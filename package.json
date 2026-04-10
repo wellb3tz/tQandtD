@@ -8,7 +8,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "demo": "vite"
   },
   "keywords": [
     "procedural-generation",
@@ -23,7 +24,9 @@
     "@types/node": "^20.10.0",
     "@vitest/coverage-v8": "^1.0.0",
     "fast-check": "^3.15.0",
+    "three": "^0.160.1",
     "typescript": "^5.3.0",
+    "vite": "^5.4.21",
     "vitest": "^1.0.0"
   }
 }
