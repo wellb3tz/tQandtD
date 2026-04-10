@@ -1,0 +1,29 @@
+{
+  "name": "procedural-world-engine",
+  "version": "1.0.0",
+  "description": "A TypeScript-based procedural world generation engine for browser-based applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "procedural-generation",
+    "world-generation",
+    "terrain",
+    "noise",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "fast-check": "^3.15.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
