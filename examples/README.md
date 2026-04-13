@@ -102,6 +102,150 @@ Demonstrates performance tracking and optimization:
 - Cache management
 - Optimization techniques
 
+### 7. Incremental Generation (`incremental-generation.ts`)
+
+Shows how to use incremental chunk generation for responsive applications:
+- Enabling incremental generation
+- Accessing partial chunk data during generation
+- Parallel incremental generation of multiple chunks
+- Cancelling generation
+- Monitoring generation progress
+- Integrating with game loops
+
+**Key Concepts:**
+- Incremental generation stages
+- Time budget management
+- Partial data access
+- Frame budget integration
+- Responsive generation
+
+### 8. Binary Serialization (`binary-serialization.ts`)
+
+Demonstrates world serialization and deserialization:
+- Serializing world data to binary format
+- Deserializing world data from binary format
+- Compression options
+- Checksum validation
+
+**Key Concepts:**
+- World persistence
+- Binary format
+- Compression
+- Data integrity
+
+### 9. Export World (`export-world.ts`)
+
+Shows how to export world data to files:
+- Exporting to JSON format
+- Exporting to binary format
+- Selective region export
+- Import functionality
+
+**Key Concepts:**
+- File export
+- Format selection
+- Region filtering
+- Import/export workflow
+
+### 10. Modification Tracking (`modification-tracking.ts`)
+
+Demonstrates how to track modifications to generated chunks for world persistence:
+- Recording single terrain edits
+- Recording multiple terrain edits at once
+- Recording structure additions
+- Recording structure removals
+- Recording combined structure changes
+- Complex modification scenarios (terraforming and building)
+
+**Key Concepts:**
+- Modification tracking
+- Terrain editing
+- Structure management
+- Delta compression
+- Persistence workflow
+
+### 11. 3D Noise Usage (`3d-noise-usage.ts`)
+
+Demonstrates 3D noise generation for more realistic terrain features:
+- Enabling 3D noise configuration
+- Comparing 2D vs 3D noise output
+- Adjusting z-scale for different effects
+- Combining 3D noise with domain warping
+- Practical use cases for volumetric terrain
+
+**Key Concepts:**
+- 3D Simplex noise
+- Vertical variation
+- Z-scale configuration
+- Volumetric terrain generation
+- Cave and overhang detection
+
+### 12. Enhanced Biomes (`enhanced-biomes.ts`)
+
+Shows the enhanced biome system with advanced features:
+- Smooth transition zones between biomes
+- Micro-biomes (oasis, clearings, ponds, groves)
+- Elevation bands in mountains (foothills, slopes, peaks)
+- Biome distribution analysis
+- Comparing standard vs enhanced biomes
+
+**Key Concepts:**
+- Biome transitions
+- Micro-biome variations
+- Elevation-based classification
+- Natural biome boundaries
+- Enhanced realism
+
+### 13. River Networks (`river-networks.ts`)
+
+Demonstrates river network data structures and concepts:
+- Basic river generation
+- River network data structures (RiverSegment, Lake, RiverNetwork)
+- River configuration options
+- River distribution analysis
+- Future enhancements (tributaries, lakes, deltas)
+
+**Key Concepts:**
+- River flow simulation
+- Network data structures
+- Flow-based width calculation
+- Cross-chunk rivers
+- Hydrological features
+
+### 14. Worker Pool Usage (`worker-pool-usage.ts`)
+
+Shows how to use the WorkerPool for parallel chunk generation:
+- Worker pool setup and configuration
+- Submitting and managing tasks
+- Priority-based task queue
+- Task cancellation
+- Pool statistics and monitoring
+- Graceful shutdown
+
+**Key Concepts:**
+- Parallel processing
+- Multi-threading
+- Task prioritization
+- Performance optimization
+- Resource management
+
+### 15. LOD System (`lod-system.ts`)
+
+Demonstrates the Level of Detail system for performance optimization:
+- LOD configuration and setup
+- Distance-based LOD selection
+- Applying LOD to chunks
+- Dynamic LOD updates
+- Performance benefits and memory savings
+- Best practices
+
+**Key Concepts:**
+- Level of Detail
+- Distance-based quality
+- Mesh resolution reduction
+- Feature density control
+- Performance scaling
+
 ## Configuration Guide
 
 ### Terrain Configuration
@@ -176,6 +320,62 @@ riverConfig: {
 }
 ```
 
+### Incremental Generation Configuration
+
+```typescript
+incrementalConfig: {
+  enabled: true,            // Enable incremental generation
+  timeBudgetMs: 16,         // Time budget per stage in ms (16ms = 60fps)
+}
+```
+
+### 3D Noise Configuration
+
+```typescript
+noise3DConfig: {
+  enable3D: true,           // Enable 3D noise generation
+  zScale: 0.5,              // Z-axis scale factor (smaller = more vertical variation)
+}
+```
+
+### Enhanced Biome Configuration
+
+```typescript
+enhancedBiomeConfig: {
+  temperatureScale: 0.005,
+  moistureScale: 0.005,
+  blendRadius: 5,
+  enableTransitions: true,        // Enable smooth transition zones
+  transitionWidth: 10,            // Transition zone width in tiles
+  enableMicroBiomes: true,        // Enable micro-biome variations
+  microBiomeFrequency: 0.1,       // Micro-biome frequency (0-1)
+  microBiomeMaxSize: 20,          // Maximum micro-biome size in tiles
+  enableElevationBands: true,     // Enable mountain elevation bands
+  snowLineElevation: 0.8,         // Snow line threshold (0-1)
+  treeLineElevation: 0.75,        // Tree line threshold (0-1)
+}
+```
+
+### LOD Configuration
+
+```typescript
+lodConfig: {
+  distances: [2, 5],              // LOD distance thresholds in chunks
+  meshResolutions: [1.0, 0.5, 0.25],  // Mesh resolution per LOD level
+  featureDensities: [1.0, 0.5, 0.1],  // Feature density per LOD level
+}
+```
+
+### Worker Pool Configuration
+
+```typescript
+workerPoolConfig: {
+  maxWorkers: 4,                  // Maximum number of worker threads
+  workerScriptUrl: './worker.js', // Path to worker script
+  taskTimeout: 30000,             // Task timeout in milliseconds
+}
+```
+
 ## Tips and Best Practices
 
 1. **Seed Selection**: Use consistent seeds for reproducible worlds. Different seeds produce completely different worlds.
@@ -189,6 +389,22 @@ riverConfig: {
 5. **Structure Placement**: More restrictive rules result in fewer structures. Balance rules with `maxAttempts` for good coverage.
 
 6. **Performance**: Chunk generation is CPU-intensive. Consider generating chunks in a Web Worker for non-blocking operation.
+
+7. **Incremental Generation**: Use incremental generation when you need to maintain responsiveness during chunk generation. Set `timeBudgetMs` to match your target frame rate (16ms for 60fps).
+
+8. **Partial Data Access**: With incremental generation, you can access and render partial chunk data (e.g., terrain) while other stages (e.g., structures) are still generating.
+
+9. **3D Noise**: Enable 3D noise for more realistic terrain with vertical variation. Adjust `zScale` to control the amount of variation (lower = more variation).
+
+10. **Enhanced Biomes**: Use enhanced biomes for more realistic worlds with smooth transitions, micro-biomes, and elevation bands. All features can be toggled independently.
+
+11. **LOD System**: Implement LOD to improve performance with large view distances. Tune distance thresholds based on your target hardware and visual quality requirements.
+
+12. **Worker Pool**: Use the worker pool for parallel chunk generation on multi-core systems. Set `maxWorkers` to `navigator.hardwareConcurrency` for optimal performance.
+
+13. **Serialization**: Choose binary format for smaller file sizes and faster loading. Use JSON format for debugging and human-readable exports.
+
+14. **Modification Tracking**: Enable modification tracking to persist player changes across sessions. Modifications are stored separately from generated data for efficient delta compression.
 
 ## Further Reading
 

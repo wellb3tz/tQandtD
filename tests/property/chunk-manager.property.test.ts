@@ -107,7 +107,7 @@ describe('ChunkManager Property Tests', () => {
           expect(chunk.x).toBe(chunkX);
           expect(chunk.y).toBe(chunkY);
           expect(chunk.size).toBe(config.chunkSize);
-          expect(chunk.heightmap.length).toBe(config.chunkSize * config.chunkSize);
+          expect(chunk.heightmap.length).toBe((config.chunkSize + 1) * (config.chunkSize + 1)); // Seamless boundaries
           expect(chunk.biomeMap.length).toBe(config.chunkSize * config.chunkSize);
         }
       ),
@@ -173,12 +173,13 @@ describe('ChunkManager Property Tests', () => {
           const manager = new ChunkManager(config);
           const chunk = manager.generateChunk(chunkX, chunkY);
           
-          const expectedSize = config.chunkSize * config.chunkSize;
+          const expectedHeightmapSize = (config.chunkSize + 1) * (config.chunkSize + 1); // Seamless boundaries
+          const expectedBiomeSize = config.chunkSize * config.chunkSize;
           
           expect(chunk.size).toBe(config.chunkSize);
-          expect(chunk.heightmap.length).toBe(expectedSize);
-          expect(chunk.biomeMap.length).toBe(expectedSize);
-          expect(chunk.biomeWeights.length).toBe(expectedSize * 8); // 8 biome types
+          expect(chunk.heightmap.length).toBe(expectedHeightmapSize);
+          expect(chunk.biomeMap.length).toBe(expectedBiomeSize);
+          expect(chunk.biomeWeights.length).toBe(expectedBiomeSize * 8); // 8 biome types
         }
       ),
       { numRuns: 100 }

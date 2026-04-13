@@ -55,17 +55,75 @@ export interface Structure {
 
 /**
  * Complete chunk data containing all generated information
+ * 
+ * **Important**: When seamless chunks are enabled (default), the heightmap contains
+ * `(size + 1) * (size + 1)` vertices instead of `size * size`. This allows boundary
+ * vertices to be shared between adjacent chunks, eliminating visible gaps.
+ * 
+ * For example, with size=32:
+ * - Heightmap contains 33x33 = 1089 vertices (indices 0-32 in both dimensions)
+ * - The vertex at local (32, y) in chunk (0, 0) has world x = 32
+ * - The vertex at local (0, y) in chunk (1, 0) also has world x = 32
+ * - Both vertices sample the same world coordinate, ensuring identical heights
  */
 export interface ChunkData {
+  /** Chunk X coordinate in chunk space */
   x: number;
+  /** Chunk Y coordinate in chunk space */
   y: number;
+  /** Size of the chunk (number of units per side, not vertex count) */
   size: number;
+  /** 
+   * Heightmap array with (size + 1) * (size + 1) vertices when seamless chunks enabled.
+   * Access using: heightmap[localY * (size + 1) + localX]
+   */
   heightmap: Float32Array;
+  /** Biome type for each point (size * size elements) */
   biomeMap: Uint8Array;
+  /** Biome blend weights (size * size * numBiomes elements) */
   biomeWeights: Float32Array;
+  /** Resources placed in this chunk */
   resources: Resource[];
+  /** Structures placed in this chunk */
   structures: Structure[];
+  /** Set of indices where rivers flow through this chunk */
   rivers: Set<number>;
+}
+
+/**
+ * Generation stage enumeration for incremental chunk generation
+ */
+export enum GenerationStage {
+  TERRAIN = 0,
+  BIOMES = 1,
+  RIVERS = 2,
+  RESOURCES = 3,
+  STRUCTURES = 4,
+  COMPLETE = 5,
+}
+
+/**
+ * Partial chunk data during incremental generation
+ */
+export interface PartialChunkData {
+  /** Chunk X coordinate */
+  x: number;
+  /** Chunk Y coordinate */
+  y: number;
+  /** Current generation stage */
+  stage: GenerationStage;
+  /** Partial chunk data (fields populated as stages complete) */
+  data: Partial<ChunkData>;
+}
+
+/**
+ * Incremental generation configuration
+ */
+export interface IncrementalConfig {
+  /** Time budget per stage in ms (default: 16 for 60fps) */
+  timeBudgetMs: number;
+  /** Enable incremental generation (default: false) */
+  enabled: boolean;
 }
 
 /**
@@ -123,4 +181,95 @@ export function localToIndex(localX: number, localY: number, chunkSize: number):
  */
 export function indexToLocal(index: number, chunkSize: number): [number, number] {
   return [index % chunkSize, Math.floor(index / chunkSize)];
+}
+
+/**
+ * Edge types for boundary vertex access
+ */
+export type ChunkEdge = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Get a boundary vertex from a chunk's heightmap
+ * 
+ * This helper function simplifies accessing vertices along chunk edges,
+ * which is useful for verifying seamless boundaries between adjacent chunks.
+ * 
+ * @param chunk - The chunk data containing the heightmap
+ * @param edge - Which edge to access ('top', 'bottom', 'left', 'right')
+ * @param index - Index along the edge (0 to chunk.size inclusive)
+ * @returns The height value at the specified boundary position
+ * 
+ * @example
+ * // Get the first vertex on the right edge of a chunk
+ * const height = getBoundaryVertex(chunk, 'right', 0);
+ * 
+ * // Get the last vertex on the top edge
+ * const height = getBoundaryVertex(chunk, 'top', chunk.size);
+ */
+export function getBoundaryVertex(chunk: ChunkData, edge: ChunkEdge, index: number): number {
+  const vertexSize = chunk.size + 1;
+  
+  if (index < 0 || index > chunk.size) {
+    throw new Error(`Boundary index ${index} out of range [0, ${chunk.size}]`);
+  }
+  
+  let localX: number;
+  let localY: number;
+  
+  switch (edge) {
+    case 'top':
+      localX = index;
+      localY = 0;
+      break;
+    case 'bottom':
+      localX = index;
+      localY = chunk.size;
+      break;
+    case 'left':
+      localX = 0;
+      localY = index;
+      break;
+    case 'right':
+      localX = chunk.size;
+      localY = index;
+      break;
+    default:
+      throw new Error(`Invalid edge type: ${edge}`);
+  }
+  
+  const heightmapIndex = localY * vertexSize + localX;
+  return chunk.heightmap[heightmapIndex];
+}
+
+/**
+ * Convert local chunk coordinates to world coordinates
+ * 
+ * This helper function converts coordinates within a chunk's local space
+ * to global world coordinates. This is essential for ensuring boundary
+ * vertices share identical world positions across adjacent chunks.
+ * 
+ * @param chunk - The chunk data
+ * @param localX - Local X coordinate within the chunk (0 to chunk.size inclusive)
+ * @param localY - Local Y coordinate within the chunk (0 to chunk.size inclusive)
+ * @returns Tuple of [worldX, worldY] in global coordinate space
+ * 
+ * @example
+ * // Get world coordinates for the top-left corner of a chunk
+ * const [worldX, worldY] = getWorldCoordinate(chunk, 0, 0);
+ * 
+ * // Get world coordinates for the bottom-right corner (boundary vertex)
+ * const [worldX, worldY] = getWorldCoordinate(chunk, chunk.size, chunk.size);
+ */
+export function getWorldCoordinate(chunk: ChunkData, localX: number, localY: number): [number, number] {
+  if (localX < 0 || localX > chunk.size) {
+    throw new Error(`Local X coordinate ${localX} out of range [0, ${chunk.size}]`);
+  }
+  if (localY < 0 || localY > chunk.size) {
+    throw new Error(`Local Y coordinate ${localY} out of range [0, ${chunk.size}]`);
+  }
+  
+  const worldX = chunk.x * chunk.size + localX;
+  const worldY = chunk.y * chunk.size + localY;
+  
+  return [worldX, worldY];
 }

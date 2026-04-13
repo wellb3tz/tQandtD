@@ -174,7 +174,7 @@ describe('Web Worker Integration', () => {
       const deserialized = deserializeChunkData(serialized);
 
       // Should have terrain and biomes but no features
-      expect(deserialized.heightmap.length).toBe(32 * 32);
+      expect(deserialized.heightmap.length).toBe(33 * 33);
       expect(deserialized.biomeMap.length).toBe(32 * 32);
       expect(deserialized.resources.length).toBe(0);
       expect(deserialized.structures.length).toBe(0);

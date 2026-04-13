@@ -72,8 +72,15 @@ export { NoiseEngine, type NoiseConfig } from './core/noise';
 export { hash, chunkSeed } from './core/hash';
 
 // World management
-export { ChunkManager, type WorldConfig, type ChunkPerformanceMetrics, type ProgressCallback } from './world/chunk-manager';
+export { ChunkManager, type WorldConfig, type ChunkPerformanceMetrics, type ProgressCallback, type Noise3DConfig } from './world/chunk-manager';
 export { BiomeSystem, type BiomeConfig } from './world/biome';
+export {
+  EnhancedBiomeSystem,
+  type EnhancedBiomeConfig,
+  type EnhancedBiomeData,
+  MicroBiomeType,
+  ElevationBand,
+} from './world/enhanced-biome';
 export {
   type ChunkData,
   type Resource,
@@ -81,18 +88,42 @@ export {
   BiomeType,
   ResourceType,
   StructureType,
+  GenerationStage,
+  type PartialChunkData,
+  type IncrementalConfig,
   worldToChunk,
   chunkToWorld,
   worldToLocal,
   localToIndex,
   indexToLocal,
+  type ChunkEdge,
+  getBoundaryVertex,
+  getWorldCoordinate,
 } from './world/chunk';
+export { LODManager, LODLevel, type LODConfig } from './world/lod';
+export { IncrementalGenerator } from './world/incremental-generator';
+export { WorkerPool, type WorkerPoolConfig } from './world/worker-pool';
+export {
+  WorldSerializer,
+  SerializationFormat,
+  type SerializationOptions,
+  type SerializedWorld,
+  type ChunkModification,
+} from './world/serialization';
 
 // Generators
 export { TerrainGenerator, type TerrainConfig } from './gen/terrain';
 export { ResourceGenerator, type ResourceConfig, type ResourceTypeConfig } from './gen/resources';
 export { StructurePlacer, type StructureConfig, type StructureTypeConfig, type PlacementRule } from './gen/structures';
-export { RiverGenerator, type RiverConfig } from './gen/rivers';
+export {
+  RiverGenerator,
+  RiverNetworkGenerator,
+  type RiverConfig,
+  type RiverNetworkConfig,
+  type RiverSegment,
+  type Lake,
+  type RiverNetwork,
+} from './gen/rivers';
 
 // Utilities
 export { poissonDiskSampling, type PoissonConfig } from './utils/poisson';

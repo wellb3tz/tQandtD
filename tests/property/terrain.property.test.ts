@@ -15,7 +15,7 @@ describe('TerrainGenerator Property Tests', () => {
 
   // Feature: procedural-world-engine, Property 6: Heightmap Size Correctness
   // **Validates: Requirements 3.3**
-  test('generateHeightmap produces array with exactly chunkSize² elements', () => {
+  test('generateHeightmap produces array with exactly (chunkSize+1)² elements', () => {
     fc.assert(
       fc.property(
         terrainConfigArb,
@@ -26,7 +26,8 @@ describe('TerrainGenerator Property Tests', () => {
           const heightmap = generator.generateHeightmap(chunkSeed, chunkSize);
           
           expect(heightmap).toBeInstanceOf(Float32Array);
-          expect(heightmap.length).toBe(chunkSize * chunkSize);
+          // After seamless chunk boundaries fix: heightmap has (chunkSize + 1) x (chunkSize + 1) vertices
+          expect(heightmap.length).toBe((chunkSize + 1) * (chunkSize + 1));
         }
       ),
       { numRuns: 100 }

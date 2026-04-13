@@ -11,6 +11,9 @@ import {
   worldToLocal,
   localToIndex,
   indexToLocal,
+  getBoundaryVertex,
+  getWorldCoordinate,
+  type ChunkEdge,
 } from '../../../src/world/chunk';
 
 describe('Chunk Data Structures', () => {
@@ -430,6 +433,204 @@ describe('Coordinate Conversion Utilities', () => {
       
       expect(worldOriginX + localX).toBe(worldX);
       expect(worldOriginY + localY).toBe(worldY);
+    });
+  });
+});
+
+describe('Boundary Vertex Helper Functions', () => {
+  // Helper to create a test chunk with seamless heightmap (size+1)^2
+  function createTestChunk(chunkX: number, chunkY: number, size: number): ChunkData {
+    const vertexSize = size + 1;
+    const heightmap = new Float32Array(vertexSize * vertexSize);
+    
+    // Fill with test data: height = localX + localY * 100
+    for (let y = 0; y <= size; y++) {
+      for (let x = 0; x <= size; x++) {
+        const index = y * vertexSize + x;
+        heightmap[index] = x + y * 100;
+      }
+    }
+    
+    return {
+      x: chunkX,
+      y: chunkY,
+      size,
+      heightmap,
+      biomeMap: new Uint8Array(size * size),
+      biomeWeights: new Float32Array(size * size * 8),
+      resources: [],
+      structures: [],
+      rivers: new Set<number>(),
+    };
+  }
+
+  describe('getBoundaryVertex', () => {
+    test('gets vertices from top edge', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      // Top edge has y=0, so height = x + 0*100 = x
+      expect(getBoundaryVertex(chunk, 'top', 0)).toBe(0);
+      expect(getBoundaryVertex(chunk, 'top', 1)).toBe(1);
+      expect(getBoundaryVertex(chunk, 'top', 16)).toBe(16);
+      expect(getBoundaryVertex(chunk, 'top', 32)).toBe(32);
+    });
+
+    test('gets vertices from bottom edge', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      // Bottom edge has y=32, so height = x + 32*100 = x + 3200
+      expect(getBoundaryVertex(chunk, 'bottom', 0)).toBe(0 + 3200);
+      expect(getBoundaryVertex(chunk, 'bottom', 1)).toBe(1 + 3200);
+      expect(getBoundaryVertex(chunk, 'bottom', 16)).toBe(16 + 3200);
+      expect(getBoundaryVertex(chunk, 'bottom', 32)).toBe(32 + 3200);
+    });
+
+    test('gets vertices from left edge', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      // Left edge has x=0, so height = 0 + y*100 = y*100
+      expect(getBoundaryVertex(chunk, 'left', 0)).toBe(0);
+      expect(getBoundaryVertex(chunk, 'left', 1)).toBe(100);
+      expect(getBoundaryVertex(chunk, 'left', 16)).toBe(1600);
+      expect(getBoundaryVertex(chunk, 'left', 32)).toBe(3200);
+    });
+
+    test('gets vertices from right edge', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      // Right edge has x=32, so height = 32 + y*100
+      expect(getBoundaryVertex(chunk, 'right', 0)).toBe(32);
+      expect(getBoundaryVertex(chunk, 'right', 1)).toBe(32 + 100);
+      expect(getBoundaryVertex(chunk, 'right', 16)).toBe(32 + 1600);
+      expect(getBoundaryVertex(chunk, 'right', 32)).toBe(32 + 3200);
+    });
+
+    test('throws error for out-of-range index', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      expect(() => getBoundaryVertex(chunk, 'top', -1)).toThrow();
+      expect(() => getBoundaryVertex(chunk, 'top', 33)).toThrow();
+      expect(() => getBoundaryVertex(chunk, 'left', -1)).toThrow();
+      expect(() => getBoundaryVertex(chunk, 'left', 33)).toThrow();
+    });
+
+    test('works with different chunk sizes', () => {
+      const chunk16 = createTestChunk(0, 0, 16);
+      const chunk64 = createTestChunk(0, 0, 64);
+      
+      expect(getBoundaryVertex(chunk16, 'top', 16)).toBe(16);
+      expect(getBoundaryVertex(chunk64, 'top', 64)).toBe(64);
+    });
+  });
+
+  describe('getWorldCoordinate', () => {
+    test('converts local coordinates to world coordinates for chunk (0,0)', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      expect(getWorldCoordinate(chunk, 0, 0)).toEqual([0, 0]);
+      expect(getWorldCoordinate(chunk, 16, 16)).toEqual([16, 16]);
+      expect(getWorldCoordinate(chunk, 32, 32)).toEqual([32, 32]);
+    });
+
+    test('converts local coordinates to world coordinates for positive chunk coords', () => {
+      const chunk = createTestChunk(2, 3, 32);
+      
+      // World = chunk * size + local
+      expect(getWorldCoordinate(chunk, 0, 0)).toEqual([64, 96]);
+      expect(getWorldCoordinate(chunk, 16, 16)).toEqual([80, 112]);
+      expect(getWorldCoordinate(chunk, 32, 32)).toEqual([96, 128]);
+    });
+
+    test('converts local coordinates to world coordinates for negative chunk coords', () => {
+      const chunk = createTestChunk(-1, -2, 32);
+      
+      expect(getWorldCoordinate(chunk, 0, 0)).toEqual([-32, -64]);
+      expect(getWorldCoordinate(chunk, 16, 16)).toEqual([-16, -48]);
+      expect(getWorldCoordinate(chunk, 32, 32)).toEqual([0, -32]);
+    });
+
+    test('boundary vertices of adjacent chunks share world coordinates', () => {
+      const chunk1 = createTestChunk(0, 0, 32);
+      const chunk2 = createTestChunk(1, 0, 32);
+      
+      // Right edge of chunk1 at local (32, y) should match left edge of chunk2 at local (0, y)
+      const [worldX1, worldY1] = getWorldCoordinate(chunk1, 32, 16);
+      const [worldX2, worldY2] = getWorldCoordinate(chunk2, 0, 16);
+      
+      expect(worldX1).toBe(32);
+      expect(worldX2).toBe(32);
+      expect(worldY1).toBe(16);
+      expect(worldY2).toBe(16);
+    });
+
+    test('throws error for out-of-range coordinates', () => {
+      const chunk = createTestChunk(0, 0, 32);
+      
+      expect(() => getWorldCoordinate(chunk, -1, 0)).toThrow();
+      expect(() => getWorldCoordinate(chunk, 33, 0)).toThrow();
+      expect(() => getWorldCoordinate(chunk, 0, -1)).toThrow();
+      expect(() => getWorldCoordinate(chunk, 0, 33)).toThrow();
+    });
+
+    test('works with different chunk sizes', () => {
+      const chunk16 = createTestChunk(1, 1, 16);
+      const chunk64 = createTestChunk(1, 1, 64);
+      
+      expect(getWorldCoordinate(chunk16, 16, 16)).toEqual([32, 32]);
+      expect(getWorldCoordinate(chunk64, 64, 64)).toEqual([128, 128]);
+    });
+  });
+
+  describe('integration: boundary vertex matching between adjacent chunks', () => {
+    test('horizontal adjacency: right edge of chunk1 matches left edge of chunk2', () => {
+      const chunk1 = createTestChunk(0, 0, 32);
+      const chunk2 = createTestChunk(1, 0, 32);
+      
+      // Check all vertices along the shared boundary
+      for (let i = 0; i <= 32; i++) {
+        const [worldX1, worldY1] = getWorldCoordinate(chunk1, 32, i);
+        const [worldX2, worldY2] = getWorldCoordinate(chunk2, 0, i);
+        
+        expect(worldX1).toBe(worldX2);
+        expect(worldY1).toBe(worldY2);
+      }
+    });
+
+    test('vertical adjacency: bottom edge of chunk1 matches top edge of chunk2', () => {
+      const chunk1 = createTestChunk(0, 0, 32);
+      const chunk2 = createTestChunk(0, 1, 32);
+      
+      // Check all vertices along the shared boundary
+      for (let i = 0; i <= 32; i++) {
+        const [worldX1, worldY1] = getWorldCoordinate(chunk1, i, 32);
+        const [worldX2, worldY2] = getWorldCoordinate(chunk2, i, 0);
+        
+        expect(worldX1).toBe(worldX2);
+        expect(worldY1).toBe(worldY2);
+      }
+    });
+
+    test('corner meeting point: four chunks share the same world coordinate', () => {
+      const chunk00 = createTestChunk(0, 0, 32);
+      const chunk10 = createTestChunk(1, 0, 32);
+      const chunk01 = createTestChunk(0, 1, 32);
+      const chunk11 = createTestChunk(1, 1, 32);
+      
+      // All four chunks should have a vertex at world (32, 32)
+      const [worldX00, worldY00] = getWorldCoordinate(chunk00, 32, 32);
+      const [worldX10, worldY10] = getWorldCoordinate(chunk10, 0, 32);
+      const [worldX01, worldY01] = getWorldCoordinate(chunk01, 32, 0);
+      const [worldX11, worldY11] = getWorldCoordinate(chunk11, 0, 0);
+      
+      expect(worldX00).toBe(32);
+      expect(worldX10).toBe(32);
+      expect(worldX01).toBe(32);
+      expect(worldX11).toBe(32);
+      
+      expect(worldY00).toBe(32);
+      expect(worldY10).toBe(32);
+      expect(worldY01).toBe(32);
+      expect(worldY11).toBe(32);
     });
   });
 });

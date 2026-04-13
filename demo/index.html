@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Procedural World Engine - 3D Demo</title>
+  <title>Procedural World Engine - Advanced Demo</title>
   <style>
     * {
       margin: 0;
@@ -23,98 +23,552 @@
       height: 100vh;
     }
     
+    /* Main UI Panel */
     #ui {
       position: absolute;
       top: 20px;
       left: 20px;
       color: white;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 15px;
-      border-radius: 8px;
-      font-size: 14px;
-      max-width: 300px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      max-width: 320px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
       backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    #ui::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    #ui::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+    }
+    
+    #ui::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
     }
     
     #ui h1 {
-      font-size: 18px;
-      margin-bottom: 10px;
+      font-size: 20px;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     
-    #ui p {
-      margin: 5px 0;
-      line-height: 1.4;
+    #ui .subtitle {
+      font-size: 11px;
+      opacity: 0.6;
+      margin-bottom: 15px;
     }
     
-    .controls {
-      margin-top: 15px;
+    .help-text {
+      font-size: 11px;
+      line-height: 1.6;
+      opacity: 0.7;
+      margin-bottom: 15px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+    
+    /* Section Headers */
+    .section {
+      margin-top: 20px;
       padding-top: 15px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
     
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    /* Control Groups */
     .control-group {
-      margin: 10px 0;
+      margin: 12px 0;
     }
     
     .control-group label {
       display: block;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       font-size: 12px;
-      opacity: 0.8;
+      opacity: 0.9;
+      font-weight: 500;
     }
     
-    input[type="number"] {
-      width: 100%;
-      padding: 5px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: white;
-      border-radius: 4px;
+    .control-description {
+      font-size: 10px;
+      opacity: 0.5;
+      margin-top: 3px;
     }
     
-    button {
+    /* Input Styles */
+    input[type="number"],
+    input[type="range"],
+    select {
       width: 100%;
       padding: 8px;
-      margin-top: 10px;
-      background: #4CAF50;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #a78bfa;
+      background: rgba(255, 255, 255, 0.12);
+    }
+    
+    input[type="range"] {
+      padding: 0;
+      height: 6px;
+      cursor: pointer;
+    }
+    
+    .range-value {
+      display: inline-block;
+      float: right;
+      font-size: 11px;
+      opacity: 0.7;
+      font-weight: 600;
+    }
+    
+    /* Checkbox Styles */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #a78bfa;
+    }
+    
+    .checkbox-group label {
+      margin: 0;
+      cursor: pointer;
+      flex: 1;
+    }
+    
+    /* Button Styles */
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
     
     button:hover {
-      background: #45a049;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
     
+    button:active {
+      transform: translateY(0);
+    }
+    
+    button.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      margin-top: 6px;
+    }
+    
+    button.secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+    }
+    
+    button.danger {
+      background: linear-gradient(135deg, #f43f5e 0%, #dc2626 100%);
+    }
+    
+    /* Stats Panel */
     #stats {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255, 255, 255, 0.2);
-      font-size: 12px;
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 11px;
+    }
+    
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 6px 0;
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+    }
+    
+    .stat-label {
       opacity: 0.7;
+    }
+    
+    .stat-value {
+      font-weight: 600;
+      color: #a78bfa;
+    }
+    
+    /* Legend */
+    .legend {
+      margin-top: 15px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+    
+    .legend-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      opacity: 0.9;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 11px;
+    }
+    
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Progress Bar */
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s;
+    }
+    
+    /* Collapsible Sections */
+    .collapsible {
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .collapsible::before {
+      content: '▼';
+      display: inline-block;
+      margin-right: 6px;
+      transition: transform 0.2s;
+      font-size: 10px;
+    }
+    
+    .collapsible.collapsed::before {
+      transform: rotate(-90deg);
+    }
+    
+    .collapsible-content {
+      max-height: 1000px;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+    
+    .collapsible-content.collapsed {
+      max-height: 0;
+    }
+    
+    /* Toast Notifications */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      animation: slideIn 0.3s ease-out;
+      z-index: 1000;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    /* Loading Overlay */
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      backdrop-filter: blur(5px);
+    }
+    
+    #loading.hidden {
+      display: none;
+    }
+    
+    .loading-content {
+      text-align: center;
+      color: white;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #a78bfa;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
   
+  <div id="loading" class="hidden">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <div id="loadingText">Generating world...</div>
+    </div>
+  </div>
+  
   <div id="ui">
-    <h1>🌍 Procedural World 3D</h1>
-    <p>WASD - Move | Mouse - Look | Space - Up | Shift - Down</p>
+    <h1>🌍 Procedural World Engine</h1>
+    <div class="subtitle">Advanced 3D Demo</div>
     
-    <div class="controls">
-      <div class="control-group">
-        <label>Seed:</label>
-        <input type="number" id="seedInput" value="12345">
-      </div>
-      <button id="regenerate">Regenerate World</button>
+    <div class="help-text">
+      <strong>Controls:</strong><br>
+      WASD - Move | Mouse - Look<br>
+      Space - Up | Shift - Down<br>
+      Click to lock cursor | ESC to unlock
     </div>
     
+    <!-- Basic Settings -->
+    <div class="section">
+      <div class="section-title">⚙️ Basic Settings</div>
+      <div class="control-group">
+        <label>World Seed</label>
+        <input type="number" id="seedInput" value="12345">
+        <div class="control-description">Same seed = same world</div>
+      </div>
+      <div class="control-group">
+        <label>Render Distance: <span class="range-value" id="renderDistValue">3</span></label>
+        <input type="range" id="renderDistance" min="2" max="8" value="3" step="1">
+      </div>
+      <button id="regenerate">🔄 Regenerate World</button>
+    </div>
+    
+    <!-- 3D Noise -->
+    <div class="section">
+      <div class="section-title collapsible" data-target="noise3d">🎲 3D Noise</div>
+      <div class="collapsible-content" id="noise3d">
+        <div class="checkbox-group">
+          <input type="checkbox" id="enable3DNoise">
+          <label for="enable3DNoise">Enable 3D Volumetric Noise</label>
+        </div>
+        <div class="control-group">
+          <label>Z-Scale: <span class="range-value" id="zScaleValue">0.5</span></label>
+          <input type="range" id="zScale" min="0.1" max="2" value="0.5" step="0.1">
+        </div>
+      </div>
+    </div>
+    
+    <!-- Enhanced Biomes -->
+    <div class="section">
+      <div class="section-title collapsible" data-target="biomes">🌿 Enhanced Biomes</div>
+      <div class="collapsible-content" id="biomes">
+        <div class="checkbox-group">
+          <input type="checkbox" id="enableTransitions" checked>
+          <label for="enableTransitions">Smooth Transitions</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="enableMicroBiomes" checked>
+          <label for="enableMicroBiomes">Micro-Biomes (Oasis, Ponds)</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="enableElevationBands" checked>
+          <label for="enableElevationBands">Mountain Elevation Bands</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- LOD System -->
+    <div class="section">
+      <div class="section-title collapsible" data-target="lod">📐 Level of Detail</div>
+      <div class="collapsible-content" id="lod">
+        <div class="checkbox-group">
+          <input type="checkbox" id="enableLOD">
+          <label for="enableLOD">Enable LOD System</label>
+        </div>
+        <div class="control-description">Reduces detail for distant chunks</div>
+      </div>
+    </div>
+    
+    <!-- Performance -->
+    <div class="section">
+      <div class="section-title collapsible" data-target="performance">⚡ Performance</div>
+      <div class="collapsible-content" id="performance">
+        <div class="checkbox-group">
+          <input type="checkbox" id="enableIncremental">
+          <label for="enableIncremental">Incremental Generation</label>
+        </div>
+        <div class="control-description">Progressive loading for 60fps</div>
+        <div class="control-group">
+          <label>Time Budget: <span class="range-value" id="timeBudgetValue">16</span>ms</label>
+          <input type="range" id="timeBudget" min="8" max="50" value="16" step="1">
+        </div>
+      </div>
+    </div>
+    
+    <!-- Visualization -->
+    <div class="section">
+      <div class="section-title collapsible" data-target="viz">🎨 Visualization</div>
+      <div class="collapsible-content" id="viz">
+        <div class="control-group">
+          <label>Display Mode</label>
+          <select id="displayMode">
+            <option value="biomes">Biomes</option>
+            <option value="height">Height Map</option>
+            <option value="moisture">Moisture</option>
+            <option value="temperature">Temperature</option>
+          </select>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showResources" checked>
+          <label for="showResources">Show Resources</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showStructures" checked>
+          <label for="showStructures">Show Structures</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showRivers" checked>
+          <label for="showRivers">Show Rivers</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- World Management -->
+    <div class="section">
+      <div class="section-title">💾 World Management</div>
+      <button id="saveWorld" class="secondary">Save World (JSON)</button>
+      <button id="saveWorldBinary" class="secondary">Save World (Binary)</button>
+      <button id="clearCache" class="secondary danger">Clear Cache</button>
+    </div>
+    
+    <!-- Stats -->
     <div id="stats">
-      <p>Chunks loaded: <span id="chunkCount">0</span></p>
-      <p>FPS: <span id="fps">60</span></p>
+      <div class="section-title">📊 Statistics</div>
+      <div class="stat-row">
+        <span class="stat-label">FPS:</span>
+        <span class="stat-value" id="fps">60</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Chunks Loaded:</span>
+        <span class="stat-value" id="chunkCount">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Cache Size:</span>
+        <span class="stat-value" id="cacheSize">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Gen Time:</span>
+        <span class="stat-value" id="genTime">0ms</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Position:</span>
+        <span class="stat-value" id="position">0, 0, 0</span>
+      </div>
+    </div>
+    
+    <!-- Biome Legend -->
+    <div class="legend">
+      <div class="legend-title">Biome Colors</div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #1e3a8a;"></div>
+        <span>Ocean</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #fef3c7;"></div>
+        <span>Beach</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #fbbf24;"></div>
+        <span>Desert</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #84cc16;"></div>
+        <span>Plains</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #15803d;"></div>
+        <span>Forest</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #065f46;"></div>
+        <span>Taiga</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #e0f2fe;"></div>
+        <span>Tundra</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #78716c;"></div>
+        <span>Mountain</span>
+      </div>
     </div>
   </div>
 

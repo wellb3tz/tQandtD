@@ -26,7 +26,8 @@ describe('TerrainGenerator', () => {
       const heightmap = generator.generateHeightmap(12345, chunkSize);
       
       expect(heightmap).toBeInstanceOf(Float32Array);
-      expect(heightmap.length).toBe(chunkSize * chunkSize);
+      // After seamless chunk boundaries fix: heightmap has (chunkSize + 1) x (chunkSize + 1) vertices
+      expect(heightmap.length).toBe((chunkSize + 1) * (chunkSize + 1));
     });
 
     test('generates heightmap for different chunk sizes', () => {
@@ -35,7 +36,8 @@ describe('TerrainGenerator', () => {
       const sizes = [8, 16, 32, 64];
       for (const size of sizes) {
         const heightmap = generator.generateHeightmap(12345, size);
-        expect(heightmap.length).toBe(size * size);
+        // After seamless chunk boundaries fix: heightmap has (size + 1) x (size + 1) vertices
+        expect(heightmap.length).toBe((size + 1) * (size + 1));
       }
     });
 
@@ -175,15 +177,23 @@ describe('TerrainGenerator', () => {
       const generator = new TerrainGenerator(defaultConfig);
       const seed = 12345;
       const chunkSize = 16;
+      const chunkX = 0;
+      const chunkY = 0;
       
-      const heightmap = generator.generateHeightmap(seed, chunkSize);
+      const heightmap = generator.generateHeightmap(seed, chunkSize, chunkX, chunkY);
+      
+      // After seamless chunk boundaries fix: heightmap has (chunkSize + 1) x (chunkSize + 1) vertices
+      const stride = chunkSize + 1;
       
       // Check a few positions
       for (let y = 0; y < chunkSize; y += 5) {
         for (let x = 0; x < chunkSize; x += 5) {
-          const index = y * chunkSize + x;
+          const index = y * stride + x;
           const heightFromMap = heightmap[index];
-          const heightFromGet = generator.getHeight(x, y, seed);
+          // getHeight expects world coordinates
+          const worldX = chunkX * chunkSize + x;
+          const worldY = chunkY * chunkSize + y;
+          const heightFromGet = generator.getHeight(worldX, worldY, seed);
           
           // Use toBeCloseTo to account for floating-point precision differences
           expect(heightFromGet).toBeCloseTo(heightFromMap, 5);

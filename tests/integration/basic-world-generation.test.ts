@@ -69,9 +69,9 @@ describe('Basic World Generation Integration', () => {
     expect(chunk.y).toBe(0);
     expect(chunk.size).toBe(32);
 
-    // Verify heightmap is generated
+    // Verify heightmap is generated (with seamless boundaries: (size+1)*(size+1))
     expect(chunk.heightmap).toBeInstanceOf(Float32Array);
-    expect(chunk.heightmap.length).toBe(32 * 32);
+    expect(chunk.heightmap.length).toBe(33 * 33);
     
     // Verify all heights are in valid range [0, 1]
     for (let i = 0; i < chunk.heightmap.length; i++) {
@@ -247,8 +247,8 @@ describe('Basic World Generation Integration', () => {
     const manager = new ChunkManager(config);
     const chunk = manager.getChunk(0, 0);
 
-    // Should still have terrain and biomes
-    expect(chunk.heightmap.length).toBe(32 * 32);
+    // Should still have terrain and biomes (heightmap has seamless boundaries)
+    expect(chunk.heightmap.length).toBe(33 * 33);
     expect(chunk.biomeMap.length).toBe(32 * 32);
 
     // Should have no resources or structures
