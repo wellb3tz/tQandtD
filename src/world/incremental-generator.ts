@@ -208,10 +208,34 @@ export class IncrementalGenerator {
     const worldX = partial.x * size;
     const worldY = partial.y * size;
 
+    // Heightmap has (size+1) x (size+1) vertices for seamless boundaries
+    const vertexCount = size + 1;
+
+    // Create height sampling callback
+    const getHeight = (worldPosX: number, worldPosY: number): number => {
+      // Convert world coordinates to chunk coordinates
+      const targetChunkX = Math.floor(worldPosX / size);
+      const targetChunkY = Math.floor(worldPosY / size);
+      
+      // If sampling from current chunk, use heightmap directly
+      if (targetChunkX === partial.x && targetChunkY === partial.y) {
+        const localX = worldPosX - worldX;
+        const localY = worldPosY - worldY;
+        // Check if within heightmap bounds (0 to size inclusive for vertices)
+        if (localX >= 0 && localX <= size && localY >= 0 && localY <= size) {
+          return heightmap[localY * vertexCount + localX];
+        }
+      }
+      
+      // For neighboring chunks, generate height on-demand using terrain generator
+      return this.terrainGenerator.getHeightAt(worldPosX, worldPosY, this.worldConfig.seed);
+    };
+
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const index = y * size + x;
-        const height = heightmap[index];
+        // Sample height from heightmap (using vertex coordinates)
+        const height = heightmap[y * vertexCount + x];
         
         // Get world position for this tile
         const wx = worldX + x;
@@ -222,7 +246,7 @@ export class IncrementalGenerator {
         biomeMap[index] = biome;
 
         // Get biome blend weights
-        const weights = this.biomeSystem.getBiomeWeights(wx, wy, height);
+        const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeight);
         
         // Store weights in the array
         const weightOffset = index * numBiomes;

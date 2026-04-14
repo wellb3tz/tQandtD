@@ -77,6 +77,22 @@ export class TerrainGenerator {
 
   /**
    * Gets height at a specific world position.
+   * Uses the same noise configuration as generateHeightmap() for consistency.
+   * This method is deterministic: same world position and seed always returns same height.
+   * 
+   * @param worldX - World X coordinate
+   * @param worldY - World Y coordinate
+   * @param seed - Seed for noise generation (should match world seed)
+   * @returns Height value in [0, 1] range
+   */
+  getHeightAt(worldX: number, worldY: number, seed: number): number {
+    const noise = new NoiseEngine(seed);
+    const use3D = this.config.enable3D ?? false;
+    return this.getHeightInternal(worldX, worldY, noise, use3D);
+  }
+
+  /**
+   * Gets height at a specific world position.
    * @param x - World X coordinate
    * @param y - World Y coordinate
    * @param seed - Seed for noise generation

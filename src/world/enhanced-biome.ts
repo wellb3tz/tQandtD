@@ -86,19 +86,22 @@ export class EnhancedBiomeSystem extends BiomeSystem {
    * Includes transition zones, micro-biomes, and elevation bands.
    * @param x - World X coordinate
    * @param y - World Y coordinate
-   * @param height - Height value at this position (0-1 range)
+   * @param getHeight - Callback function to get height at any world position
    * @returns Enhanced biome data with transitions and micro-biomes
    */
-  getEnhancedBiome(x: number, y: number, height: number): EnhancedBiomeData {
+  getEnhancedBiome(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): EnhancedBiomeData {
+    // Sample height at center position for primary biome classification
+    const height = getHeight(x, y);
+    
     // Get base biome and weights
     const biome = this.getBiome(x, y, height);
     const weights = this.enhancedConfig.enableTransitions 
-      ? this.getBiomeWeights(x, y, height)
+      ? this.getBiomeWeights(x, y, getHeight)
       : new Map([[biome, 1.0]]);
 
     // Calculate transition factor
     const transitionFactor = this.enhancedConfig.enableTransitions
-      ? this.calculateTransitionFactor(x, y, height)
+      ? this.calculateTransitionFactor(x, y, getHeight)
       : 0;
 
     // Check for micro-biome
@@ -209,12 +212,13 @@ export class EnhancedBiomeSystem extends BiomeSystem {
    * Calculates transition factor based on distance to biome boundaries.
    * @param x - World X coordinate
    * @param y - World Y coordinate
-   * @param height - Height value
+   * @param getHeight - Callback function to get height at any world position
    * @returns Transition factor (0-1)
    */
-  private calculateTransitionFactor(x: number, y: number, height: number): number {
+  private calculateTransitionFactor(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): number {
     // Get the primary biome at this position
-    const centerBiome = this.getBiome(x, y, height);
+    const centerHeight = getHeight(x, y);
+    const centerBiome = this.getBiome(x, y, centerHeight);
     
     // Sample biomes in a small radius to detect boundaries
     const sampleRadius = this.enhancedConfig.transitionWidth;
@@ -226,7 +230,10 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       const sampleX = x + Math.cos(angle) * sampleRadius;
       const sampleY = y + Math.sin(angle) * sampleRadius;
       
-      const sampleBiome = this.getBiome(sampleX, sampleY, height);
+      // Get height at the sampled position
+      const sampleHeight = getHeight(sampleX, sampleY);
+      
+      const sampleBiome = this.getBiome(sampleX, sampleY, sampleHeight);
       if (sampleBiome !== centerBiome) {
         differentBiomeCount++;
       }

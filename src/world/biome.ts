@@ -124,10 +124,10 @@ export class BiomeSystem {
    * Samples nearby positions and returns weighted biome distribution.
    * @param x - World X coordinate
    * @param y - World Y coordinate
-   * @param height - Height value at this position (0-1 range)
+   * @param getHeight - Callback function to get height at any world position
    * @returns Map of biome types to their blend weights (sum to 1.0)
    */
-  getBiomeWeights(x: number, y: number, height: number): Map<BiomeType, number> {
+  getBiomeWeights(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): Map<BiomeType, number> {
     const weights = new Map<BiomeType, number>();
     const radius = this.config.blendRadius;
     const samples = 9; // 3x3 grid of samples
@@ -141,8 +141,11 @@ export class BiomeSystem {
         const sampleX = x + dx;
         const sampleY = y + dy;
         
-        // Get biome at sample position
-        const biome = this.getBiome(sampleX, sampleY, height);
+        // Get height at this sampled position
+        const sampleHeight = getHeight(sampleX, sampleY);
+        
+        // Get biome at sample position using its own height
+        const biome = this.getBiome(sampleX, sampleY, sampleHeight);
         
         // Calculate weight based on distance (inverse distance weighting)
         const distance = Math.sqrt(dx * dx + dy * dy);

@@ -22,6 +22,11 @@ describe('EnhancedBiomeSystem', () => {
     treeLineElevation: 0.75,
   };
 
+  // Helper function to create a simple height callback that returns a constant height
+  const createConstantHeightCallback = (height: number) => {
+    return (_worldX: number, _worldY: number) => height;
+  };
+
   describe('constructor', () => {
     it('should create an instance with valid configuration', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
@@ -32,7 +37,7 @@ describe('EnhancedBiomeSystem', () => {
   describe('getEnhancedBiome', () => {
     it('should return enhanced biome data with primary biome', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.5);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
       
       expect(data).toBeDefined();
       expect(data.biome).toBeDefined();
@@ -43,21 +48,21 @@ describe('EnhancedBiomeSystem', () => {
 
     it('should return ocean biome for low height', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.2);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.2));
       
       expect(data.biome).toBe(BiomeType.OCEAN);
     });
 
     it('should return mountain biome for high height', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.8);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.8));
       
       expect(data.biome).toBe(BiomeType.MOUNTAIN);
     });
 
     it('should include elevation band for mountain biomes when enabled', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.85);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.85));
       
       if (data.biome === BiomeType.MOUNTAIN) {
         expect(data.elevationBand).toBeDefined();
@@ -69,7 +74,7 @@ describe('EnhancedBiomeSystem', () => {
     it('should not include elevation band when disabled', () => {
       const config = { ...defaultConfig, enableElevationBands: false };
       const system = new EnhancedBiomeSystem(12345, config);
-      const data = system.getEnhancedBiome(100, 100, 0.85);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.85));
       
       expect(data.elevationBand).toBeUndefined();
     });
@@ -77,7 +82,7 @@ describe('EnhancedBiomeSystem', () => {
     it('should not include transitions when disabled', () => {
       const config = { ...defaultConfig, enableTransitions: false };
       const system = new EnhancedBiomeSystem(12345, config);
-      const data = system.getEnhancedBiome(100, 100, 0.5);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
       
       expect(data.transitionFactor).toBe(0);
       expect(data.weights.size).toBe(1);
@@ -88,8 +93,8 @@ describe('EnhancedBiomeSystem', () => {
       const system1 = new EnhancedBiomeSystem(12345, defaultConfig);
       const system2 = new EnhancedBiomeSystem(12345, defaultConfig);
       
-      const data1 = system1.getEnhancedBiome(100, 100, 0.5);
-      const data2 = system2.getEnhancedBiome(100, 100, 0.5);
+      const data1 = system1.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
+      const data2 = system2.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
       
       expect(data1.biome).toBe(data2.biome);
       expect(data1.transitionFactor).toBe(data2.transitionFactor);
@@ -101,7 +106,7 @@ describe('EnhancedBiomeSystem', () => {
   describe('elevation bands', () => {
     it('should classify peaks above snow line', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.85);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.85));
       
       if (data.biome === BiomeType.MOUNTAIN) {
         expect(data.elevationBand).toBe(ElevationBand.PEAKS);
@@ -110,7 +115,7 @@ describe('EnhancedBiomeSystem', () => {
 
     it('should classify slopes between tree line and snow line', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.77);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.77));
       
       if (data.biome === BiomeType.MOUNTAIN) {
         expect(data.elevationBand).toBe(ElevationBand.SLOPES);
@@ -119,7 +124,7 @@ describe('EnhancedBiomeSystem', () => {
 
     it('should classify foothills below tree line', () => {
       const system = new EnhancedBiomeSystem(12345, defaultConfig);
-      const data = system.getEnhancedBiome(100, 100, 0.72);
+      const data = system.getEnhancedBiome(100, 100, createConstantHeightCallback(0.72));
       
       if (data.biome === BiomeType.MOUNTAIN) {
         expect(data.elevationBand).toBe(ElevationBand.FOOTHILLS);
@@ -135,7 +140,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 50; i++) {
         const x = i * 20;
         const y = i * 20;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         expect(data.transitionFactor).toBeGreaterThanOrEqual(0);
         expect(data.transitionFactor).toBeLessThanOrEqual(1);
@@ -150,7 +155,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 100; i++) {
         const x = i * 50;
         const y = i * 50;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         if (data.transitionFactor === 0) {
           foundPureBiome = true;
@@ -169,7 +174,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 100; i++) {
         const x = i * 10;
         const y = i * 10;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         if (data.transitionFactor > 0.5) {
           foundTransition = true;
@@ -189,8 +194,8 @@ describe('EnhancedBiomeSystem', () => {
       
       // The transition width affects how far we sample, which can affect the transition factor
       // Test that both systems work with different widths
-      const narrowData = narrowSystem.getEnhancedBiome(100, 100, 0.5);
-      const wideData = wideSystem.getEnhancedBiome(100, 100, 0.5);
+      const narrowData = narrowSystem.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
+      const wideData = wideSystem.getEnhancedBiome(100, 100, createConstantHeightCallback(0.5));
       
       expect(narrowData.transitionFactor).toBeGreaterThanOrEqual(0);
       expect(narrowData.transitionFactor).toBeLessThanOrEqual(1);
@@ -206,7 +211,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 20; i++) {
         const x = 100 + i * 5;
         const y = 100;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         samples.push(data.transitionFactor);
       }
       
@@ -224,7 +229,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 100; i++) {
         const x = i * 10;
         const y = i * 10;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         if (data.microBiome !== undefined) {
           // Verify parent biome constraint
@@ -254,7 +259,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 100; i++) {
         const x = i * 10;
         const y = i * 10;
-        const data = system.getEnhancedBiome(x, y, 0.5);
+        const data = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         expect(data.microBiome).toBeUndefined();
       }
@@ -270,7 +275,7 @@ describe('EnhancedBiomeSystem', () => {
       for (let i = 0; i < 500 && !foundMicroBiome; i++) {
         const x = i * 5;
         const y = i * 5;
-        const centerData = system.getEnhancedBiome(x, y, 0.5);
+        const centerData = system.getEnhancedBiome(x, y, createConstantHeightCallback(0.5));
         
         if (centerData.microBiome !== undefined) {
           foundMicroBiome = true;
@@ -286,7 +291,7 @@ describe('EnhancedBiomeSystem', () => {
             for (let distance = 1; distance <= config.microBiomeMaxSize + 5; distance++) {
               const sampleX = x + Math.cos(angle) * distance;
               const sampleY = y + Math.sin(angle) * distance;
-              const sampleData = system.getEnhancedBiome(sampleX, sampleY, 0.5);
+              const sampleData = system.getEnhancedBiome(sampleX, sampleY, createConstantHeightCallback(0.5));
               
               if (sampleData.microBiome === microBiomeType) {
                 extent = distance;

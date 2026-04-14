@@ -24,6 +24,11 @@ describe('EnhancedBiomeSystem Property Tests', () => {
     treeLineElevation: 0.75,
   };
 
+  // Helper function to create a simple height callback that returns a constant height
+  const createConstantHeightCallback = (height: number) => {
+    return (_worldX: number, _worldY: number) => height;
+  };
+
   // Feature: 3d-world-generation-enhancements, Property 2: Biome transition existence
   // **Validates: Requirements 2.1**
   test('adjacent positions with different biomes have transition zones with blended weights', () => {
@@ -35,9 +40,10 @@ describe('EnhancedBiomeSystem Property Tests', () => {
         fc.float({ min: Math.fround(0.3), max: Math.fround(0.7), noNaN: true }), // height (avoid ocean and mountain extremes)
         (seed, x, y, height) => {
           const system = new EnhancedBiomeSystem(seed, defaultConfig);
+          const getHeight = createConstantHeightCallback(height);
           
           // Get biome at center position
-          const centerData = system.getEnhancedBiome(x, y, height);
+          const centerData = system.getEnhancedBiome(x, y, getHeight);
           
           // Sample adjacent positions in 8 directions
           const adjacentOffsets = [
@@ -48,7 +54,7 @@ describe('EnhancedBiomeSystem Property Tests', () => {
           for (const [dx, dy] of adjacentOffsets) {
             const adjacentX = x + dx;
             const adjacentY = y + dy;
-            const adjacentData = system.getEnhancedBiome(adjacentX, adjacentY, height);
+            const adjacentData = system.getEnhancedBiome(adjacentX, adjacentY, getHeight);
             
             // If adjacent position has a different biome
             if (adjacentData.biome !== centerData.biome) {
@@ -67,7 +73,7 @@ describe('EnhancedBiomeSystem Property Tests', () => {
               // Additionally, check a position between them
               const midX = x + dx * 0.5;
               const midY = y + dy * 0.5;
-              const midData = system.getEnhancedBiome(midX, midY, height);
+              const midData = system.getEnhancedBiome(midX, midY, getHeight);
               const midHasTransition = midData.weights.size > 1 || midData.transitionFactor > 0;
               
               // Either the endpoints or the midpoint should show transition
@@ -103,6 +109,7 @@ describe('EnhancedBiomeSystem Property Tests', () => {
         fc.float({ min: Math.fround(0), max: Math.fround(2 * Math.PI), noNaN: true }), // direction angle
         (seed, x, y, height, angle) => {
           const system = new EnhancedBiomeSystem(seed, defaultConfig);
+          const getHeight = createConstantHeightCallback(height);
           
           // Sample along a line in the given direction to check for smoothness
           const stepSize = 0.5; // Small step for detecting discontinuities
@@ -120,7 +127,7 @@ describe('EnhancedBiomeSystem Property Tests', () => {
           for (let i = 0; i < numSteps; i++) {
             const sampleX = x + Math.cos(angle) * stepSize * i;
             const sampleY = y + Math.sin(angle) * stepSize * i;
-            const data = system.getEnhancedBiome(sampleX, sampleY, height);
+            const data = system.getEnhancedBiome(sampleX, sampleY, getHeight);
             const temperature = system.getTemperature(sampleX, sampleY);
             const moisture = system.getMoisture(sampleX, sampleY);
             
@@ -191,7 +198,8 @@ describe('EnhancedBiomeSystem Property Tests', () => {
         fc.float({ min: Math.fround(0.3), max: Math.fround(0.7), noNaN: true }), // height (avoid ocean and mountain extremes)
         (seed, x, y, height) => {
           const system = new EnhancedBiomeSystem(seed, defaultConfig);
-          const data = system.getEnhancedBiome(x, y, height);
+          const getHeight = createConstantHeightCallback(height);
+          const data = system.getEnhancedBiome(x, y, getHeight);
           
           // If a micro-biome is present, verify it matches the parent biome
           if (data.microBiome !== undefined) {
@@ -230,7 +238,8 @@ describe('EnhancedBiomeSystem Property Tests', () => {
         fc.float({ min: Math.fround(0.3), max: Math.fround(0.7), noNaN: true }), // height (avoid ocean and mountain extremes)
         (seed, x, y, height) => {
           const system = new EnhancedBiomeSystem(seed, defaultConfig);
-          const centerData = system.getEnhancedBiome(x, y, height);
+          const getHeight = createConstantHeightCallback(height);
+          const centerData = system.getEnhancedBiome(x, y, getHeight);
           
           // If a micro-biome is present at the center, measure its extent
           if (centerData.microBiome !== undefined) {
@@ -249,7 +258,7 @@ describe('EnhancedBiomeSystem Property Tests', () => {
               for (let distance = 1; distance <= maxSize + 5; distance++) {
                 const sampleX = x + Math.cos(angle) * distance;
                 const sampleY = y + Math.sin(angle) * distance;
-                const sampleData = system.getEnhancedBiome(sampleX, sampleY, height);
+                const sampleData = system.getEnhancedBiome(sampleX, sampleY, getHeight);
                 
                 if (sampleData.microBiome === microBiomeType) {
                   extent = distance;
@@ -281,7 +290,8 @@ describe('EnhancedBiomeSystem Property Tests', () => {
         fc.float({ min: Math.fround(0), max: Math.fround(1), noNaN: true }), // height (full range)
         (seed, x, y, height) => {
           const system = new EnhancedBiomeSystem(seed, defaultConfig);
-          const data = system.getEnhancedBiome(x, y, height);
+          const getHeight = createConstantHeightCallback(height);
+          const data = system.getEnhancedBiome(x, y, getHeight);
           
           // Only check elevation bands for mountain biomes
           if (data.biome === BiomeType.MOUNTAIN) {
@@ -336,7 +346,8 @@ describe('EnhancedBiomeSystem Property Tests', () => {
             const sampleY = y + Math.sin(angle) * stepSize * i;
             // Vary height slightly to cross elevation band boundaries
             const sampleHeight = height + (i / numSteps) * 0.15 - 0.075; // ±0.075 variation
-            const data = system.getEnhancedBiome(sampleX, sampleY, sampleHeight);
+            const getHeight = createConstantHeightCallback(sampleHeight);
+            const data = system.getEnhancedBiome(sampleX, sampleY, getHeight);
             
             samples.push({ x: sampleX, y: sampleY, height: sampleHeight, data });
           }

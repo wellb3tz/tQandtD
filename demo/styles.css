@@ -38,6 +38,27 @@ body {
   overflow: hidden;
 }
 
+/* Utility Classes */
+.hidden {
+  display: none !important;
+}
+
+/* Fullscreen mode */
+body.fullscreen-mode .app-content {
+  grid-template-columns: 1fr;
+  height: 100vh;
+}
+
+body.fullscreen-mode .viewer-container {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Hide toast notifications in fullscreen mode */
+body.fullscreen-mode .toast-container {
+  display: none;
+}
+
 /* Layout */
 #app {
   display: flex;

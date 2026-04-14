@@ -60,8 +60,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toggleControlsBtn = document.getElementById('toggle-controls-btn');
   const toggleMonitorBtn = document.getElementById('toggle-monitor-btn');
   const helpBtn = document.getElementById('help-btn');
+  const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
   const performanceMonitor = document.getElementById('performance-monitor');
+  const appHeader = document.querySelector('.app-header') as HTMLElement;
+  const worldManagerPanel = document.getElementById('world-manager');
   
   // Camera control buttons
   const resetCameraBtn = document.getElementById('reset-camera-btn');
@@ -349,6 +352,61 @@ document.addEventListener('DOMContentLoaded', async () => {
   helpBtn?.addEventListener('click', () => {
     if (helpModal) {
       helpModal.show();
+    }
+  });
+  
+  // Fullscreen button - hide all UI elements (exit with ESC only)
+  let isFullscreen = false;
+  
+  const toggleFullscreen = () => {
+    isFullscreen = !isFullscreen;
+    
+    if (isFullscreen) {
+      // Hide all UI elements
+      appHeader?.classList.add('hidden');
+      controlPanel?.classList.add('hidden');
+      performanceMonitor?.classList.add('hidden');
+      worldManagerPanel?.classList.add('hidden');
+      document.querySelector('.camera-controls-overlay')?.classList.add('hidden');
+      
+      // Add fullscreen class to body
+      document.body.classList.add('fullscreen-mode');
+      
+      // Resize viewer to fill screen
+      if (worldViewer) {
+        setTimeout(() => {
+          worldViewer.resize(window.innerWidth, window.innerHeight);
+        }, 100);
+      }
+    } else {
+      // Show UI elements
+      appHeader?.classList.remove('hidden');
+      controlPanel?.classList.remove('hidden');
+      performanceMonitor?.classList.remove('hidden');
+      worldManagerPanel?.classList.remove('hidden');
+      document.querySelector('.camera-controls-overlay')?.classList.remove('hidden');
+      
+      // Remove fullscreen class from body
+      document.body.classList.remove('fullscreen-mode');
+      
+      // Resize viewer back to normal
+      if (worldViewer) {
+        const viewerContainer = document.getElementById('viewer');
+        if (viewerContainer) {
+          setTimeout(() => {
+            worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+          }, 100);
+        }
+      }
+    }
+  };
+  
+  fullscreenBtn?.addEventListener('click', toggleFullscreen);
+  
+  // ESC key to exit fullscreen
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isFullscreen) {
+      toggleFullscreen();
     }
   });
   

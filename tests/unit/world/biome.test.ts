@@ -106,7 +106,9 @@ describe('BiomeSystem', () => {
     ];
     
     for (const pos of positions) {
-      const weights = biomeSystem.getBiomeWeights(pos.x, pos.y, pos.height);
+      // Create height callback that returns the same height for all positions
+      const getHeight = () => pos.height;
+      const weights = biomeSystem.getBiomeWeights(pos.x, pos.y, getHeight);
       
       // Calculate sum of all weights
       let sum = 0;
@@ -124,7 +126,9 @@ describe('BiomeSystem', () => {
   test('getBiomeWeights includes at least one biome', () => {
     const biomeSystem = new BiomeSystem(12345, defaultConfig);
     
-    const weights = biomeSystem.getBiomeWeights(0, 0, 0.5);
+    // Create height callback that returns constant height
+    const getHeight = () => 0.5;
+    const weights = biomeSystem.getBiomeWeights(0, 0, getHeight);
     
     expect(weights.size).toBeGreaterThan(0);
   });
