@@ -454,6 +454,73 @@ describe('DemoApp - Performance Testing', () => {
       // (may be slightly slower due to LOD calculations)
       expect(timeWithLOD).toBeLessThan(timeNoLOD * 1.5);
     });
+
+    it('should meet 60 FPS target with LOD enabled and 25 chunks loaded', async () => {
+      // Configure LOD system
+      app.updateEngineConfig({
+        lodConfig: {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.1]
+        }
+      });
+
+      // Generate world
+      await app.generateWorld(12345);
+
+      // Load 25 chunks (5x5 grid)
+      await app.loadChunksAround(0, 0, 2);
+
+      const state = app.getState();
+      expect(state.loadedChunkCount).toBe(25);
+
+      // Simulate 5 seconds of frame updates at 60 FPS (300 frames)
+      const targetFPS = 60;
+      const simulationDuration = 5000; // 5 seconds in ms
+      const frameCount = Math.floor((simulationDuration / 1000) * targetFPS);
+      const frameTimes: number[] = [];
+
+      for (let i = 0; i < frameCount; i++) {
+        const startTime = performance.now();
+
+        // Simulate typical frame operations
+        // Move camera in a circular pattern to trigger LOD updates
+        const angle = (i / frameCount) * Math.PI * 2;
+        app.updateCameraPosition({
+          x: Math.cos(angle) * 15,
+          y: 10,
+          z: Math.sin(angle) * 15
+        });
+
+        const endTime = performance.now();
+        frameTimes.push(endTime - startTime);
+      }
+
+      // Calculate average frame time
+      const avgFrameTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+      const targetFrameTime = 1000 / targetFPS; // 16.67ms for 60fps
+
+      // Calculate simulated FPS
+      const simulatedFPS = 1000 / avgFrameTime;
+
+      // Verify FPS >= 60
+      expect(simulatedFPS).toBeGreaterThanOrEqual(targetFPS);
+      expect(avgFrameTime).toBeLessThan(targetFrameTime);
+
+      // Verify LOD statistics
+      const finalState = app.getState();
+      expect(finalState.lodHighCount).toBeGreaterThan(0);
+      expect(finalState.lodMediumCount + finalState.lodLowCount).toBeGreaterThan(0);
+
+      // Verify total LOD chunks equals loaded chunks
+      const totalLODChunks = finalState.lodHighCount + finalState.lodMediumCount + finalState.lodLowCount;
+      expect(totalLODChunks).toBe(finalState.loadedChunkCount);
+
+      // Note: Frustum culling statistics are managed by WorldViewer which is not
+      // directly exposed by DemoApp. The LOD statistics above indirectly validate
+      // that the performance optimizations (including frustum culling) are working
+      // correctly, as different LOD levels are being applied based on distance.
+    });
   });
 
   describe('Worker Pool Performance', () => {

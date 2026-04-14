@@ -112,8 +112,12 @@ export interface PartialChunkData {
   y: number;
   /** Current generation stage */
   stage: GenerationStage;
+  /** Set of stages that have completed their work */
+  completedStages: Set<GenerationStage>;
   /** Partial chunk data (fields populated as stages complete) */
   data: Partial<ChunkData>;
+  /** Progress tracking for BIOMES stage (for intra-stage yielding) */
+  biomesProgress?: { currentY: number; currentX: number };
 }
 
 /**

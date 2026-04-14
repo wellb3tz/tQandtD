@@ -115,14 +115,26 @@ export class LODManager {
    * Applies LOD to chunk data by reducing mesh resolution and feature density
    * Creates a new ChunkData object with LOD-adjusted heightmap and features
    * 
+   * **IMPORTANT**: This method updates both the heightmap AND the chunk size to maintain
+   * consistency. The downsampled heightmap will have (newSize + 1) x (newSize + 1) vertices
+   * to preserve seamless boundaries between chunks.
+   * 
    * @param chunk - Full-resolution chunk data
    * @param level - Target LOD level
-   * @returns LOD-adjusted chunk data
+   * @returns LOD-adjusted chunk data with updated size and downsampled heightmap
    * 
    * @example
-   * const manager = new LODManager({ ... });
+   * const manager = new LODManager({ 
+   *   distances: [2, 5],
+   *   meshResolutions: [1.0, 0.5, 0.25],
+   *   featureDensities: [1.0, 0.5, 0.1]
+   * });
+   * 
+   * // Original chunk: size=32, heightmap=33x33 (1089 vertices)
    * const lodChunk = manager.applyLOD(fullChunk, LODLevel.MEDIUM);
-   * // Returns chunk with reduced heightmap resolution and fewer features
+   * // Result: size=16, heightmap=17x17 (289 vertices), 50% features
+   * 
+   * @since 1.0.0 - Fixed to update chunk.size after downsampling
    */
   applyLOD(chunk: any, level: LODLevel): any {
     const resolution = this.getMeshResolution(level);
@@ -133,9 +145,14 @@ export class LODManager {
       return chunk;
     }
 
+    // Calculate new size after downsampling
+    const newSize = Math.max(1, Math.floor(chunk.size * resolution));
+
     // Create LOD-adjusted chunk
+    // CRITICAL: Update chunk.size to match the downsampled heightmap dimensions
     const lodChunk = {
       ...chunk,
+      size: newSize,
       heightmap: this.downsampleHeightmap(chunk.heightmap, chunk.size, resolution),
       resources: this.filterFeatures(chunk.resources, density, chunk.x * 1000 + chunk.y),
       structures: this.filterFeatures(chunk.structures, density, chunk.x * 2000 + chunk.y),
@@ -148,58 +165,91 @@ export class LODManager {
    * Reduces heightmap resolution using bilinear interpolation
    * Downsamples the heightmap to a lower resolution based on the resolution multiplier
    * 
-   * @param heightmap - Full-resolution heightmap
-   * @param size - Original size (width/height of square heightmap)
+   * **CRITICAL**: Preserves seamless boundaries structure by maintaining (newSize + 1) x (newSize + 1) size.
+   * This ensures that adjacent chunks at the same LOD level share edge vertices, preventing gaps or seams
+   * in the rendered terrain.
+   * 
+   * **Algorithm**:
+   * 1. Calculate new chunk size: newSize = floor(size * resolution)
+   * 2. Create heightmap with (newSize + 1) x (newSize + 1) vertices
+   * 3. For each vertex in new heightmap, map to original coordinates
+   * 4. Use bilinear interpolation to sample height from 4 neighboring vertices
+   * 
+   * **Special Case**: For 1x1 chunks (2x2 heightmap), all vertices are set to the center value
+   * of the original heightmap to avoid interpolation artifacts.
+   * 
+   * @param heightmap - Full-resolution heightmap with size (size + 1) x (size + 1)
+   * @param size - Original chunk size (heightmap has size + 1 vertices per side)
    * @param resolution - Target resolution multiplier (0-1)
-   * @returns Downsampled heightmap
+   * @returns Downsampled heightmap with size (newSize + 1) x (newSize + 1)
    * 
    * @example
+   * // Downsample 32x32 chunk (33x33 heightmap) to 50% resolution
    * const downsampled = manager.downsampleHeightmap(heightmap, 32, 0.5);
-   * // Returns a 16x16 heightmap downsampled from 32x32 using bilinear interpolation
+   * // Returns 17x17 heightmap (16+1) with bilinear interpolation
+   * 
+   * @example
+   * // Downsample to 1x1 chunk (2x2 heightmap)
+   * const downsampled = manager.downsampleHeightmap(heightmap, 32, 0.03125);
+   * // Returns 2x2 heightmap with all vertices set to center value
+   * 
+   * @since 1.0.0 - Fixed to generate (newSize + 1) x (newSize + 1) heightmap for seamless boundaries
    */
   private downsampleHeightmap(
     heightmap: Float32Array,
     size: number,
     resolution: number
   ): Float32Array {
-    // Calculate new size based on resolution multiplier
+    // Calculate new chunk size based on resolution multiplier
     const newSize = Math.max(1, Math.floor(size * resolution));
-    const newHeightmap = new Float32Array(newSize * newSize);
+    
+    // Heightmap must have (newSize + 1) x (newSize + 1) vertices for seamless boundaries
+    const newVerticesPerSide = newSize + 1;
+    const newHeightmap = new Float32Array(newVerticesPerSide * newVerticesPerSide);
 
-    // Special case for 1x1 - just take the center value
+    // Special case for 1x1 chunk - heightmap should be 2x2
     if (newSize === 1) {
-      const centerIdx = Math.floor(size / 2) * size + Math.floor(size / 2);
-      newHeightmap[0] = heightmap[centerIdx];
+      const oldVerticesPerSide = size + 1;
+      const centerIdx = Math.floor(oldVerticesPerSide / 2) * oldVerticesPerSide + Math.floor(oldVerticesPerSide / 2);
+      const centerValue = heightmap[centerIdx];
+      // Fill all 4 vertices with the center value
+      newHeightmap[0] = centerValue;
+      newHeightmap[1] = centerValue;
+      newHeightmap[2] = centerValue;
+      newHeightmap[3] = centerValue;
       return newHeightmap;
     }
 
     // Downsample using bilinear interpolation
-    for (let y = 0; y < newSize; y++) {
-      for (let x = 0; x < newSize; x++) {
-        // Map new coordinates to original heightmap coordinates
-        const srcX = (x / (newSize - 1)) * (size - 1);
-        const srcY = (y / (newSize - 1)) * (size - 1);
+    const oldVerticesPerSide = size + 1;
+    
+    // Iterate over all vertices in the new heightmap (newSize + 1 per side)
+    for (let y = 0; y <= newSize; y++) {
+      for (let x = 0; x <= newSize; x++) {
+        // Map new vertex coordinates to original heightmap coordinates
+        const srcX = (x / newSize) * size;
+        const srcY = (y / newSize) * size;
 
         // Get integer and fractional parts for bilinear interpolation
         const x0 = Math.floor(srcX);
         const y0 = Math.floor(srcY);
-        const x1 = Math.min(x0 + 1, size - 1);
-        const y1 = Math.min(y0 + 1, size - 1);
+        const x1 = Math.min(x0 + 1, size);
+        const y1 = Math.min(y0 + 1, size);
         const fx = srcX - x0;
         const fy = srcY - y0;
 
-        // Sample four neighboring points
-        const h00 = heightmap[y0 * size + x0];
-        const h10 = heightmap[y0 * size + x1];
-        const h01 = heightmap[y1 * size + x0];
-        const h11 = heightmap[y1 * size + x1];
+        // Sample four neighboring points from original heightmap
+        const h00 = heightmap[y0 * oldVerticesPerSide + x0];
+        const h10 = heightmap[y0 * oldVerticesPerSide + x1];
+        const h01 = heightmap[y1 * oldVerticesPerSide + x0];
+        const h11 = heightmap[y1 * oldVerticesPerSide + x1];
 
         // Bilinear interpolation
         const h0 = h00 * (1 - fx) + h10 * fx;
         const h1 = h01 * (1 - fx) + h11 * fx;
         const h = h0 * (1 - fy) + h1 * fy;
 
-        newHeightmap[y * newSize + x] = h;
+        newHeightmap[y * newVerticesPerSide + x] = h;
       }
     }
 

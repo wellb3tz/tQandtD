@@ -474,6 +474,172 @@ describe('DemoApp - LOD System Integration', () => {
     });
   });
 
+  describe('Full LOD Workflow Integration (Task 8)', () => {
+    it('should complete full LOD workflow without errors', async () => {
+      // Step 1: Create DemoApp with LOD configuration
+      app.updateEngineConfig({
+        lodConfig: {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.1]
+        }
+      });
+
+      // Verify LOD manager is created
+      expect(app.getState().lodManager).not.toBeNull();
+
+      // Step 2: Generate a world
+      await app.generateWorld(54321);
+
+      // Verify world is generated
+      const state = app.getState();
+      expect(state.loadedChunkCount).toBeGreaterThan(0);
+
+      // Step 3: Load chunks with different LOD levels
+      app.updateCameraPosition({ x: 0, y: 100, z: 0 });
+      await app.loadChunksAround(0, 0, 3);
+
+      const updatedState = app.getState();
+      const chunks = Array.from(updatedState.loadedChunks.values());
+
+      // Step 4: Verify no errors occur
+      // Check that all chunks have valid data
+      for (const chunk of chunks) {
+        expect(chunk).toBeDefined();
+        expect(chunk.heightmap).toBeDefined();
+        expect(chunk.heightmap.length).toBeGreaterThan(0);
+        expect(chunk.size).toBeGreaterThan(0);
+      }
+
+      // Verify we have chunks at different LOD levels
+      const highLODChunks = chunks.filter(c => (c as any).lodLevel === LODLevel.HIGH);
+      const mediumLODChunks = chunks.filter(c => (c as any).lodLevel === LODLevel.MEDIUM);
+      const lowLODChunks = chunks.filter(c => (c as any).lodLevel === LODLevel.LOW);
+
+      expect(highLODChunks.length).toBeGreaterThan(0);
+      expect(mediumLODChunks.length + lowLODChunks.length).toBeGreaterThan(0);
+
+      // Step 5: Verify terrain displays correctly with proper heightmap sizes
+      for (const chunk of chunks) {
+        const chunkSize = chunk.size;
+        const expectedHeightmapSize = (chunkSize + 1) * (chunkSize + 1);
+        
+        // Verify heightmap has correct size for seamless boundaries
+        expect(chunk.heightmap.length).toBe(expectedHeightmapSize);
+        
+        // Verify heightmap contains valid height values
+        for (let i = 0; i < chunk.heightmap.length; i++) {
+          expect(chunk.heightmap[i]).toBeDefined();
+          expect(typeof chunk.heightmap[i]).toBe('number');
+          expect(isNaN(chunk.heightmap[i])).toBe(false);
+        }
+      }
+
+      // Verify LOD statistics are correct
+      expect(updatedState.lodHighCount).toBe(highLODChunks.length);
+      expect(updatedState.lodMediumCount).toBe(mediumLODChunks.length);
+      expect(updatedState.lodLowCount).toBe(lowLODChunks.length);
+    });
+
+    it('should handle LOD transitions when camera moves', async () => {
+      // Setup LOD configuration
+      app.updateEngineConfig({
+        lodConfig: {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.1]
+        }
+      });
+
+      // Generate world and load chunks
+      await app.generateWorld(54321);
+      await app.loadChunksAround(0, 0, 5);
+
+      // Camera at origin - chunks nearby should be HIGH LOD
+      app.updateCameraPosition({ x: 0, y: 100, z: 0 });
+      
+      const state1 = app.getState();
+      const chunks1 = Array.from(state1.loadedChunks.values());
+      
+      // Verify all chunks have valid heightmaps
+      for (const chunk of chunks1) {
+        const expectedSize = (chunk.size + 1) * (chunk.size + 1);
+        expect(chunk.heightmap.length).toBe(expectedSize);
+      }
+
+      // Move camera far away
+      app.updateCameraPosition({ x: 320, y: 100, z: 320 });
+      
+      const state2 = app.getState();
+      const chunks2 = Array.from(state2.loadedChunks.values());
+      
+      // Verify all chunks still have valid heightmaps after LOD update
+      for (const chunk of chunks2) {
+        const expectedSize = (chunk.size + 1) * (chunk.size + 1);
+        expect(chunk.heightmap.length).toBe(expectedSize);
+      }
+
+      // LOD distribution should have changed
+      const lodChanged = 
+        state1.lodHighCount !== state2.lodHighCount ||
+        state1.lodMediumCount !== state2.lodMediumCount ||
+        state1.lodLowCount !== state2.lodLowCount;
+
+      expect(lodChanged).toBe(true);
+    });
+
+    it('should render chunks correctly through WorldViewer', async () => {
+      // Setup LOD configuration
+      app.updateEngineConfig({
+        lodConfig: {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.1]
+        }
+      });
+
+      // Generate world
+      await app.generateWorld(54321);
+      app.updateCameraPosition({ x: 0, y: 100, z: 0 });
+
+      // Load chunks - this will trigger WorldViewer.addChunk for each chunk
+      await app.loadChunksAround(0, 0, 3);
+
+      const state = app.getState();
+      const chunks = Array.from(state.loadedChunks.values());
+
+      // Verify all chunks were processed without errors
+      expect(chunks.length).toBeGreaterThan(0);
+
+      // Verify each chunk has correct structure
+      for (const chunk of chunks) {
+        // Check basic chunk properties
+        expect(chunk.x).toBeDefined();
+        expect(chunk.y).toBeDefined();
+        expect(chunk.size).toBeGreaterThan(0);
+        
+        // Check heightmap
+        expect(chunk.heightmap).toBeDefined();
+        const expectedHeightmapSize = (chunk.size + 1) * (chunk.size + 1);
+        expect(chunk.heightmap.length).toBe(expectedHeightmapSize);
+        
+        // Check LOD level is assigned
+        expect((chunk as any).lodLevel).toBeDefined();
+        expect((chunk as any).lodLevel).toBeGreaterThanOrEqual(0);
+        expect((chunk as any).lodLevel).toBeLessThanOrEqual(2);
+      }
+
+      // Verify LOD statistics match actual chunks
+      const highCount = chunks.filter(c => (c as any).lodLevel === LODLevel.HIGH).length;
+      const mediumCount = chunks.filter(c => (c as any).lodLevel === LODLevel.MEDIUM).length;
+      const lowCount = chunks.filter(c => (c as any).lodLevel === LODLevel.LOW).length;
+
+      expect(state.lodHighCount).toBe(highCount);
+      expect(state.lodMediumCount).toBe(mediumCount);
+      expect(state.lodLowCount).toBe(lowCount);
+    });
+  });
+
   describe('LOD Statistics Display (Requirement 7.5)', () => {
     beforeEach(() => {
       app.updateEngineConfig({

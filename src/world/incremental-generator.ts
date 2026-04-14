@@ -69,6 +69,7 @@ export class IncrementalGenerator {
       x: chunkX,
       y: chunkY,
       stage: GenerationStage.TERRAIN,
+      completedStages: new Set<GenerationStage>(),
       data: {
         x: chunkX,
         y: chunkY,
@@ -101,20 +102,30 @@ export class IncrementalGenerator {
       return true;
     }
 
-    // Execute current stage
-    const completed = this.executeStage(partial, partial.stage);
-
-    if (completed) {
-      // Move to next stage
-      partial.stage++;
-
-      // If all stages complete, mark as complete
-      if (partial.stage === GenerationStage.COMPLETE) {
-        return true;
+    // Loop through stages while we have time budget
+    let shouldContinue = true;
+    while (shouldContinue && partial.stage !== GenerationStage.COMPLETE) {
+      // Check if current stage is already complete
+      if (partial.completedStages.has(partial.stage)) {
+        // Stage already complete, advance to next stage immediately
+        partial.stage++;
+        
+        // If all stages complete, return true
+        if (partial.stage === GenerationStage.COMPLETE) {
+          return true;
+        }
+        
+        // Continue to next stage in the loop
+        continue;
       }
+
+      // Execute current stage
+      // Returns true if within budget (continue), false if exceeded (yield)
+      shouldContinue = this.executeStage(partial, partial.stage);
     }
 
-    return false;
+    // Return true if complete, false if yielding
+    return partial.stage === GenerationStage.COMPLETE;
   }
 
   /**
@@ -168,7 +179,7 @@ export class IncrementalGenerator {
    * Executes terrain generation stage
    * @param partial - Partial chunk data
    * @param startTime - Stage start time
-   * @returns True if stage completed within time budget
+   * @returns True if within budget (continue to next stage), false if exceeded (yield)
    */
   private executeTerrainStage(partial: PartialChunkData, startTime: number): boolean {
     // Generate heightmap using TerrainGenerator with chunk coordinates for seamless boundaries
@@ -180,8 +191,16 @@ export class IncrementalGenerator {
       partial.y
     );
     
+    // Mark stage as complete
+    partial.completedStages.add(GenerationStage.TERRAIN);
+    
+    // Advance to next stage
+    partial.stage = GenerationStage.BIOMES;
+    
     // Check time budget
     const elapsed = performance.now() - startTime;
+    
+    // Return true if within budget (continue), false if exceeded (yield)
     return elapsed < this.config.timeBudgetMs;
   }
 
@@ -189,7 +208,7 @@ export class IncrementalGenerator {
    * Executes biome generation stage
    * @param partial - Partial chunk data
    * @param startTime - Stage start time
-   * @returns True if stage completed within time budget
+   * @returns True if within budget (continue to next stage), false if exceeded (yield)
    */
   private executeBiomesStage(partial: PartialChunkData, startTime: number): boolean {
     if (!partial.data.heightmap) {
@@ -198,11 +217,20 @@ export class IncrementalGenerator {
 
     const size = this.worldConfig.chunkSize;
     const heightmap = partial.data.heightmap;
-    const biomeMap = new Uint8Array(size * size);
     
-    // Calculate number of biome types for weights array
-    const numBiomes = 8; // BiomeType enum has 8 values (0-7)
-    const biomeWeights = new Float32Array(size * size * numBiomes);
+    // Initialize arrays on first call
+    if (!partial.data.biomeMap) {
+      partial.data.biomeMap = new Uint8Array(size * size);
+    }
+    if (!partial.data.biomeWeights) {
+      // Calculate number of biome types for weights array
+      const numBiomes = 8; // BiomeType enum has 8 values (0-7)
+      partial.data.biomeWeights = new Float32Array(size * size * numBiomes);
+    }
+    
+    const biomeMap = partial.data.biomeMap;
+    const biomeWeights = partial.data.biomeWeights;
+    const numBiomes = 8;
 
     // Convert chunk coordinates to world coordinates
     const worldX = partial.x * size;
@@ -231,8 +259,13 @@ export class IncrementalGenerator {
       return this.terrainGenerator.getHeightAt(worldPosX, worldPosY, this.worldConfig.seed);
     };
 
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
+    // Resume from saved position or start from beginning
+    const startY = partial.biomesProgress?.currentY || 0;
+    const startX = partial.biomesProgress?.currentX || 0;
+
+    // Generate biomes for the chunk with intra-stage yielding
+    for (let y = startY; y < size; y++) {
+      for (let x = (y === startY ? startX : 0); x < size; x++) {
         const index = y * size + x;
         // Sample height from heightmap (using vertex coordinates)
         const height = heightmap[y * vertexCount + x];
@@ -254,24 +287,31 @@ export class IncrementalGenerator {
           biomeWeights[weightOffset + b] = weights.get(b) || 0;
         }
 
-        // Check time budget periodically (every row)
-        if (x === size - 1) {
+        // Check budget every 4 tiles for fine-grained yielding
+        if ((y * size + x) % 4 === 0) {
           const elapsed = performance.now() - startTime;
           if (elapsed >= this.config.timeBudgetMs) {
-            // Yield - save progress and return false
-            // Note: For simplicity, we complete the current row before yielding
-            // A more sophisticated implementation could save mid-row state
-            return false;
+            // Save progress and yield
+            partial.biomesProgress = { currentY: y, currentX: x + 1 };
+            return false; // Yield - exceeded budget
           }
         }
       }
     }
 
-    partial.data.biomeMap = biomeMap;
-    partial.data.biomeWeights = biomeWeights;
+    // All biomes generated - clear progress and mark complete
+    delete partial.biomesProgress;
+    
+    // Mark stage as complete
+    partial.completedStages.add(GenerationStage.BIOMES);
+    
+    // Advance to next stage
+    partial.stage = GenerationStage.RIVERS;
     
     // Check time budget
     const elapsed = performance.now() - startTime;
+    
+    // Return true if within budget (continue), false if exceeded (yield)
     return elapsed < this.config.timeBudgetMs;
   }
 
@@ -279,7 +319,7 @@ export class IncrementalGenerator {
    * Executes river generation stage
    * @param partial - Partial chunk data
    * @param startTime - Stage start time
-   * @returns True if stage completed within time budget
+   * @returns True if within budget (continue to next stage), false if exceeded (yield)
    */
   private executeRiversStage(partial: PartialChunkData, startTime: number): boolean {
     if (!partial.data.heightmap || !partial.data.biomeMap) {
@@ -305,8 +345,16 @@ export class IncrementalGenerator {
     // Generate rivers using RiverGenerator
     partial.data.rivers = this.riverGenerator.generateRivers(tempChunk, seed);
     
+    // Mark stage as complete
+    partial.completedStages.add(GenerationStage.RIVERS);
+    
+    // Advance to next stage
+    partial.stage = GenerationStage.RESOURCES;
+    
     // Check time budget
     const elapsed = performance.now() - startTime;
+    
+    // Return true if within budget (continue), false if exceeded (yield)
     return elapsed < this.config.timeBudgetMs;
   }
 
@@ -314,7 +362,7 @@ export class IncrementalGenerator {
    * Executes resource generation stage
    * @param partial - Partial chunk data
    * @param startTime - Stage start time
-   * @returns True if stage completed within time budget
+   * @returns True if within budget (continue to next stage), false if exceeded (yield)
    */
   private executeResourcesStage(partial: PartialChunkData, startTime: number): boolean {
     if (!partial.data.heightmap || !partial.data.biomeMap) {
@@ -340,8 +388,16 @@ export class IncrementalGenerator {
     // Generate resources using ResourceGenerator
     partial.data.resources = this.resourceGenerator.generateResources(tempChunk, seed);
     
+    // Mark stage as complete
+    partial.completedStages.add(GenerationStage.RESOURCES);
+    
+    // Advance to next stage
+    partial.stage = GenerationStage.STRUCTURES;
+    
     // Check time budget
     const elapsed = performance.now() - startTime;
+    
+    // Return true if within budget (continue), false if exceeded (yield)
     return elapsed < this.config.timeBudgetMs;
   }
 
@@ -349,7 +405,7 @@ export class IncrementalGenerator {
    * Executes structure generation stage
    * @param partial - Partial chunk data
    * @param startTime - Stage start time
-   * @returns True if stage completed within time budget
+   * @returns True if within budget (continue to next stage), false if exceeded (yield)
    */
   private executeStructuresStage(partial: PartialChunkData, startTime: number): boolean {
     if (!partial.data.heightmap || !partial.data.biomeMap) {
@@ -375,8 +431,16 @@ export class IncrementalGenerator {
     // Generate structures using StructurePlacer
     partial.data.structures = this.structurePlacer.generateStructures(tempChunk, seed);
     
+    // Mark stage as complete
+    partial.completedStages.add(GenerationStage.STRUCTURES);
+    
+    // Advance to next stage (COMPLETE)
+    partial.stage = GenerationStage.COMPLETE;
+    
     // Check time budget
     const elapsed = performance.now() - startTime;
+    
+    // Return true if within budget (continue), false if exceeded (yield)
     return elapsed < this.config.timeBudgetMs;
   }
 

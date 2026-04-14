@@ -9,6 +9,7 @@ import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
 import { WorldConfig } from '../../../src/index';
 import { PRESETS, PresetConfig, getPresetByName } from '../config/presets';
 import { TerrainEditor } from '../editor/TerrainEditor';
+import { getWorkerUrl } from '../../worker-loader';
 
 /**
  * Parameter change callback type
@@ -864,11 +865,8 @@ export class ControlPanel {
           ? navigator.hardwareConcurrency 
           : 4;
         
-        // In dev mode, Vite serves from the src directory
-        // In production, the worker is in the dist root
-        const workerUrl = import.meta.env.DEV 
-          ? new URL('../../../src/worker.ts', import.meta.url).href
-          : '/worker.js';
+        // Use the worker loader to get the correct URL for dev/prod
+        const workerUrl = getWorkerUrl();
         
         const newConfig: Partial<WorldConfig> = {
           workerPoolConfig: {

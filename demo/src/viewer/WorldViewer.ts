@@ -156,7 +156,7 @@ export class WorldViewer {
     this.frustum = new THREE.Frustum();
     this.frustumMatrix = new THREE.Matrix4();
     this.enableFrustumCulling = true;
-    this.cullingCheckInterval = 100; // Check every 100ms
+    this.cullingCheckInterval = 16; // Check every 16ms (every frame at 60 FPS)
     this.lastCullingCheck = 0;
     
     // Initialize layer visibility (all visible by default)
@@ -458,6 +458,12 @@ export class WorldViewer {
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): void {
     const key = this.getChunkKey(chunkX, chunkY);
     
+    // Skip if heightmap is not yet generated (early stage of incremental generation)
+    if (!data.heightmap) {
+      console.log(`Skipping chunk (${chunkX}, ${chunkY}) - heightmap not yet generated`);
+      return;
+    }
+    
     // Remove existing chunk if present
     if (this.chunkMeshes.has(key)) {
       this.removeChunk(chunkX, chunkY);
@@ -480,24 +486,33 @@ export class WorldViewer {
     this.scene.add(chunkMesh.terrain);
     
     // Only add complete layers if not partial or if stage is complete
+    // Rivers: Render only on HIGH and MEDIUM LOD
     if (!partial || (stage !== undefined && stage >= 2)) { // GenerationStage.RIVERS = 2
       if (this.layerVisibility.get(RenderLayer.RIVERS) && data.rivers && data.rivers.size > 0) {
-        chunkMesh.rivers = this.createRiverOverlay(chunkX, chunkY, data);
-        this.scene.add(chunkMesh.rivers);
+        if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
+          chunkMesh.rivers = this.createRiverOverlay(chunkX, chunkY, data);
+          this.scene.add(chunkMesh.rivers);
+        }
       }
     }
     
+    // Resources: Render only on HIGH LOD
     if (!partial || (stage !== undefined && stage >= 3)) { // GenerationStage.RESOURCES = 3
       if (this.layerVisibility.get(RenderLayer.RESOURCES) && data.resources && data.resources.length > 0) {
-        chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
-        this.scene.add(chunkMesh.resources);
+        if (lodLevel === undefined || lodLevel === 0) { // Only HIGH
+          chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
+          this.scene.add(chunkMesh.resources);
+        }
       }
     }
     
+    // Structures: Render only on HIGH and MEDIUM LOD
     if (!partial || (stage !== undefined && stage >= 4)) { // GenerationStage.STRUCTURES = 4
       if (this.layerVisibility.get(RenderLayer.STRUCTURES) && data.structures && data.structures.length > 0) {
-        chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
-        this.scene.add(chunkMesh.structures);
+        if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
+          chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
+          this.scene.add(chunkMesh.structures);
+        }
       }
     }
     
@@ -576,6 +591,25 @@ export class WorldViewer {
    */
   private createTerrainMesh(chunkX: number, chunkY: number, data: ChunkData, lodLevel?: number, partial: boolean = false, stage?: number): THREE.Mesh {
     const chunkSize = data.size;
+    
+    // VALIDATION: Check if heightmap has the correct size
+    const expectedHeightmapSize = (chunkSize + 1) * (chunkSize + 1);
+    if (data.heightmap.length !== expectedHeightmapSize) {
+      console.error(
+        `Heightmap size mismatch! Expected ${expectedHeightmapSize} (${chunkSize + 1}x${chunkSize + 1}), ` +
+        `got ${data.heightmap.length}. Chunk: (${chunkX}, ${chunkY}), LOD: ${lodLevel}`
+      );
+      
+      // Create fallback heightmap with the correct size
+      const fallbackHeightmap = new Float32Array(expectedHeightmapSize);
+      // Copy available data
+      const copySize = Math.min(data.heightmap.length, expectedHeightmapSize);
+      for (let i = 0; i < copySize; i++) {
+        fallbackHeightmap[i] = data.heightmap[i];
+      }
+      data = { ...data, heightmap: fallbackHeightmap };
+    }
+    
     const geometry = new THREE.BufferGeometry();
     
     // For seamless boundaries, we need (chunkSize + 1) vertices per side

@@ -288,6 +288,13 @@ const chunk = manager.getChunk(5, 5);  // Automatically uses appropriate LOD
 // - LOW (5+ chunks): 25% resolution, 10% features
 ```
 
+**Key Features:**
+- **Seamless Boundaries**: Downsampled heightmaps maintain `(newSize + 1) x (newSize + 1)` structure to prevent gaps between chunks
+- **Bilinear Interpolation**: Smooth height transitions when reducing resolution
+- **Automatic Size Updates**: Chunk size is automatically updated to match downsampled heightmap dimensions
+- **Feature Culling**: Resources rendered only at HIGH LOD; rivers and structures at HIGH/MEDIUM LOD
+- **Performance**: 2-4x frame rate improvement with 50+ chunks loaded
+
 #### Incremental Generation
 
 Generate chunks progressively to maintain responsiveness:

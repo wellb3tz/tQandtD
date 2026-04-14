@@ -30,6 +30,10 @@ export default defineConfig({
       }
     },
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'demo/index.html'),
+        worker: resolve(__dirname, 'src/worker.ts')
+      },
       output: {
         manualChunks: {
           'three': ['three'],
@@ -58,7 +62,10 @@ export default defineConfig({
           ]
         },
         chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: (chunkInfo) => {
+          // Worker should be at root for easy loading
+          return chunkInfo.name === 'worker' ? 'worker.js' : 'assets/[name]-[hash].js';
+        },
         assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
@@ -66,5 +73,8 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['three', 'pako']
+  },
+  worker: {
+    format: 'es'
   }
 });

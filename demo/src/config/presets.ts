@@ -6,6 +6,7 @@
  */
 
 import { WorldConfig, BiomeType, ResourceType, StructureType } from '../../../src/index';
+import { getWorkerUrl } from '../../worker-loader';
 
 /**
  * Preset configuration interface
@@ -269,7 +270,7 @@ const PERFORMANCE_TEST_PRESET: PresetConfig = {
     },
     workerPoolConfig: {
       maxWorkers: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4,
-      workerScriptUrl: '/worker.js'
+      workerScriptUrl: getWorkerUrl()
     },
     incrementalConfig: {
       timeBudgetMs: 16,

@@ -345,7 +345,7 @@ describe('LODManager', () => {
         x: 0,
         y: 0,
         size: 32,
-        heightmap: new Float32Array(32 * 32).fill(0.5),
+        heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.5),
         biomeMap: new Uint8Array(32 * 32),
         biomeWeights: new Float32Array(32 * 32 * 8),
         resources: [],
@@ -355,8 +355,8 @@ describe('LODManager', () => {
 
       const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
       
-      // Heightmap should be downsampled to 16x16 (0.5 resolution)
-      expect(result.heightmap.length).toBe(16 * 16);
+      // Heightmap should be downsampled to (16 + 1) x (16 + 1) for seamless boundaries
+      expect(result.heightmap.length).toBe((16 + 1) * (16 + 1));
       expect(result.heightmap).not.toBe(chunk.heightmap);
     });
 
@@ -414,7 +414,7 @@ describe('LODManager', () => {
         x: 5,
         y: 10,
         size: 32,
-        heightmap: new Float32Array(32 * 32).fill(0.7),
+        heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.7),
         biomeMap: new Uint8Array(32 * 32),
         biomeWeights: new Float32Array(32 * 32 * 8),
         resources,
@@ -424,8 +424,8 @@ describe('LODManager', () => {
 
       const result = manager.applyLOD(chunk, LODLevel.LOW);
       
-      // Heightmap should be downsampled to 8x8 (0.25 resolution)
-      expect(result.heightmap.length).toBe(8 * 8);
+      // Heightmap should be downsampled to (8 + 1) x (8 + 1) for seamless boundaries
+      expect(result.heightmap.length).toBe((8 + 1) * (8 + 1));
       
       // Should have approximately 25% of resources (density = 0.25)
       expect(result.resources.length).toBeLessThan(resources.length * 0.5);
@@ -455,7 +455,8 @@ describe('LODManager', () => {
       
       expect(result.x).toBe(7);
       expect(result.y).toBe(13);
-      expect(result.size).toBe(32);
+      // Size should be updated after LOD downsampling (resolution = 0.5, so 32 * 0.5 = 16)
+      expect(result.size).toBe(16);
       expect(result.biomeMap).toBe(chunk.biomeMap);
       expect(result.rivers).toBe(chunk.rivers);
     });
@@ -470,23 +471,25 @@ describe('LODManager', () => {
       };
       const manager = new LODManager(config);
 
-      // Create a simple 4x4 heightmap
+      // Create a simple 4x4 heightmap with (4 + 1) x (4 + 1) = 5x5 vertices
       const heightmap = new Float32Array([
-        0.0, 0.0, 1.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
-        1.0, 1.0, 0.0, 0.0,
-        1.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.5, 1.0, 1.0,
+        0.0, 0.0, 0.5, 1.0, 1.0,
+        0.5, 0.5, 0.5, 0.5, 0.5,
+        1.0, 1.0, 0.5, 0.0, 0.0,
+        1.0, 1.0, 0.5, 0.0, 0.0,
       ]);
 
       // Access private method via any cast for testing
       const result = (manager as any).downsampleHeightmap(heightmap, 4, 0.5);
       
-      expect(result.length).toBe(2 * 2);
+      // newSize = 2, so result should be (2 + 1) x (2 + 1) = 3x3
+      expect(result.length).toBe((2 + 1) * (2 + 1));
       // Corner values should be preserved
       expect(result[0]).toBeCloseTo(0.0, 5);
-      expect(result[1]).toBeCloseTo(1.0, 5);
       expect(result[2]).toBeCloseTo(1.0, 5);
-      expect(result[3]).toBeCloseTo(0.0, 5);
+      expect(result[6]).toBeCloseTo(1.0, 5);
+      expect(result[8]).toBeCloseTo(0.0, 5);
     });
 
     it('should handle uniform heightmap', () => {
@@ -497,10 +500,11 @@ describe('LODManager', () => {
       };
       const manager = new LODManager(config);
 
-      const heightmap = new Float32Array(16 * 16).fill(0.5);
+      const heightmap = new Float32Array((16 + 1) * (16 + 1)).fill(0.5);
       const result = (manager as any).downsampleHeightmap(heightmap, 16, 0.5);
       
-      expect(result.length).toBe(8 * 8);
+      // newSize = 8, so result should be (8 + 1) x (8 + 1) = 9x9
+      expect(result.length).toBe((8 + 1) * (8 + 1));
       // All values should remain 0.5
       for (let i = 0; i < result.length; i++) {
         expect(result[i]).toBeCloseTo(0.5, 5);
@@ -515,10 +519,11 @@ describe('LODManager', () => {
       };
       const manager = new LODManager(config);
 
-      const heightmap = new Float32Array(32 * 32).fill(0.8);
+      const heightmap = new Float32Array((32 + 1) * (32 + 1)).fill(0.8);
       const result = (manager as any).downsampleHeightmap(heightmap, 32, 0.25);
       
-      expect(result.length).toBe(8 * 8);
+      // newSize = 8, so result should be (8 + 1) x (8 + 1) = 9x9
+      expect(result.length).toBe((8 + 1) * (8 + 1));
       for (let i = 0; i < result.length; i++) {
         expect(result[i]).toBeCloseTo(0.8, 5);
       }
@@ -532,20 +537,21 @@ describe('LODManager', () => {
       };
       const manager = new LODManager(config);
 
-      // Create a gradient heightmap
-      const heightmap = new Float32Array(4 * 4);
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 4; x++) {
-          heightmap[y * 4 + x] = x / 3; // Gradient from 0 to 1
+      // Create a gradient heightmap (4 + 1) x (4 + 1) = 5x5
+      const heightmap = new Float32Array((4 + 1) * (4 + 1));
+      for (let y = 0; y <= 4; y++) {
+        for (let x = 0; x <= 4; x++) {
+          heightmap[y * 5 + x] = x / 4; // Gradient from 0 to 1
         }
       }
 
       const result = (manager as any).downsampleHeightmap(heightmap, 4, 0.5);
       
-      expect(result.length).toBe(2 * 2);
+      // newSize = 2, so result should be (2 + 1) x (2 + 1) = 3x3
+      expect(result.length).toBe((2 + 1) * (2 + 1));
       // Should interpolate smoothly
       expect(result[0]).toBeCloseTo(0.0, 5);
-      expect(result[1]).toBeCloseTo(1.0, 5);
+      expect(result[2]).toBeCloseTo(1.0, 5);
     });
 
     it('should handle minimum size of 1', () => {
@@ -556,11 +562,11 @@ describe('LODManager', () => {
       };
       const manager = new LODManager(config);
 
-      const heightmap = new Float32Array(4 * 4).fill(0.6);
-      // Very low resolution should result in 1x1
+      const heightmap = new Float32Array((4 + 1) * (4 + 1)).fill(0.6);
+      // Very low resolution should result in 1x1 chunk with 2x2 heightmap
       const result = (manager as any).downsampleHeightmap(heightmap, 4, 0.1);
       
-      expect(result.length).toBe(1);
+      expect(result.length).toBe(4); // 2x2 for 1x1 chunk
       expect(result[0]).toBeCloseTo(0.6, 5);
     });
   });
@@ -847,7 +853,7 @@ describe('LODManager', () => {
           x: 100,
           y: 100,
           size: 32,
-          heightmap: new Float32Array(32 * 32).fill(0.7),
+          heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.7),
           biomeMap: new Uint8Array(32 * 32),
           biomeWeights: new Float32Array(32 * 32 * 8),
           resources,
@@ -861,8 +867,8 @@ describe('LODManager', () => {
         // Should be LOW LOD
         expect(level).toBe(LODLevel.LOW);
 
-        // Heightmap should be downsampled to 8x8 (0.25 resolution)
-        expect(result.heightmap.length).toBe(8 * 8);
+        // Heightmap should be downsampled to (8 + 1) x (8 + 1) for seamless boundaries
+        expect(result.heightmap.length).toBe((8 + 1) * (8 + 1));
 
         // Should have approximately 25% of features
         expect(result.resources.length).toBeLessThan(resources.length * 0.4);
@@ -934,7 +940,7 @@ describe('LODManager', () => {
           x: 0,
           y: 0,
           size: 32,
-          heightmap: new Float32Array(32 * 32).fill(0.5),
+          heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.5),
           biomeMap: new Uint8Array(32 * 32),
           biomeWeights: new Float32Array(32 * 32 * 8),
           resources: [],
@@ -944,15 +950,15 @@ describe('LODManager', () => {
 
         // HIGH LOD - full resolution
         const highResult = manager.applyLOD(chunk, LODLevel.HIGH);
-        expect(highResult.heightmap.length).toBe(32 * 32);
+        expect(highResult.heightmap.length).toBe((32 + 1) * (32 + 1));
 
-        // MEDIUM LOD - half resolution
+        // MEDIUM LOD - half resolution with seamless boundaries
         const mediumResult = manager.applyLOD(chunk, LODLevel.MEDIUM);
-        expect(mediumResult.heightmap.length).toBe(16 * 16);
+        expect(mediumResult.heightmap.length).toBe((16 + 1) * (16 + 1));
 
-        // LOW LOD - quarter resolution
+        // LOW LOD - quarter resolution with seamless boundaries
         const lowResult = manager.applyLOD(chunk, LODLevel.LOW);
-        expect(lowResult.heightmap.length).toBe(8 * 8);
+        expect(lowResult.heightmap.length).toBe((8 + 1) * (8 + 1));
       });
 
       it('should apply different feature densities across LOD transitions', () => {
@@ -1075,6 +1081,518 @@ describe('LODManager', () => {
 
         // Viewer moves further - LOW LOD
         expect(manager.getLODLevel(chunkX, chunkY, 4, 10)).toBe(LODLevel.LOW);
+      });
+    });
+  });
+
+  describe('LOD Fixes - Task 7', () => {
+    describe('applyLOD updates data.size correctly', () => {
+      it('should update size to 16 for MEDIUM LOD (0.5 resolution) on 32-size chunk', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size: 32,
+          heightmap: new Float32Array((32 + 1) * (32 + 1)),
+          biomeMap: new Uint8Array(32 * 32),
+          biomeWeights: new Float32Array(32 * 32 * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+        
+        // Verify size is updated to 16 (32 * 0.5)
+        expect(result.size).toBe(16);
+      });
+
+      it('should update size to 8 for LOW LOD (0.25 resolution) on 32-size chunk', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size: 32,
+          heightmap: new Float32Array((32 + 1) * (32 + 1)),
+          biomeMap: new Uint8Array(32 * 32),
+          biomeWeights: new Float32Array(32 * 32 * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.LOW);
+        
+        // Verify size is updated to 8 (32 * 0.25)
+        expect(result.size).toBe(8);
+      });
+
+      it('should update size correctly for various chunk sizes at MEDIUM LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const testCases = [
+          { originalSize: 8, expectedSize: 4 },
+          { originalSize: 16, expectedSize: 8 },
+          { originalSize: 32, expectedSize: 16 },
+          { originalSize: 64, expectedSize: 32 },
+        ];
+
+        for (const { originalSize, expectedSize } of testCases) {
+          const chunk: ChunkData = {
+            x: 0,
+            y: 0,
+            size: originalSize,
+            heightmap: new Float32Array((originalSize + 1) * (originalSize + 1)),
+            biomeMap: new Uint8Array(originalSize * originalSize),
+            biomeWeights: new Float32Array(originalSize * originalSize * 8),
+            resources: [],
+            structures: [],
+            rivers: new Set(),
+          };
+
+          const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+          expect(result.size).toBe(expectedSize);
+        }
+      });
+
+      it('should update size correctly for various chunk sizes at LOW LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const testCases = [
+          { originalSize: 8, expectedSize: 2 },
+          { originalSize: 16, expectedSize: 4 },
+          { originalSize: 32, expectedSize: 8 },
+          { originalSize: 64, expectedSize: 16 },
+        ];
+
+        for (const { originalSize, expectedSize } of testCases) {
+          const chunk: ChunkData = {
+            x: 0,
+            y: 0,
+            size: originalSize,
+            heightmap: new Float32Array((originalSize + 1) * (originalSize + 1)),
+            biomeMap: new Uint8Array(originalSize * originalSize),
+            biomeWeights: new Float32Array(originalSize * originalSize * 8),
+            resources: [],
+            structures: [],
+            rivers: new Set(),
+          };
+
+          const result = manager.applyLOD(chunk, LODLevel.LOW);
+          expect(result.size).toBe(expectedSize);
+        }
+      });
+
+      it('should not change size for HIGH LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size: 32,
+          heightmap: new Float32Array((32 + 1) * (32 + 1)),
+          biomeMap: new Uint8Array(32 * 32),
+          biomeWeights: new Float32Array(32 * 32 * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.HIGH);
+        
+        // HIGH LOD should return same chunk reference
+        expect(result).toBe(chunk);
+        expect(result.size).toBe(32);
+      });
+    });
+
+    describe('downsampled heightmap has correct size for seamless boundaries', () => {
+      it('should produce (newSize + 1) x (newSize + 1) heightmap for MEDIUM LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size: 32,
+          heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.5),
+          biomeMap: new Uint8Array(32 * 32),
+          biomeWeights: new Float32Array(32 * 32 * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+        
+        // newSize = 16, so heightmap should be (16 + 1) x (16 + 1) = 17 x 17 = 289
+        const expectedHeightmapSize = (16 + 1) * (16 + 1);
+        expect(result.heightmap.length).toBe(expectedHeightmapSize);
+      });
+
+      it('should produce (newSize + 1) x (newSize + 1) heightmap for LOW LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size: 32,
+          heightmap: new Float32Array((32 + 1) * (32 + 1)).fill(0.5),
+          biomeMap: new Uint8Array(32 * 32),
+          biomeWeights: new Float32Array(32 * 32 * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.LOW);
+        
+        // newSize = 8, so heightmap should be (8 + 1) x (8 + 1) = 9 x 9 = 81
+        const expectedHeightmapSize = (8 + 1) * (8 + 1);
+        expect(result.heightmap.length).toBe(expectedHeightmapSize);
+      });
+
+      it('should produce correct heightmap size for various chunk sizes', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const testCases = [
+          { size: 8, lodLevel: LODLevel.MEDIUM, expectedNewSize: 4 },
+          { size: 16, lodLevel: LODLevel.MEDIUM, expectedNewSize: 8 },
+          { size: 32, lodLevel: LODLevel.MEDIUM, expectedNewSize: 16 },
+          { size: 64, lodLevel: LODLevel.MEDIUM, expectedNewSize: 32 },
+          { size: 8, lodLevel: LODLevel.LOW, expectedNewSize: 2 },
+          { size: 16, lodLevel: LODLevel.LOW, expectedNewSize: 4 },
+          { size: 32, lodLevel: LODLevel.LOW, expectedNewSize: 8 },
+          { size: 64, lodLevel: LODLevel.LOW, expectedNewSize: 16 },
+        ];
+
+        for (const { size, lodLevel, expectedNewSize } of testCases) {
+          const chunk: ChunkData = {
+            x: 0,
+            y: 0,
+            size,
+            heightmap: new Float32Array((size + 1) * (size + 1)),
+            biomeMap: new Uint8Array(size * size),
+            biomeWeights: new Float32Array(size * size * 8),
+            resources: [],
+            structures: [],
+            rivers: new Set(),
+          };
+
+          const result = manager.applyLOD(chunk, lodLevel);
+          const expectedHeightmapSize = (expectedNewSize + 1) * (expectedNewSize + 1);
+          
+          expect(result.heightmap.length).toBe(expectedHeightmapSize);
+        }
+      });
+    });
+
+    describe('bilinear interpolation produces valid values', () => {
+      it('should preserve corner values during downsampling', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        // Create 8x8 chunk with distinct corner values
+        const size = 8;
+        const heightmap = new Float32Array((size + 1) * (size + 1));
+        
+        // Set corner values
+        heightmap[0] = 0.0; // Top-left
+        heightmap[size] = 1.0; // Top-right
+        heightmap[size * (size + 1)] = 2.0; // Bottom-left
+        heightmap[size * (size + 1) + size] = 3.0; // Bottom-right
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+        
+        // newSize = 4, heightmap is 5x5
+        const newSize = 4;
+        
+        // Check corner values are preserved
+        expect(result.heightmap[0]).toBeCloseTo(0.0, 5); // Top-left
+        expect(result.heightmap[newSize]).toBeCloseTo(1.0, 5); // Top-right
+        expect(result.heightmap[newSize * (newSize + 1)]).toBeCloseTo(2.0, 5); // Bottom-left
+        expect(result.heightmap[newSize * (newSize + 1) + newSize]).toBeCloseTo(3.0, 5); // Bottom-right
+      });
+
+      it('should produce interpolated values between samples', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        // Create 4x4 chunk with gradient
+        const size = 4;
+        const heightmap = new Float32Array((size + 1) * (size + 1));
+        
+        // Fill with horizontal gradient (0.0 to 1.0)
+        for (let y = 0; y <= size; y++) {
+          for (let x = 0; x <= size; x++) {
+            heightmap[y * (size + 1) + x] = x / size;
+          }
+        }
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+        
+        // newSize = 2, heightmap is 3x3
+        // Check that gradient is preserved
+        expect(result.heightmap[0]).toBeCloseTo(0.0, 5); // Left edge
+        expect(result.heightmap[1]).toBeCloseTo(0.5, 5); // Middle
+        expect(result.heightmap[2]).toBeCloseTo(1.0, 5); // Right edge
+      });
+
+      it('should produce values within range of original heightmap', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const size = 16;
+        const heightmap = new Float32Array((size + 1) * (size + 1));
+        
+        // Fill with random values between 0.2 and 0.8
+        for (let i = 0; i < heightmap.length; i++) {
+          heightmap[i] = 0.2 + Math.random() * 0.6;
+        }
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.MEDIUM);
+        
+        // All interpolated values should be within original range
+        for (let i = 0; i < result.heightmap.length; i++) {
+          expect(result.heightmap[i]).toBeGreaterThanOrEqual(0.2);
+          expect(result.heightmap[i]).toBeLessThanOrEqual(0.8);
+        }
+      });
+
+      it('should handle uniform heightmap correctly', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.25],
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const size = 32;
+        const uniformValue = 0.75;
+        const heightmap = new Float32Array((size + 1) * (size + 1)).fill(uniformValue);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.LOW);
+        
+        // All values should remain uniform
+        for (let i = 0; i < result.heightmap.length; i++) {
+          expect(result.heightmap[i]).toBeCloseTo(uniformValue, 5);
+        }
+      });
+    });
+
+    describe('special case: 1x1 chunk has 2x2 heightmap', () => {
+      it('should produce 2x2 heightmap for 1x1 chunk at extreme LOD', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.03125], // 0.03125 = 1/32, will produce 1x1 from 32x32
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const size = 32;
+        const heightmap = new Float32Array((size + 1) * (size + 1)).fill(0.6);
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.LOW);
+        
+        // Should produce 1x1 chunk with 2x2 heightmap
+        expect(result.size).toBe(1);
+        expect(result.heightmap.length).toBe(4); // 2x2
+      });
+
+      it('should fill all 4 vertices of 2x2 heightmap with center value', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.125], // Will produce 1x1 from 8x8
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const size = 8;
+        const heightmap = new Float32Array((size + 1) * (size + 1));
+        
+        // Fill with gradient, center should be around 0.5
+        for (let y = 0; y <= size; y++) {
+          for (let x = 0; x <= size; x++) {
+            heightmap[y * (size + 1) + x] = (x + y) / (2 * size);
+          }
+        }
+
+        const chunk: ChunkData = {
+          x: 0,
+          y: 0,
+          size,
+          heightmap,
+          biomeMap: new Uint8Array(size * size),
+          biomeWeights: new Float32Array(size * size * 8),
+          resources: [],
+          structures: [],
+          rivers: new Set(),
+        };
+
+        const result = manager.applyLOD(chunk, LODLevel.LOW);
+        
+        expect(result.size).toBe(1);
+        expect(result.heightmap.length).toBe(4);
+        
+        // All 4 vertices should have the same value (center value)
+        const centerValue = result.heightmap[0];
+        expect(result.heightmap[1]).toBeCloseTo(centerValue, 5);
+        expect(result.heightmap[2]).toBeCloseTo(centerValue, 5);
+        expect(result.heightmap[3]).toBeCloseTo(centerValue, 5);
+      });
+
+      it('should handle 1x1 chunk from various original sizes', () => {
+        const config: LODConfig = {
+          distances: [2, 5],
+          meshResolutions: [1.0, 0.5, 0.0625], // Will produce 1x1 from 16x16
+          featureDensities: [1.0, 0.5, 0.25],
+        };
+        const manager = new LODManager(config);
+
+        const testSizes = [16, 32, 64];
+
+        for (const size of testSizes) {
+          const heightmap = new Float32Array((size + 1) * (size + 1)).fill(0.7);
+
+          const chunk: ChunkData = {
+            x: 0,
+            y: 0,
+            size,
+            heightmap,
+            biomeMap: new Uint8Array(size * size),
+            biomeWeights: new Float32Array(size * size * 8),
+            resources: [],
+            structures: [],
+            rivers: new Set(),
+          };
+
+          // Adjust resolution to produce 1x1
+          const resolution = 1 / size;
+          const customConfig: LODConfig = {
+            distances: [2, 5],
+            meshResolutions: [1.0, 0.5, resolution],
+            featureDensities: [1.0, 0.5, 0.25],
+          };
+          const customManager = new LODManager(customConfig);
+
+          const result = customManager.applyLOD(chunk, LODLevel.LOW);
+          
+          expect(result.size).toBe(1);
+          expect(result.heightmap.length).toBe(4);
+        }
       });
     });
   });

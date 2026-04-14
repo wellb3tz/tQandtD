@@ -396,10 +396,40 @@ export class DemoApp {
           if (incrementalEnabled) {
             // Start incremental generation
             const partial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
+            
+            // Track with initial stage (TERRAIN = 0)
             this.state.chunksInProgress.set(key, partial.stage);
             
-            // Emit event for partial chunk
-            this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk: partial.data, partial: true, stage: partial.stage });
+            // Continue generation through BIOMES stage before first render
+            // This ensures we have both heightmap and biomeMap to avoid grey terrain
+            const GenerationStage = { TERRAIN: 0, BIOMES: 1, RIVERS: 2, RESOURCES: 3, STRUCTURES: 4, COMPLETE: 5 };
+            
+            // Loop until we complete BIOMES stage (reach RIVERS or beyond)
+            // This ensures both TERRAIN and BIOMES stages are complete
+            let currentStage = this.state.chunkManager.getGenerationStage(chunkX, chunkY);
+            while (currentStage !== undefined && currentStage <= GenerationStage.BIOMES) {
+              this.state.chunkManager.continueGeneration(chunkX, chunkY);
+              currentStage = this.state.chunkManager.getGenerationStage(chunkX, chunkY);
+              
+              // Update progress tracking after each call
+              if (currentStage !== undefined) {
+                this.state.chunksInProgress.set(key, currentStage);
+              }
+            }
+            
+            // Get the updated partial data after continuing through BIOMES
+            const updatedPartial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
+            
+            // Verify biomeMap exists before emitting CHUNK_LOADED
+            if (updatedPartial.data.biomeMap && updatedPartial.data.heightmap) {
+              this.emit(AppEvent.CHUNK_LOADED, { 
+                chunkX, 
+                chunkY, 
+                chunk: updatedPartial.data, 
+                partial: currentStage !== GenerationStage.COMPLETE, 
+                stage: currentStage 
+              });
+            }
           } else {
             // Generate chunk immediately
             let chunk = this.state.chunkManager.getChunk(chunkX, chunkY);
@@ -486,6 +516,7 @@ export class DemoApp {
   /**
    * Continue incremental generation for all chunks in progress
    * Should be called in the render loop
+   * Processes a limited number of chunks per frame to avoid blocking
    */
   continueIncrementalGeneration(): void {
     if (!this.state.chunkManager || !this.state.incrementalEnabled) {
@@ -493,9 +524,15 @@ export class DemoApp {
     }
 
     const chunksToRemove: string[] = [];
+    const maxChunksPerFrame = 3; // Limit to 3 chunks per frame to avoid lag
+    let processedCount = 0;
 
-    // Continue generation for all chunks in progress
+    // Continue generation for chunks in progress (limited per frame)
     for (const [key, stage] of this.state.chunksInProgress.entries()) {
+      if (processedCount >= maxChunksPerFrame) {
+        break; // Stop processing to avoid blocking the main thread
+      }
+      
       const [chunkX, chunkY] = key.split(',').map(Number);
       
       try {
@@ -530,12 +567,15 @@ export class DemoApp {
           // Get partial chunk data
           const partial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
           
-          // Emit progress event
+          // Emit progress event (viewer will skip if heightmap not ready)
           this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk: partial.data, partial: true, stage: newStage });
         }
+        
+        processedCount++;
       } catch (error) {
         console.error(`Error continuing generation for chunk (${chunkX}, ${chunkY}):`, error);
         chunksToRemove.push(key);
+        processedCount++;
       }
     }
 
