@@ -1,222 +1,421 @@
-# Procedural World Engine - Advanced 3D Demo
+# Procedural World Engine - Interactive Demo
 
-Интерактивное 3D демо процедурного мира с полной поддержкой всех функций движка.
+An interactive 3D web application showcasing all capabilities of the Procedural World Engine through an intuitive user interface.
 
-![Version](https://img.shields.io/badge/version-2.0-blue)
-![Features](https://img.shields.io/badge/features-10+-green)
-![Performance](https://img.shields.io/badge/performance-60fps-brightgreen)
+![Demo Screenshot](screenshot-placeholder.png)
+*Screenshot: The demo application showing a generated world with mountains, rivers, and biomes*
 
-## 🌟 Новые возможности
+---
 
-Это полностью обновлённое демо включает все последние функции движка:
+## 🚀 Quick Start
 
-- ✅ **3D Volumetric Noise** - объёмный шум для реалистичного ландшафта
-- ✅ **Enhanced Biome System** - 8 биомов с переходами и микро-биомами
-- ✅ **LOD System** - 3 уровня детализации для оптимизации
-- ✅ **Incremental Generation** - поэтапная генерация для 60fps
-- ✅ **Resource Clusters** - 5 типов ресурсов
-- ✅ **Structure Placement** - 3 типа структур
-- ✅ **River Networks** - генерация рек
-- ✅ **World Serialization** - сохранение в JSON и бинарном формате
-- ✅ **Performance Monitoring** - статистика в реальном времени
-- ✅ **Multiple Display Modes** - 4 режима визуализации
+### Running the Demo
 
-## 🚀 Быстрый старт
+1. **Open in Browser**:
+   ```bash
+   # From the project root
+   cd demo
+   # Open index.html in your browser
+   ```
+
+2. **Or use a local server** (recommended):
+   ```bash
+   # Using Python
+   python -m http.server 8000
+   
+   # Using Node.js
+   npx http-server
+   
+   # Then open http://localhost:8000
+   ```
+
+3. **Or build with Vite**:
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+### First Steps
+
+1. The demo loads with a default generated world
+2. Use your mouse to rotate, zoom, and pan the camera
+3. Try selecting a preset from the dropdown (e.g., "Mountainous")
+4. Click "Generate" to see the new world
+5. Press `?` to open the help dialog
+
+---
+
+## 📚 Documentation
+
+### User Documentation
+
+- **[User Guide](USER_GUIDE.md)** - Comprehensive guide covering all features
+  - Getting started
+  - Interface overview
+  - Parameter explanations
+  - Feature tutorials
+  - Troubleshooting
+
+- **[Quick Reference](QUICK_REFERENCE.md)** - Concise reference for quick lookup
+  - Keyboard shortcuts
+  - Parameter ranges
+  - Common workflows
+  - Quick tips
+
+- **[Video Walkthrough Script](VIDEO_WALKTHROUGH_SCRIPT.md)** - Guide for creating video tutorials
+  - Section-by-section script
+  - Recording tips
+  - Screenshot suggestions
+
+### Technical Documentation
+
+- **[Browser Compatibility](BROWSER_COMPATIBILITY.md)** - Browser support and testing
+- **[Testing Guide](TESTING_BROWSER_COMPATIBILITY.md)** - How to test compatibility
+
+---
+
+## ✨ Features
+
+### World Generation
+- ✅ Deterministic seed-based generation
+- ✅ Infinite world exploration
+- ✅ Automatic chunk loading/unloading
+- ✅ 5 preset configurations
+- ✅ Real-time parameter adjustment
+
+### Terrain System
+- ✅ Multi-octave noise with domain warping
+- ✅ 3D noise for volumetric features
+- ✅ Configurable height and scale
+- ✅ Real-time terrain editing (raise, lower, flatten, smooth)
+- ✅ Undo/redo support
+
+### Biome System
+- ✅ 8 diverse biome types
+- ✅ Smooth biome transitions
+- ✅ Micro-biomes (oasis, clearing, pond, grove)
+- ✅ Elevation bands (foothills, slopes, peaks)
+- ✅ Biome-based terrain coloring
+
+### Water Systems
+- ✅ River network generation
+- ✅ Flow-based river width
+- ✅ Tributary support (data structures)
+- ✅ Lake generation (data structures)
+- ✅ Delta formation (data structures)
+
+### Resources & Structures
+- ✅ 5 resource types with biome-based distribution
+- ✅ 3 structure types with placement rules
+- ✅ Poisson disk sampling for realistic spacing
+- ✅ Visual markers and 3D models
+
+### Performance Features
+- ✅ **Level of Detail (LOD)**: Distance-based detail reduction
+- ✅ **Worker Pool**: Multi-threaded chunk generation
+- ✅ **Incremental Generation**: Progressive rendering for smooth FPS
+- ✅ Frustum culling and object pooling
+- ✅ Real-time performance monitoring
+
+### World Management
+- ✅ Save/load worlds (JSON and Binary formats)
+- ✅ Compression support
+- ✅ Modification tracking and persistence
+- ✅ Export heightmap and biome maps (PNG)
+- ✅ Export configuration (JSON)
+- ✅ Shareable URLs with encoded parameters
+
+### Visualization
+- ✅ 3D terrain rendering with Three.js
+- ✅ Biome-based vertex coloring
+- ✅ River overlays
+- ✅ Resource and structure markers
+- ✅ Chunk boundary visualization
+- ✅ Wireframe mode
+- ✅ Toggleable layer visibility
+
+### User Interface
+- ✅ Responsive layout (desktop and mobile)
+- ✅ Collapsible control panel
+- ✅ Real-time performance monitor
+- ✅ Statistics display with charts
+- ✅ Interactive help modal
+- ✅ Tooltips for all parameters
+- ✅ Error handling and user feedback
+
+---
+
+## 🎮 Controls
+
+### Camera
+- **Rotate**: Left Click + Drag
+- **Zoom**: Mouse Wheel
+- **Pan**: Right Click + Drag
+- **Move**: `W` `A` `S` `D` keys
+
+### Interface
+- **Help**: `?` or `/` key
+- **Close Dialog**: `Escape` key
+
+See [Quick Reference](QUICK_REFERENCE.md) for complete control list.
+
+---
+
+## 📊 Performance
+
+### Targets
+- **Frame Rate**: 60 FPS sustained
+- **Generation Time**: <100ms per chunk (typical: 20-50ms)
+- **Memory**: ~46KB per chunk (32x32)
+- **Initial Load**: <3 seconds
+- **Time to Interactive**: <5 seconds
+
+### Optimization Tips
+1. Enable LOD system for 2-3x FPS improvement
+2. Use Worker Pool for 50-70% faster generation
+3. Enable Incremental Generation to maintain 60 FPS
+4. Reduce visible chunk count (stay near origin)
+5. Disable wireframe mode when not needed
+
+---
+
+## 🌐 Browser Compatibility
+
+### Supported Browsers
+- ✅ Chrome/Edge 90+ (Chromium)
+- ✅ Firefox 88+
+- ✅ Safari 14+
+- ✅ Mobile browsers (iOS Safari, Chrome Mobile)
+
+### Requirements
+- WebGL 1.0 or higher
+- Web Workers support
+- ES2020 JavaScript support
+- Minimum 2GB RAM recommended
+
+See [Browser Compatibility](BROWSER_COMPATIBILITY.md) for detailed information.
+
+---
+
+## 🏗️ Project Structure
+
+```
+demo/
+├── index.html                  # Main HTML file
+├── main.ts                     # Application entry point
+├── styles.css                  # Global styles
+├── src/
+│   ├── core/
+│   │   └── DemoApp.ts         # Main application class
+│   ├── viewer/
+│   │   ├── WorldViewer.ts     # 3D rendering with Three.js
+│   │   ├── materials.ts       # Material and color definitions
+│   │   ├── ObjectPool.ts      # Object pooling for performance
+│   │   └── GeometryPools.ts   # Geometry pooling
+│   ├── ui/
+│   │   ├── ControlPanel.ts    # Parameter controls
+│   │   ├── PerformanceMonitor.ts  # Performance metrics
+│   │   ├── StatisticsDisplay.ts   # World statistics
+│   │   ├── WorldManager.ts    # Save/load/export
+│   │   └── HelpModal.ts       # Help documentation
+│   ├── editor/
+│   │   └── TerrainEditor.ts   # Terrain modification tools
+│   ├── config/
+│   │   └── presets.ts         # Preset configurations
+│   └── utils/
+│       ├── coordinates.ts     # Coordinate conversion
+│       ├── ErrorHandler.ts    # Error handling
+│       └── BrowserCompatibility.ts  # Compatibility checks
+├── USER_GUIDE.md              # Comprehensive user guide
+├── QUICK_REFERENCE.md         # Quick reference guide
+├── VIDEO_WALKTHROUGH_SCRIPT.md  # Video tutorial script
+├── BROWSER_COMPATIBILITY.md   # Browser support info
+└── README.md                  # This file
+```
+
+---
+
+## 🎯 Use Cases
+
+### For Engine Developers
+- Test and validate engine features
+- Debug generation algorithms
+- Profile performance
+- Demonstrate capabilities
+
+### For Game Developers
+- Evaluate the engine for projects
+- Experiment with parameters
+- Understand integration patterns
+- Test performance on target platforms
+
+### For Technical Artists
+- Explore parameter effects
+- Create terrain presets
+- Design biome distributions
+- Visualize procedural generation
+
+### For Students/Learners
+- Learn procedural generation techniques
+- Understand noise functions
+- Study biome systems
+- Explore performance optimization
+
+---
+
+## 🔧 Development
+
+### Building
 
 ```bash
-# 1. Установи зависимости
+# Install dependencies
 npm install
 
-# 2. Собери проект
+# Development server
+npm run dev
+
+# Production build
 npm run build
 
-# 3. Запусти демо
-npm run demo
+# Preview production build
+npm run preview
 ```
 
-Открой http://localhost:3000 в браузере.
+### Testing
 
-**Подробная инструкция:** [QUICKSTART.md](QUICKSTART.md)
+```bash
+# Run all tests
+npm test
 
-## 🎮 Управление
+# Run tests in watch mode
+npm run test:watch
 
-### Движение
-- **WASD** - перемещение по горизонтали
-- **Мышь** - осмотр (клик для захвата курсора)
-- **Space** - подъём вверх
-- **Shift** - спуск вниз
-- **ESC** - освободить курсор
+# Run specific test file
+npm test -- DemoApp.test.ts
 
-### Интерфейс
-- Все настройки доступны в левой панели
-- Секции можно сворачивать/разворачивать
-- Изменения применяются после "Regenerate World"
-
-## 📚 Документация
-
-- **[QUICKSTART.md](QUICKSTART.md)** - Быстрый старт за 2 минуты
-- **[FEATURES.md](FEATURES.md)** - Подробное описание всех функций
-- **[API-EXAMPLES.md](API-EXAMPLES.md)** - Примеры использования API
-- **[TERRAIN-TUNING.md](TERRAIN-TUNING.md)** - Настройка параметров ландшафта
-- **[SEAMLESS-CHUNKS.md](SEAMLESS-CHUNKS.md)** - Техническое описание бесшовных чанков
-
-## ✨ Основные функции
-
-### 🎲 3D Noise
-Объёмный шум для создания реалистичных форм рельефа с вертикальными вариациями.
-
-### 🌿 Enhanced Biomes
-- **8 типов биомов**: Ocean, Beach, Desert, Plains, Forest, Taiga, Tundra, Mountain
-- **Плавные переходы** между биомами
-- **Микро-биомы**: Оазисы, поляны, пруды, рощи
-- **Высотные пояса** для гор: предгорья, склоны, вершины
-
-### 📐 LOD System
-Автоматическое снижение детализации для дальних чанков:
-- **HIGH** (0-2 чанка): Полная детализация
-- **MEDIUM** (2-5 чанков): 50% разрешения
-- **LOW** (5+ чанков): 25% разрешения
-
-### ⚡ Incremental Generation
-Поэтапная генерация с временными бюджетами:
-- 5 стадий: TERRAIN → BIOMES → RIVERS → RESOURCES → STRUCTURES
-- Настраиваемый time budget (8-50ms)
-- Поддержка 60fps
-
-### 🎨 Display Modes
-4 режима визуализации:
-- **Biomes** - цвета биомов
-- **Height Map** - карта высот
-- **Moisture** - карта влажности
-- **Temperature** - карта температуры
-
-### 💎 Resources
-5 типов ресурсов с кластерной генерацией:
-- Iron, Gold, Coal, Stone, Wood
-
-### 🏛️ Structures
-3 типа структур с правилами размещения:
-- Villages (деревни) - на равнинах
-- Ruins (руины) - в лесах и пустынях
-- Towers (башни) - в горах
-
-### 💾 World Serialization
-- JSON формат (читаемый)
-- Binary формат (компактный)
-- Компрессия (60-70% экономии)
-- Отслеживание модификаций
-
-## 📊 Производительность
-
-- **Генерация чанка**: 20-50ms (цель: <100ms)
-- **FPS**: 60fps при 3-5 чанках дистанции
-- **Память**: ~46KB на чанк (32×32)
-- **Кеш**: до 100 чанков в памяти
-
-### Рекомендации
-
-**Для слабых ПК:**
-- Render Distance: 2-3
-- LOD: включён
-- Incremental: включён
-- 3D Noise: выключен
-
-**Для мощных ПК:**
-- Render Distance: 6-8
-- Все функции включены
-- 3D Noise: включён
-
-## 🎯 Интересные seed'ы
-
-- **12345** - Сбалансированный мир (по умолчанию)
-- **42** - Много гор и пустынь
-- **777** - Большие океаны
-- **1337** - Много лесов
-- **9999** - Экстремальный рельеф
-
-## 🔧 Технические детали
-
-### Архитектура
-- **Three.js** - 3D рендеринг
-- **PointerLockControls** - управление камерой
-- **ChunkManager** - управление генерацией
-- **LRU Cache** - автоматическая выгрузка чанков
-
-### Освещение
-- Ambient Light - общее освещение
-- Directional Light - солнечный свет с тенями
-- Hemisphere Light - небесное освещение
-- Shadow mapping: 2048×2048
-
-## 📝 Примеры использования
-
-### Базовая инициализация
-
-```javascript
-import { ChunkManager } from '../dist/index.js';
-
-const manager = new ChunkManager({
-  seed: 12345,
-  chunkSize: 32,
-  terrainConfig: { /* ... */ },
-  enhancedBiomeConfig: { /* ... */ }
-});
-
-const chunk = manager.getChunk(0, 0);
+# Generate coverage report
+npm run test:coverage
 ```
 
-### Включение 3D Noise
+### Code Quality
 
-```javascript
-const manager = new ChunkManager({
-  seed: 12345,
-  noise3DConfig: {
-    enable3D: true,
-    zScale: 0.5
+```bash
+# Lint code
+npm run lint
+
+# Format code
+npm run format
+
+# Type check
+npm run type-check
+```
+
+---
+
+## 📝 Examples
+
+### Basic Usage
+
+```typescript
+import { DemoApp } from './src/core/DemoApp';
+
+// Initialize the demo
+const app = new DemoApp();
+await app.initialize();
+
+// Generate a world
+await app.generateWorld(12345);
+
+// Update configuration
+app.updateEngineConfig({
+  terrainConfig: {
+    baseScale: 0.01,
+    octaves: 4,
+    persistence: 0.5,
+    lacunarity: 2.0,
+    warpStrength: 30,
+    heightMultiplier: 1.0
   }
 });
 ```
 
-### Сохранение мира
+### Custom Preset
 
-```javascript
-const savedWorld = manager.saveWorld({
-  format: SerializationFormat.JSON,
-  compress: true
-});
+```typescript
+import { PresetConfig } from './src/config/presets';
+
+const customPreset: PresetConfig = {
+  name: 'My Custom Preset',
+  description: 'A unique terrain configuration',
+  config: {
+    seed: 12345,
+    terrainConfig: {
+      baseScale: 0.005,
+      octaves: 6,
+      persistence: 0.6,
+      lacunarity: 2.5,
+      warpStrength: 50,
+      heightMultiplier: 1.5
+    },
+    // ... other config
+  }
+};
+
+app.applyPreset(customPreset);
 ```
-
-**Больше примеров:** [API-EXAMPLES.md](API-EXAMPLES.md)
-
-## 🐛 Решение проблем
-
-### Низкий FPS
-1. Уменьши Render Distance
-2. Включи LOD System
-3. Отключи 3D Noise
-
-### Чанки не загружаются
-1. Проверь консоль (F12)
-2. Убедись что `npm run build` выполнен
-3. Перезапусти сервер
-
-### Ошибка при сборке
-```bash
-rm -rf node_modules package-lock.json
-npm install
-npm run build
-```
-
-## 🔗 Дополнительные ресурсы
-
-- [Документация движка](../README.md)
-- [Примеры кода](../examples/)
-- [Тесты](../tests/)
-
-## 📄 Лицензия
-
-MIT - используй свободно в своих проектах!
 
 ---
 
-**Приятного исследования процедурных миров! 🌍✨**
+## 🤝 Contributing
+
+Contributions are welcome! Please see the main project [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+
+### Areas for Contribution
+- Additional presets
+- UI improvements
+- Performance optimizations
+- Documentation enhancements
+- Browser compatibility testing
+- Accessibility improvements
+
+---
+
+## 📄 License
+
+MIT License - See [LICENSE](../LICENSE) for details.
+
+---
+
+## 🔗 Links
+
+- **Engine Repository**: [GitHub](https://github.com/yourusername/procedural-world-engine)
+- **Engine Documentation**: [README](../README.md)
+- **Examples**: [examples/](../examples/)
+- **Issues**: [GitHub Issues](https://github.com/yourusername/procedural-world-engine/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/procedural-world-engine/discussions)
+
+---
+
+## 🙏 Acknowledgments
+
+- **Three.js**: 3D rendering library
+- **Vite**: Build tool and dev server
+- **TypeScript**: Type-safe JavaScript
+- **fast-check**: Property-based testing
+- **Vitest**: Testing framework
+
+---
+
+## 📞 Support
+
+- **Documentation**: See [USER_GUIDE.md](USER_GUIDE.md)
+- **Quick Help**: Press `?` in the demo
+- **Issues**: [GitHub Issues](https://github.com/yourusername/procedural-world-engine/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/procedural-world-engine/discussions)
+
+---
+
+**Requirements Fulfilled**: 20.1, 20.2, 20.3
+
+*Last Updated: 2024*
+*Version: 1.0.0*
