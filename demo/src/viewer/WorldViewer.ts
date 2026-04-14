@@ -80,7 +80,7 @@ export class WorldViewer {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls;
+  private controls: OrbitControls | null; // Make optional for free camera mode
   
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -101,9 +101,14 @@ export class WorldViewer {
   // Animation frame ID
   private animationFrameId: number | null;
   
-  // Keyboard controls
+  // Free camera controls (FPS-style)
+  private useFreeCamera: boolean;
+  private cameraRotation: { pitch: number; yaw: number };
+  private cameraVelocity: THREE.Vector3;
   private keyboardState: Map<string, boolean>;
   private keyboardMoveSpeed: number;
+  private mouseSensitivity: number;
+  private isPointerLocked: boolean;
   
   // Camera modes
   private followTerrainMode: boolean;
@@ -123,7 +128,7 @@ export class WorldViewer {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 2000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = null; // Will be initialized based on camera mode
     
     this.chunkMeshes = new Map();
     this.layerVisibility = new Map();
@@ -131,9 +136,14 @@ export class WorldViewer {
     this.container = null;
     this.animationFrameId = null;
     
-    // Initialize keyboard controls
+    // Initialize free camera controls (FPS-style)
+    this.useFreeCamera = true; // Default to free camera
+    this.cameraRotation = { pitch: 0, yaw: 0 };
+    this.cameraVelocity = new THREE.Vector3();
     this.keyboardState = new Map();
-    this.keyboardMoveSpeed = 2.0;
+    this.keyboardMoveSpeed = 0.5; // Units per frame
+    this.mouseSensitivity = 0.002;
+    this.isPointerLocked = false;
     
     // Initialize camera modes
     this.followTerrainMode = false;
@@ -168,9 +178,11 @@ export class WorldViewer {
     // Set scene background
     this.scene.background = new THREE.Color(0x87ceeb); // Sky blue
     
-    // Position camera
+    // Position camera for free camera mode
     this.camera.position.set(50, 100, 50);
-    this.camera.lookAt(0, 0, 0);
+    this.cameraRotation.yaw = 0;
+    this.cameraRotation.pitch = -0.3; // Look slightly down
+    this.updateCameraRotation();
     
     // Configure renderer
     this.renderer.shadowMap.enabled = true;
@@ -186,14 +198,18 @@ export class WorldViewer {
     this.directionalLight.shadow.camera.top = 100;
     this.directionalLight.shadow.camera.bottom = -100;
     this.scene.add(this.directionalLight);
+  }
+  
+  /**
+   * Update camera rotation based on pitch and yaw
+   */
+  private updateCameraRotation(): void {
+    // Clamp pitch to prevent camera flipping
+    this.cameraRotation.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.cameraRotation.pitch));
     
-    // Configure orbit controls
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.screenSpacePanning = false;
-    this.controls.minDistance = 10;
-    this.controls.maxDistance = 500;
-    this.controls.maxPolarAngle = Math.PI / 2;
+    // Create rotation quaternion from yaw and pitch
+    const euler = new THREE.Euler(this.cameraRotation.pitch, this.cameraRotation.yaw, 0, 'YXZ');
+    this.camera.quaternion.setFromEuler(euler);
   }
 
   /**
@@ -218,10 +234,48 @@ export class WorldViewer {
     // Set up keyboard controls
     this.setupKeyboardControls();
     
+    // Set up mouse controls for free camera
+    this.setupMouseControls();
+    
     // Start render loop
     this.startRenderLoop();
     
-    console.log('WorldViewer initialized');
+    console.log('WorldViewer initialized with free camera mode');
+  }
+  
+  /**
+   * Set up mouse controls for free camera (FPS-style)
+   */
+  private setupMouseControls(): void {
+    if (!this.container) return;
+    
+    // Click to lock pointer
+    this.container.addEventListener('click', () => {
+      if (this.useFreeCamera && !this.isPointerLocked) {
+        this.container?.requestPointerLock();
+      }
+    });
+    
+    // Handle pointer lock change
+    document.addEventListener('pointerlockchange', () => {
+      this.isPointerLocked = document.pointerLockElement === this.container;
+    });
+    
+    // Handle mouse movement when pointer is locked
+    document.addEventListener('mousemove', (e) => {
+      if (this.isPointerLocked && this.useFreeCamera) {
+        this.cameraRotation.yaw -= e.movementX * this.mouseSensitivity;
+        this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
+        this.updateCameraRotation();
+      }
+    });
+    
+    // Exit pointer lock on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isPointerLocked) {
+        document.exitPointerLock();
+      }
+    });
   }
   
   /**
@@ -229,25 +283,29 @@ export class WorldViewer {
    */
   private setupKeyboardControls(): void {
     window.addEventListener('keydown', (e) => {
-      // Only handle WASD keys
-      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
-        this.keyboardState.set(e.key.toLowerCase(), true);
+      // Handle WASD, Space, and Shift keys
+      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', ' ', 'Shift'].includes(e.key)) {
+        const key = e.key === ' ' ? 'space' : e.key === 'Shift' ? 'shift' : e.key.toLowerCase();
+        this.keyboardState.set(key, true);
         e.preventDefault();
       }
     });
     
     window.addEventListener('keyup', (e) => {
-      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
-        this.keyboardState.set(e.key.toLowerCase(), false);
+      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', ' ', 'Shift'].includes(e.key)) {
+        const key = e.key === ' ' ? 'space' : e.key === 'Shift' ? 'shift' : e.key.toLowerCase();
+        this.keyboardState.set(key, false);
         e.preventDefault();
       }
     });
   }
   
   /**
-   * Update camera position based on keyboard input
+   * Update camera position based on keyboard input (for orbit controls mode only)
    */
   private updateKeyboardMovement(): void {
+    // Only run this method when using orbit controls (not free camera)
+    if (!this.controls || this.useFreeCamera) return;
     if (this.keyboardState.size === 0) return;
     
     const camera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
@@ -293,7 +351,12 @@ export class WorldViewer {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
       
-      // Update keyboard movement
+      // Update free camera movement
+      if (this.useFreeCamera) {
+        this.updateFreeCameraMovement();
+      }
+      
+      // Update keyboard movement (for orbit controls compatibility)
       this.updateKeyboardMovement();
       
       // Update follow terrain mode
@@ -301,8 +364,10 @@ export class WorldViewer {
         this.updateFollowTerrainMode();
       }
       
-      // Update controls
-      this.controls.update();
+      // Update controls (only if using orbit controls)
+      if (this.controls && !this.useFreeCamera) {
+        this.controls.update();
+      }
       
       // Perform frustum culling check periodically
       const now = performance.now();
@@ -317,6 +382,74 @@ export class WorldViewer {
     };
     
     animate();
+  }
+  
+  /**
+   * Update free camera movement based on keyboard input (FPS-style)
+   * Also supports orthographic camera movement in top-down view
+   */
+  private updateFreeCameraMovement(): void {
+    let moveSpeed = this.keyboardMoveSpeed;
+    
+    // Apply speed boost when Shift is held
+    if (this.keyboardState.get('shift')) {
+      moveSpeed *= 3; // 3x speed when holding Shift
+    }
+    
+    // Use orthographic camera if in top-down mode, otherwise use perspective camera
+    const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
+    
+    // Calculate movement direction
+    const movement = new THREE.Vector3();
+    
+    if (this.isOrthographic) {
+      // In top-down view, use simple horizontal movement
+      // W/S = forward/backward (Z axis), A/D = left/right (X axis)
+      if (this.keyboardState.get('w')) {
+        movement.z -= 1; // Move forward (negative Z)
+      }
+      if (this.keyboardState.get('s')) {
+        movement.z += 1; // Move backward (positive Z)
+      }
+      if (this.keyboardState.get('a')) {
+        movement.x -= 1; // Move left (negative X)
+      }
+      if (this.keyboardState.get('d')) {
+        movement.x += 1; // Move right (positive X)
+      }
+    } else {
+      // Free camera mode - use camera direction
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const up = new THREE.Vector3(0, 1, 0);
+      
+      activeCamera.getWorldDirection(forward);
+      right.crossVectors(forward, up).normalize();
+      
+      if (this.keyboardState.get('w')) {
+        movement.add(forward);
+      }
+      if (this.keyboardState.get('s')) {
+        movement.sub(forward);
+      }
+      if (this.keyboardState.get('a')) {
+        movement.sub(right);
+      }
+      if (this.keyboardState.get('d')) {
+        movement.add(right);
+      }
+      
+      // Add vertical movement with Space (only in free camera mode)
+      if (this.keyboardState.get('space')) {
+        movement.add(up);
+      }
+    }
+    
+    // Normalize and apply speed
+    if (movement.length() > 0) {
+      movement.normalize().multiplyScalar(moveSpeed);
+      activeCamera.position.add(movement);
+    }
   }
 
   /**
@@ -602,49 +735,31 @@ export class WorldViewer {
       return riverLayer;
     }
     
-    // Create line segments for each river
-    for (const river of data.rivers.values()) {
-      // Skip rivers without a valid path
-      if (!river.path || river.path.length < 2) {
-        continue;
-      }
+    const vertices: number[] = [];
+    
+    // Convert river indices to world positions
+    for (const index of data.rivers) {
+      const localX = index % chunkSize;
+      const localY = Math.floor(index / chunkSize);
       
-      const vertices: number[] = [];
+      // Get height at this position
+      const heightIndex = localY * (chunkSize + 1) + localX;
+      const height = data.heightmap[heightIndex];
       
-      // Build line segments for this river's path
-      for (let i = 0; i < river.path.length - 1; i++) {
-        const current = river.path[i];
-        const next = river.path[i + 1];
-        
-        const currentHeight = data.heightmap[current.y * chunkSize + current.x];
-        const nextHeight = data.heightmap[next.y * chunkSize + next.x];
-        
-        const worldX1 = chunkX * chunkSize + current.x;
-        const worldZ1 = chunkY * chunkSize + current.y;
-        const worldX2 = chunkX * chunkSize + next.x;
-        const worldZ2 = chunkY * chunkSize + next.y;
-        
-        // Offset slightly above terrain to prevent z-fighting
-        vertices.push(
-          worldX1, currentHeight * 50 + 0.5, worldZ1,
-          worldX2, nextHeight * 50 + 0.5, worldZ2
-        );
-      }
+      const worldX = chunkX * chunkSize + localX;
+      const worldZ = chunkY * chunkSize + localY;
       
-      // Create geometry for this river
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      
-      // Create blue material with enhanced visibility
-      const material = new THREE.LineBasicMaterial({ 
+      // Add a small cube at each river tile
+      const geometry = new THREE.BoxGeometry(0.8, 0.3, 0.8);
+      const material = new THREE.MeshBasicMaterial({ 
         color: 0x0066ff,
-        linewidth: 2,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.7
       });
       
-      const riverSegment = new THREE.LineSegments(geometry, material);
-      riverLayer.add(riverSegment);
+      const riverTile = new THREE.Mesh(geometry, material);
+      riverTile.position.set(worldX + 0.5, height * 50 + 0.2, worldZ + 0.5);
+      riverLayer.add(riverTile);
     }
     
     return riverLayer;
@@ -695,11 +810,35 @@ export class WorldViewer {
       const worldX = chunkX * chunkSize + structure.x;
       const worldZ = chunkY * chunkSize + structure.y;
       
-      const geometry = new THREE.BoxGeometry(2, 3, 2);
-      const material = new THREE.MeshLambertMaterial({ color: this.getStructureColor(structure.type) });
+      // Convert type to number if needed
+      const typeNum = typeof structure.type === 'string' ? parseInt(structure.type, 10) : structure.type;
+      
+      // Create different geometry based on structure type
+      let geometry: THREE.BufferGeometry;
+      let markerHeight: number;
+      
+      switch (typeNum) {
+        case 0: // VILLAGE - Multiple small boxes (houses)
+          geometry = new THREE.BoxGeometry(3, 2, 3);
+          markerHeight = 1;
+          break;
+        case 1: // RUINS - Broken/irregular shape (cylinder)
+          geometry = new THREE.CylinderGeometry(1.5, 1.5, 2.5, 8);
+          markerHeight = 1.25;
+          break;
+        case 2: // TOWER - Tall thin structure
+          geometry = new THREE.BoxGeometry(1.5, 5, 1.5);
+          markerHeight = 2.5;
+          break;
+        default:
+          geometry = new THREE.BoxGeometry(2, 3, 2);
+          markerHeight = 1.5;
+      }
+      
+      const material = new THREE.MeshLambertMaterial({ color: this.getStructureColor(typeNum) });
       const marker = new THREE.Mesh(geometry, material);
       
-      marker.position.set(worldX, height * 50 + 1.5, worldZ);
+      marker.position.set(worldX, height * 50 + markerHeight, worldZ);
       group.add(marker);
     }
     
@@ -748,7 +887,8 @@ export class WorldViewer {
   /**
    * Get resource color
    */
-  private getResourceColor(type: string): number {
+  private getResourceColor(type: string | number): number {
+    const typeStr = typeof type === 'number' ? String(type) : type;
     const colors: { [key: string]: number } = {
       'iron': 0xc0c0c0,
       'gold': 0xffd700,
@@ -757,20 +897,25 @@ export class WorldViewer {
       'wood': 0x8b4513
     };
     
-    return colors[type] || 0xff00ff;
+    return colors[typeStr] || 0xff00ff;
   }
 
   /**
    * Get structure color
    */
-  private getStructureColor(type: string): number {
-    const colors: { [key: string]: number } = {
-      'village': 0x8b4513,
-      'dungeon': 0x2f4f4f,
-      'temple': 0xdaa520
+  private getStructureColor(type: string | number): number {
+    // Convert to number if string
+    const typeNum = typeof type === 'string' ? parseInt(type, 10) : type;
+    
+    // Map structure types to colors
+    // 0 = VILLAGE (brown), 1 = RUINS (gray), 2 = TOWER (gold)
+    const colors: { [key: number]: number } = {
+      0: 0x8b4513,  // VILLAGE - Brown (saddle brown)
+      1: 0x708090,  // RUINS - Gray (slate gray)
+      2: 0xdaa520   // TOWER - Gold
     };
     
-    return colors[type] || 0xff00ff;
+    return colors[typeNum] ?? 0xff00ff; // Magenta fallback for unknown types
   }
 
   /**
@@ -874,8 +1019,10 @@ export class WorldViewer {
    * Set camera target
    */
   setCameraTarget(target: Vector3): void {
-    this.controls.target.set(target.x, target.y, target.z);
-    this.controls.update();
+    if (this.controls) {
+      this.controls.target.set(target.x, target.y, target.z);
+      this.controls.update();
+    }
   }
 
   /**
@@ -890,9 +1037,21 @@ export class WorldViewer {
     // Disable follow terrain mode
     this.followTerrainMode = false;
     
+    // Reset camera position
     this.camera.position.set(50, 100, 50);
-    this.controls.target.set(0, 0, 0);
-    this.controls.update();
+    
+    // Reset camera rotation for free camera mode
+    if (this.useFreeCamera) {
+      this.cameraRotation.yaw = 0;
+      this.cameraRotation.pitch = -0.3; // Look slightly down
+      this.updateCameraRotation();
+    }
+    
+    // Update orbit controls if they exist
+    if (this.controls) {
+      this.controls.target.set(0, 0, 0);
+      this.controls.update();
+    }
   }
   
   /**
@@ -922,14 +1081,18 @@ export class WorldViewer {
       this.orthographicCamera.position.set(0, 200, 0);
       this.orthographicCamera.lookAt(0, 0, 0);
       
-      // Update controls to use orthographic camera
-      this.controls.object = this.orthographicCamera;
-      this.controls.target.set(0, 0, 0);
-      this.controls.update();
+      // Update controls to use orthographic camera (if controls exist)
+      if (this.controls) {
+        this.controls.object = this.orthographicCamera;
+        this.controls.target.set(0, 0, 0);
+        this.controls.update();
+      }
     } else {
       // Switch back to perspective camera
-      this.controls.object = this.camera;
-      this.controls.update();
+      if (this.controls) {
+        this.controls.object = this.camera;
+        this.controls.update();
+      }
     }
   }
   
@@ -951,7 +1114,7 @@ export class WorldViewer {
    * Update camera position to follow terrain at fixed height
    */
   private updateFollowTerrainMode(): void {
-    if (!this.followTerrainMode) return;
+    if (!this.followTerrainMode || !this.controls) return;
     
     const camera = this.camera;
     const targetPos = this.controls.target;
@@ -1000,11 +1163,15 @@ export class WorldViewer {
    * Get current camera target
    */
   getCameraTarget(): Vector3 {
-    return {
-      x: this.controls.target.x,
-      y: this.controls.target.y,
-      z: this.controls.target.z
-    };
+    if (this.controls) {
+      return {
+        x: this.controls.target.x,
+        y: this.controls.target.y,
+        z: this.controls.target.z
+      };
+    }
+    // Return camera position if no controls (free camera mode)
+    return this.getCameraPosition();
   }
 
   /**
@@ -1228,7 +1395,9 @@ export class WorldViewer {
     }
     
     // Dispose controls
-    this.controls.dispose();
+    if (this.controls) {
+      this.controls.dispose();
+    }
     
     // Dispose renderer
     this.renderer.dispose();

@@ -16,6 +16,10 @@ export interface TerrainConfig {
   warpStrength: number;
   /** Multiplier for final height values */
   heightMultiplier: number;
+  /** Enable 3D noise for terrain generation (optional) */
+  enable3D?: boolean;
+  /** Z-axis scale for 3D noise (optional) */
+  zScale?: number;
 }
 
 /**
@@ -52,6 +56,9 @@ export class TerrainGenerator {
     const heightmap = new Float32Array(vertexCount * vertexCount);
     // Use world seed (not chunk seed) to ensure seamless boundaries across chunks
     const noise = noiseEngine3D || new NoiseEngine(worldSeed);
+    
+    // Check if 3D noise is enabled in config
+    const use3D = this.config.enable3D ?? (noiseEngine3D !== undefined);
 
     // Iterate from 0 to chunkSize (inclusive) to create overlapping boundary vertices
     for (let y = 0; y <= chunkSize; y++) {
@@ -61,7 +68,7 @@ export class TerrainGenerator {
         const worldY = chunkY * chunkSize + y;
         
         const index = y * vertexCount + x;
-        heightmap[index] = this.getHeightInternal(worldX, worldY, noise, noiseEngine3D !== undefined);
+        heightmap[index] = this.getHeightInternal(worldX, worldY, noise, use3D);
       }
     }
 
@@ -103,8 +110,9 @@ export class TerrainGenerator {
     if (use3D) {
       // Use 3D noise with z-coordinate as a variation parameter
       // Apply domain warping in 3D space for organic patterns
+      const zScale = this.config.zScale ?? 0.5; // Default to 0.5 if not specified
       const z = 0; // Use z=0 as base, could be varied for different terrain layers
-      const [warpedX, warpedY, warpedZ] = noise.domainWarp3D(x, y, z, this.config.warpStrength);
+      const [warpedX, warpedY, warpedZ] = noise.domainWarp3D(x, y, z * zScale, this.config.warpStrength);
       
       // Sample 3D fBM noise at warped coordinates
       noiseValue = noise.fbm3D(warpedX, warpedY, warpedZ, noiseConfig);

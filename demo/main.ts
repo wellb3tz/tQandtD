@@ -90,9 +90,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       terrainEditor.initialize(app, worldViewer);
       console.log('TerrainEditor initialized successfully');
       
-      // Track camera position for LOD updates
+      // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
+      let lastChunkLoadCheck = 0;
       const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
+      const chunkLoadCheckInterval = 500; // Check for new chunks every 500ms
       
       setInterval(() => {
         if (worldViewer && app) {
@@ -103,6 +105,25 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (now - lastCameraUpdate >= cameraUpdateInterval) {
             app.updateCameraPosition(cameraPos);
             lastCameraUpdate = now;
+          }
+          
+          // Check if we need to load new chunks based on camera position (requirement 2.3, 14.9)
+          if (now - lastChunkLoadCheck >= chunkLoadCheckInterval) {
+            const chunkSize = 32; // Default chunk size
+            const loadRadius = app.getState().viewDistance; // Get view distance from state
+            
+            // Convert camera world position to chunk coordinates
+            const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
+            const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
+            
+            // Load chunks around camera position
+            app.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
+            
+            // Unload distant chunks to manage memory
+            const unloadDistance = loadRadius + 2; // Unload chunks beyond load radius + 2
+            app.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
+            
+            lastChunkLoadCheck = now;
           }
           
           // Update camera position display (requirement 14.8)
@@ -189,18 +210,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       viewerContainer.addEventListener('mousedown', (e) => {
         if (e.button === 0 && app && app.getState().selectedTool !== TerrainTool.NONE) {
           isMouseDown = true;
-          app.handleTerrainClick(e.clientX, e.clientY, worldViewer, terrainEditor);
+          // Get canvas-relative coordinates
+          const canvas = worldViewer?.getCanvas();
+          if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            app.handleTerrainClick(canvasX, canvasY, worldViewer, terrainEditor);
+          }
         }
       });
       
       viewerContainer.addEventListener('mousemove', (e) => {
         if (app && worldViewer && terrainEditor) {
+          // Get canvas-relative coordinates
+          const canvas = worldViewer.getCanvas();
+          const rect = canvas.getBoundingClientRect();
+          const canvasX = e.clientX - rect.left;
+          const canvasY = e.clientY - rect.top;
+          
           // Update brush preview
-          app.handleMouseMove(e.clientX, e.clientY, worldViewer, terrainEditor);
+          app.handleMouseMove(canvasX, canvasY, worldViewer, terrainEditor);
           
           // Apply brush if mouse is down
           if (isMouseDown && app.getState().selectedTool !== TerrainTool.NONE) {
-            app.handleTerrainClick(e.clientX, e.clientY, worldViewer, terrainEditor);
+            app.handleTerrainClick(canvasX, canvasY, worldViewer, terrainEditor);
           }
         }
       });

@@ -227,7 +227,7 @@ export class ControlPanel {
         min: 0,
         max: 100,
         step: 1,
-        defaultValue: 30,
+        defaultValue: 1,
         tooltip: 'Domain warping intensity'
       },
       {
@@ -592,9 +592,9 @@ export class ControlPanel {
       id: 'minDistance',
       label: 'Structure Min Distance',
       min: 5,
-      max: 30,
+      max: 50,
       step: 5,
-      defaultValue: 10,
+      defaultValue: 30,
       tooltip: 'Minimum distance between structures'
     }, (value) => {
       this.updateStructureConfig('minDistance', value);
@@ -609,6 +609,22 @@ export class ControlPanel {
   private createAdvancedControls(): void {
     const advancedContainer = document.getElementById('advanced-controls');
     if (!advancedContainer) return;
+
+    // View Distance slider
+    const viewDistanceControl = this.createSliderControl({
+      id: 'viewDistance',
+      label: 'View Distance (chunks)',
+      min: 1,
+      max: 8,
+      step: 1,
+      defaultValue: 3,
+      tooltip: 'Number of chunks to load around camera (higher = more visible terrain, lower performance)'
+    }, (value) => {
+      if (this.app) {
+        this.app.updateState({ viewDistance: value });
+      }
+    });
+    advancedContainer.appendChild(viewDistanceControl);
 
     // LOD system
     const lodCheckbox = this.createCheckboxControl({
@@ -1206,15 +1222,56 @@ export class ControlPanel {
   private updateBiomeConfig(key: string, value: number | boolean): void {
     if (!this.app || !this.currentConfig) return;
 
-    const newConfig: Partial<WorldConfig> = {
-      biomeConfig: {
+    // Check if this is an enhanced biome feature
+    const enhancedFeatures = [
+      'enableTransitions', 'transitionWidth',
+      'enableMicroBiomes', 'microBiomeFrequency', 'microBiomeMaxSize',
+      'enableElevationBands', 'snowLineElevation', 'treeLineElevation'
+    ];
+    
+    if (enhancedFeatures.includes(key)) {
+      // Update enhancedBiomeConfig
+      const currentEnhancedConfig = this.currentConfig.enhancedBiomeConfig || {
         ...this.currentConfig.biomeConfig,
-        [key]: value
-      }
-    };
+        enableTransitions: false,
+        transitionWidth: 10,
+        enableMicroBiomes: false,
+        microBiomeFrequency: 0.1,
+        microBiomeMaxSize: 20,
+        enableElevationBands: false,
+        snowLineElevation: 0.8,
+        treeLineElevation: 0.75
+      };
 
-    this.app.updateEngineConfig(newConfig);
-    this.notifyParameterChange(newConfig);
+      const newConfig: Partial<WorldConfig> = {
+        enhancedBiomeConfig: {
+          ...currentEnhancedConfig,
+          [key]: value
+        }
+      };
+
+      this.app.updateEngineConfig(newConfig);
+      this.notifyParameterChange(newConfig);
+    } else {
+      // Update basic biomeConfig
+      const newConfig: Partial<WorldConfig> = {
+        biomeConfig: {
+          ...this.currentConfig.biomeConfig,
+          [key]: value
+        }
+      };
+
+      // If enhancedBiomeConfig exists, also update it to keep them in sync
+      if (this.currentConfig.enhancedBiomeConfig) {
+        newConfig.enhancedBiomeConfig = {
+          ...this.currentConfig.enhancedBiomeConfig,
+          [key]: value
+        };
+      }
+
+      this.app.updateEngineConfig(newConfig);
+      this.notifyParameterChange(newConfig);
+    }
   }
 
   /**
@@ -1223,15 +1280,56 @@ export class ControlPanel {
   private updateRiverConfig(key: string, value: number | boolean): void {
     if (!this.app || !this.currentConfig) return;
 
-    const newConfig: Partial<WorldConfig> = {
-      riverConfig: {
+    // Check if this is a river network feature (tributaries, lakes, deltas)
+    const networkFeatures = ['enableTributaries', 'tributaryProbability', 'enableLakes', 'enableDeltas'];
+    
+    if (networkFeatures.includes(key)) {
+      // Update riverNetworkConfig
+      const currentNetworkConfig = this.currentConfig.riverNetworkConfig || {
         ...this.currentConfig.riverConfig,
-        [key]: value
-      }
-    };
+        enableTributaries: false,
+        maxTributaryOrder: 2,
+        tributaryProbability: 0.3,
+        enableLakes: false,
+        lakeDepressionThreshold: 0.05,
+        maxLakeSize: 100,
+        enableDeltas: false,
+        deltaBranchCount: 3,
+        deltaSpreadAngle: Math.PI / 3,
+        minFlow: 1.0,
+        maxFlow: 100.0,
+        widthScale: 0.5
+      };
 
-    this.app.updateEngineConfig(newConfig);
-    this.notifyParameterChange(newConfig);
+      const newConfig: Partial<WorldConfig> = {
+        riverNetworkConfig: {
+          ...currentNetworkConfig,
+          [key]: value
+        }
+      };
+
+      this.app.updateEngineConfig(newConfig);
+      this.notifyParameterChange(newConfig);
+    } else {
+      // Update basic riverConfig
+      const newConfig: Partial<WorldConfig> = {
+        riverConfig: {
+          ...this.currentConfig.riverConfig,
+          [key]: value
+        }
+      };
+
+      // If riverNetworkConfig exists, also update it to keep them in sync
+      if (this.currentConfig.riverNetworkConfig) {
+        newConfig.riverNetworkConfig = {
+          ...this.currentConfig.riverNetworkConfig,
+          [key]: value
+        };
+      }
+
+      this.app.updateEngineConfig(newConfig);
+      this.notifyParameterChange(newConfig);
+    }
   }
 
   /**

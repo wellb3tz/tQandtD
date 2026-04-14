@@ -3,7 +3,7 @@ import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
-import { RiverGenerator, RiverConfig, RiverNetworkConfig } from '../gen/rivers';
+import { RiverGenerator, RiverConfig, RiverNetworkConfig, RiverNetworkGenerator } from '../gen/rivers';
 import { chunkSeed } from '../core/hash';
 import { LODManager, LODConfig, LODLevel } from './lod';
 import { IncrementalGenerator } from './incremental-generator';
@@ -138,7 +138,13 @@ export class ChunkManager {
     
     this.resourceGenerator = new ResourceGenerator(config.resourceConfig);
     this.structurePlacer = new StructurePlacer(config.structureConfig);
-    this.riverGenerator = new RiverGenerator(config.riverConfig);
+    
+    // Initialize RiverNetworkGenerator if river network config is provided, otherwise use basic RiverGenerator
+    if (config.riverNetworkConfig) {
+      this.riverGenerator = new RiverNetworkGenerator(config.riverNetworkConfig) as any;
+    } else {
+      this.riverGenerator = new RiverGenerator(config.riverConfig);
+    }
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig

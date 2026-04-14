@@ -44,6 +44,7 @@ export interface AppState {
   selectedTool: TerrainTool;
   brushSize: number;
   brushStrength: number;
+  viewDistance: number; // Chunk load radius
   
   // Visibility toggles
   showTerrain: boolean;
@@ -127,8 +128,10 @@ const DEFAULT_CONFIG: WorldConfig = {
     octaves: 4,
     persistence: 0.5,
     lacunarity: 2.0,
-    warpStrength: 30,
-    heightMultiplier: 1.0
+    warpStrength: 1,
+    heightMultiplier: 1.0,
+    enable3D: false,
+    zScale: 0.5
   },
   biomeConfig: {
     temperatureScale: 0.005,
@@ -136,13 +139,23 @@ const DEFAULT_CONFIG: WorldConfig = {
     blendRadius: 5
   },
   resourceConfig: {
-    types: [],
+    types: [
+      { type: 0, rarity: 0.5, biomes: [] }, // Iron
+      { type: 1, rarity: 0.5, biomes: [] }, // Gold
+      { type: 2, rarity: 0.5, biomes: [] }, // Coal
+      { type: 3, rarity: 0.5, biomes: [] }, // Stone
+      { type: 4, rarity: 0.5, biomes: [] }  // Wood
+    ],
     clusterScale: 20,
     densityThreshold: 0.6
   },
   structureConfig: {
-    types: [],
-    minDistance: 10,
+    types: [
+      { type: 0, rarity: 1.0, rules: [] }, // Village
+      { type: 1, rarity: 1.0, rules: [] }, // Ruins
+      { type: 2, rarity: 1.0, rules: [] }  // Tower
+    ],
+    minDistance: 30,
     maxAttempts: 30
   },
   riverConfig: {
@@ -184,6 +197,7 @@ export class DemoApp {
       selectedTool: TerrainTool.NONE,
       brushSize: 5,
       brushStrength: 1.0,
+      viewDistance: 3, // Default chunk load radius
       
       showTerrain: true,
       showBiomes: true,
@@ -422,7 +436,10 @@ export class DemoApp {
         chunksInProgress: new Map(this.state.chunksInProgress)
       });
       
-      console.log(`Loaded ${chunksLoaded} chunks in ${(endTime - startTime).toFixed(2)}ms`);
+      // Only log if chunks were actually loaded
+      if (chunksLoaded > 0) {
+        console.log(`Loaded ${chunksLoaded} chunks in ${(endTime - startTime).toFixed(2)}ms`);
+      }
     } catch (error) {
       console.error('Failed to load chunks:', error);
       this.emit(AppEvent.ERROR, { message: 'Chunk loading failed', error });

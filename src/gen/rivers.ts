@@ -313,6 +313,37 @@ export class RiverNetworkGenerator {
   }
 
   /**
+   * Generates rivers for a chunk (compatibility method for ChunkManager).
+   * This method provides the same interface as RiverGenerator.generateRivers()
+   * but uses the enhanced network generation internally.
+   * 
+   * @param chunkData - The chunk data containing heightmap
+   * @param chunkSeed - Unique seed for this chunk
+   * @returns Set of flat indices representing river tiles
+   */
+  generateRivers(chunkData: ChunkData, chunkSeed: number): Set<number> {
+    // Generate full network
+    const network = this.generateNetwork(chunkData, chunkSeed);
+    
+    // Convert network to Set of tile indices
+    const riverTiles = new Set<number>();
+    
+    // Add all river segment tiles
+    for (const segment of network.segments) {
+      riverTiles.add(segment.index);
+    }
+    
+    // Add all lake tiles
+    for (const lake of network.lakes) {
+      for (const tileIndex of lake.tiles) {
+        riverTiles.add(tileIndex);
+      }
+    }
+    
+    return riverTiles;
+  }
+
+  /**
    * Generates complete river network for a chunk using multi-pass pipeline.
    * Pipeline stages: lakes → main rivers → tributaries → flow calculation → width calculation → deltas
    * 
