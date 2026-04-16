@@ -14,7 +14,6 @@ import { DemoApp, AppState } from '../core/DemoApp';
 export interface GenerationBreakdown {
   terrain: number;
   biomes: number;
-  rivers: number;
   resources: number;
   structures: number;
   total: number;
@@ -67,7 +66,6 @@ export class PerformanceMonitor {
   // Generation breakdown elements
   private terrainTimeElement: HTMLElement | null = null;
   private biomesTimeElement: HTMLElement | null = null;
-  private riversTimeElement: HTMLElement | null = null;
   private resourcesTimeElement: HTMLElement | null = null;
   private structuresTimeElement: HTMLElement | null = null;
   
@@ -168,7 +166,6 @@ export class PerformanceMonitor {
     
     this.terrainTimeElement = this.createMetric(section, 'Terrain', '0 ms', true);
     this.biomesTimeElement = this.createMetric(section, 'Biomes', '0 ms', true);
-    this.riversTimeElement = this.createMetric(section, 'Rivers', '0 ms', true);
     this.resourcesTimeElement = this.createMetric(section, 'Resources', '0 ms', true);
     this.structuresTimeElement = this.createMetric(section, 'Structures', '0 ms', true);
     
@@ -392,9 +389,6 @@ export class PerformanceMonitor {
     }
     if (this.biomesTimeElement) {
       this.biomesTimeElement.textContent = `${breakdown.biomes.toFixed(2)} ms`;
-    }
-    if (this.riversTimeElement) {
-      this.riversTimeElement.textContent = `${breakdown.rivers.toFixed(2)} ms`;
     }
     if (this.resourcesTimeElement) {
       this.resourcesTimeElement.textContent = `${breakdown.resources.toFixed(2)} ms`;

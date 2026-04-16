@@ -201,3 +201,4 @@ describe('WorldConfig Enhancements', () => {
     expect(minimalConfig.incrementalConfig).toBeUndefined();
   });
 });
+

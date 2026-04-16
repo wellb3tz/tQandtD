@@ -65,7 +65,6 @@ export class HelpModal {
         <ul class="help-list">
           <li><strong>Seed:</strong> Enter a number to generate a deterministic world. Same seed = same world.</li>
           <li><strong>Generate Button:</strong> Click to create a new world with current parameters.</li>
-          <li><strong>Presets:</strong> Quick configurations for different terrain types (Mountainous, Flat Plains, etc.).</li>
         </ul>
       </div>
 
@@ -89,16 +88,6 @@ export class HelpModal {
           <li><strong>Transitions:</strong> Enable smooth blending between biomes.</li>
           <li><strong>Micro Biomes:</strong> Small-scale biome variations for detail.</li>
           <li><strong>Elevation Bands:</strong> Altitude-based biome zones (e.g., snow line).</li>
-        </ul>
-      </div>
-
-      <div class="help-section">
-        <h4>💧 River Networks</h4>
-        <ul class="help-list">
-          <li><strong>Source Elevation:</strong> Minimum height for river sources (0.5-0.9).</li>
-          <li><strong>Min Flow Length:</strong> Minimum river length before termination.</li>
-          <li><strong>Tributaries:</strong> Enable branching river systems.</li>
-          <li><strong>Lakes & Deltas:</strong> Enable water features at river endpoints.</li>
         </ul>
       </div>
 
@@ -153,7 +142,7 @@ export class HelpModal {
         <h4>👁️ Visibility Toggles</h4>
         <p>
           Use the checkboxes in the control panel to show/hide different world elements:
-          terrain, biomes, rivers, resources, structures, chunk boundaries, and wireframe mode.
+          terrain, biomes, water, resources, structures, chunk boundaries, and wireframe mode.
         </p>
       </div>
 
@@ -189,7 +178,6 @@ export class HelpModal {
         <h4>💡 Tips</h4>
         <ul class="help-list">
           <li>Hover over any control label to see a tooltip with more information.</li>
-          <li>Start with presets to see interesting configurations quickly.</li>
           <li>Enable LOD and Worker Pool for better performance with large worlds.</li>
           <li>Use incremental generation to maintain smooth framerate during chunk loading.</li>
           <li>Save your favorite configurations using the Export Configuration button.</li>

@@ -47,7 +47,7 @@ describe('Preservation Property: Interior Tile Biome Behavior', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 5,
       flowWidth: 2,
@@ -386,3 +386,4 @@ describe('Preservation Property: Interior Tile Biome Behavior', () => {
     );
   });
 });
+

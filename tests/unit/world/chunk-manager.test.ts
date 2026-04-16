@@ -30,7 +30,7 @@ describe('ChunkManager Unit Tests', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 10,
       flowWidth: 1,
@@ -287,7 +287,7 @@ describe('ChunkManager LOD Integration', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 10,
       flowWidth: 1,
@@ -480,7 +480,7 @@ describe('ChunkManager Incremental Generation Integration', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 10,
       flowWidth: 1,
@@ -762,7 +762,7 @@ describe('ChunkManager Modification Tracking', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 10,
       flowWidth: 1,
@@ -1078,7 +1078,7 @@ describe('ChunkManager Serialization Methods', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 10,
       flowWidth: 1,
@@ -1467,3 +1467,4 @@ describe('ChunkManager Serialization Methods', () => {
     expect(manager.getCacheSize()).toBe(0);
   });
 });
+

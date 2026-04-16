@@ -58,7 +58,7 @@ describe('Web Worker Integration', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.6,
       minFlowLength: 5,
       flowWidth: 2,
@@ -166,7 +166,7 @@ describe('Web Worker Integration', () => {
         ...createTestConfig(),
         resourceConfig: { types: [], clusterScale: 20, densityThreshold: 0.5 },
         structureConfig: { types: [], minDistance: 10, maxAttempts: 30 },
-        riverConfig: { sourceElevation: 1.0, minFlowLength: 1000, flowWidth: 2 },
+        riverNetworkConfig: { sourceElevation: 1.0, minFlowLength: 1000, flowWidth: 2 },
       });
       const chunk = manager.generateChunk(0, 0);
 
@@ -440,3 +440,4 @@ describe('Web Worker Integration', () => {
     });
   });
 });
+

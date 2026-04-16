@@ -152,10 +152,22 @@ const manager = new ChunkManager({
     minDistance: 10,
     maxAttempts: 30,
   },
-  riverConfig: {
+  riverNetworkConfig: {
     sourceElevation: 0.7,
     minFlowLength: 10,
     flowWidth: 2,
+    enableTributaries: true,
+    maxTributaryOrder: 2,
+    tributaryProbability: 0.3,
+    enableLakes: true,
+    lakeDepressionThreshold: 0.05,
+    maxLakeSize: 100,
+    enableDeltas: true,
+    deltaBranchCount: 3,
+    deltaSpreadAngle: Math.PI / 3,
+    minFlow: 1.0,
+    maxFlow: 100.0,
+    widthScale: 0.5,
   },
 });
 
@@ -227,10 +239,22 @@ const managerWithLOD = new ChunkManager({
     minDistance: 10,
     maxAttempts: 30,
   },
-  riverConfig: {
+  riverNetworkConfig: {
     sourceElevation: 0.7,
     minFlowLength: 10,
     flowWidth: 2,
+    enableTributaries: true,
+    maxTributaryOrder: 2,
+    tributaryProbability: 0.3,
+    enableLakes: true,
+    lakeDepressionThreshold: 0.05,
+    maxLakeSize: 100,
+    enableDeltas: true,
+    deltaBranchCount: 3,
+    deltaSpreadAngle: Math.PI / 3,
+    minFlow: 1.0,
+    maxFlow: 100.0,
+    widthScale: 0.5,
   },
   // Enable LOD system
   lodConfig: {

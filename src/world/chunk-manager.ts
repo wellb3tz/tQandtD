@@ -3,7 +3,7 @@ import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
-import { RiverGenerator, RiverConfig, RiverNetworkConfig, RiverNetworkGenerator } from '../gen/rivers';
+import { RiverNetworkConfig, RiverNetworkGenerator } from '../gen/rivers';
 import { chunkSeed } from '../core/hash';
 import { LODManager, LODConfig, LODLevel } from './lod';
 import { IncrementalGenerator } from './incremental-generator';
@@ -61,14 +61,12 @@ export interface WorldConfig {
   resourceConfig: ResourceConfig;
   /** Structure placement configuration */
   structureConfig: StructureConfig;
-  /** River generation configuration */
-  riverConfig: RiverConfig;
+  /** River network configuration */
+  riverNetworkConfig: RiverNetworkConfig;
   /** 3D noise configuration (optional) */
   noise3DConfig?: Noise3DConfig;
   /** Enhanced biome configuration (optional) */
   enhancedBiomeConfig?: EnhancedBiomeConfig;
-  /** River network configuration (optional) */
-  riverNetworkConfig?: RiverNetworkConfig;
   /** Worker pool configuration (optional) */
   workerPoolConfig?: WorkerPoolConfig;
   /** LOD configuration (optional) */
@@ -101,7 +99,7 @@ export class ChunkManager {
   private biomeSystem: BiomeSystem;
   private resourceGenerator: ResourceGenerator;
   private structurePlacer: StructurePlacer;
-  private riverGenerator: RiverGenerator;
+  private riverGenerator: RiverNetworkGenerator;
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   // @ts-expect-error - WorkerPool is initialized but not yet integrated into chunk generation pipeline
@@ -139,12 +137,29 @@ export class ChunkManager {
     this.resourceGenerator = new ResourceGenerator(config.resourceConfig);
     this.structurePlacer = new StructurePlacer(config.structureConfig);
     
-    // Initialize RiverNetworkGenerator if river network config is provided, otherwise use basic RiverGenerator
-    if (config.riverNetworkConfig) {
-      this.riverGenerator = new RiverNetworkGenerator(config.riverNetworkConfig) as any;
-    } else {
-      this.riverGenerator = new RiverGenerator(config.riverConfig);
-    }
+    // Initialize RiverNetworkGenerator for river generation
+    // Provide default configuration if not specified
+    const defaultRiverNetworkConfig: RiverNetworkConfig = {
+      sourceElevation: 0.7,
+      minFlowLength: 10,
+      flowWidth: 2,
+      enableTributaries: true,
+      maxTributaryOrder: 2,
+      tributaryProbability: 0.3,
+      enableLakes: true,
+      lakeDepressionThreshold: 0.05,
+      maxLakeSize: 100,
+      enableDeltas: true,
+      deltaBranchCount: 3,
+      deltaSpreadAngle: Math.PI / 3,
+      minFlow: 1.0,
+      maxFlow: 100.0,
+      widthScale: 0.5
+    };
+    
+    this.riverGenerator = new RiverNetworkGenerator(
+      config.riverNetworkConfig ?? defaultRiverNetworkConfig
+    );
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig

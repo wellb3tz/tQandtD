@@ -27,3 +27,4 @@ describe.skip('Incremental Generation Biome Fix - Integration Tests', () => {
 
   // TODO: Add integration tests in subsequent tasks (4.2-4.7)
 });
+

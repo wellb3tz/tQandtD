@@ -55,7 +55,7 @@ describe('Chunk Generation with Enhancements', () => {
       },
       resourceConfig: createResourceConfig(),
       structureConfig: createStructureConfig(),
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -103,7 +103,7 @@ describe('Chunk Generation with Enhancements', () => {
       },
       resourceConfig: createResourceConfig(),
       structureConfig: createStructureConfig(),
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -160,7 +160,7 @@ describe('Chunk Generation with Enhancements', () => {
       },
       resourceConfig: createResourceConfig(),
       structureConfig: createStructureConfig(),
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -235,7 +235,7 @@ describe('Chunk Generation with Enhancements', () => {
       },
       resourceConfig: createResourceConfig(),
       structureConfig: createStructureConfig(),
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -270,7 +270,7 @@ describe('Chunk Generation with Enhancements', () => {
       },
       resourceConfig: createResourceConfig(),
       structureConfig: createStructureConfig(),
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -288,3 +288,4 @@ describe('Chunk Generation with Enhancements', () => {
     expect(chunk.biomeWeights.length).toBe(32 * 32 * 8);
   });
 });
+

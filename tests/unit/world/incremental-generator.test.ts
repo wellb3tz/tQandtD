@@ -5,7 +5,7 @@ import type { WorldConfig } from '../../../src/world/chunk-manager';
 import { BiomeType, ResourceType, StructureType } from '../../../src/world/chunk';
 import { TerrainGenerator } from '../../../src/gen/terrain';
 import { BiomeSystem } from '../../../src/world/biome';
-import { RiverGenerator } from '../../../src/gen/rivers';
+import { RiverNetworkGenerator } from '../../../src/gen/rivers';
 import { ResourceGenerator } from '../../../src/gen/resources';
 import { StructurePlacer } from '../../../src/gen/structures';
 
@@ -14,7 +14,7 @@ describe('IncrementalGenerator', () => {
   let worldConfig: WorldConfig;
   let terrainGenerator: TerrainGenerator;
   let biomeSystem: BiomeSystem;
-  let riverGenerator: RiverGenerator;
+  let riverGenerator: RiverNetworkGenerator;
   let resourceGenerator: ResourceGenerator;
   let structurePlacer: StructurePlacer;
 
@@ -50,7 +50,7 @@ describe('IncrementalGenerator', () => {
         minDistance: 10,
         maxAttempts: 30,
       },
-      riverConfig: {
+      riverNetworkConfig: {
         sourceElevation: 0.7,
         minFlowLength: 10,
         flowWidth: 2,
@@ -60,7 +60,7 @@ describe('IncrementalGenerator', () => {
     // Initialize generators
     terrainGenerator = new TerrainGenerator(worldConfig.terrainConfig);
     biomeSystem = new BiomeSystem(worldConfig.seed, worldConfig.biomeConfig);
-    riverGenerator = new RiverGenerator(worldConfig.riverConfig);
+    riverGenerator = new RiverNetworkGenerator(worldConfig.riverNetworkConfig);
     resourceGenerator = new ResourceGenerator(worldConfig.resourceConfig);
     structurePlacer = new StructurePlacer(worldConfig.structureConfig);
   });
@@ -141,7 +141,7 @@ describe('IncrementalGenerator', () => {
       const customWorldConfig = { ...worldConfig, chunkSize: 64 };
       const customTerrainGen = new TerrainGenerator(customWorldConfig.terrainConfig);
       const customBiomeSystem = new BiomeSystem(customWorldConfig.seed, customWorldConfig.biomeConfig);
-      const customRiverGen = new RiverGenerator(customWorldConfig.riverConfig);
+      const customRiverGen = new RiverNetworkGenerator(customWorldConfig.riverNetworkConfig);
       const customResourceGen = new ResourceGenerator(customWorldConfig.resourceConfig);
       const customStructurePlacer = new StructurePlacer(customWorldConfig.structureConfig);
       
@@ -441,7 +441,7 @@ describe('IncrementalGenerator', () => {
       const smallWorldConfig = { ...worldConfig, chunkSize: 4 };
       const smallTerrainGen = new TerrainGenerator(smallWorldConfig.terrainConfig);
       const smallBiomeSystem = new BiomeSystem(smallWorldConfig.seed, smallWorldConfig.biomeConfig);
-      const smallRiverGen = new RiverGenerator(smallWorldConfig.riverConfig);
+      const smallRiverGen = new RiverNetworkGenerator(smallWorldConfig.riverNetworkConfig);
       const smallResourceGen = new ResourceGenerator(smallWorldConfig.resourceConfig);
       const smallStructurePlacer = new StructurePlacer(smallWorldConfig.structureConfig);
       
@@ -464,7 +464,7 @@ describe('IncrementalGenerator', () => {
       const largeWorldConfig = { ...worldConfig, chunkSize: 256 };
       const largeTerrainGen = new TerrainGenerator(largeWorldConfig.terrainConfig);
       const largeBiomeSystem = new BiomeSystem(largeWorldConfig.seed, largeWorldConfig.biomeConfig);
-      const largeRiverGen = new RiverGenerator(largeWorldConfig.riverConfig);
+      const largeRiverGen = new RiverNetworkGenerator(largeWorldConfig.riverNetworkConfig);
       const largeResourceGen = new ResourceGenerator(largeWorldConfig.resourceConfig);
       const largeStructurePlacer = new StructurePlacer(largeWorldConfig.structureConfig);
       
@@ -681,3 +681,4 @@ describe('IncrementalGenerator', () => {
     });
   });
 });
+

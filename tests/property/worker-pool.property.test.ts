@@ -33,7 +33,7 @@ describe('WorkerPool Property Tests', () => {
             biomeConfig: { scale: 0.005, octaves: 3 },
             resourceConfig: { density: 0.1 },
             structureConfig: { density: 0.05 },
-            riverConfig: { minLength: 10, maxBranches: 3 },
+            riverNetworkConfig: { minLength: 10, maxBranches: 3 },
           };
 
           const config: WorkerPoolConfig = {
@@ -282,3 +282,4 @@ describe('WorkerPool Property Tests', () => {
     );
   });
 });
+

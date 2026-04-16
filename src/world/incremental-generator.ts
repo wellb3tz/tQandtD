@@ -2,7 +2,7 @@ import { PartialChunkData, GenerationStage, IncrementalConfig } from './chunk';
 import { WorldConfig } from './chunk-manager';
 import { TerrainGenerator } from '../gen/terrain';
 import { BiomeSystem } from './biome';
-import { RiverGenerator } from '../gen/rivers';
+import { RiverNetworkGenerator } from '../gen/rivers';
 import { ResourceGenerator } from '../gen/resources';
 import { StructurePlacer } from '../gen/structures';
 import { chunkSeed } from '../core/hash';
@@ -16,7 +16,7 @@ export class IncrementalGenerator {
   private activeGenerations: Map<string, PartialChunkData>;
   private terrainGenerator: TerrainGenerator;
   private biomeSystem: BiomeSystem;
-  private riverGenerator: RiverGenerator;
+  private riverGenerator: RiverNetworkGenerator;
   private resourceGenerator: ResourceGenerator;
   private structurePlacer: StructurePlacer;
   private worldConfig: WorldConfig;
@@ -36,7 +36,7 @@ export class IncrementalGenerator {
     worldConfig: WorldConfig,
     terrainGenerator: TerrainGenerator,
     biomeSystem: BiomeSystem,
-    riverGenerator: RiverGenerator,
+    riverGenerator: RiverNetworkGenerator,
     resourceGenerator: ResourceGenerator,
     structurePlacer: StructurePlacer
   ) {

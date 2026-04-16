@@ -30,7 +30,7 @@ describe('ChunkManager Property Tests', () => {
       minDistance: fc.float({ min: Math.fround(5), max: Math.fround(20), noNaN: true }),
       maxAttempts: fc.integer({ min: 10, max: 50 }),
     }),
-    riverConfig: fc.record({
+    riverNetworkConfig: fc.record({
       sourceElevation: fc.float({ min: Math.fround(0.5), max: Math.fround(0.9), noNaN: true }),
       minFlowLength: fc.integer({ min: 3, max: 20 }),
       flowWidth: fc.integer({ min: 1, max: 3 }),
@@ -336,7 +336,7 @@ describe('ChunkManager Property Tests', () => {
               minDistance: 10,
               maxAttempts: 30,
             },
-            riverConfig: {
+            riverNetworkConfig: {
               sourceElevation: 0.7,
               minFlowLength: 10,
               flowWidth: 1,
@@ -369,3 +369,4 @@ describe('ChunkManager Property Tests', () => {
     );
   });
 });
+

@@ -168,7 +168,7 @@ describe('Modification Persistence Property Tests', () => {
                 minDistance: 10,
                 maxAttempts: 100,
               },
-              riverConfig: {
+              riverNetworkConfig: {
                 minLength: 5,
                 maxBranches: 3,
               },
@@ -272,7 +272,7 @@ describe('Modification Persistence Property Tests', () => {
                 minDistance: 10,
                 maxAttempts: 100,
               },
-              riverConfig: {
+              riverNetworkConfig: {
                 minLength: 5,
                 maxBranches: 3,
               },
@@ -368,3 +368,4 @@ describe('Modification Persistence Property Tests', () => {
     );
   });
 });
+

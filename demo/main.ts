@@ -285,8 +285,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ('showBiomes' in visibilityState) {
           worldViewer.setVisibility(RenderLayer.BIOMES, visibilityState.showBiomes);
         }
-        if ('showRivers' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.RIVERS, visibilityState.showRivers);
+        if ('showWater' in visibilityState) {
+          worldViewer.setWaterVisibility(visibilityState.showWater);
         }
         if ('showResources' in visibilityState) {
           worldViewer.setVisibility(RenderLayer.RESOURCES, visibilityState.showResources);
@@ -299,9 +299,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if ('showWireframe' in visibilityState) {
           worldViewer.setWireframeMode(visibilityState.showWireframe);
-        }
-        if ('showWater' in visibilityState) {
-          worldViewer.setWaterVisibility(visibilityState.showWater);
         }
         
         const endTime = performance.now();

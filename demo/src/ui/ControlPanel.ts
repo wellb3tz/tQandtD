@@ -1,13 +1,12 @@
 /**
  * ControlPanel - UI component for parameter adjustment and feature toggles
  * 
- * Provides interactive controls for all terrain, biome, river, resource, and structure
- * parameters. Supports real-time updates, presets, and collapsible sections.
+ * Provides interactive controls for all terrain, biome, resource, and structure
+ * parameters. Supports real-time updates and collapsible sections.
  */
 
 import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
 import { WorldConfig } from '../../../src/index';
-import { PRESETS, PresetConfig, getPresetByName } from '../config/presets';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { getWorkerUrl } from '../../worker-loader';
 
@@ -15,11 +14,6 @@ import { getWorkerUrl } from '../../worker-loader';
  * Parameter change callback type
  */
 export type ParameterChangeCallback = (config: Partial<WorldConfig>) => void;
-
-/**
- * Preset selection callback type
- */
-export type PresetSelectCallback = (preset: PresetConfig) => void;
 
 /**
  * Control configuration for sliders
@@ -52,9 +46,7 @@ export class ControlPanel {
   private terrainEditor: TerrainEditor | null = null;
   private container: HTMLElement | null = null;
   private parameterChangeCallbacks: Set<ParameterChangeCallback> = new Set();
-  private presetSelectCallbacks: Set<PresetSelectCallback> = new Set();
   private currentConfig: WorldConfig | null = null;
-  private customPresets: PresetConfig[] = [];
 
   /**
    * Initialize the control panel
@@ -65,118 +57,19 @@ export class ControlPanel {
     this.terrainEditor = terrainEditor || null;
     this.currentConfig = app.getState().config;
 
-    // Load custom presets from storage
-    this.loadCustomPresetsFromStorage();
-
     // Subscribe to state changes
     app.subscribeToState((state) => {
       this.updateFromState(state);
     });
 
-    // Create preset controls first
-    this.createPresetControls();
-
     // Create all control sections
     this.createTerrainControls();
     this.createBiomeControls();
-    this.createRiverControls();
     this.createResourceControls();
     this.createWaterControls();
     this.createAdvancedControls();
     this.createTerrainEditingControls();
     this.createVisibilityToggles();
-  }
-
-  /**
-   * Create preset configuration controls
-   */
-  private createPresetControls(): void {
-    const presetContainer = document.getElementById('preset-controls');
-    if (!presetContainer) return;
-
-    // Preset dropdown
-    const dropdownGroup = document.createElement('div');
-    dropdownGroup.className = 'control-group';
-    dropdownGroup.style.marginBottom = '12px';
-
-    const label = document.createElement('label');
-    label.htmlFor = 'preset-select';
-    label.textContent = 'Select Preset';
-    label.style.display = 'block';
-    label.style.marginBottom = '8px';
-
-    const select = document.createElement('select');
-    select.id = 'preset-select';
-    select.style.width = '100%';
-    select.style.padding = '8px';
-    select.style.borderRadius = '4px';
-    select.style.border = '1px solid var(--border-color, #ccc)';
-    select.style.backgroundColor = 'var(--bg-secondary, #fff)';
-    select.style.color = 'var(--text-primary, #000)';
-    select.style.cursor = 'pointer';
-
-    // Add default option
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = '-- Select a preset --';
-    select.appendChild(defaultOption);
-
-    // Add preset options
-    PRESETS.forEach(preset => {
-      const option = document.createElement('option');
-      option.value = preset.name;
-      option.textContent = preset.name;
-      option.title = preset.description;
-      select.appendChild(option);
-    });
-
-    // Add custom presets
-    this.customPresets.forEach(preset => {
-      const option = document.createElement('option');
-      option.value = preset.name;
-      option.textContent = `${preset.name} (Custom)`;
-      option.title = preset.description;
-      select.appendChild(option);
-    });
-
-    select.addEventListener('change', (e) => {
-      const selectedName = (e.target as HTMLSelectElement).value;
-      if (selectedName) {
-        this.loadPreset(selectedName);
-      }
-    });
-
-    dropdownGroup.appendChild(label);
-    dropdownGroup.appendChild(select);
-    presetContainer.appendChild(dropdownGroup);
-
-    // Preset description
-    const descriptionDiv = document.createElement('div');
-    descriptionDiv.id = 'preset-description';
-    descriptionDiv.style.fontSize = '0.875rem';
-    descriptionDiv.style.color = 'var(--text-secondary, #666)';
-    descriptionDiv.style.marginBottom = '16px';
-    descriptionDiv.style.minHeight = '40px';
-    descriptionDiv.style.fontStyle = 'italic';
-    presetContainer.appendChild(descriptionDiv);
-
-    // Save custom preset button
-    const saveButton = document.createElement('button');
-    saveButton.textContent = 'Save Current as Preset';
-    saveButton.style.width = '100%';
-    saveButton.style.padding = '8px';
-    saveButton.style.borderRadius = '4px';
-    saveButton.style.border = '1px solid var(--border-color, #ccc)';
-    saveButton.style.backgroundColor = 'var(--bg-primary, #f0f0f0)';
-    saveButton.style.color = 'var(--text-primary, #000)';
-    saveButton.style.cursor = 'pointer';
-    saveButton.style.fontSize = '0.875rem';
-
-    saveButton.addEventListener('click', () => {
-      this.showSavePresetDialog();
-    });
-
-    presetContainer.appendChild(saveButton);
   }
 
   /**
@@ -427,103 +320,6 @@ export class ControlPanel {
   }
 
   /**
-   * Create river parameter controls
-   */
-  private createRiverControls(): void {
-    const riverContainer = document.getElementById('river-controls');
-    if (!riverContainer) return;
-
-    const sliders: SliderConfig[] = [
-      {
-        id: 'sourceElevation',
-        label: 'Source Elevation',
-        min: 0.5,
-        max: 0.9,
-        step: 0.05,
-        defaultValue: 0.7,
-        tooltip: 'Minimum elevation for river sources'
-      },
-      {
-        id: 'minFlowLength',
-        label: 'Min Flow Length',
-        min: 5,
-        max: 50,
-        step: 5,
-        defaultValue: 10,
-        tooltip: 'Minimum river length'
-      },
-      {
-        id: 'flowWidth',
-        label: 'Flow Width',
-        min: 1,
-        max: 5,
-        step: 1,
-        defaultValue: 2,
-        tooltip: 'Width of river channels'
-      }
-    ];
-
-    sliders.forEach(config => {
-      const control = this.createSliderControl(config, (value) => {
-        this.updateRiverConfig(config.id, value);
-      });
-      riverContainer.appendChild(control);
-    });
-
-    // Enable tributaries
-    const tributariesCheckbox = this.createCheckboxControl({
-      id: 'enableTributaries',
-      label: 'Enable Tributaries',
-      defaultValue: false,
-      tooltip: 'Enable tributary river branches'
-    }, (checked) => {
-      this.updateRiverConfig('enableTributaries', checked);
-      const tributaryProbControl = document.getElementById('tributaryProbability-group');
-      if (tributaryProbControl) {
-        tributaryProbControl.style.display = checked ? 'block' : 'none';
-      }
-    });
-    riverContainer.appendChild(tributariesCheckbox);
-
-    // Tributary probability (conditional)
-    const tributaryProbControl = this.createSliderControl({
-      id: 'tributaryProbability',
-      label: 'Tributary Probability',
-      min: 0.1,
-      max: 0.5,
-      step: 0.1,
-      defaultValue: 0.3,
-      tooltip: 'Probability of tributary formation'
-    }, (value) => {
-      this.updateRiverConfig('tributaryProbability', value);
-    });
-    tributaryProbControl.style.display = 'none';
-    tributaryProbControl.id = 'tributaryProbability-group';
-    riverContainer.appendChild(tributaryProbControl);
-
-    // Enable lakes
-    const lakesCheckbox = this.createCheckboxControl({
-      id: 'enableLakes',
-      label: 'Enable Lakes',
-      defaultValue: false,
-      tooltip: 'Enable lake formation in depressions'
-    }, (checked) => {
-      this.updateRiverConfig('enableLakes', checked);
-    });
-    riverContainer.appendChild(lakesCheckbox);
-
-    // Enable deltas
-    const deltasCheckbox = this.createCheckboxControl({
-      id: 'enableDeltas',
-      label: 'Enable Deltas',
-      defaultValue: false,
-      tooltip: 'Enable river delta formation at outlets'
-    }, (checked) => {
-      this.updateRiverConfig('enableDeltas', checked);
-    });
-    riverContainer.appendChild(deltasCheckbox);
-  }
-
   /**
    * Create resource and structure controls
    */
@@ -612,111 +408,44 @@ export class ControlPanel {
     const waterContainer = document.getElementById('water-controls');
     if (!waterContainer) return;
 
-    // Ocean water section
-    const oceanSection = document.createElement('div');
-    oceanSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Ocean Water</h4>';
-    waterContainer.appendChild(oceanSection);
-
-    // Ocean color picker
-    const oceanColorControl = this.createColorControl({
-      id: 'oceanColor',
-      label: 'Ocean Color',
+    // Water color picker
+    const colorControl = this.createColorControl({
+      id: 'waterColor',
+      label: 'Water Color',
       defaultValue: '#1e90ff',
-      tooltip: 'Color of ocean water'
+      tooltip: 'Color of water surface'
     }, (color) => {
       this.updateWaterConfig('ocean', 'color', parseInt(color.replace('#', '0x')));
     });
-    waterContainer.appendChild(oceanColorControl);
+    waterContainer.appendChild(colorControl);
 
-    // Ocean opacity slider
-    const oceanOpacityControl = this.createSliderControl({
-      id: 'oceanOpacity',
-      label: 'Ocean Opacity',
+    // Water opacity slider
+    const opacityControl = this.createSliderControl({
+      id: 'waterOpacity',
+      label: 'Water Opacity',
       min: 0,
       max: 1,
       step: 0.05,
       defaultValue: 0.7,
-      tooltip: 'Transparency of ocean water (0 = transparent, 1 = opaque)'
+      tooltip: 'Transparency of water (0 = transparent, 1 = opaque)'
     }, (value) => {
       this.updateWaterConfig('ocean', 'opacity', value);
     });
-    waterContainer.appendChild(oceanOpacityControl);
+    waterContainer.appendChild(opacityControl);
 
-    // Ocean shininess slider
-    const oceanShininessControl = this.createSliderControl({
-      id: 'oceanShininess',
-      label: 'Ocean Shininess',
+    // Water shininess slider
+    const shininessControl = this.createSliderControl({
+      id: 'waterShininess',
+      label: 'Water Shininess',
       min: 0,
       max: 100,
       step: 5,
       defaultValue: 30,
-      tooltip: 'Shininess of ocean water surface'
+      tooltip: 'Shininess of water surface'
     }, (value) => {
       this.updateWaterConfig('ocean', 'shininess', value);
     });
-    waterContainer.appendChild(oceanShininessControl);
-
-    // River water section
-    const riverSection = document.createElement('div');
-    riverSection.style.marginTop = '16px';
-    riverSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">River Water</h4>';
-    waterContainer.appendChild(riverSection);
-
-    // River color picker
-    const riverColorControl = this.createColorControl({
-      id: 'riverColor',
-      label: 'River Color',
-      defaultValue: '#4682b4',
-      tooltip: 'Color of river water'
-    }, (color) => {
-      this.updateWaterConfig('river', 'color', parseInt(color.replace('#', '0x')));
-    });
-    waterContainer.appendChild(riverColorControl);
-
-    // River opacity slider
-    const riverOpacityControl = this.createSliderControl({
-      id: 'riverOpacity',
-      label: 'River Opacity',
-      min: 0,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.6,
-      tooltip: 'Transparency of river water (0 = transparent, 1 = opaque)'
-    }, (value) => {
-      this.updateWaterConfig('river', 'opacity', value);
-    });
-    waterContainer.appendChild(riverOpacityControl);
-
-    // Lake water section
-    const lakeSection = document.createElement('div');
-    lakeSection.style.marginTop = '16px';
-    lakeSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Lake Water</h4>';
-    waterContainer.appendChild(lakeSection);
-
-    // Lake color picker
-    const lakeColorControl = this.createColorControl({
-      id: 'lakeColor',
-      label: 'Lake Color',
-      defaultValue: '#1e90ff',
-      tooltip: 'Color of lake water'
-    }, (color) => {
-      this.updateWaterConfig('lake', 'color', parseInt(color.replace('#', '0x')));
-    });
-    waterContainer.appendChild(lakeColorControl);
-
-    // Lake opacity slider
-    const lakeOpacityControl = this.createSliderControl({
-      id: 'lakeOpacity',
-      label: 'Lake Opacity',
-      min: 0,
-      max: 1,
-      step: 0.05,
-      defaultValue: 0.65,
-      tooltip: 'Transparency of lake water (0 = transparent, 1 = opaque)'
-    }, (value) => {
-      this.updateWaterConfig('lake', 'opacity', value);
-    });
-    waterContainer.appendChild(lakeOpacityControl);
+    waterContainer.appendChild(shininessControl);
   }
 
   /**
@@ -1218,7 +947,6 @@ export class ControlPanel {
       { id: 'showTerrain', label: 'Show Terrain', defaultValue: true },
       { id: 'showBiomes', label: 'Show Biome Colors', defaultValue: true },
       { id: 'showWater', label: 'Show Water Layer', defaultValue: true },
-      { id: 'showRivers', label: 'Show Rivers (Old)', defaultValue: false },
       { id: 'showResources', label: 'Show Resources', defaultValue: true },
       { id: 'showStructures', label: 'Show Structures', defaultValue: true },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
@@ -1433,62 +1161,6 @@ export class ControlPanel {
 
   /**
    * Update river configuration
-   */
-  private updateRiverConfig(key: string, value: number | boolean): void {
-    if (!this.app || !this.currentConfig) return;
-
-    // Check if this is a river network feature (tributaries, lakes, deltas)
-    const networkFeatures = ['enableTributaries', 'tributaryProbability', 'enableLakes', 'enableDeltas'];
-    
-    if (networkFeatures.includes(key)) {
-      // Update riverNetworkConfig
-      const currentNetworkConfig = this.currentConfig.riverNetworkConfig || {
-        ...this.currentConfig.riverConfig,
-        enableTributaries: false,
-        maxTributaryOrder: 2,
-        tributaryProbability: 0.3,
-        enableLakes: false,
-        lakeDepressionThreshold: 0.05,
-        maxLakeSize: 100,
-        enableDeltas: false,
-        deltaBranchCount: 3,
-        deltaSpreadAngle: Math.PI / 3,
-        minFlow: 1.0,
-        maxFlow: 100.0,
-        widthScale: 0.5
-      };
-
-      const newConfig: Partial<WorldConfig> = {
-        riverNetworkConfig: {
-          ...currentNetworkConfig,
-          [key]: value
-        }
-      };
-
-      this.app.updateEngineConfig(newConfig);
-      this.notifyParameterChange(newConfig);
-    } else {
-      // Update basic riverConfig
-      const newConfig: Partial<WorldConfig> = {
-        riverConfig: {
-          ...this.currentConfig.riverConfig,
-          [key]: value
-        }
-      };
-
-      // If riverNetworkConfig exists, also update it to keep them in sync
-      if (this.currentConfig.riverNetworkConfig) {
-        newConfig.riverNetworkConfig = {
-          ...this.currentConfig.riverNetworkConfig,
-          [key]: value
-        };
-      }
-
-      this.app.updateEngineConfig(newConfig);
-      this.notifyParameterChange(newConfig);
-    }
-  }
-
   /**
    * Update resource configuration
    */
@@ -1777,23 +1449,6 @@ export class ControlPanel {
       this.updateSliderValue('sourceElevation', config.riverConfig.sourceElevation);
       this.updateSliderValue('minFlowLength', config.riverConfig.minFlowLength);
       this.updateSliderValue('flowWidth', config.riverConfig.flowWidth);
-    }
-
-    // Sync river network controls
-    if (config.riverNetworkConfig) {
-      const rnc = config.riverNetworkConfig;
-      if (rnc.enableTributaries !== undefined) {
-        this.updateCheckboxValue('enableTributaries', rnc.enableTributaries);
-      }
-      if (rnc.tributaryProbability !== undefined) {
-        this.updateSliderValue('tributaryProbability', rnc.tributaryProbability);
-      }
-      if (rnc.enableLakes !== undefined) {
-        this.updateCheckboxValue('enableLakes', rnc.enableLakes);
-      }
-      if (rnc.enableDeltas !== undefined) {
-        this.updateCheckboxValue('enableDeltas', rnc.enableDeltas);
-      }
     }
 
     // Sync resource controls

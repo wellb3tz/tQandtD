@@ -18,7 +18,6 @@ export class StatisticsDisplay {
   
   // Statistic display elements
   private chunkCountElement: HTMLElement | null = null;
-  private riverCountElement: HTMLElement | null = null;
   private avgHeightElement: HTMLElement | null = null;
   private minHeightElement: HTMLElement | null = null;
   private maxHeightElement: HTMLElement | null = null;
@@ -119,7 +118,6 @@ export class StatisticsDisplay {
     const section = this.createSection('General');
     
     this.chunkCountElement = this.createStatistic(section, 'Total Chunks', '0');
-    this.riverCountElement = this.createStatistic(section, 'Rivers', '0');
     
     this.container?.appendChild(section);
   }
@@ -243,15 +241,6 @@ export class StatisticsDisplay {
   updateChunkCount(count: number): void {
     if (this.chunkCountElement) {
       this.chunkCountElement.textContent = count.toString();
-    }
-  }
-
-  /**
-   * Update river count
-   */
-  updateRiverCount(count: number): void {
-    if (this.riverCountElement) {
-      this.riverCountElement.textContent = count.toString();
     }
   }
 
@@ -533,7 +522,6 @@ export class StatisticsDisplay {
     
     // Update all statistics
     this.updateChunkCount(state.loadedChunkCount);
-    this.updateRiverCount(state.riverCount);
     this.updateHeightStats(state.avgHeight, state.minHeight, state.maxHeight);
     this.updateBiomeDistribution(state.biomeDistribution);
     this.updateResourceCounts(state.resourceCounts);
@@ -567,7 +555,6 @@ export class StatisticsDisplay {
     // Subscribe to state changes
     app.subscribeToState((state: AppState) => {
       this.updateChunkCount(state.loadedChunkCount);
-      this.updateRiverCount(state.riverCount);
       this.updateHeightStats(state.avgHeight, state.minHeight, state.maxHeight);
       this.updateBiomeDistribution(state.biomeDistribution);
       this.updateResourceCounts(state.resourceCounts);

@@ -75,7 +75,7 @@ describe('Full Generation Pipeline Integration', () => {
         minDistance: 10,
         maxAttempts: 30,
       },
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 5,
       },
@@ -687,3 +687,4 @@ describe('Full Generation Pipeline Integration', () => {
     });
   });
 });
+

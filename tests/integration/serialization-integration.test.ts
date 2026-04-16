@@ -12,7 +12,7 @@ import { TerrainConfig } from '../../src/gen/terrain';
 import { BiomeConfig } from '../../src/world/biome';
 import { ResourceConfig } from '../../src/gen/resources';
 import { StructureConfig } from '../../src/gen/structures';
-import { RiverConfig } from '../../src/gen/rivers';
+import { RiverNetworkConfig } from '../../src/gen/rivers';
 
 describe('Serialization Integration Tests', () => {
   // Helper to create a basic world config
@@ -83,7 +83,7 @@ describe('Serialization Integration Tests', () => {
       maxAttempts: 30,
     };
 
-    const riverConfig: RiverConfig = {
+    const riverNetworkConfig: RiverNetworkConfig = {
       sourceThreshold: 0.7,
       minLength: 5,
     };
@@ -964,3 +964,4 @@ describe('Serialization Integration Tests', () => {
     });
   });
 });
+

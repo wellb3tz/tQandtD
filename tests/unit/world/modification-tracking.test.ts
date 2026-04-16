@@ -43,7 +43,7 @@ describe('Modification Tracking System', () => {
         minDistance: 10,
         maxAttempts: 30,
       },
-      riverConfig: {
+      riverNetworkConfig: {
         sourceElevation: 1.0,
         minFlowLength: 1000,
         flowWidth: 2,
@@ -728,3 +728,4 @@ describe('Modification Tracking System', () => {
     });
   });
 });
+

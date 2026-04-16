@@ -169,7 +169,7 @@ describe('Serialization Data Structures', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         chunks: [
           {
@@ -225,7 +225,7 @@ describe('Serialization Data Structures', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         chunks: [],
         modifications: [],
@@ -284,7 +284,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -344,7 +344,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -391,7 +391,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -472,7 +472,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
       };
@@ -506,7 +506,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -566,7 +566,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -616,7 +616,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -697,7 +697,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
       };
@@ -728,7 +728,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -926,7 +926,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -976,7 +976,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -1022,7 +1022,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -1089,7 +1089,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
       };
@@ -1126,7 +1126,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         chunks: [
           {
@@ -1169,7 +1169,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         chunks: [],
         modifications: [],
@@ -1200,7 +1200,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         chunks: [],
         modifications: [
@@ -1297,7 +1297,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -1370,7 +1370,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -1425,7 +1425,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -1482,7 +1482,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1514,7 +1514,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1546,7 +1546,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
           accessCounter: 0,
@@ -1579,7 +1579,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1612,7 +1612,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1642,7 +1642,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1673,7 +1673,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -1704,7 +1704,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -1800,7 +1800,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -1849,7 +1849,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -1919,7 +1919,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           chunks: [],
           modifications: [],
@@ -1995,7 +1995,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
           accessCounter: 0,
@@ -2026,7 +2026,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           chunks: [],
           modifications: [],
@@ -2056,7 +2056,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2103,7 +2103,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2150,7 +2150,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2194,7 +2194,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map(),
         };
@@ -2223,7 +2223,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2268,7 +2268,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2313,7 +2313,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2362,7 +2362,7 @@ describe('WorldSerializer class', () => {
             biomeConfig: {} as any,
             resourceConfig: {} as any,
             structureConfig: {} as any,
-            riverConfig: {} as any,
+            riverNetworkConfig: {} as any,
           },
           cache: new Map([
             ['0,0,0', {
@@ -2414,7 +2414,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -2475,7 +2475,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
         modifications: new Map([
@@ -2542,7 +2542,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
         modifications: new Map([
@@ -2588,7 +2588,7 @@ describe('WorldSerializer class', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
         // No modifications property
@@ -2623,7 +2623,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
         accessCounter: 0,
@@ -2691,7 +2691,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -2773,7 +2773,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -2860,7 +2860,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -2936,7 +2936,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -3021,7 +3021,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -3133,7 +3133,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -3219,7 +3219,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map(),
         accessCounter: 0,
@@ -3282,7 +3282,7 @@ describe('Modification Application on Deserialization', () => {
           biomeConfig: {} as any,
           resourceConfig: {} as any,
           structureConfig: {} as any,
-          riverConfig: {} as any,
+          riverNetworkConfig: {} as any,
         },
         cache: new Map([
           ['0,0,0', {
@@ -3349,3 +3349,5 @@ describe('Modification Application on Deserialization', () => {
     });
   });
 });
+
+

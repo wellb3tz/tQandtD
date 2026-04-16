@@ -71,7 +71,7 @@ describe('Incremental Generation Biome Fix - Preservation Tests', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.6,
       minFlowLength: 5,
       flowWidth: 2,
@@ -453,3 +453,4 @@ describe('Incremental Generation Biome Fix - Preservation Tests', () => {
     console.log(`  Performance baseline established for regression testing`);
   });
 });
+

@@ -79,7 +79,7 @@ const standardConfig: WorldConfig = {
     minDistance: 10,
     maxAttempts: 30,
   },
-  riverConfig: {
+  riverNetworkConfig: {
     sourceElevation: 0.7,
     minFlowLength: 10,
     flowWidth: 2,
@@ -193,7 +193,7 @@ describe('Chunk Generation Performance', () => {
         minDistance: 10,
         maxAttempts: 30,
       },
-      riverConfig: {
+      riverNetworkConfig: {
         sourceElevation: 0.7,
         minFlowLength: 10,
         flowWidth: 2,
@@ -425,3 +425,4 @@ describe('Performance Regression Tests', () => {
     expect(avgTime).toBeLessThan(400);
   });
 });
+

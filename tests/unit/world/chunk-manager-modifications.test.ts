@@ -31,7 +31,7 @@ describe('ChunkManager - Modification Recording', () => {
       structureConfig: {
         minDistance: 5,
       },
-      riverConfig: {
+      riverNetworkConfig: {
         sourceThreshold: 0.7,
         minLength: 10,
       },
@@ -375,3 +375,4 @@ describe('ChunkManager - Modification Recording', () => {
     });
   });
 });
+

@@ -49,7 +49,7 @@ export interface AppState {
   // Visibility toggles
   showTerrain: boolean;
   showBiomes: boolean;
-  showRivers: boolean;
+  showWater: boolean;
   showResources: boolean;
   showStructures: boolean;
   showChunkBoundaries: boolean;
@@ -83,7 +83,6 @@ export interface AppState {
   biomeDistribution: Map<BiomeType, number>;
   resourceCounts: Map<ResourceType, number>;
   structureCounts: Map<StructureType, number>;
-  riverCount: number;
   avgHeight: number;
   minHeight: number;
   maxHeight: number;
@@ -201,7 +200,7 @@ export class DemoApp {
       
       showTerrain: true,
       showBiomes: true,
-      showRivers: true,
+      showWater: true,
       showResources: true,
       showStructures: true,
       showChunkBoundaries: false,
@@ -230,7 +229,6 @@ export class DemoApp {
       biomeDistribution: new Map(),
       resourceCounts: new Map(),
       structureCounts: new Map(),
-      riverCount: 0,
       avgHeight: 0,
       minHeight: 0,
       maxHeight: 0
@@ -275,7 +273,7 @@ export class DemoApp {
   updateState(partial: Partial<AppState>): void {
     // Check if visibility settings changed
     const visibilityKeys = [
-      'showTerrain', 'showBiomes', 'showRivers', 'showResources',
+      'showTerrain', 'showBiomes', 'showWater', 'showResources',
       'showStructures', 'showChunkBoundaries', 'showWireframe'
     ];
     
@@ -296,7 +294,7 @@ export class DemoApp {
       this.emit(AppEvent.VISIBILITY_CHANGED, {
         showTerrain: this.state.showTerrain,
         showBiomes: this.state.showBiomes,
-        showRivers: this.state.showRivers,
+        showWater: this.state.showWater,
         showResources: this.state.showResources,
         showStructures: this.state.showStructures,
         showChunkBoundaries: this.state.showChunkBoundaries,
@@ -851,7 +849,6 @@ export class DemoApp {
     const biomeDistribution = new Map<BiomeType, number>();
     const resourceCounts = new Map<ResourceType, number>();
     const structureCounts = new Map<StructureType, number>();
-    let riverCount = 0;
     let totalHeight = 0;
     let minHeight = Infinity;
     let maxHeight = -Infinity;
@@ -875,9 +872,6 @@ export class DemoApp {
         structureCounts.set(structure.type, (structureCounts.get(structure.type) || 0) + 1);
       }
       
-      // Count rivers
-      riverCount += chunk.rivers.size;
-      
       // Calculate height statistics
       for (let i = 0; i < chunk.heightmap.length; i++) {
         const height = chunk.heightmap[i];
@@ -894,7 +888,6 @@ export class DemoApp {
       biomeDistribution,
       resourceCounts,
       structureCounts,
-      riverCount,
       avgHeight,
       minHeight: minHeight === Infinity ? 0 : minHeight,
       maxHeight: maxHeight === -Infinity ? 0 : maxHeight

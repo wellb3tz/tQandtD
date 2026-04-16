@@ -30,7 +30,7 @@ describe('Seamless Chunk Boundaries - Bug Condition Exploration', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 1.0,
       minFlowLength: 1000, // Effectively disable rivers for boundary testing
       flowWidth: 2,
@@ -320,7 +320,7 @@ describe('Seamless Chunk Boundaries - Preservation Properties', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 50,
       flowWidth: 2,
@@ -611,3 +611,4 @@ describe('Seamless Chunk Boundaries - Preservation Properties', () => {
     );
   });
 });
+

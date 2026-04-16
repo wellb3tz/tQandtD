@@ -219,3 +219,4 @@ describe('ResourceGenerator', () => {
     expect(resources.every((r) => r.type === ResourceType.WOOD)).toBe(true);
   });
 });
+

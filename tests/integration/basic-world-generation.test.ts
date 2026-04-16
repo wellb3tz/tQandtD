@@ -53,7 +53,7 @@ describe('Basic World Generation Integration', () => {
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.6,
       minFlowLength: 5,
       flowWidth: 2,
@@ -256,3 +256,4 @@ describe('Basic World Generation Integration', () => {
     expect(chunk.structures.length).toBe(0);
   });
 });
+

@@ -45,7 +45,7 @@ describe.skip('Bug Condition Exploration: Chunk Boundary Biome Discontinuity', (
       minDistance: 10,
       maxAttempts: 30,
     },
-    riverConfig: {
+    riverNetworkConfig: {
       sourceElevation: 0.7,
       minFlowLength: 5,
       flowWidth: 2,
@@ -326,3 +326,4 @@ describe.skip('Bug Condition Exploration: Chunk Boundary Biome Discontinuity', (
     );
   });
 });
+

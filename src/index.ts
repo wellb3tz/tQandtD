@@ -116,9 +116,7 @@ export { TerrainGenerator, type TerrainConfig } from './gen/terrain';
 export { ResourceGenerator, type ResourceConfig, type ResourceTypeConfig } from './gen/resources';
 export { StructurePlacer, type StructureConfig, type StructureTypeConfig, type PlacementRule } from './gen/structures';
 export {
-  RiverGenerator,
   RiverNetworkGenerator,
-  type RiverConfig,
   type RiverNetworkConfig,
   type RiverSegment,
   type Lake,
