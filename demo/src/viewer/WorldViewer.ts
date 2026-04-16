@@ -18,6 +18,10 @@ import {
 } from './materials';
 import { raycastTerrain } from '../utils/coordinates';
 import { GeometryPools } from './GeometryPools';
+import { WaterLayerManager } from './water/WaterLayerManager';
+import { adjustUnderwaterColors } from './water/UnderwaterTerrainProcessor';
+import { DEFAULT_WATER_CONFIG } from './water/config';
+import type { WaterConfig } from './water/types';
 
 /**
  * 3D vector for camera position and target
@@ -65,6 +69,8 @@ export interface ChunkCoord {
  */
 interface ChunkMesh {
   terrain: THREE.Mesh;
+  water?: import('./water/types').WaterLayerData; // New: separate water layer
+  /** @deprecated Use water property instead */
   rivers?: THREE.Group;
   resources?: THREE.Group;
   structures?: THREE.Group;
@@ -124,6 +130,10 @@ export class WorldViewer {
   private enableFrustumCulling: boolean;
   private cullingCheckInterval: number;
   private lastCullingCheck: number;
+  
+  // Water system
+  private waterLayerManager: WaterLayerManager;
+  private waterConfig: WaterConfig;
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -160,6 +170,10 @@ export class WorldViewer {
     this.enableFrustumCulling = true;
     this.cullingCheckInterval = 16; // Check every 16ms (every frame at 60 FPS)
     this.lastCullingCheck = 0;
+    
+    // Initialize water system
+    this.waterLayerManager = new WaterLayerManager();
+    this.waterConfig = DEFAULT_WATER_CONFIG;
     
     // Initialize layer visibility (all visible by default)
     Object.values(RenderLayer).forEach(layer => {
@@ -376,6 +390,19 @@ export class WorldViewer {
       if (this.enableFrustumCulling && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();
         this.lastCullingCheck = now;
+        
+        // Apply water-specific optimizations
+        const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
+        
+        // Apply frustum culling to water meshes
+        if (this.waterConfig.performance.enableFrustumCulling) {
+          this.waterLayerManager.applyFrustumCulling(activeCamera, this.waterConfig);
+        }
+        
+        // Apply LOD to water meshes
+        if (this.waterConfig.performance.enableLOD) {
+          this.waterLayerManager.applyLOD(activeCamera.position, this.waterConfig);
+        }
       }
       
       // Render scene
@@ -488,6 +515,20 @@ export class WorldViewer {
     // Add terrain to scene
     this.scene.add(chunkMesh.terrain);
     
+    // Generate and add water layer
+    if (this.waterConfig.enabled && data.heightmap) {
+      const chunkKey = this.getChunkKey(chunkX, chunkY);
+      this.waterLayerManager.addWaterToChunk(chunkKey, data, this.scene, this.waterConfig);
+      
+      // Store water layer reference in ChunkMesh
+      const waterLayer = this.waterLayerManager.getWaterLayer(chunkKey);
+      if (waterLayer) {
+        chunkMesh.water = waterLayer;
+        // Ensure water renders above terrain
+        waterLayer.group.renderOrder = 1;
+      }
+    }
+    
     // Only add complete layers if not partial or if stage is complete
     // Rivers: Render only on HIGH and MEDIUM LOD
     if (!partial || (stage !== undefined && stage >= 2)) { // GenerationStage.RIVERS = 2
@@ -536,6 +577,11 @@ export class WorldViewer {
     
     if (!chunkMesh) return;
     
+    // Remove water layer first
+    if (chunkMesh.water) {
+      this.waterLayerManager.removeWaterFromChunk(key, this.scene);
+    }
+    
     // Remove all mesh components from scene
     this.scene.remove(chunkMesh.terrain);
     chunkMesh.terrain.geometry.dispose();
@@ -577,7 +623,14 @@ export class WorldViewer {
    * Update an existing chunk
    */
   updateChunk(chunkX: number, chunkY: number, data: ChunkData): void {
-    // Simply remove and re-add
+    const key = this.getChunkKey(chunkX, chunkY);
+    
+    // Update water layer if it exists
+    if (this.waterConfig.enabled && data.heightmap) {
+      this.waterLayerManager.updateWaterMeshes(key, data, this.scene, this.waterConfig);
+    }
+    
+    // Simply remove and re-add terrain and other layers
     this.removeChunk(chunkX, chunkY);
     this.addChunk(chunkX, chunkY, data);
   }
@@ -630,6 +683,22 @@ export class WorldViewer {
     // Determine if we have biome weights for smooth blending
     const hasBlendWeights = data.biomeWeights && data.biomeWeights.length > 0;
     const numBiomes = 8; // Total number of BiomeType enum values
+    
+    // Apply underwater color adjustments if heightmap and biome data available
+    let underwaterColors: BiomeColor[] | null = null;
+    if (data.heightmap && data.biomeWeights && hasBlendWeights) {
+      underwaterColors = adjustUnderwaterColors(
+        data.heightmap,
+        data.biomeWeights,
+        chunkSize,
+        {
+          seaLevel: this.waterConfig.seaLevel,
+          darkenFactor: this.waterConfig.rendering.underwaterDarkenFactor,
+          desaturationFactor: this.waterConfig.rendering.underwaterDesaturationFactor,
+          enableDepthGradient: this.waterConfig.rendering.enableDepthGradient,
+        }
+      );
+    }
     
     // LOD visualization tints
     const lodTints = [
@@ -688,7 +757,11 @@ export class WorldViewer {
         const bmIndex = bmY * chunkSize + bmX;
         
         let color: BiomeColor;
-        if (hasBlendWeights && data.biomeMap) {
+        
+        // Use pre-calculated underwater colors if available (null = use original biome color)
+        if (underwaterColors && bmIndex < underwaterColors.length && underwaterColors[bmIndex] !== null) {
+          color = underwaterColors[bmIndex]!;
+        } else if (hasBlendWeights && data.biomeMap) {
           color = calculateBlendedColor(data.biomeWeights, bmIndex, numBiomes);
         } else if (data.biomeMap) {
           const biome = data.biomeMap[bmIndex];
@@ -987,6 +1060,27 @@ export class WorldViewer {
           break;
       }
     }
+  }
+  
+  /**
+   * Toggle water layer visibility
+   */
+  setWaterVisibility(visible: boolean): void {
+    this.waterLayerManager.toggleWaterVisibility(visible);
+  }
+  
+  /**
+   * Configure water system
+   */
+  setWaterConfig(config: Partial<WaterConfig>): void {
+    this.waterConfig = { ...this.waterConfig, ...config };
+  }
+  
+  /**
+   * Get current water configuration
+   */
+  getWaterConfig(): WaterConfig {
+    return { ...this.waterConfig };
   }
 
   /**
@@ -1441,6 +1535,9 @@ export class WorldViewer {
       const [chunkX, chunkY] = key.split(',').map(Number);
       this.removeChunk(chunkX, chunkY);
     }
+    
+    // Dispose water layer manager
+    this.waterLayerManager.dispose();
     
     // Clear geometry pools
     if (this.geometryPools) {

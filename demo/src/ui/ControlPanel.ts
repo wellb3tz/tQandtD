@@ -81,6 +81,7 @@ export class ControlPanel {
     this.createBiomeControls();
     this.createRiverControls();
     this.createResourceControls();
+    this.createWaterControls();
     this.createAdvancedControls();
     this.createTerrainEditingControls();
     this.createVisibilityToggles();
@@ -605,6 +606,120 @@ export class ControlPanel {
   }
 
   /**
+   * Create water configuration controls
+   */
+  private createWaterControls(): void {
+    const waterContainer = document.getElementById('water-controls');
+    if (!waterContainer) return;
+
+    // Ocean water section
+    const oceanSection = document.createElement('div');
+    oceanSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Ocean Water</h4>';
+    waterContainer.appendChild(oceanSection);
+
+    // Ocean color picker
+    const oceanColorControl = this.createColorControl({
+      id: 'oceanColor',
+      label: 'Ocean Color',
+      defaultValue: '#1e90ff',
+      tooltip: 'Color of ocean water'
+    }, (color) => {
+      this.updateWaterConfig('ocean', 'color', parseInt(color.replace('#', '0x')));
+    });
+    waterContainer.appendChild(oceanColorControl);
+
+    // Ocean opacity slider
+    const oceanOpacityControl = this.createSliderControl({
+      id: 'oceanOpacity',
+      label: 'Ocean Opacity',
+      min: 0,
+      max: 1,
+      step: 0.05,
+      defaultValue: 0.7,
+      tooltip: 'Transparency of ocean water (0 = transparent, 1 = opaque)'
+    }, (value) => {
+      this.updateWaterConfig('ocean', 'opacity', value);
+    });
+    waterContainer.appendChild(oceanOpacityControl);
+
+    // Ocean shininess slider
+    const oceanShininessControl = this.createSliderControl({
+      id: 'oceanShininess',
+      label: 'Ocean Shininess',
+      min: 0,
+      max: 100,
+      step: 5,
+      defaultValue: 30,
+      tooltip: 'Shininess of ocean water surface'
+    }, (value) => {
+      this.updateWaterConfig('ocean', 'shininess', value);
+    });
+    waterContainer.appendChild(oceanShininessControl);
+
+    // River water section
+    const riverSection = document.createElement('div');
+    riverSection.style.marginTop = '16px';
+    riverSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">River Water</h4>';
+    waterContainer.appendChild(riverSection);
+
+    // River color picker
+    const riverColorControl = this.createColorControl({
+      id: 'riverColor',
+      label: 'River Color',
+      defaultValue: '#4682b4',
+      tooltip: 'Color of river water'
+    }, (color) => {
+      this.updateWaterConfig('river', 'color', parseInt(color.replace('#', '0x')));
+    });
+    waterContainer.appendChild(riverColorControl);
+
+    // River opacity slider
+    const riverOpacityControl = this.createSliderControl({
+      id: 'riverOpacity',
+      label: 'River Opacity',
+      min: 0,
+      max: 1,
+      step: 0.05,
+      defaultValue: 0.6,
+      tooltip: 'Transparency of river water (0 = transparent, 1 = opaque)'
+    }, (value) => {
+      this.updateWaterConfig('river', 'opacity', value);
+    });
+    waterContainer.appendChild(riverOpacityControl);
+
+    // Lake water section
+    const lakeSection = document.createElement('div');
+    lakeSection.style.marginTop = '16px';
+    lakeSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Lake Water</h4>';
+    waterContainer.appendChild(lakeSection);
+
+    // Lake color picker
+    const lakeColorControl = this.createColorControl({
+      id: 'lakeColor',
+      label: 'Lake Color',
+      defaultValue: '#1e90ff',
+      tooltip: 'Color of lake water'
+    }, (color) => {
+      this.updateWaterConfig('lake', 'color', parseInt(color.replace('#', '0x')));
+    });
+    waterContainer.appendChild(lakeColorControl);
+
+    // Lake opacity slider
+    const lakeOpacityControl = this.createSliderControl({
+      id: 'lakeOpacity',
+      label: 'Lake Opacity',
+      min: 0,
+      max: 1,
+      step: 0.05,
+      defaultValue: 0.65,
+      tooltip: 'Transparency of lake water (0 = transparent, 1 = opaque)'
+    }, (value) => {
+      this.updateWaterConfig('lake', 'opacity', value);
+    });
+    waterContainer.appendChild(lakeOpacityControl);
+  }
+
+  /**
    * Create advanced feature controls
    */
   private createAdvancedControls(): void {
@@ -1102,7 +1217,8 @@ export class ControlPanel {
     const toggles: CheckboxConfig[] = [
       { id: 'showTerrain', label: 'Show Terrain', defaultValue: true },
       { id: 'showBiomes', label: 'Show Biome Colors', defaultValue: true },
-      { id: 'showRivers', label: 'Show Rivers', defaultValue: true },
+      { id: 'showWater', label: 'Show Water Layer', defaultValue: true },
+      { id: 'showRivers', label: 'Show Rivers (Old)', defaultValue: false },
       { id: 'showResources', label: 'Show Resources', defaultValue: true },
       { id: 'showStructures', label: 'Show Structures', defaultValue: true },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
@@ -1155,6 +1271,49 @@ export class ControlPanel {
     label.appendChild(valueDisplay);
     group.appendChild(label);
     group.appendChild(slider);
+
+    return group;
+  }
+
+  /**
+   * Create a color control element
+   */
+  private createColorControl(
+    config: { id: string; label: string; defaultValue: string; tooltip?: string },
+    onChange: (color: string) => void
+  ): HTMLElement {
+    const group = document.createElement('div');
+    group.className = 'control-group';
+    group.style.display = 'flex';
+    group.style.alignItems = 'center';
+    group.style.gap = '8px';
+    group.style.marginBottom = '12px';
+
+    const label = document.createElement('label');
+    label.htmlFor = config.id;
+    label.textContent = config.label;
+    label.style.flex = '1';
+    if (config.tooltip) {
+      label.title = config.tooltip;
+    }
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.id = config.id;
+    colorInput.value = config.defaultValue;
+    colorInput.style.width = '50px';
+    colorInput.style.height = '30px';
+    colorInput.style.border = '1px solid var(--border-color, #ccc)';
+    colorInput.style.borderRadius = '4px';
+    colorInput.style.cursor = 'pointer';
+
+    colorInput.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      onChange(color);
+    });
+
+    group.appendChild(label);
+    group.appendChild(colorInput);
 
     return group;
   }
@@ -1454,6 +1613,29 @@ export class ControlPanel {
 
     this.app.updateEngineConfig(newConfig);
     this.notifyParameterChange(newConfig);
+  }
+
+  /**
+   * Update water visibility
+   */
+  private updateWaterVisibility(visible: boolean): void {
+    // Emit event through app state system
+    if (this.app) {
+      this.app.updateState({ showWater: visible } as any);
+    }
+  }
+
+  /**
+   * Update water configuration
+   */
+  private updateWaterConfig(waterType: 'ocean' | 'river' | 'lake', property: string, value: number): void {
+    // Store water config in app state and emit event
+    if (this.app) {
+      const event = new CustomEvent('waterConfigChanged', {
+        detail: { waterType, property, value }
+      });
+      window.dispatchEvent(event);
+    }
   }
 
   /**

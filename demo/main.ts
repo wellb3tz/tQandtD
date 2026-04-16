@@ -300,6 +300,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ('showWireframe' in visibilityState) {
           worldViewer.setWireframeMode(visibilityState.showWireframe);
         }
+        if ('showWater' in visibilityState) {
+          worldViewer.setWaterVisibility(visibilityState.showWater);
+        }
         
         const endTime = performance.now();
         const updateTime = endTime - startTime;
@@ -323,6 +326,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         data.error
       ));
     });
+    
+    // Listen for water configuration changes from ControlPanel
+    window.addEventListener('waterConfigChanged', ((event: CustomEvent) => {
+      if (worldViewer) {
+        const { waterType, property, value } = event.detail;
+        const currentConfig = worldViewer.getWaterConfig();
+        const updatedConfig = {
+          ...currentConfig,
+          [waterType]: {
+            ...currentConfig[waterType],
+            [property]: value
+          }
+        };
+        worldViewer.setWaterConfig(updatedConfig);
+        
+        // Update all visible chunks to apply new water configuration
+        const state = app?.getState();
+        if (state) {
+          state.loadedChunks.forEach((chunkData, key) => {
+            const [chunkX, chunkY] = key.split(',').map(Number);
+            worldViewer.updateChunk(chunkX, chunkY, chunkData);
+          });
+        }
+      }
+    }) as EventListener);
     
     console.log('DemoApp initialized successfully');
   } catch (error) {

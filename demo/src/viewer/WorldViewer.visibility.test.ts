@@ -175,8 +175,12 @@ vi.mock('three', () => ({
   LineBasicMaterial: vi.fn(() => ({ dispose: vi.fn() })),
   Group: vi.fn(() => ({
     add: vi.fn(),
+    remove: vi.fn(),
     visible: true,
-    traverse: vi.fn()
+    traverse: vi.fn(),
+    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    renderOrder: 0,
+    children: []
   })),
   SphereGeometry: vi.fn(() => ({ dispose: vi.fn() })),
   BoxGeometry: vi.fn(() => ({ dispose: vi.fn() })),

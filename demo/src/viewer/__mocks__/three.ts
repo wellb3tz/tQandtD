@@ -118,6 +118,10 @@ export class Vector3 {
     this.z = v.z;
     return this;
   }
+
+  equals(v: Vector3) {
+    return this.x === v.x && this.y === v.y && this.z === v.z;
+  }
 }
 
 // Vector2 mock
@@ -271,6 +275,12 @@ export class Box3 {
     );
   }
 
+  copy(box: Box3) {
+    this.min.copy(box.min);
+    this.max.copy(box.max);
+    return this;
+  }
+
   applyMatrix4(matrix: Matrix4) {
     return this;
   }
@@ -388,6 +398,13 @@ export class BufferGeometry {
     this.boundingBox = new Box3(min, max);
   }
 
+  computeBoundingSphere() {
+    // Simplified bounding sphere computation for testing
+    // In real THREE.js, this computes the minimal bounding sphere
+    // For tests, we just need it to exist
+    return this;
+  }
+
   dispose() {}
 }
 
@@ -433,6 +450,35 @@ export class LineBasicMaterial extends Material {
     this.color = params.color || 0xffffff;
     Object.assign(this, params);
   }
+}
+
+export class MeshPhongMaterial extends Material {
+  color: Color;
+  shininess: number;
+  normalMap: Texture | null;
+  side: number;
+
+  constructor(params: any = {}) {
+    super();
+    this.color = new Color(params.color !== undefined ? params.color : 0xffffff);
+    this.shininess = params.shininess !== undefined ? params.shininess : 30;
+    this.normalMap = params.normalMap || null;
+    this.side = params.side !== undefined ? params.side : FrontSide;
+    this.transparent = params.transparent !== undefined ? params.transparent : false;
+    this.opacity = params.opacity !== undefined ? params.opacity : 1;
+  }
+}
+
+export class Texture {
+  image: any;
+  needsUpdate: boolean;
+
+  constructor(image?: any) {
+    this.image = image;
+    this.needsUpdate = false;
+  }
+
+  dispose() {}
 }
 
 // Geometry mocks
@@ -917,6 +963,9 @@ export class Raycaster {
 
 // Constants
 export const PCFSoftShadowMap = 2;
+export const FrontSide = 0;
+export const BackSide = 1;
+export const DoubleSide = 2;
 
 // Export all
 export default {
@@ -932,7 +981,9 @@ export default {
   Material,
   MeshLambertMaterial,
   MeshBasicMaterial,
+  MeshPhongMaterial,
   LineBasicMaterial,
+  Texture,
   BoxGeometry,
   SphereGeometry,
   CylinderGeometry,
@@ -952,5 +1003,8 @@ export default {
   Color,
   WebGLRenderer,
   Raycaster,
-  PCFSoftShadowMap
+  PCFSoftShadowMap,
+  FrontSide,
+  BackSide,
+  DoubleSide
 };

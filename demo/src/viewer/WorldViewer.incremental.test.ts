@@ -178,7 +178,12 @@ vi.mock('three', () => ({
   })),
   Group: vi.fn(() => ({
     add: vi.fn(),
-    traverse: vi.fn()
+    remove: vi.fn(),
+    traverse: vi.fn(),
+    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    visible: true,
+    renderOrder: 0,
+    children: []
   })),
   LineSegments: vi.fn(() => ({
     geometry: { dispose: vi.fn() },

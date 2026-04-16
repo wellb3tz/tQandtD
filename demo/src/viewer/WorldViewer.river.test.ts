@@ -172,7 +172,11 @@ vi.mock('three', () => ({
   LineBasicMaterial: vi.fn(() => ({ dispose: vi.fn() })),
   Group: vi.fn(() => ({
     add: vi.fn(),
+    remove: vi.fn(),
     visible: true,
+    position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    renderOrder: 0,
+    children: [],
     traverse: vi.fn((callback) => {
       // Simulate traversing children
       callback({ 

@@ -9,6 +9,7 @@ A TypeScript-based procedural world generation engine designed for browser-based
 - **Multi-Layer Terrain**: Realistic heightmaps using fractional Brownian motion and domain warping
 - **3D Noise Generation**: Volumetric noise for enhanced terrain features with vertical variation
 - **Enhanced Biome System**: 8 diverse ecosystems with smooth transitions, micro-biomes, and elevation bands
+- **Comprehensive Water System**: Separate rendering layer for oceans, rivers, and lakes with transparency, configurable materials, and underwater terrain effects
 - **Advanced River Networks**: Tributaries, lakes, deltas, and flow-based width calculation (data structures implemented)
 - **Resource Clusters**: Natural resource distribution based on biomes (5 resource types)
 - **Structure Placement**: Poisson Disk Sampling for realistic structure distribution (3 structure types)
@@ -258,6 +259,59 @@ const chunk1 = manager.getChunk(0, 0);
 const chunk2 = manager.getChunk(1, 0);
 const chunk3 = manager.getChunk(0, 1);
 ```
+
+### Water Rendering System
+
+Comprehensive water rendering with separate layers for oceans, rivers, and lakes:
+
+```typescript
+import type { WaterConfig } from 'procedural-world-engine';
+
+// Configure water appearance
+const waterConfig: Partial<WaterConfig> = {
+  enabled: true,
+  seaLevel: 0.3,
+  
+  ocean: {
+    color: 0x0066cc,      // Hex color
+    opacity: 0.7,         // 0-1
+    shininess: 80,        // 0-100
+  },
+  
+  river: {
+    color: 0x3399ff,
+    opacity: 0.6,
+  },
+  
+  lake: {
+    color: 0x4da6ff,
+    opacity: 0.65,
+  },
+  
+  rendering: {
+    waterOffset: 0.1,                    // Prevents z-fighting
+    underwaterDarkenFactor: 0.4,         // Darkens underwater terrain
+    underwaterDesaturationFactor: 0.5,   // Desaturates underwater colors
+    enableDepthGradient: true,           // Depth-based darkening
+  },
+  
+  performance: {
+    enableLOD: true,                     // Distance-based detail
+    enableFrustumCulling: true,          // Hide off-screen water
+  },
+};
+
+// Apply to viewer (demo application)
+viewer.setWaterConfig(waterConfig);
+viewer.setWaterVisibility(true);
+```
+
+**Features:**
+- Independent water meshes (ocean, river, lake)
+- Configurable colors, opacity, and materials
+- Underwater terrain color adjustments
+- Performance optimizations (LOD, frustum culling)
+- Seamless chunk boundaries
 
 #### Level of Detail (LOD)
 
