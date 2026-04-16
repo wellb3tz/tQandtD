@@ -88,6 +88,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       worldViewer.initialize(viewerContainer);
       console.log('WorldViewer initialized successfully');
       
+      // Apply initial visibility state from DemoApp
+      const initialState = app.getState();
+      worldViewer.setVisibility(RenderLayer.TERRAIN, initialState.showTerrain);
+      worldViewer.setVisibility(RenderLayer.BIOMES, initialState.showBiomes);
+      worldViewer.setWaterVisibility(initialState.showWater);
+      worldViewer.setVisibility(RenderLayer.RESOURCES, initialState.showResources);
+      worldViewer.setVisibility(RenderLayer.STRUCTURES, initialState.showStructures);
+      worldViewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, initialState.showChunkBoundaries);
+      worldViewer.setWireframeMode(initialState.showWireframe);
+      
       // Initialize TerrainEditor
       terrainEditor = new TerrainEditor();
       terrainEditor.initialize(app, worldViewer);

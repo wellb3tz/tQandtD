@@ -1,19 +1,15 @@
 /**
  * Water layer manager for managing water mesh lifecycle
  * 
- * Coordinates all water mesh generators (ocean, river, lake) and manages
- * water meshes independently from terrain. Handles adding, removing, updating,
+ * Coordinates ocean water mesh generation and manages water meshes 
+ * independently from terrain. Handles adding, removing, updating,
  * and visibility control for water layers.
- * 
- * **Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 7.6**
  */
 
 import * as THREE from 'three';
 import type { ChunkData } from '../../../../src/world/chunk';
 import type { WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
-import { generateRiverMeshes } from './RiverMeshGenerator';
-import { generateLakeMeshes } from './LakeMeshGenerator';
 import { createOceanMaterial } from './WaterMaterialFactory';
 
 /**
@@ -123,60 +119,8 @@ export class WaterLayerManager {
       }
     }
 
-    // Generate river meshes
-    if (chunkData.riverNetwork) {
-      const riverMeshes = generateRiverMeshes(chunkData, chunkData.riverNetwork, config);
-      for (const riverMesh of riverMeshes) {
-        const boundingBox = new THREE.Box3();
-        if (riverMesh.geometry.boundingBox) {
-          boundingBox.copy(riverMesh.geometry.boundingBox);
-        } else {
-          riverMesh.geometry.computeBoundingBox();
-          if (riverMesh.geometry.boundingBox) {
-            boundingBox.copy(riverMesh.geometry.boundingBox);
-          }
-        }
-        
-        const waterMesh: WaterMesh = {
-          type: 'river',
-          mesh: riverMesh,
-          material: riverMesh.material as THREE.MeshPhongMaterial,
-          boundingBox,
-        };
-        
-        waterLayer.rivers.push(waterMesh);
-        waterLayer.group.add(riverMesh);
-      }
-    }
-
-    // Generate lake meshes
-    if (chunkData.riverNetwork) {
-      const lakeMeshes = generateLakeMeshes(chunkData, chunkData.riverNetwork, config);
-      for (const lakeMesh of lakeMeshes) {
-        const boundingBox = new THREE.Box3();
-        if (lakeMesh.geometry.boundingBox) {
-          boundingBox.copy(lakeMesh.geometry.boundingBox);
-        } else {
-          lakeMesh.geometry.computeBoundingBox();
-          if (lakeMesh.geometry.boundingBox) {
-            boundingBox.copy(lakeMesh.geometry.boundingBox);
-          }
-        }
-        
-        const waterMesh: WaterMesh = {
-          type: 'lake',
-          mesh: lakeMesh,
-          material: lakeMesh.material as THREE.MeshPhongMaterial,
-          boundingBox,
-        };
-        
-        waterLayer.lakes.push(waterMesh);
-        waterLayer.group.add(lakeMesh);
-      }
-    }
-
     // Position group at origin
-    // Ocean/river/lake geometries use world coordinates, so group is positioned at origin
+    // Ocean geometries use world coordinates, so group is positioned at origin
     waterLayer.group.position.set(0, 0, 0);
     waterLayer.group.visible = true; // Explicitly set visible
     waterLayer.group.renderOrder = 1; // Render after terrain

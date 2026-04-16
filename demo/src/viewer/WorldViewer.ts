@@ -542,9 +542,10 @@ export class WorldViewer {
     
     // Resources: Render only on HIGH LOD
     if (!partial || (stage !== undefined && stage >= 3)) { // GenerationStage.RESOURCES = 3
-      if (this.layerVisibility.get(RenderLayer.RESOURCES) && data.resources && data.resources.length > 0) {
+      if (data.resources && data.resources.length > 0) {
         if (lodLevel === undefined || lodLevel === 0) { // Only HIGH
           chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
+          chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
           this.scene.add(chunkMesh.resources);
         }
       }
@@ -552,18 +553,19 @@ export class WorldViewer {
     
     // Structures: Render only on HIGH and MEDIUM LOD
     if (!partial || (stage !== undefined && stage >= 4)) { // GenerationStage.STRUCTURES = 4
-      if (this.layerVisibility.get(RenderLayer.STRUCTURES) && data.structures && data.structures.length > 0) {
+      if (data.structures && data.structures.length > 0) {
         if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
           chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
+          chunkMesh.structures.visible = this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
           this.scene.add(chunkMesh.structures);
         }
       }
     }
     
-    if (this.layerVisibility.get(RenderLayer.CHUNK_BOUNDARIES)) {
-      chunkMesh.boundaries = this.createChunkBoundaries(chunkX, chunkY, data);
-      this.scene.add(chunkMesh.boundaries);
-    }
+    // Always create chunk boundaries, but respect visibility setting
+    chunkMesh.boundaries = this.createChunkBoundaries(chunkX, chunkY, data);
+    chunkMesh.boundaries.visible = this.layerVisibility.get(RenderLayer.CHUNK_BOUNDARIES) !== false;
+    this.scene.add(chunkMesh.boundaries);
     
     this.chunkMeshes.set(key, chunkMesh);
   }
@@ -957,6 +959,7 @@ export class WorldViewer {
 
   /**
    * Create chunk boundary visualization
+   * Only draws top and left edges to avoid doubling with adjacent chunks
    */
   private createChunkBoundaries(chunkX: number, chunkY: number, data: ChunkData): THREE.LineSegments {
     const chunkSize = data.size;
@@ -964,32 +967,29 @@ export class WorldViewer {
     
     // Get corner heights
     const topLeft = data.heightmap[0];
-    const topRight = data.heightmap[chunkSize - 1];
-    const bottomLeft = data.heightmap[(chunkSize - 1) * chunkSize];
-    const bottomRight = data.heightmap[chunkSize * chunkSize - 1];
+    const topRight = data.heightmap[chunkSize];
+    const bottomLeft = data.heightmap[chunkSize * chunkSize];
     
     const worldX = chunkX * chunkSize;
     const worldZ = chunkY * chunkSize;
     
-    // Draw boundary lines
+    // Only draw top and left edges to avoid doubling
+    // Top edge (left to right)
     vertices.push(
       worldX, topLeft * 50, worldZ,
-      worldX + chunkSize, topRight * 50, worldZ,
-      
-      worldX + chunkSize, topRight * 50, worldZ,
-      worldX + chunkSize, bottomRight * 50, worldZ + chunkSize,
-      
-      worldX + chunkSize, bottomRight * 50, worldZ + chunkSize,
-      worldX, bottomLeft * 50, worldZ + chunkSize,
-      
-      worldX, bottomLeft * 50, worldZ + chunkSize,
-      worldX, topLeft * 50, worldZ
+      worldX + chunkSize, topRight * 50, worldZ
+    );
+    
+    // Left edge (top to bottom)
+    vertices.push(
+      worldX, topLeft * 50, worldZ,
+      worldX, bottomLeft * 50, worldZ + chunkSize
     );
     
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     
-    const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1 });
+    const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
     
     return new THREE.LineSegments(geometry, material);
   }

@@ -1,15 +1,13 @@
 /**
  * Water system module exports
  * 
- * Comprehensive water rendering system for oceans, rivers, and lakes.
+ * Water rendering system for oceans.
  */
 
 // Type definitions
 export type {
   WaterConfig,
   OceanConfig,
-  RiverConfig,
-  LakeConfig,
   PerformanceConfig,
   RenderingConfig,
   WaterType,
@@ -23,8 +21,6 @@ export {
   validateWaterConfig,
   DEFAULT_WATER_CONFIG,
   DEFAULT_OCEAN_CONFIG,
-  DEFAULT_RIVER_CONFIG,
-  DEFAULT_LAKE_CONFIG,
   DEFAULT_PERFORMANCE_CONFIG,
   DEFAULT_RENDERING_CONFIG,
 } from './config';
@@ -32,8 +28,6 @@ export {
 // Material factory
 export {
   createOceanMaterial,
-  createRiverMaterial,
-  createLakeMaterial,
 } from './WaterMaterialFactory';
 
 // Ocean mesh generator
@@ -41,16 +35,6 @@ export {
   identifyOceanTiles,
   buildOceanGeometry,
 } from './OceanMeshGenerator';
-
-// River mesh generator
-export {
-  generateRiverMeshes,
-} from './RiverMeshGenerator';
-
-// Lake mesh generator
-export {
-  generateLakeMeshes,
-} from './LakeMeshGenerator';
 
 // Underwater terrain processor
 export type {
