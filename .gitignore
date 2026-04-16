@@ -5,5 +5,10 @@ coverage/
 *.log
 .DS_Store
 .env
-.vscode/
-.idea/
+
+# Compiled TypeScript files in demo folder
+demo/**/*.js
+demo/**/*.d.ts
+demo/**/*.js.map
+demo/**/*.d.ts.map
+!demo/vite-env.d.ts

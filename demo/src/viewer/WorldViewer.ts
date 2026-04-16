@@ -8,7 +8,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { ChunkData } from '../../../src/index';
+import { ChunkData } from '@engine/index';
 import {
   getBiomeColor,
   calculateBlendedColor,

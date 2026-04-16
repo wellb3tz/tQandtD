@@ -6,8 +6,8 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '../../../../src/world/chunk';
-import type { RiverNetwork, Lake } from '../../../../src/gen/rivers';
+import type { ChunkData } from '@engine/world/chunk';
+import type { RiverNetwork, Lake } from '@engine/gen/rivers';
 import type { WaterConfig } from './types';
 
 /**

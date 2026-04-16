@@ -6,7 +6,7 @@
  */
 
 import type { BiomeColor } from '../materials';
-import { BiomeType } from '../../../../src/world/chunk';
+import { BiomeType } from '@engine/world/chunk';
 import { BIOME_COLORS } from '../materials';
 
 /**

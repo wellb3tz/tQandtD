@@ -5,8 +5,8 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
-import { WorldConfig } from '../../../src/index';
+import { DemoApp, AppState, TerrainTool } from '@core/DemoApp';
+import { WorldConfig } from '@engine/index';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { getWorkerUrl } from '../../worker-loader';
 

@@ -6,8 +6,8 @@
  * visual charts for biome distribution (pie chart) and resource counts (bar chart).
  */
 
-import { DemoApp, AppState } from '../core/DemoApp';
-import { BiomeType, ResourceType, StructureType } from '../../../src/index';
+import { DemoApp, AppState } from '@core/DemoApp';
+import { BiomeType, ResourceType, StructureType } from '@engine/index';
 
 /**
  * StatisticsDisplay - Shows world statistics and distribution charts

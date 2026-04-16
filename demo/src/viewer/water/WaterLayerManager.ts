@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '../../../../src/world/chunk';
+import type { ChunkData } from '@engine/world/chunk';
 import type { WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { createOceanMaterial } from './WaterMaterialFactory';

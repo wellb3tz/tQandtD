@@ -6,8 +6,8 @@
  * Displays world checksums and validates data integrity.
  */
 
-import { DemoApp } from '../core/DemoApp';
-import { WorldSerializer, SerializationFormat, SerializationOptions } from '../../../src/world/serialization';
+import { DemoApp } from '@core/DemoApp';
+import { WorldSerializer, SerializationFormat, SerializationOptions } from '@engine/world/serialization';
 import { errorHandler } from '../utils/ErrorHandler';
 
 /**

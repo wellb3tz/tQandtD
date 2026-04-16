@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '../../../../src/world/chunk';
+import type { ChunkData } from '@engine/world/chunk';
 
 /**
  * Shoreline transition data

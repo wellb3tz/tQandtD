@@ -6,7 +6,7 @@
  * updates, chunk loading coordination, and event system for component communication.
  */
 
-import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, LODManager, LODLevel } from '../../../src/index';
+import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, LODManager, LODLevel } from '@engine/index';
 
 /**
  * 3D vector for camera position and target

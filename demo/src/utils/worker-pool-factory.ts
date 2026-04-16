@@ -3,7 +3,7 @@
  * Handles both development (Vite worker import) and production (built worker.js)
  */
 
-import { WorkerPool, WorkerPoolConfig } from '../../../../src/world/worker-pool';
+import { WorkerPool, WorkerPoolConfig } from '@engine/world/worker-pool';
 import { createWorker } from '../../worker-loader';
 
 /**

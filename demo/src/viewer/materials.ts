@@ -5,7 +5,7 @@
  * smooth color blending between biomes based on blend weights.
  */
 
-import { BiomeType } from '../../../src/world/chunk';
+import { BiomeType } from '@engine/world/chunk';
 import * as THREE from 'three';
 
 /**

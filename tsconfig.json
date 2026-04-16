@@ -17,8 +17,17 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@engine/*": ["src/*"],
+      "@core/*": ["demo/src/core/*"],
+      "@viewer/*": ["demo/src/viewer/*"],
+      "@ui/*": ["demo/src/ui/*"],
+      "@editor/*": ["demo/src/editor/*"],
+      "@utils/*": ["demo/src/utils/*"]
+    }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "dist-demo", "**/*.test.ts"]
 }

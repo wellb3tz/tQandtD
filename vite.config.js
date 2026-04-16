@@ -13,7 +13,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'procedural-world-engine': resolve(__dirname, './src/index.ts')
+      'procedural-world-engine': resolve(__dirname, './src/index.ts'),
+      '@engine': resolve(__dirname, './src'),
+      '@core': resolve(__dirname, './demo/src/core'),
+      '@viewer': resolve(__dirname, './demo/src/viewer'),
+      '@ui': resolve(__dirname, './demo/src/ui'),
+      '@editor': resolve(__dirname, './demo/src/editor'),
+      '@utils': resolve(__dirname, './demo/src/utils')
     }
   },
   build: {
