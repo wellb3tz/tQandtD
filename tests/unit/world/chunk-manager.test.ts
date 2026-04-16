@@ -326,9 +326,10 @@ describe('ChunkManager LOD Integration', () => {
     
     expect(chunk.x).toBe(0);
     expect(chunk.y).toBe(0);
-    expect(chunk.size).toBe(32);
-    // Heightmap should be downsampled to 16x16 (0.5 resolution)
-    expect(chunk.heightmap.length).toBe(16 * 16);
+    // After LOD fix, size is updated to downsampled size
+    expect(chunk.size).toBe(16); // 32 * 0.5 = 16
+    // Heightmap should be downsampled to (16+1) x (16+1) for seamless boundaries
+    expect(chunk.heightmap.length).toBe(17 * 17);
   });
 
   test('getChunk with LOW LOD returns heavily downsampled chunk', () => {
@@ -337,9 +338,10 @@ describe('ChunkManager LOD Integration', () => {
     
     expect(chunk.x).toBe(0);
     expect(chunk.y).toBe(0);
-    expect(chunk.size).toBe(32);
-    // Heightmap should be downsampled to 8x8 (0.25 resolution)
-    expect(chunk.heightmap.length).toBe(8 * 8);
+    // After LOD fix, size is updated to downsampled size
+    expect(chunk.size).toBe(8); // 32 * 0.25 = 8
+    // Heightmap should be downsampled to (8+1) x (8+1) for seamless boundaries
+    expect(chunk.heightmap.length).toBe(9 * 9);
   });
 
   test('getChunk caches chunks by LOD level separately', () => {
@@ -354,10 +356,10 @@ describe('ChunkManager LOD Integration', () => {
     expect(chunkHigh).not.toBe(chunkLow);
     expect(chunkMedium).not.toBe(chunkLow);
     
-    // Verify they have different heightmap sizes
+    // Verify they have different heightmap sizes (with seamless boundaries)
     expect(chunkHigh.heightmap.length).toBe(33 * 33);
-    expect(chunkMedium.heightmap.length).toBe(16 * 16);
-    expect(chunkLow.heightmap.length).toBe(8 * 8);
+    expect(chunkMedium.heightmap.length).toBe(17 * 17); // 16+1 for seamless boundaries
+    expect(chunkLow.heightmap.length).toBe(9 * 9); // 8+1 for seamless boundaries
   });
 
   test('getChunk returns cached chunk for same coordinates and LOD', () => {
@@ -442,7 +444,8 @@ describe('ChunkManager LOD Integration', () => {
     // Coordinates should be preserved
     expect(chunkMedium.x).toBe(7);
     expect(chunkMedium.y).toBe(13);
-    expect(chunkMedium.size).toBe(32);
+    // After LOD fix, size is updated to downsampled size
+    expect(chunkMedium.size).toBe(16); // 32 * 0.5 = 16
     
     // Biome data should be preserved
     expect(chunkMedium.biomeMap).toBeDefined();

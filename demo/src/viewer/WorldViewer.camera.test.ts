@@ -34,6 +34,42 @@ vi.mock('three', async () => {
       remove: vi.fn(),
       background: null
     })),
+    Euler: vi.fn().mockImplementation((x = 0, y = 0, z = 0, order = 'XYZ') => ({
+      x, y, z, order,
+      set: vi.fn(function(this: any, nx: number, ny: number, nz: number, norder?: string) {
+        this.x = nx;
+        this.y = ny;
+        this.z = nz;
+        if (norder !== undefined) this.order = norder;
+        return this;
+      })
+    })),
+    Quaternion: vi.fn().mockImplementation((x = 0, y = 0, z = 0, w = 1) => ({
+      x, y, z, w,
+      setFromEuler: vi.fn(function(this: any, euler: any) {
+        // Simplified quaternion from euler conversion
+        const c1 = Math.cos(euler.x / 2);
+        const c2 = Math.cos(euler.y / 2);
+        const c3 = Math.cos(euler.z / 2);
+        const s1 = Math.sin(euler.x / 2);
+        const s2 = Math.sin(euler.y / 2);
+        const s3 = Math.sin(euler.z / 2);
+
+        if (euler.order === 'XYZ') {
+          this.x = s1 * c2 * c3 + c1 * s2 * s3;
+          this.y = c1 * s2 * c3 - s1 * c2 * s3;
+          this.z = c1 * c2 * s3 + s1 * s2 * c3;
+          this.w = c1 * c2 * c3 - s1 * s2 * s3;
+        } else if (euler.order === 'YXZ') {
+          this.x = s1 * c2 * c3 + c1 * s2 * s3;
+          this.y = c1 * s2 * c3 - s1 * c2 * s3;
+          this.z = c1 * c2 * s3 - s1 * s2 * c3;
+          this.w = c1 * c2 * c3 + s1 * s2 * s3;
+        }
+
+        return this;
+      })
+    })),
     PerspectiveCamera: vi.fn(() => {
       const position = { x: 0, y: 0, z: 0 };
       const positionProxy = new Proxy(position, {
@@ -59,6 +95,31 @@ vi.mock('three', async () => {
           }),
           add: vi.fn()
         },
+        quaternion: {
+          x: 0, y: 0, z: 0, w: 1,
+          setFromEuler: vi.fn(function(this: any, euler: any) {
+            const c1 = Math.cos(euler.x / 2);
+            const c2 = Math.cos(euler.y / 2);
+            const c3 = Math.cos(euler.z / 2);
+            const s1 = Math.sin(euler.x / 2);
+            const s2 = Math.sin(euler.y / 2);
+            const s3 = Math.sin(euler.z / 2);
+
+            if (euler.order === 'XYZ') {
+              this.x = s1 * c2 * c3 + c1 * s2 * s3;
+              this.y = c1 * s2 * c3 - s1 * c2 * s3;
+              this.z = c1 * c2 * s3 + s1 * s2 * c3;
+              this.w = c1 * c2 * c3 - s1 * s2 * s3;
+            } else if (euler.order === 'YXZ') {
+              this.x = s1 * c2 * c3 + c1 * s2 * s3;
+              this.y = c1 * s2 * c3 - s1 * c2 * s3;
+              this.z = c1 * c2 * s3 - s1 * s2 * c3;
+              this.w = c1 * c2 * c3 + s1 * s2 * s3;
+            }
+
+            return this;
+          })
+        },
         lookAt: vi.fn(),
         updateProjectionMatrix: vi.fn(),
         getWorldDirection: vi.fn((target) => {
@@ -69,6 +130,10 @@ vi.mock('three', async () => {
     }),
     OrthographicCamera: vi.fn(() => ({
       position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      quaternion: {
+        x: 0, y: 0, z: 0, w: 1,
+        setFromEuler: vi.fn()
+      },
       lookAt: vi.fn(),
       updateProjectionMatrix: vi.fn()
     })),
@@ -94,8 +159,17 @@ vi.mock('three', async () => {
         this.z += v.z;
         return this;
       }),
+      sub: vi.fn(function(this: any, v: any) {
+        this.x -= v.x;
+        this.y -= v.y;
+        this.z -= v.z;
+        return this;
+      }),
       multiplyScalar: vi.fn(function(this: any, s: number) {
-        return { x: this.x * s, y: this.y * s, z: this.z * s };
+        this.x *= s;
+        this.y *= s;
+        this.z *= s;
+        return this;
       }),
       crossVectors: vi.fn(function(this: any, a: any, b: any) {
         this.x = a.y * b.z - a.z * b.y;
@@ -135,12 +209,19 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
         get x() { return target.x; },
         get y() { return target.y; },
         get z() { return target.z; },
+        set x(value: number) { target.x = value; },
+        set y(value: number) { target.y = value; },
+        set z(value: number) { target.z = value; },
         set: vi.fn((x: number, y: number, z: number) => {
           target.x = x;
           target.y = y;
           target.z = z;
         }),
-        add: vi.fn()
+        add: vi.fn((v: any) => {
+          target.x += v.x;
+          target.y += v.y;
+          target.z += v.z;
+        })
       },
       update: vi.fn(),
       dispose: vi.fn(),

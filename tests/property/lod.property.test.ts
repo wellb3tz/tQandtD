@@ -220,16 +220,16 @@ describe('LOD Property Tests', () => {
         // Generate valid LOD configuration with decreasing resolutions and densities
         fc.record({
           distances: fc.constant([2, 5]),
-          meshResolutions: fc.array(fc.float({ min: Math.fround(0.1), max: Math.fround(1.0), noNaN: true }), { minLength: 3, maxLength: 3 }).map(arr => {
-            // Ensure resolutions are in descending order: HIGH >= MEDIUM >= LOW
-            const sorted = [...arr].sort((a, b) => b - a);
-            return sorted;
-          }),
-          featureDensities: fc.array(fc.float({ min: Math.fround(0.1), max: Math.fround(1.0), noNaN: true }), { minLength: 3, maxLength: 3 }).map(arr => {
-            // Ensure densities are in descending order: HIGH >= MEDIUM >= LOW
-            const sorted = [...arr].sort((a, b) => b - a);
-            return sorted;
-          }),
+          meshResolutions: fc.tuple(
+            fc.float({ min: Math.fround(0.5), max: Math.fround(1.0), noNaN: true }), // HIGH: 0.5-1.0
+            fc.float({ min: Math.fround(0.25), max: Math.fround(0.5), noNaN: true }), // MEDIUM: 0.25-0.5
+            fc.float({ min: Math.fround(0.1), max: Math.fround(0.25), noNaN: true })  // LOW: 0.1-0.25
+          ).map(([high, medium, low]) => [high, medium, low]),
+          featureDensities: fc.tuple(
+            fc.float({ min: Math.fround(0.5), max: Math.fround(1.0), noNaN: true }), // HIGH: 0.5-1.0
+            fc.float({ min: Math.fround(0.25), max: Math.fround(0.5), noNaN: true }), // MEDIUM: 0.25-0.5
+            fc.float({ min: Math.fround(0.1), max: Math.fround(0.25), noNaN: true })  // LOW: 0.1-0.25
+          ).map(([high, medium, low]) => [high, medium, low]),
         }),
         // Generate chunk size
         fc.integer({ min: 8, max: 64 }),
@@ -239,11 +239,12 @@ describe('LOD Property Tests', () => {
           const manager = new LODManager(config);
 
           // Create a test chunk with heightmap and features
+          // Note: Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices for seamless boundaries
           const createChunk = (x: number, y: number) => ({
             x,
             y,
             size: chunkSize,
-            heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
+            heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
             biomeMap: new Uint8Array(chunkSize * chunkSize),
             biomeWeights: new Float32Array(chunkSize * chunkSize * 8),
             resources: Array.from({ length: featureCount }, (_, i) => ({
@@ -288,14 +289,15 @@ describe('LOD Property Tests', () => {
             mediumFeatureCount >= lowFeatureCount;
 
           // Property 3: Mesh resolution should match configured multipliers
+          // Note: Heightmaps have (size + 1) x (size + 1) vertices for seamless boundaries
           const expectedHighSize = chunkSize;
           const expectedMediumSize = Math.max(1, Math.floor(chunkSize * config.meshResolutions[LODLevel.MEDIUM]));
           const expectedLowSize = Math.max(1, Math.floor(chunkSize * config.meshResolutions[LODLevel.LOW]));
 
           const meshResolutionMatchesConfig = 
-            highChunk.heightmap.length === expectedHighSize * expectedHighSize &&
-            mediumChunk.heightmap.length === expectedMediumSize * expectedMediumSize &&
-            lowChunk.heightmap.length === expectedLowSize * expectedLowSize;
+            highChunk.heightmap.length === (expectedHighSize + 1) * (expectedHighSize + 1) &&
+            mediumChunk.heightmap.length === (expectedMediumSize + 1) * (expectedMediumSize + 1) &&
+            lowChunk.heightmap.length === (expectedLowSize + 1) * (expectedLowSize + 1);
 
           // All properties must hold
           return meshResolutionDecreases && featureDensityDecreases && meshResolutionMatchesConfig;

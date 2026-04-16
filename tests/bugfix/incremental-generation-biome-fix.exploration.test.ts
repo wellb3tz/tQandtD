@@ -108,44 +108,50 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     const partial = chunkManager.getChunkIncremental(0, 0);
     expect(partial.stage).toBe(GenerationStage.TERRAIN);
 
-    // Call continueGeneration() 10 times in a loop
+    // Call continueGeneration() until complete or max iterations
     const stages: number[] = [];
-    for (let i = 0; i < 10; i++) {
-      const result = chunkManager.continueGeneration(0, 0);
+    const maxIterations = 100; // Safety limit
+    let complete = false;
+    
+    for (let i = 0; i < maxIterations && !complete; i++) {
+      complete = chunkManager.continueGeneration(0, 0);
       const currentStage = chunkManager.getGenerationStage(0, 0);
       stages.push(currentStage!);
     }
 
-    // Get current stage after 10 iterations
+    // Get current stage after iterations
     const currentStage = chunkManager.getGenerationStage(0, 0);
 
     // Document the observed behavior
     const stageNames = stages.map(s => GenerationStage[s]);
     const uniqueStages = [...new Set(stageNames)];
-    const stuckStage = stageNames[stageNames.length - 1];
+    const finalStage = stageNames[stageNames.length - 1];
     
     console.log(`\n=== BUG DEMONSTRATION ===`);
-    console.log(`After 10 iterations, stage is: ${stuckStage}`);
-    console.log(`Stage progression: ${stageNames.join(' -> ')}`);
+    console.log(`After ${stages.length} iterations, stage is: ${finalStage}`);
+    console.log(`Stage progression: ${stageNames.slice(0, 20).join(' -> ')}${stages.length > 20 ? '...' : ''}`);
     console.log(`Unique stages visited: ${uniqueStages.join(', ')}`);
+    console.log(`Completed: ${complete}`);
     
-    // Check if stage is stuck (same stage for last 5 iterations)
-    const lastFiveStages = stages.slice(-5);
-    const isStuck = lastFiveStages.every(s => s === lastFiveStages[0]);
+    // Check if stage is stuck (same stage for last 10 iterations)
+    const lastTenStages = stages.slice(-10);
+    const isStuck = lastTenStages.length >= 10 && lastTenStages.every(s => s === lastTenStages[0]);
     
     if (isStuck && currentStage !== GenerationStage.COMPLETE) {
       console.log(`\n✗ BUG CONFIRMED: Stage ${GenerationStage[currentStage!]} stuck in infinite loop`);
       console.log(`  - Stage never advances beyond ${GenerationStage[currentStage!]}`);
       console.log(`  - Work is regenerated on every continueGeneration() call`);
       console.log(`  - This matches the bug description in bugfix.md`);
+    } else if (complete && currentStage === GenerationStage.COMPLETE) {
+      console.log(`\n✓ FIX VERIFIED: Generation completed successfully`);
+      console.log(`  - All stages advanced properly`);
+      console.log(`  - No infinite loops detected`);
     }
 
     // Assert that stage advances beyond TERRAIN (to BIOMES or later)
-    // This assertion PASSES because TERRAIN completes quickly
-    // But the test documents that BIOMES gets stuck instead
     expect(currentStage).toBeGreaterThan(GenerationStage.TERRAIN);
     
-    // The real bug: stage should eventually reach COMPLETE, but it doesn't
+    // The real test: stage should eventually reach COMPLETE
     // EXPECTED ON UNFIXED CODE: This assertion FAILS - stage stuck at BIOMES
     // EXPECTED ON FIXED CODE: This assertion PASSES - stage reaches COMPLETE
     expect(currentStage).toBe(GenerationStage.COMPLETE);
@@ -184,42 +190,53 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     const currentStageBeforeLoop = chunkManager.getGenerationStage(0, 0);
     expect(currentStageBeforeLoop).toBeGreaterThanOrEqual(GenerationStage.BIOMES);
 
-    // Call continueGeneration() 10 times in a loop
+    // Call continueGeneration() until complete or max iterations
     const stages: number[] = [];
-    for (let i = 0; i < 10; i++) {
-      chunkManager.continueGeneration(0, 0);
+    const maxIterations = 100; // Safety limit
+    let complete = false;
+    
+    for (let i = 0; i < maxIterations && !complete; i++) {
+      complete = chunkManager.continueGeneration(0, 0);
       const currentStage = chunkManager.getGenerationStage(0, 0);
       stages.push(currentStage!);
     }
 
-    // Get current stage after 10 iterations
+    // Get current stage after iterations
     const currentStage = chunkManager.getGenerationStage(0, 0);
 
     // Document the observed behavior
     const stageNames = stages.map(s => GenerationStage[s]);
     const uniqueStages = [...new Set(stageNames)];
-    const stuckStage = stageNames[stageNames.length - 1];
+    const finalStage = stageNames[stageNames.length - 1];
     
     console.log(`\n=== BUG DEMONSTRATION - BIOMES STAGE ===`);
-    console.log(`After 10 iterations, stage is: ${stuckStage}`);
-    console.log(`Stage progression: ${stageNames.join(' -> ')}`);
+    console.log(`After ${stages.length} iterations, stage is: ${finalStage}`);
+    console.log(`Stage progression: ${stageNames.slice(0, 20).join(' -> ')}${stages.length > 20 ? '...' : ''}`);
     console.log(`Unique stages visited: ${uniqueStages.join(', ')}`);
+    console.log(`Completed: ${complete}`);
     
-    // Check if stage is stuck (same stage for last 5 iterations)
-    const lastFiveStages = stages.slice(-5);
-    const isStuck = lastFiveStages.every(s => s === lastFiveStages[0]);
+    // Check if stage is stuck (same stage for last 10 iterations)
+    const lastTenStages = stages.slice(-10);
+    const isStuck = lastTenStages.length >= 10 && lastTenStages.every(s => s === lastTenStages[0]);
     
     if (isStuck && currentStage === GenerationStage.BIOMES) {
       console.log(`\n✗ BUG CONFIRMED: BIOMES stage stuck in infinite loop`);
       console.log(`  - Stage never advances beyond BIOMES to RIVERS`);
       console.log(`  - Work is regenerated on every continueGeneration() call`);
       console.log(`  - This matches the bug description in bugfix.md`);
+    } else if (complete && currentStage === GenerationStage.COMPLETE) {
+      console.log(`\n✓ FIX VERIFIED: Generation completed successfully`);
+      console.log(`  - All stages advanced properly`);
+      console.log(`  - No infinite loops detected`);
     }
 
     // Assert that stage advances beyond BIOMES (to RIVERS or later)
-    // EXPECTED ON UNFIXED CODE: This assertion FAILS - stage stuck at BIOMES
-    // EXPECTED ON FIXED CODE: This assertion PASSES - stage advances to RIVERS
     expect(currentStage).toBeGreaterThan(GenerationStage.BIOMES);
+    
+    // The real test: stage should eventually reach COMPLETE
+    // EXPECTED ON UNFIXED CODE: This assertion FAILS - stage stuck at BIOMES
+    // EXPECTED ON FIXED CODE: This assertion PASSES - stage reaches COMPLETE
+    expect(currentStage).toBe(GenerationStage.COMPLETE);
   });
 
   /**
@@ -273,13 +290,13 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     const partial2 = chunkManager.getChunkIncremental(0, 0);
     const biomeMap2 = partial2.data.biomeMap;
 
-    // Call continueGeneration() again for same chunk (should be at BIOMES still due to bug)
+    // Call continueGeneration() again for same chunk (should advance to next stage, not regenerate BIOMES)
     const startTime2 = performance.now();
     chunkManager.continueGeneration(0, 0);
     const time2 = performance.now() - startTime2;
     const stage2 = chunkManager.getGenerationStage(0, 0);
     
-    // Capture biomeMap reference after second BIOMES execution
+    // Capture biomeMap reference after third call
     const partial3 = chunkManager.getChunkIncremental(0, 0);
     const biomeMap3 = partial3.data.biomeMap;
     const heightmap3 = partial3.data.heightmap;
@@ -287,32 +304,23 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     // Document the observed behavior
     console.log(`\n=== BUG DEMONSTRATION - REDUNDANT WORK ===`);
     console.log(`Stage after first BIOMES call: ${GenerationStage[stage1!]}`);
-    console.log(`Stage after second BIOMES call: ${GenerationStage[stage2!]}`);
+    console.log(`Stage after second call: ${GenerationStage[stage2!]}`);
     console.log(`Heightmap reference changed: ${heightmap1 !== heightmap3}`);
     console.log(`BiomeMap reference changed (1st->2nd): ${biomeMap2 !== biomeMap3}`);
     console.log(`First BIOMES call time: ${time1.toFixed(2)}ms`);
-    console.log(`Second BIOMES call time: ${time2.toFixed(2)}ms`);
-    console.log(`Time ratio: ${(time2 / time1).toFixed(2)}x`);
+    console.log(`Second call time (next stage): ${time2.toFixed(2)}ms`);
 
-    // Check if work was regenerated
-    // If times are similar (ratio close to 1.0), work is being regenerated
-    const timeRatio = time2 / time1;
-    const wasRegenerated = timeRatio > 0.5; // If second call takes >50% of first call time, likely regenerating
+    // Verify biomeMap was NOT regenerated (same reference throughout)
+    expect(biomeMap3).toBe(biomeMap1);
+    expect(biomeMap3).toBe(biomeMap2);
     
-    if (wasRegenerated) {
-      console.log(`\n✗ BUG CONFIRMED: Work regenerated on every continueGeneration() call`);
-      console.log(`  - No completion tracking for stages`);
-      console.log(`  - Work is redundantly regenerated from scratch`);
-      console.log(`  - This matches the bug description in bugfix.md (Requirements 1.14, 1.15, 1.16)`);
-    } else {
-      console.log(`\n✓ FIX VERIFIED: Work NOT regenerated (much faster on second call)`);
-      console.log(`  - Completion tracking prevents redundant work`);
-    }
-
-    // Assert work is NOT regenerated (second call should be much faster)
-    // EXPECTED ON UNFIXED CODE: This assertion FAILS - work regenerated from scratch (time ratio ~1.0)
-    // EXPECTED ON FIXED CODE: This assertion PASSES - work is skipped (time ratio <0.1)
-    expect(timeRatio).toBeLessThan(0.5);
+    // Verify heightmap was NOT regenerated (same reference throughout)
+    expect(heightmap3).toBe(heightmap1);
+    
+    console.log(`\n✓ FIX VERIFIED: Work NOT regenerated`);
+    console.log(`  - BiomeMap reference unchanged: ${biomeMap3 === biomeMap1}`);
+    console.log(`  - Heightmap reference unchanged: ${heightmap3 === heightmap1}`);
+    console.log(`  - Completion tracking prevents redundant work`);
   });
 
   /**
@@ -582,7 +590,7 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     const biomesStages: GenerationStage[] = [];
     const biomesMapsGenerated: boolean[] = [];
     
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 50; i++) { // Increased from 5 to 50 to allow biomes stage to complete
       const startTime = performance.now();
       const result = defaultChunkManager.continueGeneration(0, 0);
       const elapsed = performance.now() - startTime;
@@ -621,14 +629,14 @@ describe('Incremental Generation Biome Fix - Bug Condition Exploration', () => {
     // it means work is being regenerated on every call (infinite loop)
     if (allStagesSame && finalStage === GenerationStage.BIOMES) {
       console.log(`\n✗ BUG CONFIRMED: BIOMES stage stuck in infinite loop`);
-      console.log(`  - Stage never advances beyond BIOMES`);
+      console.log(`  - Stage never advances beyond BIOMES after ${biomesTimes.length} calls`);
       console.log(`  - Work is regenerated on every call (similar execution times)`);
       console.log(`  - No completion tracking - system doesn't know work is done`);
       console.log(`  - Budget check happens after work, but stage doesn't advance`);
       console.log(`  - This matches the bug description in bugfix.md (Requirements 1.16, 1.17, 1.18, 1.19)`);
       
       // This is the assertion that should FAIL on unfixed code
-      // After 5 calls, the stage should have advanced beyond BIOMES
+      // After many calls, the stage should have advanced beyond BIOMES
       expect(finalStage).toBeGreaterThan(GenerationStage.BIOMES);
     } else if (finalBiomeMapGenerated && finalStage > GenerationStage.BIOMES) {
       console.log(`\n✓ FIX VERIFIED: BIOMES stage advances after work completes`);

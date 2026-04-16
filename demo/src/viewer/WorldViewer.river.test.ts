@@ -10,6 +10,82 @@ import { ChunkData, BiomeType } from '../../../src/index';
 
 // Mock Three.js
 vi.mock('three', () => ({
+  Vector3: vi.fn(function(this: any, x = 0, y = 0, z = 0) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.set = vi.fn((x: number, y: number, z: number) => {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      return this;
+    });
+    this.copy = vi.fn((v: any) => {
+      this.x = v.x;
+      this.y = v.y;
+      this.z = v.z;
+      return this;
+    });
+    this.add = vi.fn((v: any) => {
+      this.x += v.x;
+      this.y += v.y;
+      this.z += v.z;
+      return this;
+    });
+    this.sub = vi.fn((v: any) => {
+      this.x -= v.x;
+      this.y -= v.y;
+      this.z -= v.z;
+      return this;
+    });
+    this.multiplyScalar = vi.fn((s: number) => {
+      this.x *= s;
+      this.y *= s;
+      this.z *= s;
+      return this;
+    });
+    this.crossVectors = vi.fn((a: any, b: any) => {
+      this.x = a.y * b.z - a.z * b.y;
+      this.y = a.z * b.x - a.x * b.z;
+      this.z = a.x * b.y - a.y * b.x;
+      return this;
+    });
+    this.normalize = vi.fn(() => {
+      const len = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+      if (len > 0) {
+        this.x /= len;
+        this.y /= len;
+        this.z /= len;
+      }
+      return this;
+    });
+    this.length = vi.fn(() => {
+      return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    });
+    return this;
+  }),
+  Euler: vi.fn(function(this: any, x = 0, y = 0, z = 0) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    return this;
+  }),
+  Quaternion: vi.fn(function(this: any) {
+    this.setFromEuler = vi.fn();
+    return this;
+  }),
+  Matrix4: vi.fn(function(this: any) {
+    this.elements = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    this.multiplyMatrices = vi.fn(() => this);
+    this.identity = vi.fn(() => this);
+    return this;
+  }),
+  Frustum: vi.fn(function(this: any) {
+    this.planes = [];
+    this.setFromProjectionMatrix = vi.fn(() => this);
+    this.intersectsBox = vi.fn(() => true);
+    return this;
+  }),
   Scene: vi.fn(() => ({
     add: vi.fn(),
     remove: vi.fn(),
@@ -19,7 +95,12 @@ vi.mock('three', () => ({
     position: { set: vi.fn(), x: 0, y: 0, z: 0 },
     lookAt: vi.fn(),
     aspect: 1,
-    updateProjectionMatrix: vi.fn()
+    updateProjectionMatrix: vi.fn(),
+    quaternion: { setFromEuler: vi.fn() },
+    getWorldDirection: vi.fn((target) => {
+      target.set(0, 0, -1);
+      return target;
+    })
   })),
   WebGLRenderer: vi.fn(() => ({
     setSize: vi.fn(),
@@ -38,15 +119,39 @@ vi.mock('three', () => ({
     }
   })),
   Color: vi.fn((color) => ({ r: 0, g: 0, b: 0 })),
-  BufferGeometry: vi.fn(() => ({
-    setAttribute: vi.fn(),
-    setIndex: vi.fn(),
-    computeVertexNormals: vi.fn(),
-    dispose: vi.fn(),
-    getAttribute: vi.fn()
+  BufferGeometry: vi.fn(function(this: any) {
+    this.setAttribute = vi.fn();
+    this.setIndex = vi.fn();
+    this.computeVertexNormals = vi.fn();
+    this.computeBoundingBox = vi.fn(() => {
+      // Create a mock bounding box when computed
+      this.boundingBox = {
+        min: { x: 0, y: 0, z: 0 },
+        max: { x: 32, y: 10, z: 32 },
+        clone: vi.fn(() => ({
+          min: { x: 0, y: 0, z: 0 },
+          max: { x: 32, y: 10, z: 32 },
+          applyMatrix4: vi.fn()
+        })),
+        applyMatrix4: vi.fn()
+      };
+    });
+    this.dispose = vi.fn();
+    this.getAttribute = vi.fn();
+    return this;
+  }),
+  BufferAttribute: vi.fn((array, size) => ({
+    array,
+    itemSize: size,
+    count: array.length / size,
+    needsUpdate: false
   })),
   Float32BufferAttribute: vi.fn((array, size) => array),
   MeshLambertMaterial: vi.fn(() => ({
+    wireframe: false,
+    dispose: vi.fn()
+  })),
+  MeshBasicMaterial: vi.fn(() => ({
     wireframe: false,
     dispose: vi.fn()
   })),
@@ -75,6 +180,9 @@ vi.mock('three', () => ({
         material: { dispose: vi.fn() }
       });
     })
+  })),
+  BoxGeometry: vi.fn(() => ({
+    dispose: vi.fn()
   })),
   PCFSoftShadowMap: 0
 }));
@@ -119,8 +227,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -151,8 +259,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -195,8 +303,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -231,8 +339,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -269,8 +377,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map(), // No rivers
@@ -295,8 +403,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -323,8 +431,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x: 0,
       y: 0,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([
@@ -356,8 +464,8 @@ describe('WorldViewer - River Overlay Rendering', () => {
       x,
       y,
       size: chunkSize,
-      heightmap: new Float32Array(chunkSize * chunkSize).fill(0.5),
-      biomeMap: new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS),
+      heightmap: new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5),
+      biomeMap: new Uint8Array((chunkSize + 1) * (chunkSize + 1)).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
       rivers: new Map([

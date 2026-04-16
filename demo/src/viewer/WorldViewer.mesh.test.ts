@@ -40,9 +40,48 @@ vi.mock('three', () => ({
     remove: vi.fn(),
     background: null
   })),
+  Euler: vi.fn().mockImplementation((x = 0, y = 0, z = 0, order = 'XYZ') => ({
+    x, y, z, order,
+    set: vi.fn(function(this: any, nx: number, ny: number, nz: number, norder?: string) {
+      this.x = nx;
+      this.y = ny;
+      this.z = nz;
+      if (norder !== undefined) this.order = norder;
+      return this;
+    })
+  })),
+  Quaternion: vi.fn().mockImplementation((x = 0, y = 0, z = 0, w = 1) => ({
+    x, y, z, w,
+    setFromEuler: vi.fn(function(this: any, euler: any) {
+      // Simplified quaternion from euler conversion
+      const c1 = Math.cos(euler.x / 2);
+      const c2 = Math.cos(euler.y / 2);
+      const c3 = Math.cos(euler.z / 2);
+      const s1 = Math.sin(euler.x / 2);
+      const s2 = Math.sin(euler.y / 2);
+      const s3 = Math.sin(euler.z / 2);
+
+      if (euler.order === 'XYZ') {
+        this.x = s1 * c2 * c3 + c1 * s2 * s3;
+        this.y = c1 * s2 * c3 - s1 * c2 * s3;
+        this.z = c1 * c2 * s3 + s1 * s2 * c3;
+        this.w = c1 * c2 * c3 - s1 * s2 * s3;
+      }
+
+      return this;
+    })
+  })),
   PerspectiveCamera: vi.fn(() => ({
     position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    quaternion: {
+      x: 0, y: 0, z: 0, w: 1,
+      setFromEuler: vi.fn()
+    },
     lookAt: vi.fn(),
+    getWorldDirection: vi.fn((target) => {
+      target.set(0, 0, -1);
+      return target;
+    }),
     aspect: 1,
     updateProjectionMatrix: vi.fn()
   })),
@@ -66,6 +105,7 @@ vi.mock('three', () => ({
   BufferGeometry: vi.fn(() => {
     const attributes: any = {};
     let indexData: any = null;
+    let boundingBox: any = null;
     
     return {
       setAttribute: vi.fn((name: string, attr: any) => {
@@ -103,10 +143,35 @@ vi.mock('three', () => ({
           };
         }
       }),
+      computeBoundingBox: vi.fn(() => {
+        // Create a simple bounding box
+        boundingBox = {
+          min: { x: 0, y: 0, z: 0 },
+          max: { x: 32, y: 10, z: 32 },
+          clone: vi.fn(() => ({
+            min: { x: 0, y: 0, z: 0 },
+            max: { x: 32, y: 10, z: 32 },
+            applyMatrix4: vi.fn()
+          })),
+          applyMatrix4: vi.fn()
+        };
+      }),
+      get boundingBox() {
+        return boundingBox;
+      },
       dispose: vi.fn()
     };
   }),
   Float32BufferAttribute: vi.fn((array: Float32Array, itemSize: number) => ({
+    array,
+    count: array.length / itemSize,
+    itemSize,
+    getX: (i: number) => array[i * itemSize],
+    getY: (i: number) => array[i * itemSize + 1],
+    getZ: (i: number) => array[i * itemSize + 2],
+    needsUpdate: false
+  })),
+  BufferAttribute: vi.fn((array: Float32Array | Uint16Array | Uint32Array, itemSize: number) => ({
     array,
     count: array.length / itemSize,
     itemSize,
@@ -182,10 +247,60 @@ vi.mock('three', () => ({
   })),
   PCFSoftShadowMap: 0,
   Vector3: vi.fn(() => ({
-    set: vi.fn(),
+    set: vi.fn(function(this: any, x: number, y: number, z: number) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      return this;
+    }),
+    add: vi.fn(function(this: any, v: any) {
+      this.x += v.x;
+      this.y += v.y;
+      this.z += v.z;
+      return this;
+    }),
+    sub: vi.fn(function(this: any, v: any) {
+      this.x -= v.x;
+      this.y -= v.y;
+      this.z -= v.z;
+      return this;
+    }),
+    multiplyScalar: vi.fn(function(this: any, s: number) {
+      this.x *= s;
+      this.y *= s;
+      this.z *= s;
+      return this;
+    }),
+    crossVectors: vi.fn(function(this: any, a: any, b: any) {
+      const ax = a.x, ay = a.y, az = a.z;
+      const bx = b.x, by = b.y, bz = b.z;
+      this.x = ay * bz - az * by;
+      this.y = az * bx - ax * bz;
+      this.z = ax * by - ay * bx;
+      return this;
+    }),
+    normalize: vi.fn(function(this: any) {
+      const len = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+      if (len > 0) {
+        this.x /= len;
+        this.y /= len;
+        this.z /= len;
+      }
+      return this;
+    }),
+    length: vi.fn(function(this: any) {
+      return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }),
     x: 0,
     y: 0,
     z: 0
+  })),
+  Frustum: vi.fn(() => ({
+    setFromProjectionMatrix: vi.fn(),
+    intersectsObject: vi.fn(() => true)
+  })),
+  Matrix4: vi.fn(() => ({
+    multiplyMatrices: vi.fn()
   }))
 }));
 
@@ -236,11 +351,13 @@ describe('WorldViewer - Mesh Generation', () => {
   describe('Terrain Geometry Creation', () => {
     it('should create correct number of vertices from heightmap', () => {
       const chunkSize = 4;
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices for seamless boundaries
       const heightmap = new Float32Array([
-        0.0, 0.1, 0.2, 0.3,
-        0.1, 0.2, 0.3, 0.4,
-        0.2, 0.3, 0.4, 0.5,
-        0.3, 0.4, 0.5, 0.6
+        0.0, 0.1, 0.2, 0.3, 0.4,
+        0.1, 0.2, 0.3, 0.4, 0.5,
+        0.2, 0.3, 0.4, 0.5, 0.6,
+        0.3, 0.4, 0.5, 0.6, 0.7,
+        0.4, 0.5, 0.6, 0.7, 0.8
       ]);
 
       const chunkData: ChunkData = {
@@ -256,14 +373,15 @@ describe('WorldViewer - Mesh Generation', () => {
 
       // Check captured geometry
       expect(capturedGeometry).not.toBeNull();
-      expect(capturedGeometry!.positions.length).toBe(chunkSize * chunkSize * 3);
+      expect(capturedGeometry!.positions.length).toBe((chunkSize + 1) * (chunkSize + 1) * 3);
     });
 
     it('should create vertices at correct world positions', () => {
       const chunkSize = 3;
       const chunkX = 2;
       const chunkY = 1;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -288,16 +406,21 @@ describe('WorldViewer - Mesh Generation', () => {
       expect(positions[1]).toBe(height);
       expect(positions[2]).toBe(worldZ);
 
-      // Check last vertex (chunkSize-1, chunkSize-1) in chunk
-      const lastIndex = (chunkSize * chunkSize - 1) * 3;
-      expect(positions[lastIndex]).toBe(worldX + chunkSize - 1);
+      // Check last vertex (chunkSize, chunkSize) in chunk (note: chunkSize not chunkSize-1 for seamless boundaries)
+      const lastIndex = ((chunkSize + 1) * (chunkSize + 1) - 1) * 3;
+      expect(positions[lastIndex]).toBe(worldX + chunkSize);
       expect(positions[lastIndex + 1]).toBe(height);
-      expect(positions[lastIndex + 2]).toBe(worldZ + chunkSize - 1);
+      expect(positions[lastIndex + 2]).toBe(worldZ + chunkSize);
     });
 
     it('should scale heightmap values correctly', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array([0.0, 0.5, 1.0, 0.25]);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array([
+        0.0, 0.5, 1.0,
+        0.25, 0.75, 0.5,
+        0.5, 0.25, 0.0
+      ]);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -322,7 +445,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should create correct triangle indices', () => {
       const chunkSize = 3;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -338,27 +462,29 @@ describe('WorldViewer - Mesh Generation', () => {
       expect(capturedGeometry).not.toBeNull();
       const indices = capturedGeometry!.indices;
 
-      // Number of quads = (chunkSize - 1) * (chunkSize - 1)
+      // Number of quads = chunkSize * chunkSize
       // Each quad = 2 triangles = 6 indices
-      const expectedIndices = (chunkSize - 1) * (chunkSize - 1) * 6;
+      const expectedIndices = chunkSize * chunkSize * 6;
       expect(indices.length).toBe(expectedIndices);
 
       // Check first quad indices (top-left quad)
       // Triangle 1: topLeft, bottomLeft, topRight
       // Triangle 2: topRight, bottomLeft, bottomRight
+      const verticesPerSide = chunkSize + 1;
       expect(indices[0]).toBe(0); // topLeft
-      expect(indices[1]).toBe(chunkSize); // bottomLeft
+      expect(indices[1]).toBe(verticesPerSide); // bottomLeft
       expect(indices[2]).toBe(1); // topRight
       expect(indices[3]).toBe(1); // topRight
-      expect(indices[4]).toBe(chunkSize); // bottomLeft
-      expect(indices[5]).toBe(chunkSize + 1); // bottomRight
+      expect(indices[4]).toBe(verticesPerSide); // bottomLeft
+      expect(indices[5]).toBe(verticesPerSide + 1); // bottomRight
     });
   });
 
   describe('Normal Calculation', () => {
     it('should compute vertex normals for terrain mesh', () => {
       const chunkSize = 3;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -375,15 +501,17 @@ describe('WorldViewer - Mesh Generation', () => {
       const normals = capturedGeometry!.normals;
 
       // Should have normals for all vertices (3 components per vertex)
-      expect(normals.length).toBe(chunkSize * chunkSize * 3);
+      expect(normals.length).toBe((chunkSize + 1) * (chunkSize + 1) * 3);
     });
 
     it('should have normalized normal vectors', () => {
       const chunkSize = 3;
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 4x4 = 16 values
       const heightmap = new Float32Array([
-        0.0, 0.1, 0.2,
-        0.1, 0.5, 0.3,
-        0.2, 0.3, 0.4
+        0.0, 0.1, 0.2, 0.3,
+        0.1, 0.5, 0.3, 0.4,
+        0.2, 0.3, 0.4, 0.5,
+        0.3, 0.4, 0.5, 0.6
       ]);
 
       const chunkData: ChunkData = {
@@ -412,7 +540,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should point upward for flat terrain', () => {
       const chunkSize = 3;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) vertices
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -439,7 +568,8 @@ describe('WorldViewer - Mesh Generation', () => {
   describe('Biome Color Mapping', () => {
     it('should apply biome colors to vertices', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array([
         BiomeType.FOREST,
         BiomeType.DESERT,
@@ -462,7 +592,7 @@ describe('WorldViewer - Mesh Generation', () => {
       const colors = capturedGeometry!.colors;
 
       // Should have colors for all vertices (3 components per vertex)
-      expect(colors.length).toBe(chunkSize * chunkSize * 3);
+      expect(colors.length).toBe((chunkSize + 1) * (chunkSize + 1) * 3);
 
       // Colors should be in valid range [0, 1]
       for (let i = 0; i < colors.length; i += 3) {
@@ -482,11 +612,13 @@ describe('WorldViewer - Mesh Generation', () => {
     it('should use blended colors when biome weights are available', () => {
       const chunkSize = 2;
       const numBiomes = 8;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       // Create biome weights for smooth blending
-      const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
+      // Note: biomeWeights is per-vertex, so needs (chunkSize + 1) * (chunkSize + 1) * numBiomes
+      const biomeWeights = new Float32Array((chunkSize + 1) * (chunkSize + 1) * numBiomes);
       // First vertex: 50% forest, 50% plains
       biomeWeights[0 * numBiomes + BiomeType.FOREST] = 0.5;
       biomeWeights[0 * numBiomes + BiomeType.PLAINS] = 0.5;
@@ -519,7 +651,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should use gray color when no biome data available', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
 
       const chunkData: ChunkData = {
         size: chunkSize,
@@ -546,7 +679,8 @@ describe('WorldViewer - Mesh Generation', () => {
   describe('LOD Mesh Simplification', () => {
     it('should apply LOD tint to mesh colors', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const chunkData: ChunkData = {
@@ -566,12 +700,13 @@ describe('WorldViewer - Mesh Generation', () => {
 
       // LOD level 1 (MEDIUM) should have slight yellow tint
       // Colors should be modified from base biome color
-      expect(colors.length).toBe(chunkSize * chunkSize * 3);
+      expect(colors.length).toBe((chunkSize + 1) * (chunkSize + 1) * 3);
     });
 
     it('should store LOD level in mesh userData', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const chunkData: ChunkData = {
@@ -592,7 +727,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should apply different tints for different LOD levels', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       // Create chunks at different LOD levels
@@ -634,7 +770,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should not apply LOD tint when lodLevel is undefined', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const chunkData: ChunkData = {
@@ -657,7 +794,8 @@ describe('WorldViewer - Mesh Generation', () => {
   describe('Partial Generation Visualization', () => {
     it('should apply opacity for partial chunks', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const chunkData: ChunkData = {
@@ -679,7 +817,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should store partial status in mesh userData', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const chunkData: ChunkData = {
@@ -700,7 +839,8 @@ describe('WorldViewer - Mesh Generation', () => {
 
     it('should apply different tints for different generation stages', () => {
       const chunkSize = 2;
-      const heightmap = new Float32Array(chunkSize * chunkSize).fill(0.5);
+      // Heightmap needs (chunkSize + 1) x (chunkSize + 1) = 3x3 = 9 values
+      const heightmap = new Float32Array((chunkSize + 1) * (chunkSize + 1)).fill(0.5);
       const biomeMap = new Uint8Array(chunkSize * chunkSize).fill(BiomeType.PLAINS);
 
       const stages = [0, 1, 2]; // TERRAIN, BIOMES, RIVERS

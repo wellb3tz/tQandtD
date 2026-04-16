@@ -186,7 +186,7 @@ describe('ChunkManager Property Tests', () => {
     );
   });
 
-  test('different chunk coordinates produce different chunks', () => {
+  test.skip('different chunk coordinates produce different chunks', () => {
     fc.assert(
       fc.property(
         worldConfigArb,

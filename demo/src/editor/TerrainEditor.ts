@@ -499,7 +499,8 @@ export class TerrainEditor {
     const state = this.app.getState();
     if (!state.chunkManager) return;
     
-    const entry = this.undoStack.pop()!;
+    const entry = this.undoStack.pop();
+    if (!entry) return;
     
     // Save current state to redo stack
     const chunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
@@ -531,7 +532,8 @@ export class TerrainEditor {
     const state = this.app.getState();
     if (!state.chunkManager) return;
     
-    const entry = this.redoStack.pop()!;
+    const entry = this.redoStack.pop();
+    if (!entry) return;
     
     // Save current state to undo stack
     const chunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);

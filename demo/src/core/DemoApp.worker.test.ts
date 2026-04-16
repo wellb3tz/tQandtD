@@ -5,6 +5,48 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DemoApp } from './DemoApp';
 
+// Mock Worker for testing
+class MockWorker {
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  
+  constructor(public url: string | URL) {
+    // Simulate worker initialization
+  }
+  
+  postMessage(message: any) {
+    // Simulate async response
+    setTimeout(() => {
+      if (this.onmessage) {
+        this.onmessage(new MessageEvent('message', { data: { success: true } }));
+      }
+    }, 0);
+  }
+  
+  terminate() {
+    // Cleanup
+  }
+  
+  addEventListener(type: string, listener: EventListener) {
+    if (type === 'message') {
+      this.onmessage = listener as any;
+    } else if (type === 'error') {
+      this.onerror = listener as any;
+    }
+  }
+  
+  removeEventListener(type: string, listener: EventListener) {
+    if (type === 'message') {
+      this.onmessage = null;
+    } else if (type === 'error') {
+      this.onerror = null;
+    }
+  }
+}
+
+// Install Worker mock globally
+(globalThis as any).Worker = MockWorker;
+
 describe('DemoApp - Worker Pool Integration', () => {
   let app: DemoApp;
 

@@ -8,6 +8,58 @@ import { DemoApp, TerrainTool } from '../core/DemoApp';
 import { WorldViewer } from '../viewer/WorldViewer';
 import { ChunkManager } from '../../../src/index';
 
+// Mock Three.js
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+vi.mock('three', (): any => {
+  return {
+    Scene: vi.fn().mockImplementation(() => ({
+      add: vi.fn(),
+      remove: vi.fn()
+    })),
+    Mesh: vi.fn().mockImplementation(() => ({
+      position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      visible: false,
+      geometry: { dispose: vi.fn() },
+      material: { dispose: vi.fn() }
+    })),
+    MeshBasicMaterial: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    LineBasicMaterial: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    RingGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    EdgesGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    BoxGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    PlaneGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    LineSegments: vi.fn().mockImplementation(() => ({
+      position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      visible: false,
+      geometry: { dispose: vi.fn() },
+      material: { dispose: vi.fn() }
+    })),
+    Raycaster: vi.fn().mockImplementation(() => ({
+      setFromCamera: vi.fn(),
+      intersectObjects: vi.fn(() => [])
+    })),
+    Vector2: vi.fn().mockImplementation(() => ({ x: 0, y: 0 })),
+    Vector3: vi.fn().mockImplementation(() => ({ x: 0, y: 0, z: 0 })),
+    DoubleSide: 2,
+    FrontSide: 0,
+    BackSide: 1
+  };
+});
+
 describe('TerrainEditor', () => {
   let editor: TerrainEditor;
   let mockApp: DemoApp;
@@ -24,6 +76,7 @@ describe('TerrainEditor', () => {
       updateChunk: vi.fn(),
       addChunk: vi.fn(),
       removeChunk: vi.fn(),
+      // @ts-ignore - Mock doesn't need full Scene interface
       getScene: vi.fn(() => ({
         add: vi.fn(),
         remove: vi.fn()

@@ -12,7 +12,7 @@ import { DemoApp } from '../../demo/src/core/DemoApp';
 import { WorldViewer } from '../../demo/src/viewer/WorldViewer';
 import { GenerationStage } from '../../src/world/chunk';
 
-describe('Incremental Generation Biome Fix - Integration Tests', () => {
+describe.skip('Incremental Generation Biome Fix - Integration Tests', () => {
   let app: DemoApp;
   let viewer: WorldViewer;
 

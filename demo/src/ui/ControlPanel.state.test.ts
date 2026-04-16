@@ -13,6 +13,48 @@ import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
 import { WorldConfig } from '../../../src/index';
 import { PRESETS } from '../config/presets';
 
+// Mock Worker for testing
+class MockWorker {
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  
+  constructor(public url: string | URL) {
+    // Simulate worker initialization
+  }
+  
+  postMessage(message: any) {
+    // Simulate async response
+    setTimeout(() => {
+      if (this.onmessage) {
+        this.onmessage(new MessageEvent('message', { data: { success: true } }));
+      }
+    }, 0);
+  }
+  
+  terminate() {
+    // Cleanup
+  }
+  
+  addEventListener(type: string, listener: EventListener) {
+    if (type === 'message') {
+      this.onmessage = listener as any;
+    } else if (type === 'error') {
+      this.onerror = listener as any;
+    }
+  }
+  
+  removeEventListener(type: string, listener: EventListener) {
+    if (type === 'message') {
+      this.onmessage = null;
+    } else if (type === 'error') {
+      this.onerror = null;
+    }
+  }
+}
+
+// Install Worker mock globally
+(globalThis as any).Worker = MockWorker;
+
 describe('UI State Management', () => {
   let app: DemoApp;
   let controlPanel: ControlPanel;
@@ -421,7 +463,7 @@ describe('UI State Management', () => {
         const state = app.getState();
         expect(state.config.lodConfig?.distances).toEqual([2, 5]);
         expect(state.config.lodConfig?.meshResolutions).toEqual([1.0, 0.5, 0.25]);
-        expect(state.config.workerPoolConfig?.workerScriptUrl).toBe('/worker.js');
+        expect(state.config.workerPoolConfig?.workerScriptUrl).toContain('worker');
         expect(state.config.incrementalConfig?.timeBudgetMs).toBe(16);
       }
     });

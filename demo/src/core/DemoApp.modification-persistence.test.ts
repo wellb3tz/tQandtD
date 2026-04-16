@@ -12,6 +12,68 @@ import { WorldViewer } from '../viewer/WorldViewer';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { SerializationFormat } from '../../../src/world/serialization';
 
+// Mock Three.js
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+vi.mock('three', (): any => {
+  return {
+    Scene: vi.fn().mockImplementation(() => ({
+      add: vi.fn(),
+      remove: vi.fn(),
+      background: null
+    })),
+    Mesh: vi.fn().mockImplementation(() => ({
+      position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      visible: false,
+      geometry: { dispose: vi.fn() },
+      material: { dispose: vi.fn() }
+    })),
+    MeshBasicMaterial: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    LineBasicMaterial: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    RingGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    EdgesGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    BoxGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    PlaneGeometry: vi.fn().mockImplementation(() => ({
+      dispose: vi.fn()
+    })),
+    LineSegments: vi.fn().mockImplementation(() => ({
+      position: { set: vi.fn(), x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      visible: false,
+      geometry: { dispose: vi.fn() },
+      material: { dispose: vi.fn() }
+    })),
+    Raycaster: vi.fn().mockImplementation(() => ({
+      setFromCamera: vi.fn(),
+      intersectObjects: vi.fn(() => [])
+    })),
+    Vector2: vi.fn().mockImplementation(() => ({ x: 0, y: 0 })),
+    Vector3: vi.fn().mockImplementation(() => ({ x: 0, y: 0, z: 0 })),
+    DoubleSide: 2,
+    FrontSide: 0,
+    BackSide: 1
+  };
+});
+
+vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
+  OrbitControls: vi.fn().mockImplementation(() => ({
+    update: vi.fn(),
+    dispose: vi.fn(),
+    target: { set: vi.fn(), x: 0, y: 0, z: 0 },
+    enableDamping: false
+  }))
+}));
+
 describe('DemoApp Modification Persistence Integration', () => {
   let app: DemoApp;
   let viewer: Partial<WorldViewer>;

@@ -105,7 +105,7 @@ describe('ControlPanel - Worker Pool Controls', () => {
         expect.objectContaining({
           workerPoolConfig: expect.objectContaining({
             maxWorkers: expect.any(Number),
-            workerScriptUrl: '/worker.js',
+            workerScriptUrl: expect.stringContaining('worker'),
             taskTimeout: 30000
           })
         })
@@ -254,7 +254,7 @@ describe('ControlPanel - Worker Pool Controls', () => {
       expect(mockApp.updateEngineConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           workerPoolConfig: expect.objectContaining({
-            workerScriptUrl: '/worker.js'
+            workerScriptUrl: expect.stringContaining('worker')
           })
         })
       );

@@ -115,6 +115,7 @@ export class WorldViewer {
   private followTerrainHeight: number;
   private orthographicCamera: THREE.OrthographicCamera | null;
   private isOrthographic: boolean;
+  private cameraTarget: THREE.Vector3; // Track target even in free camera mode
   
   // Performance optimizations
   private geometryPools: GeometryPools | null;
@@ -150,6 +151,7 @@ export class WorldViewer {
     this.followTerrainHeight = 50;
     this.orthographicCamera = null;
     this.isOrthographic = false;
+    this.cameraTarget = new THREE.Vector3(0, 0, 0); // Default target at origin
     
     // Initialize performance optimizations (lazy-initialized to avoid issues with mocked Three.js in tests)
     this.geometryPools = null;
@@ -423,7 +425,8 @@ export class WorldViewer {
       const right = new THREE.Vector3();
       const up = new THREE.Vector3(0, 1, 0);
       
-      activeCamera.getWorldDirection(forward);
+      // Use perspective camera for free camera mode (orthographic doesn't have getWorldDirection)
+      this.camera.getWorldDirection(forward);
       right.crossVectors(forward, up).normalize();
       
       if (this.keyboardState.get('w')) {
@@ -1053,6 +1056,10 @@ export class WorldViewer {
    * Set camera target
    */
   setCameraTarget(target: Vector3): void {
+    // Update internal target
+    this.cameraTarget.set(target.x, target.y, target.z);
+    
+    // Update controls target if they exist
     if (this.controls) {
       this.controls.target.set(target.x, target.y, target.z);
       this.controls.update();
@@ -1080,6 +1087,9 @@ export class WorldViewer {
       this.cameraRotation.pitch = -0.3; // Look slightly down
       this.updateCameraRotation();
     }
+    
+    // Reset internal target
+    this.cameraTarget.set(0, 0, 0);
     
     // Update orbit controls if they exist
     if (this.controls) {
@@ -1204,8 +1214,12 @@ export class WorldViewer {
         z: this.controls.target.z
       };
     }
-    // Return camera position if no controls (free camera mode)
-    return this.getCameraPosition();
+    // Return internal target for free camera mode
+    return {
+      x: this.cameraTarget.x,
+      y: this.cameraTarget.y,
+      z: this.cameraTarget.z
+    };
   }
 
   /**
@@ -1301,6 +1315,11 @@ export class WorldViewer {
    */
   private updateFrustumCulling(): void {
     if (!this.enableFrustumCulling) return;
+    
+    // Safety check for test environments where frustum might not be fully mocked
+    if (typeof this.frustum.intersectsBox !== 'function') {
+      return;
+    }
     
     const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
     
