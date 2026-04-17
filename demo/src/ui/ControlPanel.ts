@@ -512,33 +512,13 @@ export class ControlPanel {
     // Worker pool
     const workerCheckbox = this.createCheckboxControl({
       id: 'enableWorkerPool',
-      label: 'Enable Worker Pool',
+      label: 'Enable Worker Pool (4 workers)',
       defaultValue: false,
-      tooltip: 'Enable multi-threaded generation'
+      tooltip: 'Multi-threaded generation with 4 worker threads'
     }, (checked) => {
       this.updateWorkerPoolConfig('enabled', checked);
-      const maxWorkersControl = document.getElementById('maxWorkers-group');
-      if (maxWorkersControl) {
-        maxWorkersControl.style.display = checked ? 'block' : 'none';
-      }
     });
     advancedContainer.appendChild(workerCheckbox);
-
-    // Max workers slider (conditional)
-    const maxWorkersControl = this.createSliderControl({
-      id: 'maxWorkers',
-      label: 'Max Workers',
-      min: 1,
-      max: 16,
-      step: 1,
-      defaultValue: typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4,
-      tooltip: 'Maximum number of worker threads'
-    }, (value) => {
-      this.updateWorkerPoolConfig('maxWorkers', value);
-    });
-    maxWorkersControl.style.display = 'none';
-    maxWorkersControl.id = 'maxWorkers-group';
-    advancedContainer.appendChild(maxWorkersControl);
 
     // Incremental generation
     const incrementalCheckbox = this.createCheckboxControl({
@@ -721,10 +701,8 @@ export class ControlPanel {
 
     if (key === 'enabled') {
       if (value === true) {
-        // Enable Worker Pool with default configuration
-        const defaultMaxWorkers = typeof navigator !== 'undefined' && navigator.hardwareConcurrency 
-          ? navigator.hardwareConcurrency 
-          : 4;
+        // Enable Worker Pool with fixed 4 workers for optimal balance
+        const defaultMaxWorkers = 4;
         
         // Use the worker loader to get the correct URL for dev/prod
         const workerUrl = getWorkerUrl();
@@ -733,7 +711,7 @@ export class ControlPanel {
           workerPoolConfig: {
             maxWorkers: defaultMaxWorkers,
             workerScriptUrl: workerUrl,
-            taskTimeout: 30000
+            taskTimeout: 5000 // 5 second timeout for faster fallback
           }
         };
         this.app.updateEngineConfig(newConfig);

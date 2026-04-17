@@ -407,42 +407,23 @@ export class DemoApp {
             // Start incremental generation
             const partial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
             
-            // Track with initial stage (TERRAIN = 0)
+            // Track with initial stage
             this.state.chunksInProgress.set(key, partial.stage);
             
-            // Continue generation through BIOMES stage before first render
-            // This ensures we have both heightmap and biomeMap to avoid grey terrain
-            const GenerationStage = { TERRAIN: 0, BIOMES: 1, RIVERS: 2, RESOURCES: 3, STRUCTURES: 4, COMPLETE: 5 };
+            // Emit initial chunk loaded event with partial data
+            // The continueIncrementalGeneration() method will handle progressive updates
+            this.emit(AppEvent.CHUNK_LOADED, { 
+              chunkX, 
+              chunkY, 
+              chunk: partial.data, 
+              partial: true, 
+              stage: partial.stage 
+            });
             
-            // Loop until we complete BIOMES stage (reach RIVERS or beyond)
-            // This ensures both TERRAIN and BIOMES stages are complete
-            let currentStage = this.state.chunkManager.getGenerationStage(chunkX, chunkY);
-            while (currentStage !== undefined && currentStage <= GenerationStage.BIOMES) {
-              this.state.chunkManager.continueGeneration(chunkX, chunkY);
-              currentStage = this.state.chunkManager.getGenerationStage(chunkX, chunkY);
-              
-              // Update progress tracking after each call
-              if (currentStage !== undefined) {
-                this.state.chunksInProgress.set(key, currentStage);
-              }
-            }
-            
-            // Get the updated partial data after continuing through BIOMES
-            const updatedPartial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
-            
-            // Verify biomeMap exists before emitting CHUNK_LOADED
-            if (updatedPartial.data.biomeMap && updatedPartial.data.heightmap) {
-              this.emit(AppEvent.CHUNK_LOADED, { 
-                chunkX, 
-                chunkY, 
-                chunk: updatedPartial.data, 
-                partial: currentStage !== GenerationStage.COMPLETE, 
-                stage: currentStage 
-              });
-            }
+            chunksLoaded++;
           } else {
             // Generate chunk immediately
-            let chunk = this.state.chunkManager.getChunk(chunkX, chunkY);
+            let chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
             
             // Apply LOD if enabled
             if (this.state.lodManager) {
@@ -528,7 +509,7 @@ export class DemoApp {
    * Should be called in the render loop
    * Processes a limited number of chunks per frame to avoid blocking
    */
-  continueIncrementalGeneration(): void {
+  async continueIncrementalGeneration(): Promise<void> {
     if (!this.state.chunkManager || !this.state.incrementalEnabled) {
       return;
     }
@@ -554,7 +535,7 @@ export class DemoApp {
         
         if (complete && newStage !== undefined) {
           // Generation complete - get final chunk
-          const chunk = this.state.chunkManager.getChunk(chunkX, chunkY);
+          const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
           
           // Apply LOD if enabled
           let finalChunk = chunk;
@@ -613,11 +594,20 @@ export class DemoApp {
       ...config
     };
     
-    // Recreate ChunkManager if certain configs changed
+    // Shut down existing worker pool if we're recreating the ChunkManager
     const shouldRecreateManager = 
       'incrementalConfig' in config ||
       'maxCacheSize' in config ||
       'workerPoolConfig' in config;
+    
+    if (shouldRecreateManager) {
+      // Shut down old worker pool to prevent memory leaks and hanging workers
+      const oldManager = this.state.chunkManager as any;
+      if (oldManager?.workerPool) {
+        console.log('[DemoApp] Shutting down old worker pool');
+        oldManager.workerPool.shutdown();
+      }
+    }
     
     if (shouldRecreateManager && !('workerPoolConfig' in config)) {
       // Simple recreation for non-worker-pool changes
@@ -656,6 +646,10 @@ export class DemoApp {
           fallback: true
         });
       }
+    } else if ('workerPoolConfig' in config && !config.workerPoolConfig) {
+      // Worker pool is being disabled - recreate without it
+      this.state.chunkManager = new ChunkManager(newConfig);
+      workerPoolEnabled = false;
     }
     
     // Update incremental generation enabled state

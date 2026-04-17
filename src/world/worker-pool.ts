@@ -10,6 +10,8 @@ export interface WorkerPoolConfig {
   workerScriptUrl: string;
   /** Timeout for worker tasks in ms (default: 30000) */
   taskTimeout: number;
+  /** World configuration to send to workers */
+  worldConfig?: any;
 }
 
 /**
@@ -66,7 +68,7 @@ export class WorkerPool {
 
     // Initialize workers
     for (let i = 0; i < config.maxWorkers; i++) {
-      const worker = new (globalThis as any).Worker(config.workerScriptUrl) as Worker;
+      const worker = new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
       
       // Set up message handler for this worker
       worker.onmessage = (event: MessageEvent) => {
@@ -75,6 +77,7 @@ export class WorkerPool {
 
       // Set up error handler for this worker
       worker.onerror = (error: ErrorEvent) => {
+        console.error('Worker error:', error);
         this.handleTaskError(i, new Error(error.message));
       };
 
@@ -83,6 +86,14 @@ export class WorkerPool {
         currentTask: null,
         completedTasks: 0,
       });
+      
+      // Initialize worker with world config if provided
+      if (config.worldConfig) {
+        worker.postMessage({
+          type: 'init',
+          config: config.worldConfig,
+        });
+      }
     }
   }
 
@@ -190,7 +201,7 @@ export class WorkerPool {
 
     // Send task to worker
     idleWorker.worker.postMessage({
-      type: 'generate',
+      type: 'generateChunk',
       chunkX: task.chunkX,
       chunkY: task.chunkY,
       lodLevel: task.lodLevel,
@@ -211,13 +222,32 @@ export class WorkerPool {
   /**
    * Handles task completion from worker
    * @param workerId - Worker index
-   * @param result - Chunk data result
+   * @param result - Worker response message
    */
-  private handleTaskComplete(workerId: number, result: ChunkData): void {
+  private handleTaskComplete(workerId: number, result: any): void {
     const workerState = this.workers[workerId];
     const task = workerState.currentTask;
 
     if (!task) {
+      return;
+    }
+
+    // Handle different message types from worker
+    if (result.type === 'ready') {
+      // Worker initialized successfully
+      console.log(`Worker ${workerId} initialized`);
+      return;
+    }
+
+    if (result.type === 'error') {
+      // Worker reported an error
+      this.handleTaskError(workerId, new Error(result.message));
+      return;
+    }
+
+    if (result.type !== 'chunkReady') {
+      // Unknown message type
+      console.warn(`Unknown message type from worker ${workerId}:`, result.type);
       return;
     }
 
@@ -241,15 +271,38 @@ export class WorkerPool {
     // Remove from active tasks
     this.activeTasks.delete(task.id);
 
+    // Deserialize chunk data from worker
+    // The worker sends serialized chunk data that needs to be converted back
+    const chunkData = this.deserializeChunkData(result.chunk);
+
     // Call completion callback
     try {
-      task.onComplete(result);
+      task.onComplete(chunkData);
     } catch (error) {
       console.error(`Error in task completion callback: ${error}`);
     }
 
     // Assign next task if available
     this.assignNextTask();
+  }
+
+  /**
+   * Deserializes chunk data received from worker
+   * @param serialized - Serialized chunk data from worker
+   * @returns Deserialized ChunkData
+   */
+  private deserializeChunkData(serialized: any): ChunkData {
+    return {
+      x: serialized.x,
+      y: serialized.y,
+      size: serialized.size,
+      heightmap: new Float32Array(serialized.heightmap),
+      biomeMap: new Uint8Array(serialized.biomeMap),
+      biomeWeights: new Float32Array(serialized.biomeWeights),
+      resources: serialized.resources,
+      structures: serialized.structures,
+      rivers: new Set(serialized.rivers),
+    };
   }
 
   /**

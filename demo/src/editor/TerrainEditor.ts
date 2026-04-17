@@ -214,7 +214,7 @@ export class TerrainEditor {
   /**
    * Apply brush at world coordinates
    */
-  applyBrush(worldX: number, worldY: number): void {
+  async applyBrush(worldX: number, worldY: number): Promise<void> {
     if (!this.app || this.currentTool === TerrainTool.NONE) {
       return;
     }
@@ -225,23 +225,23 @@ export class TerrainEditor {
     }
     
     // Save state for undo before modification
-    this.saveStateForUndo(worldX, worldY);
+    await this.saveStateForUndo(worldX, worldY);
     
     // Apply the appropriate tool
     switch (this.currentTool) {
       case TerrainTool.RAISE:
-        this.raiseTerrain(worldX, worldY, this.brushSize, this.brushStrength);
+        await this.raiseTerrain(worldX, worldY, this.brushSize, this.brushStrength);
         break;
       case TerrainTool.LOWER:
-        this.lowerTerrain(worldX, worldY, this.brushSize, this.brushStrength);
+        await this.lowerTerrain(worldX, worldY, this.brushSize, this.brushStrength);
         break;
       case TerrainTool.FLATTEN:
         // Get target height at center
-        const targetHeight = this.getHeightAt(worldX, worldY);
-        this.flattenTerrain(worldX, worldY, this.brushSize, targetHeight);
+        const targetHeight = await this.getHeightAt(worldX, worldY);
+        await this.flattenTerrain(worldX, worldY, this.brushSize, targetHeight);
         break;
       case TerrainTool.SMOOTH:
-        this.smoothTerrain(worldX, worldY, this.brushSize);
+        await this.smoothTerrain(worldX, worldY, this.brushSize);
         break;
     }
     
@@ -254,8 +254,8 @@ export class TerrainEditor {
   /**
    * Raise terrain at world coordinates
    */
-  raiseTerrain(worldX: number, worldY: number, radius: number, strength: number): void {
-    this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
+  async raiseTerrain(worldX: number, worldY: number, radius: number, strength: number): Promise<void> {
+    await this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
       // Apply falloff based on distance from center
       const falloff = 1.0 - (distance / maxDistance);
       const delta = strength * 0.1 * falloff;
@@ -266,8 +266,8 @@ export class TerrainEditor {
   /**
    * Lower terrain at world coordinates
    */
-  lowerTerrain(worldX: number, worldY: number, radius: number, strength: number): void {
-    this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
+  async lowerTerrain(worldX: number, worldY: number, radius: number, strength: number): Promise<void> {
+    await this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
       // Apply falloff based on distance from center
       const falloff = 1.0 - (distance / maxDistance);
       const delta = strength * 0.1 * falloff;
@@ -278,8 +278,8 @@ export class TerrainEditor {
   /**
    * Flatten terrain to target height
    */
-  flattenTerrain(worldX: number, worldY: number, radius: number, targetHeight: number): void {
-    this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
+  async flattenTerrain(worldX: number, worldY: number, radius: number, targetHeight: number): Promise<void> {
+    await this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance) => {
       // Apply falloff based on distance from center
       const falloff = 1.0 - (distance / maxDistance);
       // Interpolate towards target height
@@ -290,7 +290,7 @@ export class TerrainEditor {
   /**
    * Smooth terrain by averaging neighboring heights
    */
-  smoothTerrain(worldX: number, worldY: number, radius: number): void {
+  async smoothTerrain(worldX: number, worldY: number, radius: number): Promise<void> {
     if (!this.app) return;
     
     const state = this.app.getState();
@@ -301,15 +301,15 @@ export class TerrainEditor {
     // Collect all heights in the radius first
     const heightMap = new Map<string, number>();
     
-    this.iterateTerrainInRadius(worldX, worldY, radius, (wx, wy, chunkX, chunkY, localX, localY) => {
-      const height = this.getHeightAt(wx, wy);
+    await this.iterateTerrainInRadius(worldX, worldY, radius, async (wx, wy, chunkX, chunkY, localX, localY) => {
+      const height = await this.getHeightAt(wx, wy);
       if (height !== null) {
         heightMap.set(`${wx},${wy}`, height);
       }
     });
     
     // Apply smoothing
-    this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance, wx, wy) => {
+    await this.modifyTerrainInRadius(worldX, worldY, radius, (height, distance, maxDistance, wx, wy) => {
       // Calculate average of neighboring heights
       let sum = height;
       let count = 1;
@@ -342,12 +342,12 @@ export class TerrainEditor {
   /**
    * Modify terrain in a radius using a modification function
    */
-  private modifyTerrainInRadius(
+  private async modifyTerrainInRadius(
     worldX: number,
     worldY: number,
     radius: number,
     modifyFn: (height: number, distance: number, maxDistance: number, wx: number, wy: number) => number
-  ): void {
+  ): Promise<void> {
     if (!this.app) return;
     
     const state = this.app.getState();
@@ -357,8 +357,8 @@ export class TerrainEditor {
     const affectedChunks = new Set<string>();
     
     // Iterate over all tiles in radius
-    this.iterateTerrainInRadius(worldX, worldY, radius, (wx, wy, chunkX, chunkY, localX, localY, distance) => {
-      const chunk = state.chunkManager!.getChunk(chunkX, chunkY);
+    await this.iterateTerrainInRadius(worldX, worldY, radius, async (wx, wy, chunkX, chunkY, localX, localY, distance) => {
+      const chunk = await state.chunkManager!.getChunk(chunkX, chunkY);
       const index = localY * chunkSize + localX;
       
       const currentHeight = chunk.heightmap[index];
@@ -377,7 +377,7 @@ export class TerrainEditor {
     if (this.viewer) {
       for (const key of affectedChunks) {
         const [chunkX, chunkY] = key.split(',').map(Number);
-        const chunk = state.chunkManager.getChunk(chunkX, chunkY);
+        const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
         this.viewer.updateChunk(chunkX, chunkY, chunk);
       }
     }
@@ -386,12 +386,12 @@ export class TerrainEditor {
   /**
    * Iterate over terrain tiles in a radius
    */
-  private iterateTerrainInRadius(
+  private async iterateTerrainInRadius(
     worldX: number,
     worldY: number,
     radius: number,
-    callback: (wx: number, wy: number, chunkX: number, chunkY: number, localX: number, localY: number, distance: number) => void
-  ): void {
+    callback: (wx: number, wy: number, chunkX: number, chunkY: number, localX: number, localY: number, distance: number) => void | Promise<void>
+  ): Promise<void> {
     if (!this.app) return;
     
     const state = this.app.getState();
@@ -421,7 +421,7 @@ export class TerrainEditor {
         const localX = ((wx % chunkSize) + chunkSize) % chunkSize;
         const localY = ((wy % chunkSize) + chunkSize) % chunkSize;
         
-        callback(wx, wy, chunkX, chunkY, localX, localY, distance);
+        await callback(wx, wy, chunkX, chunkY, localX, localY, distance);
       }
     }
   }
@@ -429,7 +429,7 @@ export class TerrainEditor {
   /**
    * Get height at world coordinates
    */
-  private getHeightAt(worldX: number, worldY: number): number | null {
+  private async getHeightAt(worldX: number, worldY: number): Promise<number | null> {
     if (!this.app) return null;
     
     const state = this.app.getState();
@@ -442,7 +442,7 @@ export class TerrainEditor {
     const localY = ((worldY % chunkSize) + chunkSize) % chunkSize;
     
     try {
-      const chunk = state.chunkManager.getChunk(chunkX, chunkY);
+      const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
       const index = localY * chunkSize + localX;
       return chunk.heightmap[index];
     } catch {
@@ -453,7 +453,7 @@ export class TerrainEditor {
   /**
    * Save state for undo
    */
-  private saveStateForUndo(worldX: number, worldY: number): void {
+  private async saveStateForUndo(worldX: number, worldY: number): Promise<void> {
     if (!this.app) return;
     
     const state = this.app.getState();
@@ -463,14 +463,14 @@ export class TerrainEditor {
     const affectedChunks = new Set<string>();
     
     // Determine which chunks are affected
-    this.iterateTerrainInRadius(worldX, worldY, this.brushSize, (wx, wy, chunkX, chunkY) => {
+    await this.iterateTerrainInRadius(worldX, worldY, this.brushSize, (wx, wy, chunkX, chunkY) => {
       affectedChunks.add(`${chunkX},${chunkY}`);
     });
     
     // Save snapshot of each affected chunk
     for (const key of affectedChunks) {
       const [chunkX, chunkY] = key.split(',').map(Number);
-      const chunk = state.chunkManager.getChunk(chunkX, chunkY);
+      const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
       
       const entry: HistoryEntry = {
         chunkX,
@@ -493,7 +493,7 @@ export class TerrainEditor {
   /**
    * Undo last modification
    */
-  undo(): void {
+  async undo(): Promise<void> {
     if (!this.canUndo() || !this.app) return;
     
     const state = this.app.getState();
@@ -503,7 +503,7 @@ export class TerrainEditor {
     if (!entry) return;
     
     // Save current state to redo stack
-    const chunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+    const chunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
     this.redoStack.push({
       chunkX: entry.chunkX,
       chunkY: entry.chunkY,
@@ -518,7 +518,7 @@ export class TerrainEditor {
     
     // Update viewer
     if (this.viewer) {
-      const updatedChunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+      const updatedChunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
       this.viewer.updateChunk(entry.chunkX, entry.chunkY, updatedChunk);
     }
   }
@@ -526,7 +526,7 @@ export class TerrainEditor {
   /**
    * Redo last undone modification
    */
-  redo(): void {
+  async redo(): Promise<void> {
     if (!this.canRedo() || !this.app) return;
     
     const state = this.app.getState();
@@ -536,7 +536,7 @@ export class TerrainEditor {
     if (!entry) return;
     
     // Save current state to undo stack
-    const chunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+    const chunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
     this.undoStack.push({
       chunkX: entry.chunkX,
       chunkY: entry.chunkY,
@@ -551,7 +551,7 @@ export class TerrainEditor {
     
     // Update viewer
     if (this.viewer) {
-      const updatedChunk = state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+      const updatedChunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
       this.viewer.updateChunk(entry.chunkX, entry.chunkY, updatedChunk);
     }
   }
@@ -584,13 +584,13 @@ export class TerrainEditor {
   /**
    * Show brush preview at world coordinates
    */
-  showBrushPreview(worldX: number, worldY: number): void {
+  async showBrushPreview(worldX: number, worldY: number): Promise<void> {
     if (!this.brushPreview || !this.viewer || this.currentTool === TerrainTool.NONE) {
       return;
     }
     
     // Get height at position
-    const height = this.getHeightAt(Math.floor(worldX), Math.floor(worldY));
+    const height = await this.getHeightAt(Math.floor(worldX), Math.floor(worldY));
     if (height === null) return;
     
     // Position preview

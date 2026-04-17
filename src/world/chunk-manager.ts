@@ -10,7 +10,7 @@ import { IncrementalGenerator } from './incremental-generator';
 import { ChunkModification, WorldSerializer } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
-import { WorkerPoolConfig, WorkerPool } from './worker-pool';
+import { WorkerPoolConfig, WorkerPool, WorkerTask } from './worker-pool';
 
 /**
  * Configuration for 3D noise generation
@@ -164,7 +164,10 @@ export class ChunkManager {
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig
-      ? new WorkerPool(config.workerPoolConfig)
+      ? new WorkerPool({
+          ...config.workerPoolConfig,
+          worldConfig: config,
+        })
       : null;
     
     // Initialize LODManager if LOD is enabled (Requirement 10.1)
@@ -199,9 +202,9 @@ export class ChunkManager {
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
    * @param lodLevel - LOD level for the chunk (default: HIGH)
-   * @returns The chunk data at the specified coordinates
+   * @returns Promise resolving to the chunk data at the specified coordinates
    */
-  getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): ChunkData {
+  async getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): Promise<ChunkData> {
     const key = this.getCacheKey(chunkX, chunkY, lodLevel);
     
     // Check cache
@@ -215,8 +218,16 @@ export class ChunkManager {
     // Cache miss
     this.cacheMisses++;
 
-    // Generate new chunk at full resolution
-    const chunk = this.generateChunk(chunkX, chunkY);
+    // Decide generation strategy based on worker pool availability
+    let chunk: ChunkData;
+    
+    if (this.workerPool) {
+      // Asynchronous generation via worker pool
+      chunk = await this.generateChunkAsync(chunkX, chunkY);
+    } else {
+      // Synchronous generation on main thread
+      chunk = this.generateChunk(chunkX, chunkY);
+    }
 
     // Apply LOD if LODManager is configured and LOD level is not HIGH
     const lodChunk = this.lodManager && lodLevel !== LODLevel.HIGH
@@ -227,6 +238,39 @@ export class ChunkManager {
     this.addToCache(key, lodChunk);
 
     return lodChunk;
+  }
+
+  /**
+   * Generates a chunk asynchronously using the worker pool.
+   * @param chunkX - Chunk X coordinate
+   * @param chunkY - Chunk Y coordinate
+   * @returns Promise resolving to the generated chunk data
+   */
+  private generateChunkAsync(chunkX: number, chunkY: number): Promise<ChunkData> {
+    return new Promise((resolve, reject) => {
+      const task: WorkerTask = {
+        id: '', // Will be assigned by submitTask
+        chunkX,
+        chunkY,
+        lodLevel: LODLevel.HIGH, // Always generate at full resolution
+        priority: 0, // Default priority
+        onComplete: (chunk: ChunkData) => {
+          resolve(chunk);
+        },
+        onError: (error: Error) => {
+          // Fallback to synchronous generation on error
+          console.warn(`Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync:`, error);
+          try {
+            const syncChunk = this.generateChunk(chunkX, chunkY);
+            resolve(syncChunk);
+          } catch (syncError) {
+            reject(syncError);
+          }
+        }
+      };
+
+      this.workerPool!.submitTask(task);
+    });
   }
 
   /**
