@@ -411,7 +411,10 @@ export class ChunkManager {
     // Log performance metrics if enabled
     if (this.config.enablePerformanceMetrics) {
       metrics.totalTime = performance.now() - startTime;
-      console.log(`Chunk (${chunkX}, ${chunkY}) generation metrics:`, metrics);
+      // Only log if total time is unusually high (> 100ms)
+      if (metrics.totalTime > 100) {
+        console.log(`Chunk (${chunkX}, ${chunkY}) generation metrics:`, metrics);
+      }
     }
 
     return chunk;

@@ -25,6 +25,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^20.10.0",
     "@types/pako": "^2.0.4",

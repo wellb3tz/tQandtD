@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Playwright E2E Testing Reminder",
+  "description": "Reminds to consider Playwright E2E tests when working with browser features, UI components, Web Workers, or integration scenarios",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "demo/**/*.ts",
+      "demo/**/*.tsx",
+      "src/world/worker-pool.ts",
+      "src/worker.ts",
+      "tests/integration/**/*.test.ts"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Consider if this change requires Playwright E2E testing:\n\n🎭 **When to use Playwright:**\n- Browser-specific features (Web Workers, localStorage, etc.)\n- UI interactions (clicks, form inputs, navigation)\n- Console output verification\n- Real browser behavior (not mocked)\n- Integration of multiple components\n- Timing-sensitive operations\n- Memory leaks or performance issues\n\n📝 **Current file context:**\n- If this is a UI component → Test user interactions\n- If this involves Workers → Test real Worker behavior\n- If this is integration code → Test full system flow\n- If this affects browser APIs → Test in real browser\n\n💡 **Quick Playwright test template:**\n```typescript\ntest('should verify [feature]', async ({ page }) => {\n  const consoleMessages: string[] = [];\n  page.on('console', msg => consoleMessages.push(msg.text()));\n  \n  await page.goto('http://localhost:3001/');\n  // Your test actions here\n  \n  // Verify expected behavior\n  expect(consoleMessages).toContain('[Expected message]');\n});\n```\n\n✅ **Benefits we saw:**\n- Found 90x WorkerPool creation (would miss in unit tests)\n- Saw real console output patterns\n- Discovered recursive Worker creation\n- Verified actual browser behavior\n\n❓ **Should you add a Playwright test for this change?**"
+  }
+}

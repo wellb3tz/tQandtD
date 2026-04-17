@@ -95,6 +95,9 @@ export class WorldViewer {
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
   
+  // Fog of war - explored chunks shown as gray planes
+  private fogOfWarMeshes: Map<string, THREE.Mesh>;
+  
   // Layer visibility
   private layerVisibility: Map<RenderLayer, boolean>;
   
@@ -142,6 +145,7 @@ export class WorldViewer {
     this.controls = null; // Will be initialized based on camera mode
     
     this.chunkMeshes = new Map();
+    this.fogOfWarMeshes = new Map();
     this.layerVisibility = new Map();
     this.wireframeMode = false;
     this.container = null;
@@ -494,9 +498,12 @@ export class WorldViewer {
       return;
     }
     
+    // Remove fog of war plane if it exists (chunk is being reloaded)
+    this.removeFogOfWarPlane(chunkX, chunkY);
+    
     // Remove existing chunk if present
     if (this.chunkMeshes.has(key)) {
-      this.removeChunk(chunkX, chunkY);
+      this.removeChunk(chunkX, chunkY, false); // Don't create fog of war when replacing
     }
     
     // Get LOD level from chunk metadata if available
@@ -573,11 +580,16 @@ export class WorldViewer {
   /**
    * Remove a chunk from the scene
    */
-  removeChunk(chunkX: number, chunkY: number): void {
+  removeChunk(chunkX: number, chunkY: number, keepFogOfWar: boolean = false): void {
     const key = this.getChunkKey(chunkX, chunkY);
     const chunkMesh = this.chunkMeshes.get(key);
     
     if (!chunkMesh) return;
+    
+    // Create fog of war plane before removing the chunk
+    if (keepFogOfWar) {
+      this.createFogOfWarPlane(chunkX, chunkY, chunkMesh.terrain);
+    }
     
     // Remove water layer first
     if (chunkMesh.water) {
@@ -619,6 +631,102 @@ export class WorldViewer {
     }
     
     this.chunkMeshes.delete(key);
+  }
+  
+  /**
+   * Create a fog of war plane for an explored chunk
+   */
+  private createFogOfWarPlane(chunkX: number, chunkY: number, originalTerrain: THREE.Mesh): void {
+    const key = this.getChunkKey(chunkX, chunkY);
+    
+    // Remove existing fog of war mesh if present
+    this.removeFogOfWarPlane(chunkX, chunkY);
+    
+    // Get chunk size from original terrain
+    const geometry = originalTerrain.geometry as THREE.BufferGeometry;
+    const positions = geometry.getAttribute('position');
+    
+    // Calculate average height for the plane
+    let avgHeight = 0;
+    let count = 0;
+    for (let i = 0; i < positions.count; i++) {
+      avgHeight += positions.getY(i);
+      count++;
+    }
+    avgHeight = count > 0 ? avgHeight / count : 0;
+    
+    // Create simplified plane geometry
+    const chunkSize = Math.sqrt(positions.count) - 1;
+    const planeGeometry = new THREE.PlaneGeometry(chunkSize, chunkSize, 1, 1);
+    
+    // Rotate to match terrain orientation (XZ plane)
+    planeGeometry.rotateX(-Math.PI / 2);
+    
+    // Create gray material with transparency
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x808080,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    
+    const plane = new THREE.Mesh(planeGeometry, material);
+    
+    // Position at chunk location with average height
+    plane.position.set(
+      chunkX * chunkSize + chunkSize / 2,
+      avgHeight,
+      chunkY * chunkSize + chunkSize / 2
+    );
+    
+    // Add to scene and track
+    this.scene.add(plane);
+    this.fogOfWarMeshes.set(key, plane);
+  }
+  
+  /**
+   * Remove fog of war plane for a chunk
+   */
+  private removeFogOfWarPlane(chunkX: number, chunkY: number): void {
+    const key = this.getChunkKey(chunkX, chunkY);
+    const plane = this.fogOfWarMeshes.get(key);
+    
+    if (plane) {
+      this.scene.remove(plane);
+      plane.geometry.dispose();
+      if (Array.isArray(plane.material)) {
+        plane.material.forEach(m => m.dispose());
+      } else {
+        plane.material.dispose();
+      }
+      this.fogOfWarMeshes.delete(key);
+    }
+  }
+  
+  /**
+   * Clear all fog of war planes
+   */
+  clearFogOfWar(): void {
+    for (const [key, plane] of this.fogOfWarMeshes.entries()) {
+      this.scene.remove(plane);
+      plane.geometry.dispose();
+      if (Array.isArray(plane.material)) {
+        plane.material.forEach(m => m.dispose());
+      } else {
+        plane.material.dispose();
+      }
+    }
+    this.fogOfWarMeshes.clear();
+  }
+  
+  /**
+   * Set fog of war visibility
+   */
+  setFogOfWarVisibility(visible: boolean): void {
+    for (const plane of this.fogOfWarMeshes.values()) {
+      plane.visible = visible;
+    }
   }
 
   /**

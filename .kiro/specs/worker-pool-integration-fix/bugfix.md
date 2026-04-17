@@ -2,34 +2,42 @@
 
 ## Introduction
 
-The WorkerPool is initialized in ChunkManager when workerPoolConfig is provided, but it is never invoked during chunk generation. This causes all chunk generation to execute synchronously on the main thread, making the maxWorkers configuration option ineffective. This bug prevents users from leveraging multi-threaded chunk generation for improved performance, particularly when generating multiple chunks or maintaining 60fps during world exploration.
+The WorkerPool is being created infinitely (100+ times) during normal application operation, causing a critical memory leak that crashes the browser. Workers fail to load with undefined errors, and memory grows from 200MB to 8GB+ until system crash. The root cause is that ChunkManager is being recreated repeatedly in DemoApp.updateEngineConfig(), and each recreation instantiates a new WorkerPool without properly shutting down the previous one. Additionally, workers are failing to load their module, resulting in undefined error messages.
 
 ## Bug Analysis
 
 ### Current Behavior (Defect)
 
-1.1 WHEN workerPoolConfig is provided with maxWorkers setting THEN the system initializes a WorkerPool but never calls submitTask() during chunk generation
+1.1 WHEN workerPoolConfig is enabled THEN the system creates infinite WorkerPool instances (100+ observed) instead of reusing a single pool
 
-1.2 WHEN getChunk() is called with workerPoolConfig enabled THEN the system executes generateChunk() synchronously on the main thread instead of delegating to the worker pool
+1.2 WHEN WorkerPool is initialized THEN workers fail to load with error messages showing all undefined fields: {message: undefined, filename: undefined, lineno: undefined, colno: undefined, error: undefined}
 
-1.3 WHEN multiple chunks need generation with workerPoolConfig enabled THEN the system processes them sequentially on the main thread instead of parallelizing across worker threads
+1.3 WHEN ChunkManager is recreated in updateEngineConfig() THEN the old WorkerPool is not properly shut down before creating a new one, causing memory leak
+
+1.4 WHEN "[WorkerPool] Successfully initialized 4 workers" message appears THEN it repeats infinitely instead of appearing once
+
+1.5 WHEN memory usage is monitored THEN it grows infinitely from 200MB to 8GB+ until browser crashes
 
 ### Expected Behavior (Correct)
 
-2.1 WHEN workerPoolConfig is provided with maxWorkers setting THEN the system SHALL delegate chunk generation to the worker pool via submitTask()
+2.1 WHEN workerPoolConfig is enabled THEN the system SHALL create exactly one WorkerPool instance that is reused throughout the application lifecycle
 
-2.2 WHEN getChunk() is called with workerPoolConfig enabled THEN the system SHALL submit the generation task to the worker pool and return the result asynchronously
+2.2 WHEN WorkerPool is initialized THEN workers SHALL load successfully without undefined errors
 
-2.3 WHEN multiple chunks need generation with workerPoolConfig enabled THEN the system SHALL distribute generation tasks across available worker threads up to maxWorkers limit
+2.3 WHEN ChunkManager needs to be recreated THEN the system SHALL call workerPool.shutdown() on the old instance before creating a new ChunkManager
+
+2.4 WHEN "[WorkerPool] Successfully initialized 4 workers" message appears THEN it SHALL appear exactly once per WorkerPool creation
+
+2.5 WHEN memory usage is monitored THEN it SHALL remain stable and not grow infinitely
 
 ### Unchanged Behavior (Regression Prevention)
 
-3.1 WHEN workerPoolConfig is not provided (null/undefined) THEN the system SHALL CONTINUE TO generate chunks synchronously on the main thread via generateChunk()
+3.1 WHEN workerPoolConfig is not provided (null/undefined) THEN the system SHALL CONTINUE TO generate chunks synchronously without creating any WorkerPool
 
-3.2 WHEN getChunk() is called without workerPoolConfig THEN the system SHALL CONTINUE TO return chunk data synchronously from the cache or generateChunk()
+3.2 WHEN worker pool is disabled after being enabled THEN the system SHALL CONTINUE TO function correctly with synchronous generation
 
 3.3 WHEN chunk generation completes (worker or synchronous) THEN the system SHALL CONTINUE TO cache the result with LRU eviction
 
-3.4 WHEN LOD levels are specified THEN the system SHALL CONTINUE TO apply LOD transformations after chunk generation regardless of worker pool usage
+3.4 WHEN LOD levels are specified THEN the system SHALL CONTINUE TO apply LOD transformations after chunk generation
 
 3.5 WHEN incremental generation is used THEN the system SHALL CONTINUE TO support getChunkIncremental() independently of worker pool configuration

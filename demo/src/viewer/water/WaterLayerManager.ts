@@ -87,7 +87,6 @@ export class WaterLayerManager {
 
     // Generate ocean meshes
     const oceanTiles = identifyOceanTiles(chunkData, config.seaLevel);
-    console.log(`[Water] Chunk ${chunkKey}: Found ${oceanTiles.length} ocean tiles`);
     if (oceanTiles.length > 0) {
       const oceanGeometry = buildOceanGeometry(oceanTiles, chunkData, config);
       if (oceanGeometry) {
@@ -115,7 +114,6 @@ export class WaterLayerManager {
         
         waterLayer.ocean.push(waterMesh);
         waterLayer.group.add(oceanMesh);
-        console.log(`[Water] Added ocean mesh to chunk ${chunkKey}`);
       }
     }
 
@@ -128,15 +126,6 @@ export class WaterLayerManager {
     // Add to scene and store
     scene.add(waterLayer.group);
     this.waterLayers.set(chunkKey, waterLayer);
-    
-    console.log(`[Water] Added water layer for chunk ${chunkKey}:`, {
-      ocean: waterLayer.ocean.length,
-      rivers: waterLayer.rivers.length,
-      lakes: waterLayer.lakes.length,
-      groupChildren: waterLayer.group.children.length,
-      groupVisible: waterLayer.group.visible,
-      groupPosition: { x: waterLayer.group.position.x, y: waterLayer.group.position.y, z: waterLayer.group.position.z }
-    });
   }
 
   /**

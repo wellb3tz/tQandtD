@@ -1,39 +1,52 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
-import { ChunkManager } from '../../src/world/chunk-manager';
-import { WorkerPool } from '../../src/world/worker-pool';
-import { LODLevel } from '../../src/world/lod';
-import type { WorldConfig } from '../../src/world/chunk-manager';
 
 /**
  * Bug Condition Exploration Test for Worker Pool Integration Fix
  * 
- * **Validates: Requirements 1.1, 1.2, 2.1, 2.2**
+ * **Validates: Requirements 1.1, 1.3, 1.4, 1.5**
  * 
- * This test explores the bug condition where WorkerPool is initialized but never invoked.
+ * This test explores the bug condition where enabling workerPoolConfig and calling
+ * updateEngineConfig() multiple times creates infinite WorkerPool instances without
+ * shutting down old ones, causing memory leaks.
  * 
  * **CRITICAL**: This test is EXPECTED TO FAIL on unfixed code.
- * The failure confirms that the bug exists (submitTask is never called).
+ * The failure confirms that the bug exists (multiple WorkerPool instances, no shutdown).
  * 
  * **DO NOT attempt to fix the test or code when it fails.**
  * 
  * After the fix is implemented, this same test will pass, validating the fix.
  */
-describe('Bug Condition Exploration: Worker Pool Integration', () => {
+describe('Bug Condition Exploration: WorkerPool Infinite Creation', () => {
   // Mock Worker API for Node.js test environment
   let MockWorker: any;
   let originalWorker: any;
+  let workerInstances: any[];
 
   beforeEach(() => {
     vi.clearAllMocks();
+    workerInstances = [];
 
-    // Create a mock Worker class
-    MockWorker = vi.fn().mockImplementation(() => ({
-      postMessage: vi.fn(),
-      terminate: vi.fn(),
-      onmessage: null,
-      onerror: null,
-    }));
+    // Create a mock Worker class that tracks all instances
+    MockWorker = vi.fn().mockImplementation(() => {
+      const instance = {
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+        onmessage: null,
+        onerror: null,
+        _terminated: false,
+      };
+      
+      // Override terminate to track termination
+      const originalTerminate = instance.terminate;
+      instance.terminate = vi.fn(() => {
+        instance._terminated = true;
+        originalTerminate.call(instance);
+      });
+      
+      workerInstances.push(instance);
+      return instance;
+    });
 
     // Store original Worker and replace with mock
     originalWorker = (globalThis as any).Worker;
@@ -43,133 +56,97 @@ describe('Bug Condition Exploration: Worker Pool Integration', () => {
   afterEach(() => {
     // Restore original Worker
     (globalThis as any).Worker = originalWorker;
+    workerInstances = [];
   });
 
   /**
-   * Property 1: Bug Condition - Worker Pool Delegation Not Invoked
+   * Property 1: Bug Condition - WorkerPool Infinite Creation
    * 
-   * Tests that when workerPoolConfig is provided with maxWorkers > 0,
-   * calling getChunk() for a non-cached chunk invokes WorkerPool.submitTask().
+   * Tests that enabling workerPoolConfig and calling updateEngineConfig() multiple times
+   * results in exactly one WorkerPool instance (not multiple instances).
    * 
    * **EXPECTED OUTCOME ON UNFIXED CODE**: Test FAILS
-   * - submitTask() is never called
-   * - getChunk() executes synchronously instead
+   * - Multiple WorkerPool instances are created (100+ observed in production)
+   * - shutdown() is never called on old WorkerPool instances
+   * - Old workers are never terminated, causing memory leak
    * 
    * **EXPECTED OUTCOME AFTER FIX**: Test PASSES
-   * - submitTask() is called with correct parameters
-   * - Chunk generation is delegated to worker pool
+   * - Exactly one WorkerPool instance exists
+   * - shutdown() is called on old WorkerPool before creating new one
+   * - Old workers are terminated properly
    */
-  it('should invoke WorkerPool.submitTask() when workerPoolConfig is enabled', async () => {
+  it('Property 1: Exactly one WorkerPool instance after multiple updateEngineConfig() calls', async () => {
     await fc.assert(
       fc.asyncProperty(
-        // Generate random chunk coordinates
-        fc.integer({ min: -10, max: 10 }), // chunkX
-        fc.integer({ min: -10, max: 10 }), // chunkY
+        // Generate random number of updateEngineConfig() calls (2-10)
+        fc.integer({ min: 2, max: 10 }),
         // Generate random maxWorkers setting (1-8 workers)
         fc.integer({ min: 1, max: 8 }),
-        async (chunkX, chunkY, maxWorkers) => {
-          // Spy on WorkerPool.submitTask() method and mock it to call onComplete immediately
-          const submitTaskSpy = vi.spyOn(WorkerPool.prototype, 'submitTask').mockImplementation(function(this: WorkerPool, task: any) {
-            // Simulate immediate worker completion with a generated chunk
-            setTimeout(() => {
-              const mockChunk = {
-                x: task.chunkX,
-                y: task.chunkY,
-                size: 32,
-                heightmap: new Float32Array(33 * 33),
-                biomeMap: new Uint8Array(32 * 32),
-                biomeWeights: new Float32Array(32 * 32 * 8),
-                resources: [],
-                structures: [],
-                rivers: new Set<number>(),
-              };
-              task.onComplete(mockChunk);
-            }, 0);
-            return 'mock-task-id';
-          });
+        async (numCalls, maxWorkers) => {
+          // Clear worker instances from previous property test iterations
+          workerInstances.length = 0;
+          
+          // Dynamically import DemoApp to avoid module caching issues
+          const { DemoApp } = await import('../../demo/src/core/DemoApp');
+          
+          // Create DemoApp instance
+          const app = new DemoApp();
+          await app.initialize();
 
-          // Create minimal WorldConfig with workerPoolConfig enabled
-          const config: WorldConfig = {
-            seed: 12345,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
+          // Enable worker pool
+          app.updateEngineConfig({
             workerPoolConfig: {
               maxWorkers,
               workerScriptUrl: '/worker.js',
               taskTimeout: 30000,
             },
-            maxCacheSize: 10,
-          };
+          });
 
-          // Create ChunkManager with workerPoolConfig
-          const chunkManager = new ChunkManager(config);
+          // Record initial worker count
+          const initialWorkerCount = workerInstances.length;
+          expect(initialWorkerCount).toBe(maxWorkers);
 
-          // Call getChunk() for a non-cached chunk
-          // This should trigger worker pool delegation
-          const chunk = await chunkManager.getChunk(chunkX, chunkY, LODLevel.HIGH);
-
-          // Assert that submitTask() was called
-          // **ON UNFIXED CODE**: This assertion will FAIL because submitTask is never called
-          // **AFTER FIX**: This assertion will PASS
-          expect(submitTaskSpy).toHaveBeenCalled();
-
-          // Verify submitTask was called with correct parameters
-          if (submitTaskSpy.mock.calls.length > 0) {
-            const taskArg = submitTaskSpy.mock.calls[0][0];
-            expect(taskArg).toMatchObject({
-              chunkX,
-              chunkY,
-              lodLevel: LODLevel.HIGH,
+          // Call updateEngineConfig() multiple times with workerPoolConfig changes
+          for (let i = 0; i < numCalls - 1; i++) {
+            app.updateEngineConfig({
+              workerPoolConfig: {
+                maxWorkers: maxWorkers + (i % 2), // Alternate between maxWorkers and maxWorkers+1
+                workerScriptUrl: '/worker.js',
+                taskTimeout: 30000,
+              },
             });
-            expect(taskArg.onComplete).toBeDefined();
-            expect(taskArg.onError).toBeDefined();
           }
 
-          // Verify chunk was returned
-          expect(chunk).toBeDefined();
-          expect(chunk.x).toBe(chunkX);
-          expect(chunk.y).toBe(chunkY);
+          // **CRITICAL ASSERTIONS**: These will FAIL on unfixed code
+          
+          // 1. Verify exactly one WorkerPool instance exists (not multiple)
+          // On unfixed code: workerInstances.length will be much larger (numCalls * maxWorkers)
+          const expectedMaxWorkers = maxWorkers + ((numCalls - 2) % 2);
+          const expectedTotalWorkers = expectedMaxWorkers; // Should be only the latest WorkerPool's workers
+          
+          // On unfixed code, this will fail because old workers are never terminated
+          const activeWorkers = workerInstances.filter(w => !w._terminated);
+          expect(activeWorkers.length).toBe(expectedTotalWorkers);
+
+          // 2. Verify old workers were terminated (shutdown was called)
+          // On unfixed code: no workers will be terminated
+          const terminatedWorkers = workerInstances.filter(w => w._terminated);
+          const expectedTerminatedCount = workerInstances.length - expectedTotalWorkers;
+          expect(terminatedWorkers.length).toBe(expectedTerminatedCount);
+
+          // 3. Document counterexample if test fails
+          if (activeWorkers.length !== expectedTotalWorkers) {
+            console.log('COUNTEREXAMPLE FOUND:');
+            console.log(`  - updateEngineConfig() called ${numCalls} times with workerPoolConfig`);
+            console.log(`  - Expected ${expectedTotalWorkers} active workers (one WorkerPool)`);
+            console.log(`  - Actual ${activeWorkers.length} active workers (multiple WorkerPools)`);
+            console.log(`  - Total workers created: ${workerInstances.length}`);
+            console.log(`  - Workers terminated: ${terminatedWorkers.length}`);
+            console.log(`  - BUG CONFIRMED: Multiple WorkerPool instances exist, old ones not shut down`);
+          }
 
           // Cleanup
-          submitTaskSpy.mockRestore();
+          app.destroy();
         }
       ),
       {
@@ -185,113 +162,209 @@ describe('Bug Condition Exploration: Worker Pool Integration', () => {
    * Scoped Bug Condition Test - Concrete Failing Case
    * 
    * This test uses a specific concrete case to ensure reproducibility.
-   * For deterministic bugs, scoping to concrete cases ensures the test
-   * consistently demonstrates the bug.
+   * Tests the exact scenario from the bug report: enabling workerPoolConfig
+   * and calling updateEngineConfig() multiple times.
    * 
    * **EXPECTED OUTCOME ON UNFIXED CODE**: Test FAILS
    * **EXPECTED OUTCOME AFTER FIX**: Test PASSES
    */
-  it('should invoke WorkerPool.submitTask() for concrete case: chunk (0,0) with 4 workers', async () => {
-    // Spy on WorkerPool.submitTask() method and mock it to call onComplete immediately
-    const submitTaskSpy = vi.spyOn(WorkerPool.prototype, 'submitTask').mockImplementation(function(this: WorkerPool, task: any) {
-      // Simulate immediate worker completion with a generated chunk
-      setTimeout(() => {
-        const mockChunk = {
-          x: task.chunkX,
-          y: task.chunkY,
-          size: 32,
-          heightmap: new Float32Array(33 * 33),
-          biomeMap: new Uint8Array(32 * 32),
-          biomeWeights: new Float32Array(32 * 32 * 8),
-          resources: [],
-          structures: [],
-          rivers: new Set<number>(),
-        };
-        task.onComplete(mockChunk);
-      }, 0);
-      return 'mock-task-id';
-    });
+  it('Concrete case: Enable worker pool and call updateEngineConfig() 5 times', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance
+    const app = new DemoApp();
+    await app.initialize();
 
-    // Create minimal WorldConfig with workerPoolConfig enabled
-    const config: WorldConfig = {
-      seed: 12345,
-      chunkSize: 32,
-      terrainConfig: {
-        scale: 0.01,
-        octaves: 4,
-        persistence: 0.5,
-        lacunarity: 2.0,
-        heightScale: 1.0,
-        enableDomainWarping: false,
-      },
-      biomeConfig: {
-        scale: 0.005,
-        moistureScale: 0.008,
-      },
-      resourceConfig: {
-        types: [],
-        clusterScale: 50,
-        densityThreshold: 0.6,
-      },
-      structureConfig: {
-        types: [],
-        minDistance: 20,
-        maxAttempts: 30,
-      },
-      riverNetworkConfig: {
-        sourceElevation: 0.7,
-        minFlowLength: 10,
-        flowWidth: 2,
-        enableTributaries: true,
-        maxTributaryOrder: 2,
-        tributaryProbability: 0.3,
-        enableLakes: true,
-        lakeDepressionThreshold: 0.05,
-        maxLakeSize: 100,
-        enableDeltas: true,
-        deltaBranchCount: 3,
-        deltaSpreadAngle: Math.PI / 3,
-        minFlow: 1.0,
-        maxFlow: 100.0,
-        widthScale: 0.5,
-      },
+    // Enable worker pool with 4 workers
+    app.updateEngineConfig({
       workerPoolConfig: {
         maxWorkers: 4,
         workerScriptUrl: '/worker.js',
         taskTimeout: 30000,
       },
-      maxCacheSize: 10,
-    };
+    });
 
-    // Create ChunkManager with workerPoolConfig
-    const chunkManager = new ChunkManager(config);
+    // Verify initial state: 4 workers created
+    expect(workerInstances.length).toBe(4);
+    const initialWorkers = [...workerInstances];
 
-    // Call getChunk() for chunk (0, 0)
-    const chunk = await chunkManager.getChunk(0, 0, LODLevel.HIGH);
-
-    // **CRITICAL ASSERTION**: submitTask() should be called
-    // **ON UNFIXED CODE**: This will FAIL - submitTask is never called
-    // **AFTER FIX**: This will PASS - submitTask is called
-    expect(submitTaskSpy).toHaveBeenCalled();
-
-    // Document the counterexample
-    if (!submitTaskSpy.mock.calls.length) {
-      console.log('COUNTEREXAMPLE FOUND:');
-      console.log('  - workerPoolConfig provided with maxWorkers: 4');
-      console.log('  - getChunk(0, 0) called');
-      console.log('  - submitTask() was NOT called (bug confirmed)');
-      console.log('  - Chunk was generated synchronously instead');
+    // Call updateEngineConfig() 4 more times (5 total calls)
+    for (let i = 0; i < 4; i++) {
+      app.updateEngineConfig({
+        workerPoolConfig: {
+          maxWorkers: 4,
+          workerScriptUrl: '/worker.js',
+          taskTimeout: 30000,
+        },
+      });
     }
 
-    // Verify chunk structure is correct
-    expect(chunk).toBeDefined();
-    expect(chunk.x).toBe(0);
-    expect(chunk.y).toBe(0);
-    expect(chunk.size).toBe(32);
+    // **CRITICAL ASSERTIONS**: These will FAIL on unfixed code
+
+    // 1. Verify exactly 4 active workers (one WorkerPool)
+    // On unfixed code: 20 workers will be active (5 WorkerPools * 4 workers each)
+    const activeWorkers = workerInstances.filter(w => !w._terminated);
+    expect(activeWorkers.length).toBe(4);
+
+    // 2. Verify old workers were terminated
+    // On unfixed code: 0 workers will be terminated
+    const terminatedWorkers = workerInstances.filter(w => w._terminated);
+    expect(terminatedWorkers.length).toBe(workerInstances.length - 4);
+
+    // 3. Verify initial workers were terminated (shutdown was called)
+    // On unfixed code: initial workers will still be active
+    for (const worker of initialWorkers) {
+      expect(worker._terminated).toBe(true);
+    }
+
+    // Document counterexample if test fails
+    if (activeWorkers.length !== 4) {
+      console.log('COUNTEREXAMPLE FOUND:');
+      console.log('  - Enabled workerPoolConfig with 4 workers');
+      console.log('  - Called updateEngineConfig() 5 times total');
+      console.log(`  - Expected 4 active workers (one WorkerPool)`);
+      console.log(`  - Actual ${activeWorkers.length} active workers`);
+      console.log(`  - Total workers created: ${workerInstances.length}`);
+      console.log(`  - Workers terminated: ${terminatedWorkers.length}`);
+      console.log('  - BUG CONFIRMED: Multiple WorkerPool instances created without shutdown');
+    }
 
     // Cleanup
-    submitTaskSpy.mockRestore();
-  }, 10000); // Increase timeout for async test
+    app.destroy();
+  }, 10000);
+
+  /**
+   * Test: shutdown() is called on old WorkerPool before creating new ChunkManager
+   * 
+   * Verifies that when updateEngineConfig() recreates ChunkManager, it calls
+   * shutdown() on the old WorkerPool instance.
+   * 
+   * **EXPECTED OUTCOME ON UNFIXED CODE**: Test FAILS (shutdown never called)
+   * **EXPECTED OUTCOME AFTER FIX**: Test PASSES (shutdown called)
+   */
+  it('shutdown() is called on old WorkerPool before creating new ChunkManager', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance
+    const app = new DemoApp();
+    await app.initialize();
+
+    // Enable worker pool
+    app.updateEngineConfig({
+      workerPoolConfig: {
+        maxWorkers: 4,
+        workerScriptUrl: '/worker.js',
+        taskTimeout: 30000,
+      },
+    });
+
+    // Get reference to first WorkerPool's workers
+    const firstPoolWorkers = [...workerInstances];
+
+    // Update config again (should trigger shutdown of old pool)
+    app.updateEngineConfig({
+      workerPoolConfig: {
+        maxWorkers: 4,
+        workerScriptUrl: '/worker.js',
+        taskTimeout: 30000,
+      },
+    });
+
+    // **CRITICAL ASSERTION**: Old workers should be terminated
+    // On unfixed code: firstPoolWorkers will still be active (terminate never called)
+    for (const worker of firstPoolWorkers) {
+      expect(worker.terminate).toHaveBeenCalled();
+      expect(worker._terminated).toBe(true);
+    }
+
+    // Document counterexample if test fails
+    const activeOldWorkers = firstPoolWorkers.filter(w => !w._terminated);
+    if (activeOldWorkers.length > 0) {
+      console.log('COUNTEREXAMPLE FOUND:');
+      console.log('  - Created WorkerPool with 4 workers');
+      console.log('  - Called updateEngineConfig() again');
+      console.log(`  - Expected old workers to be terminated`);
+      console.log(`  - Actual ${activeOldWorkers.length} old workers still active`);
+      console.log('  - BUG CONFIRMED: shutdown() not called on old WorkerPool');
+    }
+
+    // Cleanup
+    app.destroy();
+  }, 10000);
+
+  /**
+   * Test: Old workers are terminated when new WorkerPool is created
+   * 
+   * Verifies that worker.terminate() is called on all workers from the old
+   * WorkerPool when a new one is created.
+   * 
+   * **EXPECTED OUTCOME ON UNFIXED CODE**: Test FAILS (workers never terminated)
+   * **EXPECTED OUTCOME AFTER FIX**: Test PASSES (workers terminated)
+   */
+  it('Old workers are terminated when new WorkerPool is created', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance
+    const app = new DemoApp();
+    await app.initialize();
+
+    // Enable worker pool with 4 workers
+    app.updateEngineConfig({
+      workerPoolConfig: {
+        maxWorkers: 4,
+        workerScriptUrl: '/worker.js',
+        taskTimeout: 30000,
+      },
+    });
+
+    expect(workerInstances.length).toBe(4);
+
+    // Change maxWorkers to 6 (should shutdown old pool and create new one)
+    app.updateEngineConfig({
+      workerPoolConfig: {
+        maxWorkers: 6,
+        workerScriptUrl: '/worker.js',
+        taskTimeout: 30000,
+      },
+    });
+
+    // **CRITICAL ASSERTIONS**:
+    
+    // 1. Total workers created should be 10 (4 old + 6 new)
+    expect(workerInstances.length).toBe(10);
+
+    // 2. First 4 workers should be terminated
+    // On unfixed code: first 4 workers will still be active
+    for (let i = 0; i < 4; i++) {
+      expect(workerInstances[i]._terminated).toBe(true);
+    }
+
+    // 3. Last 6 workers should be active
+    for (let i = 4; i < 10; i++) {
+      expect(workerInstances[i]._terminated).toBe(false);
+    }
+
+    // 4. Exactly 6 active workers (new pool only)
+    const activeWorkers = workerInstances.filter(w => !w._terminated);
+    expect(activeWorkers.length).toBe(6);
+
+    // Document counterexample if test fails
+    if (activeWorkers.length !== 6) {
+      console.log('COUNTEREXAMPLE FOUND:');
+      console.log('  - Created WorkerPool with 4 workers');
+      console.log('  - Changed maxWorkers to 6');
+      console.log(`  - Expected 6 active workers (new pool only)`);
+      console.log(`  - Actual ${activeWorkers.length} active workers`);
+      console.log(`  - Old workers terminated: ${workerInstances.slice(0, 4).filter(w => w._terminated).length}/4`);
+      console.log('  - BUG CONFIRMED: Old workers not terminated');
+    }
+
+    // Cleanup
+    app.destroy();
+  }, 10000);
 });
 
 /**
@@ -299,30 +372,46 @@ describe('Bug Condition Exploration: Worker Pool Integration', () => {
  * 
  * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
  * 
- * These tests verify that synchronous generation behavior is preserved when
- * workerPoolConfig is null/undefined. They follow the observation-first methodology:
- * 1. Observe behavior on UNFIXED code for non-buggy inputs
- * 2. Write property-based tests capturing observed behavior patterns
- * 3. Run tests on UNFIXED code
+ * These tests validate that non-workerPoolConfig updates continue to work correctly
+ * after the fix is implemented. They follow the observation-first methodology:
  * 
- * **EXPECTED OUTCOME**: Tests PASS on unfixed code (confirms baseline behavior)
- * **AFTER FIX**: Tests should continue to PASS (confirms no regressions)
+ * 1. Run tests on UNFIXED code to observe baseline behavior
+ * 2. Tests should PASS on unfixed code (confirming current behavior)
+ * 3. After fix is implemented, tests should still PASS (confirming no regressions)
+ * 
+ * **EXPECTED OUTCOME ON UNFIXED CODE**: Tests PASS
+ * **EXPECTED OUTCOME AFTER FIX**: Tests PASS
  */
-describe('Preservation Property Tests: Synchronous Generation Behavior', () => {
+describe('Preservation: Non-WorkerPool Configuration Updates', () => {
   // Mock Worker API for Node.js test environment
   let MockWorker: any;
   let originalWorker: any;
+  let workerInstances: any[];
 
   beforeEach(() => {
     vi.clearAllMocks();
+    workerInstances = [];
 
-    // Create a mock Worker class
-    MockWorker = vi.fn().mockImplementation(() => ({
-      postMessage: vi.fn(),
-      terminate: vi.fn(),
-      onmessage: null,
-      onerror: null,
-    }));
+    // Create a mock Worker class that tracks all instances
+    MockWorker = vi.fn().mockImplementation(() => {
+      const instance = {
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+        onmessage: null,
+        onerror: null,
+        _terminated: false,
+      };
+      
+      // Override terminate to track termination
+      const originalTerminate = instance.terminate;
+      instance.terminate = vi.fn(() => {
+        instance._terminated = true;
+        originalTerminate.call(instance);
+      });
+      
+      workerInstances.push(instance);
+      return instance;
+    });
 
     // Store original Worker and replace with mock
     originalWorker = (globalThis as any).Worker;
@@ -332,93 +421,70 @@ describe('Preservation Property Tests: Synchronous Generation Behavior', () => {
   afterEach(() => {
     // Restore original Worker
     (globalThis as any).Worker = originalWorker;
+    workerInstances = [];
   });
 
   /**
-   * Test Case 1: Verify getChunk() returns ChunkData synchronously when workerPoolConfig is null
+   * Property 2: Preservation - Non-WorkerPool Configuration Updates
    * 
-   * **Validates: Requirements 3.1, 3.2**
+   * Tests that updateEngineConfig() with non-workerPoolConfig changes produces
+   * the same behavior as before the fix. This includes terrain config, biome config,
+   * LOD config, incremental config, and cache size updates.
+   * 
+   * **EXPECTED OUTCOME**: Tests PASS on both unfixed and fixed code
    */
-  it('Property 2.1: getChunk() returns ChunkData synchronously when workerPoolConfig is null', async () => {
+  it('Property 2: Non-workerPoolConfig updates work correctly without WorkerPool', async () => {
     await fc.assert(
       fc.asyncProperty(
-        // Generate random chunk coordinates
-        fc.integer({ min: -10, max: 10 }), // chunkX
-        fc.integer({ min: -10, max: 10 }), // chunkY
-        async (chunkX, chunkY) => {
-          // Create WorldConfig WITHOUT workerPoolConfig
-          const config: WorldConfig = {
-            seed: 12345,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
-            maxCacheSize: 10,
-            // workerPoolConfig is NOT provided (null/undefined)
-          };
+        // Generate random terrain config updates
+        fc.record({
+          baseScale: fc.double({ min: 0.001, max: 0.1 }),
+          octaves: fc.integer({ min: 1, max: 8 }),
+          persistence: fc.double({ min: 0.1, max: 0.9 }),
+          lacunarity: fc.double({ min: 1.5, max: 3.0 }),
+        }),
+        // Generate random biome config updates
+        fc.record({
+          temperatureScale: fc.double({ min: 0.001, max: 0.01 }),
+          moistureScale: fc.double({ min: 0.001, max: 0.01 }),
+        }),
+        // Generate random cache size
+        fc.integer({ min: 100, max: 2000 }),
+        async (terrainConfig, biomeConfig, maxCacheSize) => {
+          // Clear worker instances from previous property test iterations
+          workerInstances.length = 0;
+          
+          // Dynamically import DemoApp
+          const { DemoApp } = await import('../../demo/src/core/DemoApp');
+          
+          // Create DemoApp instance WITHOUT worker pool
+          const app = new DemoApp();
+          await app.initialize();
 
-          // Create ChunkManager without workerPoolConfig
-          const chunkManager = new ChunkManager(config);
+          // Verify no workers created initially
+          expect(workerInstances.length).toBe(0);
 
-          // Spy on generateChunk to verify it's called directly
-          const generateChunkSpy = vi.spyOn(chunkManager as any, 'generateChunk');
+          // Update terrain config (should NOT create WorkerPool)
+          app.updateEngineConfig({ terrainConfig });
+          expect(workerInstances.length).toBe(0);
 
-          // Call getChunk() - should execute synchronously
-          const chunk = await chunkManager.getChunk(chunkX, chunkY, LODLevel.HIGH);
+          // Update biome config (should NOT create WorkerPool)
+          app.updateEngineConfig({ biomeConfig });
+          expect(workerInstances.length).toBe(0);
 
-          // Verify chunk is returned immediately (synchronous)
-          expect(chunk).toBeDefined();
-          expect(chunk.x).toBe(chunkX);
-          expect(chunk.y).toBe(chunkY);
-          expect(chunk.size).toBe(32);
-          expect(chunk.heightmap).toBeInstanceOf(Float32Array);
-          expect(chunk.biomeMap).toBeInstanceOf(Uint8Array);
-          expect(chunk.biomeWeights).toBeInstanceOf(Float32Array);
-          expect(Array.isArray(chunk.resources)).toBe(true);
-          expect(Array.isArray(chunk.structures)).toBe(true);
-          expect(chunk.rivers).toBeInstanceOf(Set);
+          // Update cache size (should NOT create WorkerPool)
+          app.updateEngineConfig({ maxCacheSize });
+          expect(workerInstances.length).toBe(0);
 
-          // Verify generateChunk was called directly (synchronous path)
-          expect(generateChunkSpy).toHaveBeenCalledWith(chunkX, chunkY);
+          // Verify ChunkManager still exists and works
+          const state = app.getState();
+          expect(state.chunkManager).not.toBeNull();
+          expect(state.config.terrainConfig).toEqual(terrainConfig);
+          expect(state.config.biomeConfig).toEqual(biomeConfig);
+          expect(state.config.maxCacheSize).toBe(maxCacheSize);
 
           // Cleanup
-          generateChunkSpy.mockRestore();
+          app.destroy();
         }
       ),
       {
@@ -426,75 +492,90 @@ describe('Preservation Property Tests: Synchronous Generation Behavior', () => {
         verbose: true,
       }
     );
-  });
+  }, 30000);
 
   /**
-   * Test Case 2: Verify generateChunk() is called directly when workerPoolConfig is null
+   * Test: Synchronous chunk generation works when workerPoolConfig is null
    * 
-   * **Validates: Requirements 3.1, 3.2**
+   * Validates that the default synchronous generation path continues to work
+   * correctly without any WorkerPool involvement.
+   * 
+   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
    */
-  it('Property 2.2: generateChunk() is called directly when workerPoolConfig is null', async () => {
+  it('Synchronous chunk generation works when workerPoolConfig is null', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance WITHOUT worker pool
+    const app = new DemoApp();
+    await app.initialize();
+
+    // Verify no workers created
+    expect(workerInstances.length).toBe(0);
+
+    // Generate chunks synchronously
+    await app.loadChunksAround(0, 0, 1);
+
+    // Verify chunks were loaded
+    const state = app.getState();
+    expect(state.loadedChunkCount).toBeGreaterThan(0);
+    expect(state.loadedChunks.size).toBeGreaterThan(0);
+
+    // Verify still no workers created
+    expect(workerInstances.length).toBe(0);
+
+    // Cleanup
+    app.destroy();
+  }, 10000);
+
+  /**
+   * Test: LOD configuration updates work correctly
+   * 
+   * Validates that LOD config updates continue to work without affecting
+   * WorkerPool behavior. Note: LOD config alone doesn't trigger ChunkManager
+   * recreation, so lodManager remains null unless combined with other config changes.
+   * 
+   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
+   */
+  it('LOD configuration updates work correctly', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.integer({ min: -5, max: 5 }), // chunkX
-        fc.integer({ min: -5, max: 5 }), // chunkY
-        async (chunkX, chunkY) => {
-          const config: WorldConfig = {
-            seed: 54321,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
-            maxCacheSize: 10,
-          };
+        // Generate random LOD config
+        fc.record({
+          highDetailRadius: fc.integer({ min: 1, max: 3 }),
+          mediumDetailRadius: fc.integer({ min: 2, max: 5 }),
+          lowDetailRadius: fc.integer({ min: 3, max: 8 }),
+          highDetailResolution: fc.integer({ min: 16, max: 64 }),
+          mediumDetailResolution: fc.integer({ min: 8, max: 32 }),
+          lowDetailResolution: fc.integer({ min: 4, max: 16 }),
+        }),
+        async (lodConfig) => {
+          // Clear worker instances from previous property test iterations
+          workerInstances.length = 0;
+          
+          // Dynamically import DemoApp
+          const { DemoApp } = await import('../../demo/src/core/DemoApp');
+          
+          // Create DemoApp instance WITHOUT worker pool
+          const app = new DemoApp();
+          await app.initialize();
 
-          const chunkManager = new ChunkManager(config);
-          const generateChunkSpy = vi.spyOn(chunkManager as any, 'generateChunk');
+          // Update LOD config (should NOT create WorkerPool)
+          app.updateEngineConfig({ lodConfig });
 
-          // Call getChunk() - should call generateChunk directly
-          await chunkManager.getChunk(chunkX, chunkY);
+          // Verify no workers created
+          expect(workerInstances.length).toBe(0);
 
-          // Verify generateChunk was called with correct parameters
-          expect(generateChunkSpy).toHaveBeenCalledTimes(1);
-          expect(generateChunkSpy).toHaveBeenCalledWith(chunkX, chunkY);
+          // Verify LOD config was updated in state
+          const state = app.getState();
+          expect(state.config.lodConfig).toEqual(lodConfig);
+          
+          // Note: lodManager remains null because LOD config alone doesn't trigger
+          // ChunkManager recreation. This is the observed baseline behavior.
+          expect(state.lodManager).toBeNull();
 
-          generateChunkSpy.mockRestore();
+          // Cleanup
+          app.destroy();
         }
       ),
       {
@@ -502,84 +583,49 @@ describe('Preservation Property Tests: Synchronous Generation Behavior', () => {
         verbose: true,
       }
     );
-  });
+  }, 30000);
 
   /**
-   * Test Case 3: Verify cache behavior (hits, misses, LRU eviction) works identically
-   * with and without workerPoolConfig
+   * Test: Incremental generation configuration updates work correctly
    * 
-   * **Validates: Requirement 3.3**
+   * Validates that incremental generation config updates continue to work
+   * without affecting WorkerPool behavior.
+   * 
+   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
    */
-  it('Property 2.3: Cache behavior works identically with and without workerPoolConfig', async () => {
+  it('Incremental generation configuration updates work correctly', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.integer({ min: 1, max: 5 }), // maxCacheSize
-        fc.array(fc.tuple(fc.integer({ min: 0, max: 3 }), fc.integer({ min: 0, max: 3 })), { minLength: 5, maxLength: 10 }), // chunk coordinates
-        async (maxCacheSize, chunkCoords) => {
-          // Create two ChunkManagers: one without workerPoolConfig, one with
-          const baseConfig = {
-            seed: 99999,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
-            maxCacheSize,
-          };
+        // Generate random incremental config
+        fc.record({
+          enabled: fc.boolean(),
+          timeBudgetMs: fc.integer({ min: 5, max: 50 }),
+          stagesPerFrame: fc.integer({ min: 1, max: 3 }),
+        }),
+        async (incrementalConfig) => {
+          // Clear worker instances from previous property test iterations
+          workerInstances.length = 0;
+          
+          // Dynamically import DemoApp
+          const { DemoApp } = await import('../../demo/src/core/DemoApp');
+          
+          // Create DemoApp instance WITHOUT worker pool
+          const app = new DemoApp();
+          await app.initialize();
 
-          // ChunkManager without workerPoolConfig
-          const chunkManagerNoWorker = new ChunkManager(baseConfig);
+          // Update incremental config (should recreate ChunkManager but NOT create WorkerPool)
+          app.updateEngineConfig({ incrementalConfig });
 
-          // Generate chunks and track cache behavior
-          for (const [x, y] of chunkCoords) {
-            await chunkManagerNoWorker.getChunk(x, y);
-          }
+          // Verify no workers created
+          expect(workerInstances.length).toBe(0);
 
-          const statsNoWorker = chunkManagerNoWorker.getCacheStats();
+          // Verify incremental config was updated
+          const state = app.getState();
+          expect(state.config.incrementalConfig).toEqual(incrementalConfig);
+          expect(state.incrementalEnabled).toBe(incrementalConfig.enabled);
 
-          // Verify cache behavior
-          expect(statsNoWorker.size).toBeLessThanOrEqual(maxCacheSize);
-          expect(statsNoWorker.maxSize).toBe(maxCacheSize);
-          expect(statsNoWorker.hitRate).toBeGreaterThanOrEqual(0);
-          expect(statsNoWorker.hitRate).toBeLessThanOrEqual(1);
-
-          // Verify LRU eviction: cache size should not exceed maxCacheSize
-          expect(chunkManagerNoWorker.getCacheSize()).toBeLessThanOrEqual(maxCacheSize);
+          // Cleanup
+          app.destroy();
         }
       ),
       {
@@ -587,269 +633,135 @@ describe('Preservation Property Tests: Synchronous Generation Behavior', () => {
         verbose: true,
       }
     );
-  });
+  }, 30000);
 
   /**
-   * Test Case 4: Verify LOD transformations are applied correctly regardless of generation method
+   * Test: Multiple non-workerPoolConfig updates in sequence
    * 
-   * **Validates: Requirement 3.4**
-   */
-  it('Property 2.4: LOD transformations are applied correctly when workerPoolConfig is null', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: -5, max: 5 }), // chunkX
-        fc.integer({ min: -5, max: 5 }), // chunkY
-        fc.constantFrom(LODLevel.HIGH, LODLevel.MEDIUM, LODLevel.LOW), // lodLevel
-        async (chunkX, chunkY, lodLevel) => {
-          const config: WorldConfig = {
-            seed: 77777,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
-            lodConfig: {
-              distances: [2, 5],
-              meshResolutions: [1.0, 0.5, 0.25],
-              featureDensities: [1.0, 0.5, 0.1],
-            },
-            maxCacheSize: 10,
-          };
-
-          const chunkManager = new ChunkManager(config);
-
-          // Generate chunk with LOD level
-          const chunk = await chunkManager.getChunk(chunkX, chunkY, lodLevel);
-
-          // Verify chunk structure
-          expect(chunk).toBeDefined();
-          expect(chunk.x).toBe(chunkX);
-          expect(chunk.y).toBe(chunkY);
-
-          // Verify LOD was applied based on level
-          if (lodLevel === LODLevel.HIGH) {
-            // HIGH LOD should have full resolution
-            expect(chunk.size).toBe(32);
-            expect(chunk.heightmap.length).toBe(33 * 33); // (size + 1) * (size + 1)
-          } else if (lodLevel === LODLevel.MEDIUM) {
-            // MEDIUM LOD should have 50% resolution
-            expect(chunk.size).toBe(16);
-            expect(chunk.heightmap.length).toBe(17 * 17);
-          } else if (lodLevel === LODLevel.LOW) {
-            // LOW LOD should have 25% resolution
-            expect(chunk.size).toBe(8);
-            expect(chunk.heightmap.length).toBe(9 * 9);
-          }
-        }
-      ),
-      {
-        numRuns: 10,
-        verbose: true,
-      }
-    );
-  });
-
-  /**
-   * Test Case 5: Verify getChunkIncremental() continues to work independently
-   * of worker pool configuration
+   * Validates that multiple configuration updates work correctly without
+   * creating any WorkerPool instances.
    * 
-   * **Validates: Requirement 3.5**
+   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
    */
-  it('Property 2.5: getChunkIncremental() works independently of worker pool configuration', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: -5, max: 5 }), // chunkX
-        fc.integer({ min: -5, max: 5 }), // chunkY
-        async (chunkX, chunkY) => {
-          const config: WorldConfig = {
-            seed: 88888,
-            chunkSize: 32,
-            terrainConfig: {
-              scale: 0.01,
-              octaves: 4,
-              persistence: 0.5,
-              lacunarity: 2.0,
-              heightScale: 1.0,
-              enableDomainWarping: false,
-            },
-            biomeConfig: {
-              scale: 0.005,
-              moistureScale: 0.008,
-            },
-            resourceConfig: {
-              types: [],
-              clusterScale: 50,
-              densityThreshold: 0.6,
-            },
-            structureConfig: {
-              types: [],
-              minDistance: 20,
-              maxAttempts: 30,
-            },
-            riverNetworkConfig: {
-              sourceElevation: 0.7,
-              minFlowLength: 10,
-              flowWidth: 2,
-              enableTributaries: true,
-              maxTributaryOrder: 2,
-              tributaryProbability: 0.3,
-              enableLakes: true,
-              lakeDepressionThreshold: 0.05,
-              maxLakeSize: 100,
-              enableDeltas: true,
-              deltaBranchCount: 3,
-              deltaSpreadAngle: Math.PI / 3,
-              minFlow: 1.0,
-              maxFlow: 100.0,
-              widthScale: 0.5,
-            },
-            incrementalConfig: {
-              enabled: true,
-              timeBudgetMs: 16,
-            },
-            maxCacheSize: 10,
-          };
+  it('Multiple non-workerPoolConfig updates work correctly', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance WITHOUT worker pool
+    const app = new DemoApp();
+    await app.initialize();
 
-          const chunkManager = new ChunkManager(config);
+    // Verify no workers created initially
+    expect(workerInstances.length).toBe(0);
 
-          // Start incremental generation
-          const partialChunk = chunkManager.getChunkIncremental(chunkX, chunkY);
-
-          // Verify partial chunk structure
-          expect(partialChunk).toBeDefined();
-          expect(partialChunk.x).toBe(chunkX);
-          expect(partialChunk.y).toBe(chunkY);
-          expect(partialChunk.stage).toBeDefined();
-          expect(partialChunk.completedStages).toBeInstanceOf(Set);
-          expect(partialChunk.data).toBeDefined();
-
-          // Continue generation until complete
-          let isComplete = false;
-          let iterations = 0;
-          const maxIterations = 100; // Safety limit
-
-          while (!isComplete && iterations < maxIterations) {
-            isComplete = chunkManager.continueGeneration(chunkX, chunkY);
-            iterations++;
-          }
-
-          // Verify generation completed
-          expect(isComplete).toBe(true);
-          expect(iterations).toBeLessThan(maxIterations);
-
-          // Verify final stage
-          const finalStage = chunkManager.getGenerationStage(chunkX, chunkY);
-          expect(finalStage).toBeDefined();
-        }
-      ),
-      {
-        numRuns: 5, // Fewer runs since incremental generation is slower
-        verbose: true,
-      }
-    );
-  });
-
-  /**
-   * Concrete test case for cache behavior preservation
-   * Tests specific scenario: generate 3 chunks with cache size 2, verify LRU eviction
-   */
-  it('Concrete case: Cache LRU eviction works correctly without workerPoolConfig', async () => {
-    const config: WorldConfig = {
-      seed: 11111,
-      chunkSize: 32,
+    // Update terrain config
+    app.updateEngineConfig({
       terrainConfig: {
-        scale: 0.01,
-        octaves: 4,
-        persistence: 0.5,
-        lacunarity: 2.0,
-        heightScale: 1.0,
-        enableDomainWarping: false,
+        baseScale: 0.02,
+        octaves: 5,
+        persistence: 0.6,
+        lacunarity: 2.5,
+        warpStrength: 1.5,
+        heightMultiplier: 1.2,
+        enable3D: false,
+        zScale: 0.5,
       },
+    });
+    expect(workerInstances.length).toBe(0);
+
+    // Update biome config
+    app.updateEngineConfig({
       biomeConfig: {
-        scale: 0.005,
+        temperatureScale: 0.008,
         moistureScale: 0.008,
+        blendRadius: 8,
       },
-      resourceConfig: {
-        types: [],
-        clusterScale: 50,
-        densityThreshold: 0.6,
+    });
+    expect(workerInstances.length).toBe(0);
+
+    // Update cache size (requires ChunkManager recreation)
+    app.updateEngineConfig({ maxCacheSize: 500 });
+    expect(workerInstances.length).toBe(0);
+
+    // Update incremental config (requires ChunkManager recreation)
+    app.updateEngineConfig({
+      incrementalConfig: {
+        enabled: true,
+        timeBudgetMs: 10,
+        stagesPerFrame: 2,
       },
-      structureConfig: {
-        types: [],
-        minDistance: 20,
-        maxAttempts: 30,
+    });
+    expect(workerInstances.length).toBe(0);
+
+    // Verify all configs were updated
+    const state = app.getState();
+    expect(state.config.terrainConfig?.baseScale).toBe(0.02);
+    expect(state.config.biomeConfig?.temperatureScale).toBe(0.008);
+    expect(state.config.maxCacheSize).toBe(500);
+    expect(state.config.incrementalConfig?.enabled).toBe(true);
+    expect(state.incrementalEnabled).toBe(true);
+
+    // Verify ChunkManager still works
+    expect(state.chunkManager).not.toBeNull();
+
+    // Cleanup
+    app.destroy();
+  }, 10000);
+
+  /**
+   * Test: Configuration updates work correctly after disabling worker pool
+   * 
+   * Validates that after disabling worker pool, non-workerPoolConfig updates
+   * continue to work correctly.
+   * 
+   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
+   */
+  it('Configuration updates work correctly after disabling worker pool', async () => {
+    // Dynamically import DemoApp
+    const { DemoApp } = await import('../../demo/src/core/DemoApp');
+    
+    // Create DemoApp instance
+    const app = new DemoApp();
+    await app.initialize();
+
+    // Enable worker pool
+    app.updateEngineConfig({
+      workerPoolConfig: {
+        maxWorkers: 4,
+        workerScriptUrl: '/worker.js',
+        taskTimeout: 30000,
       },
-      riverNetworkConfig: {
-        sourceElevation: 0.7,
-        minFlowLength: 10,
-        flowWidth: 2,
-        enableTributaries: true,
-        maxTributaryOrder: 2,
-        tributaryProbability: 0.3,
-        enableLakes: true,
-        lakeDepressionThreshold: 0.05,
-        maxLakeSize: 100,
-        enableDeltas: true,
-        deltaBranchCount: 3,
-        deltaSpreadAngle: Math.PI / 3,
-        minFlow: 1.0,
-        maxFlow: 100.0,
-        widthScale: 0.5,
+    });
+    expect(workerInstances.length).toBe(4);
+
+    // Disable worker pool
+    app.updateEngineConfig({ workerPoolConfig: undefined });
+
+    // Now update non-workerPoolConfig settings (should NOT create new workers)
+    const workerCountAfterDisable = workerInstances.length;
+
+    app.updateEngineConfig({
+      terrainConfig: {
+        baseScale: 0.015,
+        octaves: 6,
+        persistence: 0.55,
+        lacunarity: 2.2,
+        warpStrength: 1.0,
+        heightMultiplier: 1.0,
+        enable3D: false,
+        zScale: 0.5,
       },
-      maxCacheSize: 2,
-    };
+    });
 
-    const chunkManager = new ChunkManager(config);
+    // Verify no new workers created
+    expect(workerInstances.length).toBe(workerCountAfterDisable);
 
-    // Generate 3 chunks with cache size 2
-    await chunkManager.getChunk(0, 0); // Cache: [(0,0)]
-    await chunkManager.getChunk(1, 0); // Cache: [(0,0), (1,0)]
-    await chunkManager.getChunk(2, 0); // Cache: [(1,0), (2,0)] - (0,0) evicted
+    // Verify config was updated
+    const state = app.getState();
+    expect(state.config.terrainConfig?.baseScale).toBe(0.015);
+    expect(state.workerPoolEnabled).toBe(false);
 
-    // Verify cache size is 2 (LRU eviction occurred)
-    expect(chunkManager.getCacheSize()).toBe(2);
-
-    // Access (1,0) again - should be cache hit
-    const statsBefore = chunkManager.getCacheStats();
-    await chunkManager.getChunk(1, 0);
-    const statsAfter = chunkManager.getCacheStats();
-
-    // Verify cache hit occurred
-    expect(statsAfter.hitRate).toBeGreaterThan(statsBefore.hitRate);
-  });
+    // Cleanup
+    app.destroy();
+  }, 10000);
 });

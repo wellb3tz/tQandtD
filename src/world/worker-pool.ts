@@ -54,6 +54,8 @@ export class WorkerPool {
   private taskQueue: WorkerTask[];
   private activeTasks: Map<string, WorkerTask>;
   private taskIdCounter: number;
+  private initialized: boolean;
+  private initializationError: Error | null;
 
   /**
    * Creates a new WorkerPool
@@ -65,36 +67,69 @@ export class WorkerPool {
     this.taskQueue = [];
     this.activeTasks = new Map();
     this.taskIdCounter = 0;
+    this.initialized = false;
+    this.initializationError = null;
 
     // Initialize workers
     for (let i = 0; i < config.maxWorkers; i++) {
-      const worker = new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
-      
-      // Set up message handler for this worker
-      worker.onmessage = (event: MessageEvent) => {
-        this.handleTaskComplete(i, event.data);
-      };
+      try {
+        const worker = new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
+        
+        // Set up message handler for this worker
+        worker.onmessage = (event: MessageEvent) => {
+          this.handleTaskComplete(i, event.data);
+        };
 
-      // Set up error handler for this worker
-      worker.onerror = (error: ErrorEvent) => {
-        console.error('Worker error:', error);
-        this.handleTaskError(i, new Error(error.message));
-      };
+        // Set up error handler for this worker
+        worker.onerror = (error: ErrorEvent) => {
+          console.error(`[WorkerPool] Worker ${i} error:`, {
+            message: error.message,
+            filename: error.filename,
+            lineno: error.lineno,
+            colno: error.colno,
+            error: error.error
+          });
+          
+          // Mark initialization as failed
+          if (!this.initialized) {
+            this.initializationError = new Error(`Worker ${i} failed to load: ${error.message}`);
+          }
+          
+          this.handleTaskError(i, new Error(error.message || 'Worker error'));
+        };
 
-      this.workers.push({
-        worker,
-        currentTask: null,
-        completedTasks: 0,
-      });
-      
-      // Initialize worker with world config if provided
-      if (config.worldConfig) {
-        worker.postMessage({
-          type: 'init',
-          config: config.worldConfig,
+        this.workers.push({
+          worker,
+          currentTask: null,
+          completedTasks: 0,
         });
+        
+        // Initialize worker with world config if provided
+        // CRITICAL: Remove workerPoolConfig to prevent recursive WorkerPool creation
+        if (config.worldConfig) {
+          const { workerPoolConfig, ...configWithoutWorkerPool } = config.worldConfig;
+          worker.postMessage({
+            type: 'init',
+            config: configWithoutWorkerPool,
+          });
+        }
+      } catch (error) {
+        console.error(`[WorkerPool] Failed to create worker ${i}:`, error);
+        this.initializationError = error as Error;
+        throw error;
       }
     }
+    
+    // Mark as initialized if no errors occurred
+    this.initialized = true;
+    console.log(`[WorkerPool] Successfully initialized ${this.workers.length} workers`);
+    
+    // Wait a bit to see if workers fail to load
+    setTimeout(() => {
+      if (this.initializationError) {
+        console.error('[WorkerPool] Workers failed to load after initialization');
+      }
+    }, 100);
   }
 
   /**
@@ -103,6 +138,13 @@ export class WorkerPool {
    * @returns Task ID for tracking
    */
   submitTask(task: WorkerTask): string {
+    // Check if pool is initialized
+    if (!this.initialized || this.initializationError) {
+      console.error('[WorkerPool] Cannot submit task - pool not initialized:', this.initializationError);
+      // Immediately call error callback
+      task.onError(this.initializationError || new Error('Worker pool not initialized'));
+      return '';
+    }
     // Generate task ID if not provided
     if (!task.id) {
       task.id = `task-${this.taskIdCounter++}`;

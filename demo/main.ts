@@ -339,6 +339,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
+      // Clear fog of war when generating new world
+      if (worldViewer) {
+        worldViewer.clearFogOfWar();
+      }
       errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
     });
     
@@ -352,7 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     app.on(AppEvent.CHUNK_UNLOADED, (data) => {
       // Remove chunk from viewer
       if (worldViewer) {
-        worldViewer.removeChunk(data.chunkX, data.chunkY);
+        worldViewer.removeChunk(data.chunkX, data.chunkY, data.keepFogOfWar || false);
       }
     });
     
@@ -382,6 +386,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if ('showWireframe' in visibilityState) {
           worldViewer.setWireframeMode(visibilityState.showWireframe);
+        }
+        if ('fogOfWarEnabled' in visibilityState) {
+          worldViewer.setFogOfWarVisibility(visibilityState.fogOfWarEnabled);
         }
         
         const endTime = performance.now();

@@ -5,8 +5,8 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { DemoApp, AppState, TerrainTool } from '@core/DemoApp';
-import { WorldConfig } from '@engine/index';
+import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
+import type { WorldConfig } from '../../../src/world/chunk-manager';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { getWorkerUrl } from '../../worker-loader';
 
@@ -14,6 +14,25 @@ import { getWorkerUrl } from '../../worker-loader';
  * Parameter change callback type
  */
 export type ParameterChangeCallback = (config: Partial<WorldConfig>) => void;
+
+/**
+ * Preset selection callback type
+ */
+export type PresetSelectCallback = (preset: PresetConfig) => void;
+
+/**
+ * Preset configuration interface
+ */
+export interface PresetConfig {
+  name: string;
+  description: string;
+  config: WorldConfig;
+}
+
+/**
+ * Built-in presets
+ */
+const PRESETS: PresetConfig[] = [];
 
 /**
  * Control configuration for sliders
@@ -46,7 +65,9 @@ export class ControlPanel {
   private terrainEditor: TerrainEditor | null = null;
   private container: HTMLElement | null = null;
   private parameterChangeCallbacks: Set<ParameterChangeCallback> = new Set();
+  private presetSelectCallbacks: Set<PresetSelectCallback> = new Set();
   private currentConfig: WorldConfig | null = null;
+  private customPresets: PresetConfig[] = [];
 
   /**
    * Initialize the control panel
@@ -58,7 +79,7 @@ export class ControlPanel {
     this.currentConfig = app.getState().config;
 
     // Subscribe to state changes
-    app.subscribeToState((state) => {
+    app.subscribeToState((state: AppState) => {
       this.updateFromState(state);
     });
 
@@ -509,12 +530,12 @@ export class ControlPanel {
     lodDistancesControl.id = 'lodDistances-group';
     advancedContainer.appendChild(lodDistancesControl);
 
-    // Worker pool
+    // Worker pool (FIXED - memory leak resolved)
     const workerCheckbox = this.createCheckboxControl({
       id: 'enableWorkerPool',
-      label: 'Enable Worker Pool (4 workers)',
+      label: 'Enable Worker Pool (Multi-threaded)',
       defaultValue: false,
-      tooltip: 'Multi-threaded generation with 4 worker threads'
+      tooltip: 'Enable multi-threaded chunk generation using Web Workers for better performance. Uses 4 workers by default.'
     }, (checked) => {
       this.updateWorkerPoolConfig('enabled', checked);
     });
@@ -945,7 +966,8 @@ export class ControlPanel {
       { id: 'showResources', label: 'Show Resources', defaultValue: true },
       { id: 'showStructures', label: 'Show Structures', defaultValue: true },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
-      { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false }
+      { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
+      { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: true }
     ];
 
     toggles.forEach(config => {
@@ -1201,7 +1223,9 @@ export class ControlPanel {
         updatedTypes.push({
           type: resourceTypeIndex,
           rarity: 0.5,
-          biomes: [] // Will use default biomes
+          biomes: [], // Will use default biomes
+          minAmount: 1,
+          maxAmount: 5
         });
       }
     } else {
@@ -1355,11 +1379,11 @@ export class ControlPanel {
    */
   loadPreset(presetName: string): void {
     // Try to find in built-in presets
-    let preset = getPresetByName(presetName);
+    let preset = PRESETS.find((p: PresetConfig) => p.name === presetName);
     
     // Try to find in custom presets
     if (!preset) {
-      preset = this.customPresets.find(p => p.name === presetName);
+      preset = this.customPresets.find((p: PresetConfig) => p.name === presetName);
     }
 
     if (!preset) {
@@ -1440,10 +1464,10 @@ export class ControlPanel {
     }
 
     // Sync river controls
-    if (config.riverConfig) {
-      this.updateSliderValue('sourceElevation', config.riverConfig.sourceElevation);
-      this.updateSliderValue('minFlowLength', config.riverConfig.minFlowLength);
-      this.updateSliderValue('flowWidth', config.riverConfig.flowWidth);
+    if (config.riverNetworkConfig) {
+      this.updateSliderValue('sourceElevation', config.riverNetworkConfig.sourceElevation);
+      this.updateSliderValue('minFlowLength', config.riverNetworkConfig.minFlowLength);
+      this.updateSliderValue('flowWidth', config.riverNetworkConfig.flowWidth);
     }
 
     // Sync resource controls

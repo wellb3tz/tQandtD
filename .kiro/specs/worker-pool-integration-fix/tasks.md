@@ -1,113 +1,75 @@
 # Implementation Plan
 
 - [x] 1. Write bug condition exploration test
-  - **Property 1: Bug Condition** - Worker Pool Delegation Not Invoked
+  - **Property 1: Bug Condition** - WorkerPool Infinite Creation
   - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
   - **DO NOT attempt to fix the test or the code when it fails**
   - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
-  - **GOAL**: Surface counterexamples that demonstrate the bug exists
-  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing case(s) to ensure reproducibility
-  - Test that when workerPoolConfig is provided with maxWorkers > 0, calling getChunk() for a non-cached chunk invokes WorkerPool.submitTask()
-  - Use property-based testing to generate random chunk coordinates (chunkX, chunkY) and workerPoolConfig settings
-  - Spy on WorkerPool.submitTask() method to verify it is called
-  - Assert that submitTask() is invoked with correct parameters (chunkX, chunkY, lodLevel, callbacks)
+  - **GOAL**: Surface counterexamples that demonstrate infinite WorkerPool creation
+  - **Scoped PBT Approach**: Scope the property to the concrete failing case - enabling workerPoolConfig and calling updateEngineConfig() multiple times
+  - Test that enabling workerPoolConfig and calling updateEngineConfig() multiple times results in exactly one WorkerPool instance (from Bug Condition in design)
+  - Test that shutdown() is called on old WorkerPool before creating new ChunkManager
+  - Test that old workers are terminated when new WorkerPool is created
+  - The test assertions should match the Expected Behavior Properties from design (exactly one WorkerPool, shutdown called, workers terminated)
   - Run test on UNFIXED code
   - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
-  - Document counterexamples found: submitTask() is never called, getChunk() executes synchronously
+  - Document counterexamples found: multiple WorkerPool instances, shutdown never called, workers not terminated
   - Mark task complete when test is written, run, and failure is documented
-  - _Requirements: 1.1, 1.2, 2.1, 2.2_
+  - _Requirements: 1.1, 1.3, 1.4, 1.5_
 
 - [x] 2. Write preservation property tests (BEFORE implementing fix)
-  - **Property 2: Preservation** - Synchronous Generation Behavior
+  - **Property 2: Preservation** - Non-WorkerPool Configuration Updates
   - **IMPORTANT**: Follow observation-first methodology
-  - Observe behavior on UNFIXED code for non-buggy inputs (when workerPoolConfig is null/undefined)
-  - Test Case 1: Verify getChunk() returns ChunkData synchronously when workerPoolConfig is null
-  - Test Case 2: Verify generateChunk() is called directly when workerPoolConfig is null
-  - Test Case 3: Verify cache behavior (hits, misses, LRU eviction) works identically with and without workerPoolConfig
-  - Test Case 4: Verify LOD transformations are applied correctly regardless of generation method
-  - Test Case 5: Verify getChunkIncremental() continues to work independently of worker pool configuration
+  - Observe behavior on UNFIXED code for non-workerPoolConfig updates (terrain config, biome config, LOD config, incremental config, cache size)
+  - Observe that these updates work correctly without any WorkerPool shutdown logic
   - Write property-based tests capturing observed behavior patterns from Preservation Requirements
+  - Test that updateEngineConfig() with non-workerPoolConfig changes produces same behavior as before
+  - Test that synchronous chunk generation continues to work when workerPoolConfig is null
+  - Test that LOD configuration updates work correctly
+  - Test that incremental generation configuration updates work correctly
   - Property-based testing generates many test cases for stronger guarantees
   - Run tests on UNFIXED code
   - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
   - Mark task complete when tests are written, run, and passing on unfixed code
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [x] 3. Fix for worker pool integration
+- [x] 3. Fix for infinite WorkerPool creation
 
-  - [x] 3.1 Make getChunk() asynchronous
-    - Change return type from `ChunkData` to `Promise<ChunkData>`
-    - Update method signature: `async getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): Promise<ChunkData>`
-    - Add async/await support for both synchronous and asynchronous generation paths
-    - **NOTE**: This is a breaking API change that requires updating all callers
-    - _Bug_Condition: isBugCondition(input) where input.workerPoolConfig IS NOT NULL AND input.workerPoolConfig.maxWorkers > 0_
-    - _Expected_Behavior: getChunk() returns Promise<ChunkData> and delegates to worker pool when workerPoolConfig is enabled_
-    - _Preservation: Synchronous generation behavior when workerPoolConfig is null (Requirements 3.1, 3.2)_
-    - _Requirements: 2.1, 2.2, 3.1, 3.2_
+  - [x] 3.1 Implement the fix in DemoApp.updateEngineConfig()
+    - Add WorkerPool shutdown before ChunkManager recreation
+    - Access old ChunkManager: `const oldManager = this.state.chunkManager as any;`
+    - Check if WorkerPool exists: `if (oldManager?.workerPool)`
+    - Call shutdown: `oldManager.workerPool.shutdown();`
+    - Add logging: `console.log('[DemoApp] Shutting down old worker pool');`
+    - Place shutdown call BEFORE all ChunkManager recreation paths (enabling worker pool, disabling worker pool, other config changes)
+    - Ensure shutdown happens in the correct location (after shouldRecreateManager check, before creating new ChunkManager)
+    - _Bug_Condition: isBugCondition(input) where 'workerPoolConfig' IN input.config AND oldChunkManager.workerPool exists AND shutdown() is NOT called_
+    - _Expected_Behavior: expectedBehavior(result) - exactly one WorkerPool instance exists, shutdown() is called on old instance, old workers are terminated_
+    - _Preservation: Non-workerPoolConfig updates remain unchanged, synchronous generation continues to work, LOD/incremental/cache updates work correctly_
+    - _Requirements: 2.1, 2.3, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [x] 3.2 Add worker pool delegation logic
-    - After cache miss, check if `this.workerPool` exists
-    - If workerPool exists: delegate to worker via new `generateChunkAsync()` method
-    - If workerPool is null: use existing synchronous `generateChunk()` path
-    - Maintain cache integration and LOD application for both paths
-    - _Bug_Condition: isBugCondition(input) where WorkerPool.submitTask() is never called_
-    - _Expected_Behavior: When workerPool exists, submitTask() is called with correct parameters_
-    - _Preservation: Cache behavior, LOD application remain unchanged (Requirements 3.3, 3.4)_
-    - _Requirements: 2.1, 2.2, 2.3, 3.3, 3.4_
-
-  - [x] 3.3 Implement generateChunkAsync() method
-    - Create private method `generateChunkAsync(chunkX: number, chunkY: number): Promise<ChunkData>`
-    - Wrap WorkerPool.submitTask() in a Promise
-    - Create WorkerTask object with:
-      - Unique task ID (assigned by submitTask)
-      - chunkX and chunkY coordinates
-      - lodLevel: LODLevel.HIGH (always generate at full resolution)
-      - priority: 0 (default priority)
-      - onComplete callback that resolves the Promise with ChunkData
-      - onError callback that falls back to synchronous generation
-    - Handle worker errors gracefully with fallback to generateChunk()
-    - _Bug_Condition: isBugCondition(input) where no code path from getChunk() to submitTask() exists_
-    - _Expected_Behavior: generateChunkAsync() creates WorkerTask and calls submitTask(), returns Promise<ChunkData>_
-    - _Preservation: Error handling maintains system stability (Requirements 3.1, 3.2)_
-    - _Requirements: 2.1, 2.2, 2.3_
-
-  - [x] 3.4 Update all getChunk() callers to handle async
-    - Search codebase for all calls to `getChunk()`
-    - Update callers to use `await` or `.then()` for Promise handling
-    - Ensure error handling is in place for rejected Promises
-    - Update demo application if it calls getChunk()
-    - _Bug_Condition: N/A (this is a consequence of the API change)_
-    - _Expected_Behavior: All callers properly handle async getChunk()_
-    - _Preservation: Existing functionality continues to work with async API_
-    - _Requirements: 2.1, 2.2_
-
-  - [x] 3.5 Verify bug condition exploration test now passes
-    - **Property 1: Expected Behavior** - Worker Pool Delegation Invoked
+  - [x] 3.2 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Single WorkerPool Instance
     - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
     - The test from task 1 encodes the expected behavior
     - When this test passes, it confirms the expected behavior is satisfied
     - Run bug condition exploration test from step 1
     - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
-    - Verify that WorkerPool.submitTask() is called when workerPoolConfig is enabled
-    - Verify that chunk generation occurs asynchronously
-    - Verify that worker-generated chunks match expected ChunkData structure
-    - _Requirements: 2.1, 2.2, 2.3_
+    - Verify exactly one WorkerPool instance exists after multiple updateEngineConfig() calls
+    - Verify shutdown() is called on old WorkerPool before creating new ChunkManager
+    - Verify old workers are terminated
+    - _Requirements: 2.1, 2.3, 2.5_
 
-  - [x] 3.6 Verify preservation tests still pass
-    - **Property 2: Preservation** - Synchronous Generation Behavior Preserved
+  - [x] 3.3 Verify preservation tests still pass
+    - **Property 2: Preservation** - Non-WorkerPool Configuration Updates
     - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
     - Run preservation property tests from step 2
     - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
-    - Verify synchronous generation when workerPoolConfig is null
-    - Verify cache behavior is unchanged
-    - Verify LOD application works correctly
-    - Verify getChunkIncremental() continues to work independently
     - Confirm all tests still pass after fix (no regressions)
+    - Verify non-workerPoolConfig updates work exactly as before
+    - Verify synchronous generation continues to work
+    - Verify LOD/incremental/cache updates work correctly
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [x] 4. Checkpoint - Ensure all tests pass
-  - Run full test suite with `npm test`
-  - Verify all bug condition tests pass (worker pool delegation works)
-  - Verify all preservation tests pass (synchronous generation preserved)
-  - Verify no regressions in existing functionality
-  - Check for TypeScript compilation errors
-  - Ensure all tests pass, ask the user if questions arise
+  - Ensure all tests pass, ask the user if questions arise.

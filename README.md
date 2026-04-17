@@ -811,22 +811,58 @@ npm run test:coverage
 
 The project includes comprehensive test coverage:
 - **275+ tests** across 23+ test files
-- **Unit tests** for specific functionality
+- **Unit tests** for specific functionality (Vitest)
 - **Property-based tests** using fast-check for correctness validation
-- **Integration tests** for complete workflows including:
-  - Full generation pipeline with all enhancements
-  - Cross-chunk river continuity
-  - Save/load cycle verification
-  - Worker pool functionality
-  - Serialization round-trip testing
+- **Integration tests** for complete workflows
+- **E2E tests** using Playwright for real browser behavior
 - **Performance benchmarks** validating <100ms per chunk target
 
 ### Test Categories
 
-- `tests/unit/` - Unit tests for individual components
-- `tests/property/` - Property-based tests for correctness properties
-- `tests/integration/` - End-to-end workflow tests
+- `tests/unit/` - Unit tests for individual components (Vitest)
+- `tests/property/` - Property-based tests for correctness properties (fast-check)
+- `tests/integration/` - Integration tests with mocked browser APIs (Vitest)
+- `tests/e2e/` - End-to-end tests in real browser (Playwright)
+- `tests/bugfix/` - Regression tests for specific bugs
 - `tests/performance/` - Performance benchmarks
+
+### Running Tests
+
+```bash
+# Unit and integration tests
+npm test                    # Run all Vitest tests once
+npm run test:watch          # Run tests in watch mode
+npm run test:coverage       # Generate coverage report
+
+# E2E tests (Playwright)
+npx playwright test         # Run all E2E tests
+npx playwright test --ui    # Run with UI mode
+npx playwright test --headed # Run with visible browser
+```
+
+### When to Use Each Testing Tool
+
+**Vitest (Unit/Integration)** - Use for:
+- Pure logic and algorithms
+- Isolated component testing
+- Fast feedback during development
+- Mocked browser APIs
+
+**Playwright (E2E)** - Use for:
+- Browser-specific features (Web Workers, Storage, etc.)
+- UI interactions and user workflows
+- Console output verification
+- Real browser behavior (timing, memory, performance)
+- Integration of multiple systems
+
+**Example: Worker Pool Bug Discovery**
+
+Unit tests showed the fix worked (shutdown() was called), but Playwright revealed the real issue:
+- Unit tests: Expected 1 WorkerPool initialization ✅
+- Playwright: Found 90 initializations ❌
+- Root cause: Recursive WorkerPool creation in workers
+
+See `.kiro/steering/playwright-best-practices.md` for detailed E2E testing guidelines.
 
 ## Project Structure
 

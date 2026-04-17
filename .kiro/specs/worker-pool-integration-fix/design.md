@@ -1,94 +1,98 @@
-# Worker Pool Integration Fix Design
+# Worker Pool Integration Fix Bugfix Design
 
 ## Overview
 
-The WorkerPool is currently initialized in ChunkManager when workerPoolConfig is provided, but it is never invoked during chunk generation. This design document outlines how to integrate the worker pool into the chunk generation flow by delegating chunk generation tasks to worker threads via the WorkerPool.submitTask() method. The fix ensures that when workerPoolConfig is enabled, chunk generation executes asynchronously on worker threads, while maintaining backward compatibility for synchronous generation when workerPoolConfig is not provided.
+The WorkerPool is being created infinitely during normal application operation, causing a critical memory leak that crashes the browser. The root cause is that `DemoApp.updateEngineConfig()` recreates ChunkManager repeatedly without properly shutting down the old WorkerPool instance. Each recreation instantiates a new WorkerPool with 4 workers that are never terminated, leading to 100+ WorkerPool instances and memory growth from 200MB to 8GB+ until system crash. Additionally, workers fail to load their module with undefined errors. This design outlines a fix to ensure exactly one WorkerPool instance exists and is properly shut down before creating a new one, while also addressing the worker loading failures.
 
 ## Glossary
 
-- **Bug_Condition (C)**: The condition that triggers the bug - when workerPoolConfig is provided but WorkerPool.submitTask() is never called during chunk generation
-- **Property (P)**: The desired behavior when workerPoolConfig is enabled - chunk generation should be delegated to worker threads via submitTask()
-- **Preservation**: Existing synchronous chunk generation behavior that must remain unchanged when workerPoolConfig is not provided
-- **ChunkManager**: The class in `src/world/chunk-manager.ts` that orchestrates chunk generation and caching
+- **Bug_Condition (C)**: The condition that triggers the bug - when updateEngineConfig() is called with workerPoolConfig changes, causing ChunkManager recreation without shutting down the old WorkerPool
+- **Property (P)**: The desired behavior - exactly one WorkerPool instance should exist and be reused, with proper shutdown before recreation
+- **Preservation**: Existing synchronous generation behavior and configuration update behavior that must remain unchanged when workerPoolConfig is not used
+- **DemoApp**: The class in `demo/src/core/DemoApp.ts` that manages application state and coordinates components
+- **updateEngineConfig()**: The method in DemoApp that updates WorldConfig and recreates ChunkManager when certain config changes occur
+- **ChunkManager**: The class in `src/world/chunk-manager.ts` that orchestrates chunk generation and owns the WorkerPool instance
 - **WorkerPool**: The class in `src/world/worker-pool.ts` that manages a pool of Web Workers for parallel chunk generation
-- **getChunk()**: The method in ChunkManager that retrieves or generates chunks, currently always executes synchronously
-- **generateChunk()**: The method in ChunkManager that performs synchronous chunk generation on the main thread
-- **submitTask()**: The method in WorkerPool that delegates a chunk generation task to an available worker thread
-- **workerPoolConfig**: The optional configuration property in WorldConfig that enables multi-threaded chunk generation
+- **shutdown()**: The method in WorkerPool that terminates all workers and cleans up resources
+- **isUpdatingConfig**: A flag in DemoApp that prevents recursive updateEngineConfig() calls
 
 ## Bug Details
 
 ### Bug Condition
 
-The bug manifests when workerPoolConfig is provided with maxWorkers setting. The ChunkManager initializes a WorkerPool instance but never calls submitTask() during chunk generation. The getChunk() method always executes generateChunk() synchronously on the main thread, completely bypassing the worker pool infrastructure.
+The bug manifests when workerPoolConfig is enabled and updateEngineConfig() is called (either directly or through UI interactions). The method recreates ChunkManager to apply configuration changes, but it does not call shutdown() on the old WorkerPool before creating the new ChunkManager. Each new ChunkManager instantiates a new WorkerPool with 4 workers, and the old workers are never terminated. Something is triggering repeated calls to updateEngineConfig(), causing infinite WorkerPool creation.
 
 **Formal Specification:**
 ```
 FUNCTION isBugCondition(input)
-  INPUT: input of type { workerPoolConfig: WorkerPoolConfig | null, chunkX: number, chunkY: number }
+  INPUT: input of type { config: Partial<WorldConfig>, oldChunkManager: ChunkManager | null }
   OUTPUT: boolean
   
-  RETURN input.workerPoolConfig IS NOT NULL
-         AND input.workerPoolConfig.maxWorkers > 0
-         AND WorkerPool instance exists in ChunkManager
-         AND getChunk(chunkX, chunkY) executes generateChunk() synchronously
-         AND WorkerPool.submitTask() is never called
+  RETURN 'workerPoolConfig' IN input.config
+         AND input.oldChunkManager IS NOT NULL
+         AND input.oldChunkManager.workerPool IS NOT NULL
+         AND input.oldChunkManager.workerPool.shutdown() is NOT called
+         AND new ChunkManager(newConfig) is created
+         AND new WorkerPool is instantiated
 END FUNCTION
 ```
 
 ### Examples
 
-- **Example 1**: User provides `workerPoolConfig: { maxWorkers: 4, workerScriptUrl: '/worker.js', taskTimeout: 30000 }` in WorldConfig. ChunkManager initializes WorkerPool with 4 workers. User calls `getChunk(0, 0)`. Expected: Task submitted to worker pool, chunk generated on worker thread. Actual: generateChunk() executes synchronously on main thread, worker pool sits idle.
+- **Example 1**: User enables worker pool via UI toggle. Expected: One WorkerPool with 4 workers is created. Actual: updateEngineConfig() is called repeatedly, creating 100+ WorkerPool instances, each with 4 workers, causing memory to grow from 200MB to 8GB+ until crash.
 
-- **Example 2**: User provides `workerPoolConfig: { maxWorkers: 8, workerScriptUrl: '/worker.js', taskTimeout: 30000 }` and calls getChunk() for 10 different chunks in rapid succession. Expected: Up to 8 chunks generated in parallel across worker threads, remaining 2 queued. Actual: All 10 chunks generated sequentially on main thread, blocking UI for extended period.
+- **Example 2**: User changes worker pool configuration (e.g., maxWorkers from 4 to 8). Expected: Old WorkerPool is shut down, new WorkerPool with 8 workers is created. Actual: Old WorkerPool remains active, new WorkerPool is created, both consume memory, and repeated calls create infinite instances.
 
-- **Example 3**: User provides `workerPoolConfig: { maxWorkers: 2, workerScriptUrl: '/worker.js', taskTimeout: 30000 }` and generates chunks during world exploration. Expected: Chunk generation offloaded to workers, maintaining 60fps. Actual: Main thread blocked during generation, frame drops occur.
+- **Example 3**: User toggles worker pool off then on again. Expected: WorkerPool is shut down when disabled, new WorkerPool is created when re-enabled. Actual: Old WorkerPool is not shut down, new WorkerPool is created, memory leak continues.
 
-- **Edge Case**: User provides `workerPoolConfig: { maxWorkers: 1, workerScriptUrl: '/worker.js', taskTimeout: 30000 }`. Expected: Single worker handles generation asynchronously, main thread remains responsive. Actual: Synchronous generation on main thread, no benefit from worker configuration.
+- **Edge Case**: User enables worker pool but workers fail to load with undefined errors. Expected: Initialization error is caught, fallback to synchronous generation occurs. Actual: WorkerPool is marked as "initialized" despite worker failures, and repeated recreation attempts continue creating broken WorkerPool instances.
 
 ## Expected Behavior
 
 ### Preservation Requirements
 
 **Unchanged Behaviors:**
-- Synchronous chunk generation via generateChunk() must continue to work when workerPoolConfig is not provided
-- LRU cache behavior must remain unchanged regardless of worker pool usage
-- LOD transformations must continue to apply after chunk generation
-- Incremental generation via getChunkIncremental() must continue to work independently
-- Cache hit/miss statistics tracking must remain unchanged
-- Chunk modification recording must continue to work identically
+- Mouse clicks on UI controls must continue to work exactly as before
+- Configuration updates that don't involve workerPoolConfig must remain unchanged
+- Synchronous chunk generation when workerPoolConfig is null must continue to work
+- LOD configuration updates must continue to work correctly
+- Incremental generation configuration updates must continue to work correctly
+- Cache size configuration updates must continue to work correctly
 
 **Scope:**
-All inputs where workerPoolConfig is null or undefined should be completely unaffected by this fix. This includes:
-- Direct calls to generateChunk() (always synchronous)
-- getChunk() calls when workerPoolConfig is not provided (synchronous generation)
-- getChunkIncremental() calls (independent of worker pool)
-- Cache operations (clearCache, getCacheSize, getCacheStats)
-- Serialization operations (saveWorld, loadWorld, exportWorld)
+All inputs that do NOT involve workerPoolConfig changes should be completely unaffected by this fix. This includes:
+- Configuration updates for terrain, biomes, resources, structures, rivers
+- Configuration updates for LOD, incremental generation, cache size
+- World generation with new seed
+- Chunk loading and unloading
+- Camera position updates
+- UI state changes (visibility toggles, tool selection, etc.)
 
 ## Hypothesized Root Cause
 
-Based on the bug description and code analysis, the root cause is:
+Based on the bug description and code analysis, the most likely issues are:
 
-1. **Missing Integration Point**: The getChunk() method has no code path that checks for workerPoolConfig and delegates to the worker pool. It always calls generateChunk() directly, which is a synchronous method.
+1. **Missing WorkerPool Shutdown**: The updateEngineConfig() method recreates ChunkManager when workerPoolConfig changes, but it does not call shutdown() on the old ChunkManager's WorkerPool before creating the new instance. The old workers remain active in memory, never terminated.
 
-2. **Synchronous API Design**: The getChunk() method has a synchronous return type `ChunkData`, which prevents it from awaiting asynchronous worker results. To integrate workers, the method would need to become asynchronous or use a callback pattern.
+2. **Repeated updateEngineConfig() Calls**: Something is triggering updateEngineConfig() repeatedly (possibly a UI event loop, reactive state update, or recursive call). The isUpdatingConfig flag helps but doesn't solve the root cause.
 
-3. **No Worker Task Creation**: There is no code that creates WorkerTask objects and calls submitTask() on the WorkerPool instance. The WorkerPool infrastructure exists but has no entry point from ChunkManager.
+3. **Worker Loading Failures**: Workers fail to load their module, resulting in error messages with all undefined fields. This suggests a Vite configuration issue or incorrect worker URL. However, WorkerPool still marks itself as "initialized" despite these failures.
 
-4. **Cache-First Logic**: The getChunk() method checks the cache first, then immediately falls through to synchronous generation. There's no intermediate step to check if worker pool is available and submit an async task.
+4. **No Cleanup on Error**: When worker initialization fails, the WorkerPool instance is not cleaned up or shut down. Repeated initialization attempts create more broken WorkerPool instances.
+
+5. **Async Initialization Errors**: Worker loading errors are asynchronous (occur after constructor completes), so the error checking in updateEngineConfig() doesn't catch them. The method proceeds as if initialization succeeded.
 
 ## Correctness Properties
 
-Property 1: Bug Condition - Worker Pool Delegation
+Property 1: Bug Condition - WorkerPool Shutdown Before Recreation
 
-_For any_ getChunk() call where workerPoolConfig is provided (this.workerPool is not null) and the chunk is not in cache, the fixed ChunkManager SHALL delegate chunk generation to the worker pool via submitTask(), causing the chunk to be generated asynchronously on a worker thread and returned via callback or Promise.
+_For any_ updateEngineConfig() call where workerPoolConfig is provided and an old ChunkManager with WorkerPool exists, the fixed DemoApp SHALL call shutdown() on the old WorkerPool before creating a new ChunkManager, ensuring old workers are terminated and memory is freed.
 
-**Validates: Requirements 2.1, 2.2, 2.3**
+**Validates: Requirements 2.1, 2.3, 2.5**
 
-Property 2: Preservation - Synchronous Generation
+Property 2: Preservation - Non-WorkerPool Configuration Updates
 
-_For any_ getChunk() call where workerPoolConfig is NOT provided (this.workerPool is null), the fixed ChunkManager SHALL produce exactly the same synchronous behavior as the original code, generating chunks via generateChunk() on the main thread and returning ChunkData immediately.
+_For any_ updateEngineConfig() call where workerPoolConfig is NOT provided (configuration changes don't involve worker pool), the fixed DemoApp SHALL produce exactly the same behavior as the original code, updating configuration without any WorkerPool shutdown logic.
 
 **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
 
@@ -98,123 +102,168 @@ _For any_ getChunk() call where workerPoolConfig is NOT provided (this.workerPoo
 
 Assuming our root cause analysis is correct:
 
-**File**: `src/world/chunk-manager.ts`
+**File**: `demo/src/core/DemoApp.ts`
 
-**Method**: `getChunk()`
+**Method**: `updateEngineConfig()`
 
 **Specific Changes**:
 
-1. **Make getChunk() Asynchronous**: Change the return type from `ChunkData` to `Promise<ChunkData>` to support both synchronous and asynchronous generation paths.
-   - Update method signature: `async getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): Promise<ChunkData>`
-   - This is a breaking API change that requires updating all callers
+1. **Add WorkerPool Shutdown Before Recreation**: Before creating a new ChunkManager, check if the old ChunkManager has a WorkerPool and call shutdown() on it.
+   - Access the old ChunkManager: `const oldManager = this.state.chunkManager as any;`
+   - Check if WorkerPool exists: `if (oldManager?.workerPool)`
+   - Call shutdown: `oldManager.workerPool.shutdown();`
+   - Log the shutdown: `console.log('[DemoApp] Shutting down old worker pool');`
 
-2. **Add Worker Pool Check**: After cache miss, check if `this.workerPool` exists before deciding generation strategy.
-   - If workerPool exists: delegate to worker via submitTask()
-   - If workerPool is null: use existing synchronous generateChunk() path
+2. **Ensure Shutdown Happens Before All ChunkManager Recreations**: The method creates new ChunkManager in multiple places (enabling worker pool, disabling worker pool, other config changes). Ensure shutdown is called in all paths where workerPoolConfig was previously enabled.
 
-3. **Create WorkerTask Object**: When worker pool is available, construct a WorkerTask with:
-   - Unique task ID (can be generated by submitTask)
-   - chunkX and chunkY coordinates
-   - lodLevel parameter
-   - priority (default to 0, or calculate based on distance from player)
-   - onComplete callback that applies LOD and adds to cache
-   - onError callback that falls back to synchronous generation or propagates error
+3. **Improve Worker Loading Error Detection**: The current error checking happens synchronously, but worker loading errors are asynchronous. Consider:
+   - Adding a small delay after WorkerPool creation to allow async errors to surface
+   - Checking WorkerPool.initializationError after creation
+   - Falling back to synchronous generation if initialization fails
 
-4. **Handle Async Worker Result**: Use Promise-based pattern to await worker completion:
-   - Wrap submitTask() in a Promise that resolves when onComplete fires
-   - Apply LOD transformation to worker-generated chunk if needed
-   - Add result to cache with LRU eviction
-   - Return the chunk data
+4. **Investigate Repeated Calls**: Add logging to identify what's triggering repeated updateEngineConfig() calls:
+   - Log the call stack: `console.trace('[DemoApp] Call stack:');`
+   - Log the config changes: `console.log('[DemoApp] Config changes:', config);`
+   - The isUpdatingConfig flag already prevents recursive calls, but something else may be triggering repeated calls
 
-5. **Maintain Synchronous Path**: When workerPool is null, preserve existing behavior:
-   - Call generateChunk() synchronously
-   - Apply LOD if needed
-   - Add to cache
-   - Return immediately
+5. **Consider Singleton Pattern**: For long-term robustness, consider making WorkerPool a singleton that's created once and reused across ChunkManager instances. This would prevent multiple instances even if shutdown is missed.
 
-**Alternative Approach (Non-Breaking)**:
-If maintaining synchronous API is critical, add a new method `getChunkAsync()` that uses worker pool, while keeping `getChunk()` synchronous. However, this doesn't fix the bug that workerPoolConfig is ignored - it just provides an alternative API.
-
-### Implementation Pseudocode
+### Implementation Code
 
 ```typescript
-async getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): Promise<ChunkData> {
-  const key = this.getCacheKey(chunkX, chunkY, lodLevel);
-  
-  // Check cache
-  const cached = this.cache.get(key);
-  if (cached) {
-    cached.lastAccessed = ++this.accessCounter;
-    this.cacheHits++;
-    return cached.chunk;
+updateEngineConfig(config: Partial<WorldConfig>): void {
+  // Prevent recursive calls
+  if (this.isUpdatingConfig) {
+    console.warn('[DemoApp] Ignoring recursive updateEngineConfig call');
+    console.trace('[DemoApp] Call stack:');
+    return;
   }
-
-  // Cache miss
-  this.cacheMisses++;
-
-  // Decide generation strategy based on worker pool availability
-  let chunk: ChunkData;
   
-  if (this.workerPool) {
-    // Asynchronous generation via worker pool
-    chunk = await this.generateChunkAsync(chunkX, chunkY);
-  } else {
-    // Synchronous generation on main thread
-    chunk = this.generateChunk(chunkX, chunkY);
+  // Log who is calling this
+  if ('workerPoolConfig' in config) {
+    console.log('[DemoApp] updateEngineConfig called with workerPoolConfig');
+    console.trace('[DemoApp] Call stack:');
   }
-
-  // Apply LOD if needed
-  const lodChunk = this.lodManager && lodLevel !== LODLevel.HIGH
-    ? this.lodManager.applyLOD(chunk, lodLevel)
-    : chunk;
-
-  // Add to cache
-  this.addToCache(key, lodChunk);
-
-  return lodChunk;
-}
-
-private generateChunkAsync(chunkX: number, chunkY: number): Promise<ChunkData> {
-  return new Promise((resolve, reject) => {
-    const task: WorkerTask = {
-      id: '', // Will be assigned by submitTask
-      chunkX,
-      chunkY,
-      lodLevel: LODLevel.HIGH, // Always generate at full resolution
-      priority: 0, // Default priority
-      onComplete: (chunk: ChunkData) => {
-        resolve(chunk);
-      },
-      onError: (error: Error) => {
-        // Fallback to synchronous generation on error
-        console.warn(`Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync:`, error);
-        try {
-          const syncChunk = this.generateChunk(chunkX, chunkY);
-          resolve(syncChunk);
-        } catch (syncError) {
-          reject(syncError);
-        }
-      }
+  
+  this.isUpdatingConfig = true;
+  
+  try {
+    const newConfig = {
+      ...this.state.config,
+      ...config
     };
-
-    this.workerPool!.submitTask(task);
-  });
+    
+    // Check if this requires recreating the ChunkManager
+    const shouldRecreateManager = 
+      'incrementalConfig' in config ||
+      'maxCacheSize' in config ||
+      'workerPoolConfig' in config;
+    
+    // If not recreating manager, just update config and return
+    if (!shouldRecreateManager) {
+      this.updateState({ config: newConfig });
+      this.emit(AppEvent.CONFIG_CHANGED, newConfig);
+      return;
+    }
+    
+    // **FIX: Shut down old worker pool to prevent memory leaks**
+    const oldManager = this.state.chunkManager as any;
+    if (oldManager?.workerPool) {
+      console.log('[DemoApp] Shutting down old worker pool');
+      oldManager.workerPool.shutdown();
+    }
+    
+    // Update LOD manager if LOD config changed
+    let lodManager = this.state.lodManager;
+    if ('lodConfig' in config) {
+      lodManager = config.lodConfig ? new LODManager(config.lodConfig) : null;
+    }
+    
+    // Handle worker pool configuration
+    let workerPoolEnabled = !!newConfig.workerPoolConfig;
+    
+    if ('workerPoolConfig' in config) {
+      if (config.workerPoolConfig) {
+        // Enabling or updating worker pool
+        try {
+          const newManager = new ChunkManager(newConfig);
+          
+          // Check if worker pool was actually created and initialized
+          const workerPool = (newManager as any).workerPool;
+          if (workerPool && workerPool.initializationError) {
+            throw workerPool.initializationError;
+          }
+          
+          this.state.chunkManager = newManager;
+          workerPoolEnabled = true;
+          console.log('[DemoApp] Worker pool enabled successfully');
+        } catch (error) {
+          console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
+          newConfig.workerPoolConfig = undefined;
+          this.state.chunkManager = new ChunkManager(newConfig);
+          workerPoolEnabled = false;
+          
+          this.emit(AppEvent.ERROR, { 
+            message: 'Worker Pool initialization failed. Using single-threaded generation.', 
+            error,
+            category: 'worker_pool',
+            fallback: true
+          });
+        }
+      } else {
+        // Disabling worker pool
+        this.state.chunkManager = new ChunkManager(newConfig);
+        workerPoolEnabled = false;
+        console.log('[DemoApp] Worker pool disabled');
+      }
+    } else {
+      // Other config changes that require manager recreation
+      this.state.chunkManager = new ChunkManager(newConfig);
+    }
+    
+    // Update incremental generation enabled state
+    const incrementalEnabled = newConfig.incrementalConfig?.enabled || false;
+    
+    this.updateState({ 
+      config: newConfig, 
+      lodManager,
+      workerPoolEnabled,
+      incrementalEnabled
+    });
+    this.emit(AppEvent.CONFIG_CHANGED, newConfig);
+  } finally {
+    this.isUpdatingConfig = false;
+  }
 }
 ```
 
-### Worker Communication Protocol
+### Additional Considerations
 
-The worker pool needs to communicate with Web Workers using the protocol defined in `src/worker.ts`:
+**Worker Loading Fix**: The worker loading failures (undefined errors) suggest a separate issue with Vite worker configuration or worker URL. This should be investigated separately:
+- Check that worker-loader.ts correctly creates workers in both dev and production
+- Verify Vite worker configuration in vite.config.js
+- Ensure worker.ts exports are compatible with the worker loading mechanism
+- Consider adding better error messages when workers fail to load
 
-1. **Worker Initialization**: When WorkerPool is created, each worker should receive an 'init' message with WorldConfig
-2. **Chunk Generation Request**: When submitTask() is called, send 'generateChunk' message with chunkX and chunkY
-3. **Chunk Generation Response**: Worker responds with 'chunkReady' message containing serialized ChunkData
-4. **Deserialization**: Use deserializeChunkData() to convert worker response back to ChunkData with TypedArrays
+**Singleton Pattern (Future Enhancement)**: To prevent multiple WorkerPool instances even if shutdown is missed:
+```typescript
+// In a new file: demo/src/utils/worker-pool-singleton.ts
+let globalWorkerPool: WorkerPool | null = null;
 
-**Note**: The current WorkerPool implementation in `src/world/worker-pool.ts` already handles worker communication, but it may need updates to:
-- Send 'init' message with WorldConfig during worker creation
-- Send 'generateChunk' messages in submitTask()
-- Deserialize chunk data in handleTaskComplete()
+export function getOrCreateWorkerPool(config: WorkerPoolConfig): WorkerPool {
+  if (!globalWorkerPool) {
+    globalWorkerPool = new WorkerPool(config);
+  }
+  return globalWorkerPool;
+}
+
+export function shutdownGlobalWorkerPool(): void {
+  if (globalWorkerPool) {
+    globalWorkerPool.shutdown();
+    globalWorkerPool = null;
+  }
+}
+```
 
 ## Testing Strategy
 
@@ -226,17 +275,19 @@ The testing strategy follows a two-phase approach: first, surface counterexample
 
 **Goal**: Surface counterexamples that demonstrate the bug BEFORE implementing the fix. Confirm or refute the root cause analysis. If we refute, we will need to re-hypothesize.
 
-**Test Plan**: Write tests that configure ChunkManager with workerPoolConfig, call getChunk(), and assert that WorkerPool.submitTask() is invoked. Run these tests on the UNFIXED code to observe failures and understand the root cause.
+**Test Plan**: Write tests that enable workerPoolConfig, call updateEngineConfig() multiple times, and assert that only one WorkerPool instance exists and old instances are shut down. Run these tests on the UNFIXED code to observe failures and understand the root cause.
 
 **Test Cases**:
-1. **Worker Pool Initialization Test**: Create ChunkManager with workerPoolConfig, verify WorkerPool instance exists (will pass on unfixed code)
-2. **Submit Task Invocation Test**: Call getChunk() with workerPoolConfig enabled, spy on submitTask() method, assert it was called (will fail on unfixed code - submitTask never called)
-3. **Synchronous Execution Test**: Call getChunk() with workerPoolConfig enabled, measure execution time, verify it blocks main thread (will fail on unfixed code - shows synchronous execution)
-4. **Worker Pool Stats Test**: Call getChunk() multiple times with workerPoolConfig enabled, check WorkerPool.getStats(), verify queuedTasks or activeWorkers > 0 (will fail on unfixed code - stats show no activity)
+1. **Single WorkerPool Instance Test**: Enable workerPoolConfig, verify only one WorkerPool exists (will fail on unfixed code - multiple instances created)
+2. **Shutdown Called Test**: Enable workerPoolConfig, change config, spy on shutdown() method, assert it was called (will fail on unfixed code - shutdown never called)
+3. **Memory Leak Test**: Enable workerPoolConfig, call updateEngineConfig() 10 times, count WorkerPool instances (will fail on unfixed code - 10+ instances exist)
+4. **Worker Termination Test**: Enable workerPoolConfig, change config, verify old workers are terminated (will fail on unfixed code - workers remain active)
 
 **Expected Counterexamples**:
-- submitTask() is never invoked when getChunk() is called
-- Possible causes: no code path from getChunk() to submitTask(), synchronous API design prevents async delegation
+- Multiple WorkerPool instances exist simultaneously
+- shutdown() is never called on old WorkerPool instances
+- Workers are never terminated, causing memory leak
+- Possible causes: missing shutdown call before ChunkManager recreation, repeated updateEngineConfig() calls
 
 ### Fix Checking
 
@@ -245,11 +296,11 @@ The testing strategy follows a two-phase approach: first, surface counterexample
 **Pseudocode:**
 ```
 FOR ALL input WHERE isBugCondition(input) DO
-  result := getChunk_fixed(input.chunkX, input.chunkY)
-  ASSERT result is Promise<ChunkData>
-  ASSERT WorkerPool.submitTask() was called
-  ASSERT chunk generation occurred on worker thread
-  ASSERT result matches expected ChunkData structure
+  result := updateEngineConfig_fixed(input.config)
+  ASSERT oldWorkerPool.shutdown() was called
+  ASSERT only one WorkerPool instance exists
+  ASSERT old workers are terminated
+  ASSERT memory usage remains stable
 END FOR
 ```
 
@@ -260,7 +311,7 @@ END FOR
 **Pseudocode:**
 ```
 FOR ALL input WHERE NOT isBugCondition(input) DO
-  ASSERT getChunk_original(input) = getChunk_fixed(input)
+  ASSERT updateEngineConfig_original(input) = updateEngineConfig_fixed(input)
 END FOR
 ```
 
@@ -269,34 +320,33 @@ END FOR
 - It catches edge cases that manual unit tests might miss
 - It provides strong guarantees that behavior is unchanged for all non-buggy inputs
 
-**Test Plan**: Observe behavior on UNFIXED code first for synchronous generation (no workerPoolConfig), then write property-based tests capturing that behavior.
+**Test Plan**: Observe behavior on UNFIXED code first for non-workerPoolConfig updates, then write property-based tests capturing that behavior.
 
 **Test Cases**:
-1. **Synchronous Generation Preservation**: Verify that when workerPoolConfig is null, getChunk() returns ChunkData synchronously with identical results
-2. **Cache Behavior Preservation**: Verify that cache hits, misses, and LRU eviction work identically with and without worker pool
-3. **LOD Application Preservation**: Verify that LOD transformations are applied correctly regardless of generation method
-4. **Incremental Generation Preservation**: Verify that getChunkIncremental() continues to work independently of worker pool configuration
+1. **Non-WorkerPool Config Preservation**: Observe that terrain, biome, resource config updates work correctly on unfixed code, then write test to verify this continues after fix
+2. **LOD Config Preservation**: Observe that LOD config updates work correctly on unfixed code, then write test to verify this continues after fix
+3. **Incremental Config Preservation**: Observe that incremental generation config updates work correctly on unfixed code, then write test to verify this continues after fix
 
 ### Unit Tests
 
-- Test getChunk() with workerPoolConfig enabled, verify submitTask() is called
-- Test getChunk() without workerPoolConfig, verify generateChunk() is called synchronously
-- Test worker task creation with correct parameters (chunkX, chunkY, lodLevel, callbacks)
-- Test worker error handling with fallback to synchronous generation
-- Test cache integration after worker-generated chunks
-- Test LOD application to worker-generated chunks
+- Test updateEngineConfig() with workerPoolConfig changes, verify shutdown() is called
+- Test updateEngineConfig() without workerPoolConfig, verify no shutdown() call
+- Test that only one WorkerPool instance exists after multiple config updates
+- Test that old workers are terminated when new WorkerPool is created
+- Test fallback to synchronous generation when worker initialization fails
+- Test that isUpdatingConfig flag prevents recursive calls
 
 ### Property-Based Tests
 
-- Generate random chunk coordinates and verify worker pool delegation when workerPoolConfig is enabled
-- Generate random WorldConfig variations and verify synchronous generation when workerPoolConfig is null
-- Generate random cache states and verify cache behavior is preserved across generation methods
-- Test that worker-generated chunks are deterministic (same seed produces same chunk)
+- Generate random workerPoolConfig variations and verify only one WorkerPool exists
+- Generate random non-workerPoolConfig updates and verify behavior is preserved
+- Generate random sequences of config updates and verify memory remains stable
+- Test that worker-generated chunks are deterministic across WorkerPool recreations
 
 ### Integration Tests
 
-- Test full workflow: initialize ChunkManager with workerPoolConfig, generate multiple chunks, verify parallel execution
-- Test worker pool exhaustion: request more chunks than maxWorkers, verify queueing behavior
-- Test mixed generation: some chunks from cache, some from workers, some synchronous
-- Test worker timeout handling and fallback to synchronous generation
-- Test that worker-generated chunks have seamless boundaries with synchronously-generated chunks
+- Test full workflow: enable worker pool, generate chunks, change config, verify old pool is shut down
+- Test repeated config changes: toggle worker pool on/off multiple times, verify no memory leak
+- Test worker pool exhaustion: request many chunks, change config, verify old tasks are cancelled
+- Test that UI remains responsive during worker pool recreation
+- Test that chunk generation continues to work correctly after WorkerPool recreation

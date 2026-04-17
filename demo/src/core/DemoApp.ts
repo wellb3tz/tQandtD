@@ -54,6 +54,10 @@ export interface AppState {
   showStructures: boolean;
   showChunkBoundaries: boolean;
   showWireframe: boolean;
+  fogOfWarEnabled: boolean; // Show explored chunks as gray planes
+  
+  // Chunk tracking
+  exploredChunks: Set<string>; // Chunks that have been visited
   
   // Performance metrics
   fps: number;
@@ -190,11 +194,13 @@ export class DemoApp {
   private subscribers: Set<StateChangeCallback>;
   private eventListeners: Map<AppEvent, Set<EventCallback>>;
   private initialized: boolean;
+  private isUpdatingConfig: boolean; // Prevent recursive config updates
 
   constructor() {
     this.initialized = false;
     this.subscribers = new Set();
     this.eventListeners = new Map();
+    this.isUpdatingConfig = false;
     
     // Initialize state with defaults
     this.state = {
@@ -217,6 +223,9 @@ export class DemoApp {
       showStructures: false,
       showChunkBoundaries: false,
       showWireframe: false,
+      fogOfWarEnabled: true,
+      
+      exploredChunks: new Set(),
       
       fps: 0,
       avgGenerationTime: 0,
@@ -286,7 +295,7 @@ export class DemoApp {
     // Check if visibility settings changed
     const visibilityKeys = [
       'showTerrain', 'showBiomes', 'showWater', 'showResources',
-      'showStructures', 'showChunkBoundaries', 'showWireframe'
+      'showStructures', 'showChunkBoundaries', 'showWireframe', 'fogOfWarEnabled'
     ];
     
     const visibilityChanged = visibilityKeys.some(key => key in partial);
@@ -310,7 +319,8 @@ export class DemoApp {
         showResources: this.state.showResources,
         showStructures: this.state.showStructures,
         showChunkBoundaries: this.state.showChunkBoundaries,
-        showWireframe: this.state.showWireframe
+        showWireframe: this.state.showWireframe,
+        fogOfWarEnabled: this.state.fogOfWarEnabled
       });
     }
   }
@@ -346,15 +356,20 @@ export class DemoApp {
       // Create new ChunkManager with updated config
       const newManager = new ChunkManager(newConfig);
       
-      // Clear existing chunks
+      // Clear existing chunks and explored chunks
       this.state.loadedChunks.clear();
+      this.state.exploredChunks.clear();
       
       // Update state
       this.updateState({
         chunkManager: newManager,
         config: newConfig,
-        loadedChunks: new Map()
+        loadedChunks: new Map(),
+        exploredChunks: new Set()
       });
+      
+      // Emit event to clear fog of war in viewer
+      this.emit(AppEvent.WORLD_GENERATED, { seed });
       
       // Load initial chunks around origin (3x3 grid)
       await this.loadChunksAround(0, 0, 1);
@@ -362,7 +377,6 @@ export class DemoApp {
       // Update statistics
       this.updateStatistics();
       
-      this.emit(AppEvent.WORLD_GENERATED, { seed });
       console.log(`World generated with seed: ${seed}`);
     } catch (error) {
       console.error('Failed to generate world:', error);
@@ -410,6 +424,9 @@ export class DemoApp {
             // Track with initial stage
             this.state.chunksInProgress.set(key, partial.stage);
             
+            // Mark as explored
+            this.state.exploredChunks.add(key);
+            
             // Emit initial chunk loaded event with partial data
             // The continueIncrementalGeneration() method will handle progressive updates
             this.emit(AppEvent.CHUNK_LOADED, { 
@@ -433,6 +450,7 @@ export class DemoApp {
             }
             
             this.state.loadedChunks.set(key, chunk);
+            this.state.exploredChunks.add(key); // Mark as explored
             chunksLoaded++;
             
             this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
@@ -457,8 +475,8 @@ export class DemoApp {
         chunksInProgress: new Map(this.state.chunksInProgress)
       });
       
-      // Only log if chunks were actually loaded
-      if (chunksLoaded > 0) {
+      // Only log if chunks were actually loaded (and more than 5 chunks)
+      if (chunksLoaded > 5) {
         console.log(`Loaded ${chunksLoaded} chunks in ${(endTime - startTime).toFixed(2)}ms`);
       }
     } catch (error) {
@@ -474,11 +492,11 @@ export class DemoApp {
   unloadDistantChunks(centerX: number, centerY: number, maxDistance: number): void {
     const chunksToUnload: string[] = [];
     
-    // Find chunks beyond max distance
+    // Find chunks beyond max distance using Chebyshev distance (matches square grid loading)
     for (const [key, chunk] of this.state.loadedChunks.entries()) {
-      const dx = chunk.x - centerX;
-      const dy = chunk.y - centerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dx = Math.abs(chunk.x - centerX);
+      const dy = Math.abs(chunk.y - centerY);
+      const distance = Math.max(dx, dy); // Chebyshev distance for square grid
       
       if (distance > maxDistance) {
         chunksToUnload.push(key);
@@ -490,17 +508,28 @@ export class DemoApp {
       const chunk = this.state.loadedChunks.get(key);
       if (chunk) {
         this.state.loadedChunks.delete(key);
-        this.emit(AppEvent.CHUNK_UNLOADED, { chunkX: chunk.x, chunkY: chunk.y });
+        
+        // Emit unload event with fog of war flag
+        this.emit(AppEvent.CHUNK_UNLOADED, { 
+          chunkX: chunk.x, 
+          chunkY: chunk.y,
+          keepFogOfWar: this.state.fogOfWarEnabled 
+        });
       }
     }
     
-    if (chunksToUnload.length > 0) {
+    if (chunksToUnload.length > 5) {
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
         loadedChunkCount: this.state.loadedChunks.size
       });
       
       console.log(`Unloaded ${chunksToUnload.length} distant chunks`);
+    } else if (chunksToUnload.length > 0) {
+      this.updateState({
+        loadedChunks: new Map(this.state.loadedChunks),
+        loadedChunkCount: this.state.loadedChunks.size
+      });
     }
   }
 
@@ -589,79 +618,106 @@ export class DemoApp {
    * Update Worker Pool configuration
    */
   updateEngineConfig(config: Partial<WorldConfig>): void {
-    const newConfig = {
-      ...this.state.config,
-      ...config
-    };
+    // Prevent recursive calls
+    if (this.isUpdatingConfig) {
+      console.warn('[DemoApp] Ignoring recursive updateEngineConfig call');
+      console.trace('[DemoApp] Recursive call stack:');
+      return;
+    }
     
-    // Shut down existing worker pool if we're recreating the ChunkManager
-    const shouldRecreateManager = 
-      'incrementalConfig' in config ||
-      'maxCacheSize' in config ||
-      'workerPoolConfig' in config;
+    // Log ALL calls to updateEngineConfig with stack trace
+    console.log('[DemoApp] updateEngineConfig called with:', Object.keys(config));
+    console.trace('[DemoApp] Call stack:');
     
-    if (shouldRecreateManager) {
-      // Shut down old worker pool to prevent memory leaks and hanging workers
+    this.isUpdatingConfig = true;
+    
+    try {
+      const newConfig = {
+        ...this.state.config,
+        ...config
+      };
+      
+      // Check if this requires recreating the ChunkManager
+      const shouldRecreateManager = 
+        'incrementalConfig' in config ||
+        'maxCacheSize' in config ||
+        'workerPoolConfig' in config;
+      
+      // If not recreating manager, just update config and return
+      if (!shouldRecreateManager) {
+        this.updateState({ config: newConfig });
+        this.emit(AppEvent.CONFIG_CHANGED, newConfig);
+        return;
+      }
+      
+      // Shut down old worker pool to prevent memory leaks
       const oldManager = this.state.chunkManager as any;
       if (oldManager?.workerPool) {
         console.log('[DemoApp] Shutting down old worker pool');
         oldManager.workerPool.shutdown();
       }
-    }
-    
-    if (shouldRecreateManager && !('workerPoolConfig' in config)) {
-      // Simple recreation for non-worker-pool changes
-      this.state.chunkManager = new ChunkManager(newConfig);
-    }
-    
-    // Update LOD manager if LOD config changed
-    let lodManager = this.state.lodManager;
-    if ('lodConfig' in config) {
-      if (config.lodConfig) {
-        lodManager = new LODManager(config.lodConfig);
+      
+      // Update LOD manager if LOD config changed
+      let lodManager = this.state.lodManager;
+      if ('lodConfig' in config) {
+        lodManager = config.lodConfig ? new LODManager(config.lodConfig) : null;
+      }
+      
+      // Handle worker pool configuration
+      let workerPoolEnabled = !!newConfig.workerPoolConfig;
+      
+      if ('workerPoolConfig' in config) {
+        if (config.workerPoolConfig) {
+          // Enabling or updating worker pool
+          try {
+            const newManager = new ChunkManager(newConfig);
+            
+            // Check if worker pool was actually created and initialized
+            const workerPool = (newManager as any).workerPool;
+            if (workerPool && workerPool.initializationError) {
+              throw workerPool.initializationError;
+            }
+            
+            this.state.chunkManager = newManager;
+            workerPoolEnabled = true;
+            console.log('[DemoApp] Worker pool enabled successfully');
+          } catch (error) {
+            console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
+            newConfig.workerPoolConfig = undefined;
+            this.state.chunkManager = new ChunkManager(newConfig);
+            workerPoolEnabled = false;
+            
+            this.emit(AppEvent.ERROR, { 
+              message: 'Worker Pool initialization failed. Using single-threaded generation.', 
+              error,
+              category: 'worker_pool',
+              fallback: true
+            });
+          }
+        } else {
+          // Disabling worker pool
+          this.state.chunkManager = new ChunkManager(newConfig);
+          workerPoolEnabled = false;
+          console.log('[DemoApp] Worker pool disabled');
+        }
       } else {
-        lodManager = null;
-      }
-    }
-    
-    // Update worker pool enabled state with fallback handling
-    let workerPoolEnabled = !!config.workerPoolConfig;
-    if ('workerPoolConfig' in config && config.workerPoolConfig) {
-      try {
-        // Try to initialize worker pool
+        // Other config changes that require manager recreation
         this.state.chunkManager = new ChunkManager(newConfig);
-        workerPoolEnabled = true;
-      } catch (error) {
-        console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
-        // Fall back to single-threaded by removing worker pool config
-        newConfig.workerPoolConfig = undefined;
-        this.state.chunkManager = new ChunkManager(newConfig);
-        workerPoolEnabled = false;
-        
-        // Emit error event for fallback notification
-        this.emit(AppEvent.ERROR, { 
-          message: 'Worker Pool initialization failed. Using single-threaded generation.', 
-          error,
-          category: 'worker_pool',
-          fallback: true
-        });
       }
-    } else if ('workerPoolConfig' in config && !config.workerPoolConfig) {
-      // Worker pool is being disabled - recreate without it
-      this.state.chunkManager = new ChunkManager(newConfig);
-      workerPoolEnabled = false;
+      
+      // Update incremental generation enabled state
+      const incrementalEnabled = newConfig.incrementalConfig?.enabled || false;
+      
+      this.updateState({ 
+        config: newConfig, 
+        lodManager,
+        workerPoolEnabled,
+        incrementalEnabled
+      });
+      this.emit(AppEvent.CONFIG_CHANGED, newConfig);
+    } finally {
+      this.isUpdatingConfig = false;
     }
-    
-    // Update incremental generation enabled state
-    const incrementalEnabled = config.incrementalConfig?.enabled || false;
-    
-    this.updateState({ 
-      config: newConfig, 
-      lodManager,
-      workerPoolEnabled,
-      incrementalEnabled
-    });
-    this.emit(AppEvent.CONFIG_CHANGED, newConfig);
   }
 
   /**
