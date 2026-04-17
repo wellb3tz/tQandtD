@@ -1521,6 +1521,33 @@ export class WorldViewer {
   }
 
   /**
+   * Get render statistics (vertex count, draw calls)
+   */
+  getRenderStats(): { vertexCount: number; drawCalls: number } {
+    let vertexCount = 0;
+    let drawCalls = 0;
+    
+    // Count vertices and draw calls from all chunk meshes
+    this.scene.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.geometry) {
+        const geometry = object.geometry;
+        
+        // Count vertices
+        if (geometry.attributes.position) {
+          vertexCount += geometry.attributes.position.count;
+        }
+        
+        // Each mesh is a draw call
+        if (object.visible) {
+          drawCalls++;
+        }
+      }
+    });
+    
+    return { vertexCount, drawCalls };
+  }
+
+  /**
    * Clean up resources
    */
   dispose(): void {

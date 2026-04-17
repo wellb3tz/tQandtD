@@ -102,7 +102,6 @@ export class ChunkManager {
   private riverGenerator: RiverNetworkGenerator;
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
-  // @ts-expect-error - WorkerPool is initialized but not yet integrated into chunk generation pipeline
   private workerPool: WorkerPool | null;
   private lodManager: LODManager | null;
   private incrementalGenerator: IncrementalGenerator | null;
@@ -111,6 +110,8 @@ export class ChunkManager {
   private maxCacheSize: number;
   private accessCounter: number;
   private modifications: Map<string, ChunkModification>;
+  private cacheHits: number;
+  private cacheMisses: number;
 
   /**
    * Creates a new ChunkManager with the given configuration.
@@ -189,6 +190,8 @@ export class ChunkManager {
     this.maxCacheSize = config.maxCacheSize ?? 100;
     this.accessCounter = 0;
     this.modifications = new Map();
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
   }
 
   /**
@@ -205,8 +208,12 @@ export class ChunkManager {
     const cached = this.cache.get(key);
     if (cached) {
       cached.lastAccessed = ++this.accessCounter;
+      this.cacheHits++;
       return cached.chunk;
     }
+
+    // Cache miss
+    this.cacheMisses++;
 
     // Generate new chunk at full resolution
     const chunk = this.generateChunk(chunkX, chunkY);
@@ -385,10 +392,14 @@ export class ChunkManager {
    * Gets cache statistics.
    * @returns Object with cache statistics
    */
-  getCacheStats(): { size: number; maxSize: number; hitRate?: number } {
+  getCacheStats(): { size: number; maxSize: number; hitRate: number } {
+    const totalRequests = this.cacheHits + this.cacheMisses;
+    const hitRate = totalRequests > 0 ? this.cacheHits / totalRequests : 0;
+    
     return {
       size: this.cache.size,
       maxSize: this.maxCacheSize,
+      hitRate
     };
   }
 

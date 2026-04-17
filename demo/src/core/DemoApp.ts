@@ -139,11 +139,11 @@ const DEFAULT_CONFIG: WorldConfig = {
   },
   resourceConfig: {
     types: [
-      { type: 0, rarity: 0.5, biomes: [] }, // Iron
-      { type: 1, rarity: 0.5, biomes: [] }, // Gold
-      { type: 2, rarity: 0.5, biomes: [] }, // Coal
-      { type: 3, rarity: 0.5, biomes: [] }, // Stone
-      { type: 4, rarity: 0.5, biomes: [] }  // Wood
+      { type: 0, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 5 }, // Iron
+      { type: 1, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 3 }, // Gold
+      { type: 2, rarity: 0.5, biomes: [], minAmount: 2, maxAmount: 6 }, // Coal
+      { type: 3, rarity: 0.5, biomes: [], minAmount: 3, maxAmount: 8 }, // Stone
+      { type: 4, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 4 }  // Wood
     ],
     clusterScale: 20,
     densityThreshold: 0.6
@@ -157,12 +157,24 @@ const DEFAULT_CONFIG: WorldConfig = {
     minDistance: 30,
     maxAttempts: 30
   },
-  riverConfig: {
+  riverNetworkConfig: {
     sourceElevation: 0.7,
     minFlowLength: 10,
-    flowWidth: 2
+    flowWidth: 2,
+    enableTributaries: true,
+    maxTributaryOrder: 2,
+    tributaryProbability: 0.3,
+    enableLakes: true,
+    lakeDepressionThreshold: 0.05,
+    maxLakeSize: 100,
+    enableDeltas: true,
+    deltaBranchCount: 3,
+    deltaSpreadAngle: Math.PI / 3,
+    minFlow: 1.0,
+    maxFlow: 100.0,
+    widthScale: 0.5
   },
-  maxCacheSize: 100,
+  maxCacheSize: 1000,
   enablePerformanceMetrics: true
 };
 
@@ -201,8 +213,8 @@ export class DemoApp {
       showTerrain: true,
       showBiomes: true,
       showWater: true,
-      showResources: true,
-      showStructures: true,
+      showResources: false,
+      showStructures: false,
       showChunkBoundaries: false,
       showWireframe: false,
       
@@ -601,8 +613,14 @@ export class DemoApp {
       ...config
     };
     
-    // If incremental config changed, recreate ChunkManager
-    if ('incrementalConfig' in config) {
+    // Recreate ChunkManager if certain configs changed
+    const shouldRecreateManager = 
+      'incrementalConfig' in config ||
+      'maxCacheSize' in config ||
+      'workerPoolConfig' in config;
+    
+    if (shouldRecreateManager && !('workerPoolConfig' in config)) {
+      // Simple recreation for non-worker-pool changes
       this.state.chunkManager = new ChunkManager(newConfig);
     }
     
@@ -798,7 +816,7 @@ export class DemoApp {
     let lowCount = 0;
 
     // Calculate LOD level for each loaded chunk
-    for (const [key, chunk] of this.state.loadedChunks.entries()) {
+    for (const [, chunk] of this.state.loadedChunks.entries()) {
       const level = this.state.lodManager.getLODLevel(
         chunk.x,
         chunk.y,

@@ -104,14 +104,14 @@ export class IncrementalGenerator {
 
     // Loop through stages while we have time budget
     let shouldContinue = true;
-    while (shouldContinue && partial.stage !== GenerationStage.COMPLETE) {
+    while (shouldContinue && (partial.stage as number) !== GenerationStage.COMPLETE) {
       // Check if current stage is already complete
       if (partial.completedStages.has(partial.stage)) {
         // Stage already complete, advance to next stage immediately
         partial.stage++;
         
         // If all stages complete, return true
-        if (partial.stage === GenerationStage.COMPLETE) {
+        if ((partial.stage as number) === GenerationStage.COMPLETE) {
           return true;
         }
         
@@ -125,7 +125,7 @@ export class IncrementalGenerator {
     }
 
     // Return true if complete, false if yielding
-    return partial.stage === GenerationStage.COMPLETE;
+    return (partial.stage as number) === GenerationStage.COMPLETE;
   }
 
   /**

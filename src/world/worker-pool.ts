@@ -1,25 +1,5 @@
 import type { ChunkData } from './chunk.js';
 
-// Type declarations for Web Worker API (not included in ES2020 lib)
-declare global {
-  interface Transferable {}
-  
-  interface Worker {
-    postMessage(message: any, transfer?: Transferable[]): void;
-    terminate(): void;
-    onmessage: ((event: MessageEvent) => void) | null;
-    onerror: ((event: ErrorEvent) => void) | null;
-  }
-  
-  interface MessageEvent {
-    data: any;
-  }
-  
-  interface ErrorEvent {
-    message: string;
-  }
-}
-
 /**
  * Worker pool configuration
  */

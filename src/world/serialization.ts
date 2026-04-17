@@ -350,6 +350,7 @@ export class WorldSerializer {
       return btoa(binaryString);
     } else {
       // Node.js environment
+      // @ts-ignore - Buffer is available in Node.js
       return Buffer.from(array).toString('base64');
     }
   }
@@ -362,7 +363,7 @@ export class WorldSerializer {
    */
   private compressUint8Array(data: Uint8Array): Uint8Array {
     // Dynamic import of pako for compression
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // @ts-ignore - Dynamic require for Node.js compatibility
     const pako = require('pako');
     return pako.deflate(data);
   }
@@ -785,6 +786,7 @@ export class WorldSerializer {
       binaryString = atob(base64);
     } else {
       // Node.js environment
+      // @ts-ignore - Buffer is available in Node.js
       binaryString = Buffer.from(base64, 'base64').toString('binary');
     }
 
@@ -805,7 +807,7 @@ export class WorldSerializer {
    */
   private decompressUint8Array(data: Uint8Array): Uint8Array {
     // Dynamic import of pako for decompression
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // @ts-ignore - Dynamic require for Node.js compatibility
     const pako = require('pako');
     return pako.inflate(data);
   }

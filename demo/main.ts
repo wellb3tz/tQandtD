@@ -11,6 +11,7 @@ import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
 import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { HelpModal } from './src/ui/HelpModal';
+import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
 
 console.log('Procedural World Engine Demo - Initializing...');
@@ -22,6 +23,7 @@ let worldViewer: WorldViewer | null = null;
 let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let helpModal: HelpModal | null = null;
+let performanceMonitor: PerformanceMonitor | null = null;
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
@@ -62,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const helpBtn = document.getElementById('help-btn');
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
-  const performanceMonitor = document.getElementById('performance-monitor');
+  const performanceMonitorElement = document.getElementById('performance-monitor');
   const appHeader = document.querySelector('.app-header') as HTMLElement;
   const worldManagerPanel = document.getElementById('world-manager');
   
@@ -106,8 +108,36 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
       let lastChunkLoadCheck = 0;
+      let lastPerformanceUpdate = 0;
       const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
       const chunkLoadCheckInterval = 500; // Check for new chunks every 500ms
+      const performanceUpdateInterval = 500; // Update performance metrics every 500ms
+      
+      // FPS tracking
+      let frameCount = 0;
+      let lastFPSUpdate = performance.now();
+      let currentFPS = 60;
+      
+      // Render loop for FPS tracking and performance updates
+      const renderLoop = () => {
+        frameCount++;
+        const now = performance.now();
+        
+        // Calculate FPS every second
+        if (now - lastFPSUpdate >= 1000) {
+          currentFPS = Math.round((frameCount * 1000) / (now - lastFPSUpdate));
+          frameCount = 0;
+          lastFPSUpdate = now;
+          
+          // Update FPS in app state
+          if (app) {
+            app.updateState({ fps: currentFPS });
+          }
+        }
+        
+        requestAnimationFrame(renderLoop);
+      };
+      renderLoop();
       
       setInterval(() => {
         if (worldViewer && app) {
@@ -139,6 +169,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             lastChunkLoadCheck = now;
           }
           
+          // Update performance metrics
+          if (now - lastPerformanceUpdate >= performanceUpdateInterval) {
+            // Get render stats from WorldViewer
+            const renderStats = worldViewer.getRenderStats();
+            
+            // Calculate memory usage (approximate)
+            const memoryUsage = calculateMemoryUsage(app.getState().loadedChunks.size);
+            
+            // Update performance monitor
+            if (performanceMonitor) {
+              performanceMonitor.updateMemoryUsage(memoryUsage);
+              performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
+            }
+            
+            lastPerformanceUpdate = now;
+          }
+          
           // Update camera position display (requirement 14.8)
           if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
             cameraXDisplay.textContent = cameraPos.x.toFixed(2);
@@ -168,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controlPanelContainer = document.getElementById('control-panel');
     if (controlPanelContainer) {
       controlPanelInstance = new ControlPanel();
-      controlPanelInstance.initialize(controlPanelContainer, app, terrainEditor);
+      controlPanelInstance.initialize(controlPanelContainer, app, terrainEditor || undefined);
       console.log('ControlPanel initialized successfully');
     }
     
@@ -188,32 +235,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     helpModal.initialize();
     console.log('HelpModal initialized successfully');
     
-    // Subscribe to state changes
+    // Initialize PerformanceMonitor
+    const perfMonitorContainer = document.getElementById('performance-monitor');
+    if (perfMonitorContainer) {
+      performanceMonitor = new PerformanceMonitor();
+      performanceMonitor.initialize(perfMonitorContainer);
+      console.log('PerformanceMonitor initialized successfully');
+    }
+    
+    // Subscribe to state changes and update performance monitor
     app.subscribeToState((state) => {
-      updateMetric('chunks-value', state.loadedChunkCount.toString());
-      updateMetric('gen-time-value', `${state.avgGenerationTime.toFixed(2)} ms`);
-      updateMetric('cache-value', `${(state.cacheHitRate * 100).toFixed(1)}%`);
-      
-      // Update LOD statistics
-      updateMetric('lod-high-value', state.lodHighCount.toString());
-      updateMetric('lod-medium-value', state.lodMediumCount.toString());
-      updateMetric('lod-low-value', state.lodLowCount.toString());
-      
-      // Update worker pool statistics
-      updateMetric('active-workers-value', state.activeWorkers.toString());
-      updateMetric('queued-tasks-value', state.queuedTasks.toString());
-      updateMetric('completed-tasks-value', state.completedTasks.toString());
-      updateMetric('avg-worker-time-value', `${state.avgWorkerTime.toFixed(2)} ms`);
-      
-      // Update incremental generation statistics
-      updateMetric('chunks-in-progress-value', state.chunksInProgress.size.toString());
-      
-      // Display stage names for chunks in progress
-      const stageNames = ['TERRAIN', 'BIOMES', 'RIVERS', 'RESOURCES', 'STRUCTURES', 'COMPLETE'];
-      const stageList = Array.from(state.chunksInProgress.entries())
-        .map(([key, stage]) => `${key}: ${stageNames[stage] || 'UNKNOWN'}`)
-        .join(', ');
-      updateMetric('gen-stage-value', stageList || 'None');
+      if (performanceMonitor) {
+        // Update generation time with breakdown
+        const breakdown = {
+          terrain: state.avgGenerationTime * 0.4, // Approximate breakdown
+          biomes: state.avgGenerationTime * 0.2,
+          resources: state.avgGenerationTime * 0.2,
+          structures: state.avgGenerationTime * 0.2,
+          total: state.avgGenerationTime
+        };
+        performanceMonitor.updateGenerationTime(state.avgGenerationTime, breakdown);
+        
+        // Update cache statistics
+        const chunkManager = state.chunkManager;
+        if (chunkManager) {
+          const cacheStats = chunkManager.getCacheStats();
+          performanceMonitor.updateCacheStats(cacheStats.hitRate, cacheStats.size, cacheStats.maxSize);
+        }
+        
+        // Update loaded chunks count
+        performanceMonitor.updateLoadedChunks(state.loadedChunkCount);
+        
+        // Update LOD statistics
+        performanceMonitor.updateLODStats({
+          highCount: state.lodHighCount,
+          mediumCount: state.lodMediumCount,
+          lowCount: state.lodLowCount
+        });
+        
+        // Update worker pool statistics
+        performanceMonitor.updateWorkerStats({
+          activeWorkers: state.activeWorkers,
+          queuedTasks: state.queuedTasks,
+          completedTasks: state.completedTasks,
+          avgWorkerTime: state.avgWorkerTime
+        });
+        
+        // Update incremental generation statistics
+        performanceMonitor.updateIncrementalStats({
+          chunksInProgress: state.chunksInProgress,
+          currentFPS: state.fps
+        });
+      }
     });
     
     // Set up terrain editing mouse events
@@ -341,8 +414,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const currentConfig = worldViewer.getWaterConfig();
         const updatedConfig = {
           ...currentConfig,
-          [waterType]: {
-            ...currentConfig[waterType],
+          [waterType as keyof typeof currentConfig]: {
+            ...(currentConfig[waterType as keyof typeof currentConfig] as any),
             [property]: value
           }
         };
@@ -350,10 +423,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Update all visible chunks to apply new water configuration
         const state = app?.getState();
-        if (state) {
+        if (state && worldViewer) {
           state.loadedChunks.forEach((chunkData, key) => {
             const [chunkX, chunkY] = key.split(',').map(Number);
-            worldViewer.updateChunk(chunkX, chunkY, chunkData);
+            worldViewer!.updateChunk(chunkX, chunkY, chunkData);
           });
         }
       }
@@ -380,7 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Toggle performance monitor
   toggleMonitorBtn?.addEventListener('click', () => {
-    performanceMonitor?.classList.toggle('hidden');
+    performanceMonitorElement?.classList.toggle('hidden');
   });
   
   // Help button (requirement 20.1, 20.2)
@@ -400,7 +473,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Hide all UI elements
       appHeader?.classList.add('hidden');
       controlPanel?.classList.add('hidden');
-      performanceMonitor?.classList.add('hidden');
+      performanceMonitorElement?.classList.add('hidden');
       worldManagerPanel?.classList.add('hidden');
       document.querySelector('.camera-controls-overlay')?.classList.add('hidden');
       
@@ -410,14 +483,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Resize viewer to fill screen
       if (worldViewer) {
         setTimeout(() => {
-          worldViewer.resize(window.innerWidth, window.innerHeight);
+          worldViewer!.resize(window.innerWidth, window.innerHeight);
         }, 100);
       }
     } else {
       // Show UI elements
       appHeader?.classList.remove('hidden');
       controlPanel?.classList.remove('hidden');
-      performanceMonitor?.classList.remove('hidden');
+      performanceMonitorElement?.classList.remove('hidden');
       worldManagerPanel?.classList.remove('hidden');
       document.querySelector('.camera-controls-overlay')?.classList.remove('hidden');
       
@@ -429,7 +502,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const viewerContainer = document.getElementById('viewer');
         if (viewerContainer) {
           setTimeout(() => {
-            worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+            worldViewer!.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
           }, 100);
         }
       }
@@ -453,11 +526,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (width < narrowScreenThreshold) {
       // Auto-collapse on narrow screens
       controlPanel?.classList.add('collapsed');
-      performanceMonitor?.classList.add('hidden');
+      performanceMonitorElement?.classList.add('hidden');
     } else if (width >= 1200) {
       // Auto-expand on wide screens
       controlPanel?.classList.remove('collapsed');
-      performanceMonitor?.classList.remove('hidden');
+      performanceMonitorElement?.classList.remove('hidden');
     }
     // For medium screens (768-1200), maintain current state
   };
@@ -609,32 +682,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   
-  // Initialize placeholder values in performance monitor
-  updateMetric('fps-value', '60');
-  updateMetric('vertices-value', '0');
-  updateMetric('gen-time-value', '0 ms');
-  updateMetric('chunks-value', '0');
-  updateMetric('memory-value', '0 MB');
-  updateMetric('cache-value', '0%');
-  updateMetric('lod-high-value', '0');
-  updateMetric('lod-medium-value', '0');
-  updateMetric('lod-low-value', '0');
-  updateMetric('active-workers-value', '0');
-  updateMetric('queued-tasks-value', '0');
-  updateMetric('completed-tasks-value', '0');
-  updateMetric('avg-worker-time-value', '0 ms');
-  updateMetric('chunks-in-progress-value', '0');
-  updateMetric('gen-stage-value', 'None');
-  
   console.log('Demo application initialized successfully');
 });
 
 /**
- * Update a metric display value
+ * Calculate approximate memory usage based on loaded chunks
+ * Each chunk contains heightmap, biomeMap, resources, structures
  */
-function updateMetric(elementId: string, value: string): void {
-  const element = document.getElementById(elementId);
-  if (element) {
-    element.textContent = value;
-  }
+function calculateMemoryUsage(chunkCount: number): number {
+  // Approximate memory per chunk:
+  // - heightmap: (33 * 33) * 4 bytes = 4,356 bytes
+  // - biomeMap: (32 * 32) * 1 byte = 1,024 bytes
+  // - resources: ~50 resources * 20 bytes = 1,000 bytes
+  // - structures: ~10 structures * 20 bytes = 200 bytes
+  // Total per chunk: ~6,580 bytes (~6.4 KB)
+  const bytesPerChunk = 6580;
+  return chunkCount * bytesPerChunk;
 }

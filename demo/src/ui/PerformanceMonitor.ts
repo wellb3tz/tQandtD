@@ -42,7 +42,7 @@ export interface WorkerStats {
  * Incremental generation statistics
  */
 export interface IncrementalStats {
-  chunksInProgress: Map<string, string>;
+  chunksInProgress: Map<string, number>;
   currentFPS: number;
 }
 

@@ -471,6 +471,23 @@ export class ControlPanel {
     });
     advancedContainer.appendChild(viewDistanceControl);
 
+    // Cache Size slider
+    const cacheSizeControl = this.createSliderControl({
+      id: 'maxCacheSize',
+      label: 'Cache Size (chunks)',
+      min: 100,
+      max: 2000,
+      step: 100,
+      defaultValue: 1000,
+      tooltip: 'Maximum number of chunks to keep in memory. Higher values improve performance when revisiting areas.'
+    }, (value) => {
+      if (this.app) {
+        const newConfig = { ...this.app.getState().config, maxCacheSize: value };
+        this.app.updateEngineConfig(newConfig);
+      }
+    });
+    advancedContainer.appendChild(cacheSizeControl);
+
     // LOD system
     const lodCheckbox = this.createCheckboxControl({
       id: 'enableLOD',
