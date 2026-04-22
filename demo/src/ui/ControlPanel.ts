@@ -250,7 +250,7 @@ export class ControlPanel {
     const transitionsCheckbox = this.createCheckboxControl({
       id: 'enableTransitions',
       label: 'Enable Transitions',
-      defaultValue: false,
+      defaultValue: true,
       tooltip: 'Enable smooth biome transitions'
     }, (checked) => {
       this.updateBiomeConfig('enableTransitions', checked);
@@ -273,7 +273,7 @@ export class ControlPanel {
     }, (value) => {
       this.updateBiomeConfig('transitionWidth', value);
     });
-    transitionWidthControl.style.display = 'none';
+    transitionWidthControl.style.display = 'block';
     transitionWidthControl.id = 'transitionWidth-group';
     biomeContainer.appendChild(transitionWidthControl);
 
@@ -1135,7 +1135,7 @@ export class ControlPanel {
       // Update enhancedBiomeConfig
       const currentEnhancedConfig = this.currentConfig.enhancedBiomeConfig || {
         ...this.currentConfig.biomeConfig,
-        enableTransitions: false,
+        enableTransitions: true,
         transitionWidth: 10,
         enableMicroBiomes: false,
         microBiomeFrequency: 0.1,
@@ -1495,15 +1495,37 @@ export class ControlPanel {
   }
 
   /**
-   * Update checkbox value
+   * Update checkbox value without triggering engine config updates.
+   * Also updates dependent UI elements (e.g. conditional sliders).
    */
   private updateCheckboxValue(id: string, checked: boolean): void {
     const checkbox = document.getElementById(id) as HTMLInputElement;
-    if (checkbox) {
-      checkbox.checked = checked;
-      
-      // Trigger change event to update dependent controls
-      checkbox.dispatchEvent(new Event('change'));
+    if (!checkbox) return;
+
+    checkbox.checked = checked;
+
+    // Update dependent conditional controls without going through updateBiomeConfig
+    switch (id) {
+      case 'enableTransitions': {
+        const ctrl = document.getElementById('transitionWidth-group');
+        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        break;
+      }
+      case 'enableMicroBiomes': {
+        const ctrl = document.getElementById('microBiomeFrequency-group');
+        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        break;
+      }
+      case 'enableElevationBands': {
+        const ctrl = document.getElementById('snowLineElevation-group');
+        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        break;
+      }
+      case 'enable3D': {
+        const ctrl = document.getElementById('zScale-group');
+        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        break;
+      }
     }
   }
 

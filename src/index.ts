@@ -77,6 +77,15 @@ export {
   ElevationBand,
 } from './world/enhanced-biome';
 export {
+  ClimateSystem,
+  type ClimateConfig,
+  DEFAULT_CLIMATE_CONFIG,
+} from './world/climate';
+export {
+  BiomeCompatibilityMatrix,
+  type SerializedCompatibilityMatrix,
+} from './world/biome-compatibility';
+export {
   type ChunkData,
   type Resource,
   type Structure,

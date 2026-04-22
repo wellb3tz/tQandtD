@@ -1,6 +1,8 @@
 import { BiomeConfig, BiomeSystem } from './biome';
 import { BiomeType } from './chunk';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
+import { ClimateSystem, ClimateConfig, DEFAULT_CLIMATE_CONFIG } from './climate';
+import { BiomeCompatibilityMatrix } from './biome-compatibility';
 
 /**
  * Enhanced biome configuration extending base BiomeConfig
@@ -10,20 +12,55 @@ export interface EnhancedBiomeConfig extends BiomeConfig {
   enableTransitions: boolean;
   /** Transition zone width in world units (default: 10) */
   transitionWidth: number;
-  
+
   /** Enable micro-biomes (default: true) */
   enableMicroBiomes: boolean;
   /** Micro-biome frequency (0-1, default: 0.1) */
   microBiomeFrequency: number;
   /** Maximum micro-biome size in tiles (default: 20) */
   microBiomeMaxSize: number;
-  
+
   /** Enable elevation bands in mountains (default: true) */
   enableElevationBands: boolean;
   /** Snow line elevation threshold (default: 0.8) */
   snowLineElevation: number;
   /** Tree line elevation threshold (default: 0.75) */
   treeLineElevation: number;
+
+  // -------------------------------------------------------------------------
+  // New climate / compatibility fields (all optional, default false / undefined)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Activates ClimateSystem for temperature and moisture computation.
+   * When false (default), the existing BiomeSystem noise-only path is used,
+   * producing bit-identical results to the pre-feature implementation.
+   */
+  enableClimateSystem?: boolean;
+
+  /**
+   * Activates biome compatibility enforcement via BiomeCompatibilityMatrix.
+   * When false (default), blend weights are identical to the current behaviour.
+   */
+  enableCompatibilityMatrix?: boolean;
+
+  /**
+   * All ClimateSystem parameters.
+   * When enableClimateSystem is true and this is absent, DEFAULT_CLIMATE_CONFIG is used.
+   */
+  climateConfig?: ClimateConfig;
+
+  /**
+   * Minimum depression depth for OASIS / POND micro-biome placement (default: 0.05).
+   * A position is considered a depression when (height - neighbourAvg) < -depressionDepthThreshold.
+   */
+  depressionDepthThreshold?: number;
+
+  /**
+   * Maximum terrain gradient for CLEARING / GROVE micro-biome placement (default: 0.03).
+   * A position is considered flat when gradient < clearingGradientThreshold.
+   */
+  clearingGradientThreshold?: number;
 }
 
 /**
@@ -64,49 +101,96 @@ export interface EnhancedBiomeData {
 /**
  * Enhanced biome system with transition zones, micro-biomes, and elevation bands.
  * Extends the base BiomeSystem with additional features for more realistic biome generation.
+ *
+ * New opt-in features (all disabled by default for backward compatibility):
+ * - ClimateSystem: geographically plausible temperature/moisture
+ * - BiomeCompatibilityMatrix: prevents impossible biome neighbours
+ * - Terrain-aware micro-biome placement
  */
 export class EnhancedBiomeSystem extends BiomeSystem {
   private microBiomeNoise: NoiseEngine;
   private enhancedConfig: EnhancedBiomeConfig;
 
+  /** ClimateSystem instance, or null when enableClimateSystem is false. */
+  private climateSystem: ClimateSystem | null;
+  /** BiomeCompatibilityMatrix instance, or null when enableCompatibilityMatrix is false. */
+  private compatibilityMatrix: BiomeCompatibilityMatrix | null;
+
+  /** Cached noise config for micro-biome sampling — avoids per-tile object allocation. */
+  private readonly microBiomeNoiseConfig: NoiseConfig = {
+    octaves: 3,
+    persistence: 0.5,
+    lacunarity: 2.0,
+    scale: 50,
+  };
+
   /**
    * Creates a new EnhancedBiomeSystem with the given seed and configuration.
-   * @param seed - Numeric seed for deterministic biome generation
-   * @param config - Enhanced biome configuration parameters
+   * @param seed   - Numeric seed for deterministic biome generation.
+   * @param config - Enhanced biome configuration parameters.
    */
   constructor(seed: number, config: EnhancedBiomeConfig) {
     super(seed, config);
     // Use a different seed for micro-biome noise to avoid correlation
     this.microBiomeNoise = new NoiseEngine(seed + 2000);
     this.enhancedConfig = config;
+
+    // Instantiate ClimateSystem when opted in
+    this.climateSystem = config.enableClimateSystem === true
+      ? new ClimateSystem(seed, config.climateConfig ?? DEFAULT_CLIMATE_CONFIG)
+      : null;
+
+    // Instantiate BiomeCompatibilityMatrix when opted in
+    this.compatibilityMatrix = config.enableCompatibilityMatrix === true
+      ? new BiomeCompatibilityMatrix()
+      : null;
   }
 
   /**
    * Gets enhanced biome data at a world position.
    * Includes transition zones, micro-biomes, and elevation bands.
-   * @param x - World X coordinate
-   * @param y - World Y coordinate
-   * @param getHeight - Callback function to get height at any world position
-   * @returns Enhanced biome data with transitions and micro-biomes
+   * @param x         - World X coordinate.
+   * @param y         - World Y coordinate.
+   * @param getHeight - Callback function to get height at any world position.
+   * @returns Enhanced biome data with transitions and micro-biomes.
    */
-  getEnhancedBiome(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): EnhancedBiomeData {
+  getEnhancedBiome(
+    x: number,
+    y: number,
+    getHeight: (worldX: number, worldY: number) => number,
+  ): EnhancedBiomeData {
     // Sample height at center position for primary biome classification
     const height = getHeight(x, y);
-    
-    // Get base biome and weights
-    const biome = this.getBiome(x, y, height);
-    const weights = this.enhancedConfig.enableTransitions 
+
+    // Compute temperature and moisture — use ClimateSystem when enabled,
+    // otherwise fall through to the parent BiomeSystem noise-only path via getBiome.
+    let biome: BiomeType;
+    if (this.climateSystem !== null) {
+      const temperature = this.climateSystem.getTemperature(x, y, height);
+      const moisture    = this.climateSystem.getMoisture(x, y, height, getHeight);
+      biome = this.classifyBiomeFromClimate(height, temperature, moisture);
+    } else {
+      biome = this.getBiome(x, y, height);
+    }
+
+    // Get blend weights
+    const weights = this.enhancedConfig.enableTransitions
       ? this.getBiomeWeights(x, y, getHeight)
       : new Map([[biome, 1.0]]);
+
+    // Apply compatibility matrix weight correction when enabled
+    if (this.compatibilityMatrix !== null) {
+      this.applyCompatibilityCorrection(weights);
+    }
 
     // Calculate transition factor
     const transitionFactor = this.enhancedConfig.enableTransitions
       ? this.calculateTransitionFactor(x, y, getHeight)
       : 0;
 
-    // Check for micro-biome
+    // Check for micro-biome (terrain-aware when getHeight is available)
     const microBiome = this.enhancedConfig.enableMicroBiomes
-      ? this.getMicroBiome(x, y, biome)
+      ? this.getMicroBiome(x, y, biome, getHeight, height)
       : undefined;
 
     // Determine elevation band for mountains
@@ -123,80 +207,177 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
   /**
-   * Determines if a micro-biome should exist at this location.
-   * @param x - World X coordinate
-   * @param y - World Y coordinate
-   * @param parentBiome - The parent biome type
-   * @returns Micro-biome type or undefined
+   * Classifies a biome from pre-computed climate values.
+   * Mirrors the logic in BiomeSystem.getBiome but accepts explicit temperature/moisture.
    */
-  private getMicroBiome(x: number, y: number, parentBiome: BiomeType): MicroBiomeType | undefined {
-    // Sample micro-biome noise
-    const noiseConfig: NoiseConfig = {
-      octaves: 3,
-      persistence: 0.5,
-      lacunarity: 2.0,
-      scale: 50, // Smaller scale for localized features
-    };
-    
-    const noiseValue = this.microBiomeNoise.fbm(x, y, noiseConfig);
-    
-    // Check if noise exceeds frequency threshold
-    const threshold = 1.0 - this.enhancedConfig.microBiomeFrequency * 2; // Convert 0-1 to -1 to 1 range
-    if (noiseValue < threshold) {
-      return undefined;
+  private classifyBiomeFromClimate(height: number, temperature: number, moisture: number): BiomeType {
+    if (height < 0.3) return BiomeType.OCEAN;
+    if (height < 0.35) return BiomeType.BEACH;
+    if (height > 0.7) return BiomeType.MOUNTAIN;
+
+    if (temperature < -0.3) {
+      return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
+    } else if (temperature > 0.3) {
+      return moisture < -0.2 ? BiomeType.DESERT : BiomeType.PLAINS;
+    } else {
+      return moisture > 0.2 ? BiomeType.FOREST : BiomeType.PLAINS;
+    }
+  }
+
+  /**
+   * Applies BiomeCompatibilityMatrix weight correction in-place.
+   * For each non-primary biome that is incompatible with the primary biome,
+   * its weight is zeroed and transferred to the intermediate biome.
+   */
+  private applyCompatibilityCorrection(weights: Map<BiomeType, number>): void {
+    if (weights.size === 0) return;
+
+    // Find primary biome (highest weight)
+    let primaryBiome: BiomeType = BiomeType.PLAINS;
+    let primaryWeight = -1;
+    for (const [biome, weight] of weights) {
+      if (weight > primaryWeight) {
+        primaryWeight = weight;
+        primaryBiome = biome;
+      }
     }
 
-    // Calculate micro-biome size by checking the extent of the high-noise region
-    // Sample in multiple directions to estimate the size
+    const matrix = this.compatibilityMatrix!;
+
+    // Two-pass: first accumulate onto intermediates, then zero incompatible biomes.
+    // This avoids allocating a temporary array.
+    for (const [biome, weight] of weights) {
+      if (biome === primaryBiome || weight === 0) continue;
+      if (!matrix.isCompatible(primaryBiome, biome)) {
+        const intermediate = matrix.getIntermediate(primaryBiome, biome);
+        if (intermediate !== undefined) {
+          weights.set(intermediate, (weights.get(intermediate) ?? 0) + weight);
+        }
+      }
+    }
+    // Zero out incompatible biomes in a second pass
+    for (const [biome] of weights) {
+      if (biome === primaryBiome) continue;
+      if (!matrix.isCompatible(primaryBiome, biome)) {
+        weights.set(biome, 0);
+      }
+    }
+  }
+
+  /**
+   * Determines if a micro-biome should exist at this location.
+   * Applies terrain-aware placement conditions before the noise threshold check.
+   *
+   * @param x          - World X coordinate.
+   * @param y          - World Y coordinate.
+   * @param parentBiome - The parent biome type.
+   * @param getHeight  - Callback to sample terrain height.
+   * @param height     - Pre-sampled height at (x, y).
+   * @returns Micro-biome type or undefined.
+   */
+  private getMicroBiome(
+    x: number,
+    y: number,
+    parentBiome: BiomeType,
+    getHeight: (worldX: number, worldY: number) => number,
+    height: number,
+  ): MicroBiomeType | undefined {
+    const depressionThreshold = this.enhancedConfig.depressionDepthThreshold ?? 0.05;
+    const gradientThreshold   = this.enhancedConfig.clearingGradientThreshold ?? 0.03;
+
+    // Terrain-aware pre-checks per micro-biome type
+    switch (parentBiome) {
+      case BiomeType.DESERT:
+      case BiomeType.PLAINS: {
+        // OASIS / POND: only in terrain depressions
+        const neighbourAvg = (
+          getHeight(x + 1, y) +
+          getHeight(x - 1, y) +
+          getHeight(x, y + 1) +
+          getHeight(x, y - 1)
+        ) / 4;
+        // Not a depression → skip
+        if ((height - neighbourAvg) >= -depressionThreshold) return undefined;
+        break;
+      }
+      case BiomeType.FOREST:
+      case BiomeType.TUNDRA: {
+        // CLEARING / GROVE: only on low-gradient (flat) terrain
+        const gradient = this.computeGradientLocal(x, y, getHeight, height);
+        if (gradient >= gradientThreshold) return undefined;
+        break;
+      }
+      default:
+        break;
+    }
+
+    // Noise threshold check (existing logic) — use cached config to avoid per-tile allocation
+    const noiseValue = this.microBiomeNoise.fbm(x, y, this.microBiomeNoiseConfig);
+    const threshold = 1.0 - this.enhancedConfig.microBiomeFrequency * 2;
+    if (noiseValue < threshold) return undefined;
+
+    // Size check — pre-compute trig values to avoid per-iteration Math.cos/sin calls
     const sampleDirections = 8;
     let maxExtent = 0;
-    
     for (let i = 0; i < sampleDirections; i++) {
       const angle = (i / sampleDirections) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
       let extent = 0;
-      
-      // Sample outward from center until noise drops below threshold
       for (let distance = 1; distance <= this.enhancedConfig.microBiomeMaxSize; distance++) {
-        const sampleX = x + Math.cos(angle) * distance;
-        const sampleY = y + Math.sin(angle) * distance;
-        const sampleNoise = this.microBiomeNoise.fbm(sampleX, sampleY, noiseConfig);
-        
+        const sampleX = x + cosA * distance;
+        const sampleY = y + sinA * distance;
+        const sampleNoise = this.microBiomeNoise.fbm(sampleX, sampleY, this.microBiomeNoiseConfig);
         if (sampleNoise >= threshold) {
           extent = distance;
         } else {
           break;
         }
       }
-      
       maxExtent = Math.max(maxExtent, extent);
     }
-    
-    // Enforce maximum size constraint
-    // If the micro-biome extends beyond the maximum size, reject it
-    if (maxExtent > this.enhancedConfig.microBiomeMaxSize) {
-      return undefined;
-    }
+    if (maxExtent > this.enhancedConfig.microBiomeMaxSize) return undefined;
 
-    // Determine micro-biome type based on parent biome
+    // Map parent biome to micro-biome type
     switch (parentBiome) {
-      case BiomeType.DESERT:
-        return MicroBiomeType.OASIS;
-      case BiomeType.FOREST:
-        return MicroBiomeType.CLEARING;
-      case BiomeType.PLAINS:
-        return MicroBiomeType.POND;
-      case BiomeType.TUNDRA:
-        return MicroBiomeType.GROVE;
-      default:
-        return undefined;
+      case BiomeType.DESERT:  return MicroBiomeType.OASIS;
+      case BiomeType.FOREST:  return MicroBiomeType.CLEARING;
+      case BiomeType.PLAINS:  return MicroBiomeType.POND;
+      case BiomeType.TUNDRA:  return MicroBiomeType.GROVE;
+      default:                return undefined;
     }
   }
 
   /**
+   * Computes terrain gradient magnitude using the ClimateSystem if available,
+   * otherwise uses the same inline RMS formula.
+   */
+  private computeGradientLocal(
+    x: number,
+    y: number,
+    getHeight: (wx: number, wy: number) => number,
+    height: number,
+  ): number {
+    if (this.climateSystem !== null) {
+      return this.climateSystem.computeGradient(x, y, getHeight);
+    }
+    // Inline RMS formula (same as ClimateSystem.computeGradient with step=1)
+    const dx1 = getHeight(x + 1, y) - height;
+    const dx2 = getHeight(x - 1, y) - height;
+    const dy1 = getHeight(x, y + 1) - height;
+    const dy2 = getHeight(x, y - 1) - height;
+    return Math.sqrt((dx1 * dx1 + dx2 * dx2 + dy1 * dy1 + dy2 * dy2) / 4);
+  }
+
+  /**
    * Determines elevation band for mountain terrain.
-   * @param height - Height value (0-1 range)
-   * @returns Elevation band type
+   * @param height - Height value (0-1 range).
+   * @returns Elevation band type.
    */
   private getElevationBand(height: number): ElevationBand {
     if (height >= this.enhancedConfig.snowLineElevation) {
@@ -210,36 +391,34 @@ export class EnhancedBiomeSystem extends BiomeSystem {
 
   /**
    * Calculates transition factor based on distance to biome boundaries.
-   * @param x - World X coordinate
-   * @param y - World Y coordinate
-   * @param getHeight - Callback function to get height at any world position
-   * @returns Transition factor (0-1)
+   * @param x         - World X coordinate.
+   * @param y         - World Y coordinate.
+   * @param getHeight - Callback function to get height at any world position.
+   * @returns Transition factor (0-1).
    */
-  private calculateTransitionFactor(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): number {
-    // Get the primary biome at this position
+  private calculateTransitionFactor(
+    x: number,
+    y: number,
+    getHeight: (worldX: number, worldY: number) => number,
+  ): number {
     const centerHeight = getHeight(x, y);
-    const centerBiome = this.getBiome(x, y, centerHeight);
-    
-    // Sample biomes in a small radius to detect boundaries
+    const centerBiome  = this.getBiome(x, y, centerHeight);
+
     const sampleRadius = this.enhancedConfig.transitionWidth;
-    const sampleCount = 8; // Sample in 8 directions
+    const sampleCount  = 8;
     let differentBiomeCount = 0;
-    
+
     for (let i = 0; i < sampleCount; i++) {
-      const angle = (i / sampleCount) * Math.PI * 2;
+      const angle   = (i / sampleCount) * Math.PI * 2;
       const sampleX = x + Math.cos(angle) * sampleRadius;
       const sampleY = y + Math.sin(angle) * sampleRadius;
-      
-      // Get height at the sampled position
       const sampleHeight = getHeight(sampleX, sampleY);
-      
-      const sampleBiome = this.getBiome(sampleX, sampleY, sampleHeight);
+      const sampleBiome  = this.getBiome(sampleX, sampleY, sampleHeight);
       if (sampleBiome !== centerBiome) {
         differentBiomeCount++;
       }
     }
-    
-    // Transition factor is proportional to how many different biomes are nearby
+
     return differentBiomeCount / sampleCount;
   }
 }
