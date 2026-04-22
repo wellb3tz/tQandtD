@@ -9,8 +9,7 @@ A TypeScript-based procedural world generation engine designed for browser-based
 - **Multi-Layer Terrain**: Realistic heightmaps using fractional Brownian motion and domain warping
 - **3D Noise Generation**: Volumetric noise for enhanced terrain features with vertical variation
 - **Enhanced Biome System**: 8 diverse ecosystems with smooth transitions, micro-biomes, and elevation bands
-- **Comprehensive Water System**: Separate rendering layer for oceans, rivers, and lakes with transparency, configurable materials, and underwater terrain effects
-- **Advanced River Networks**: Tributaries, lakes, deltas, and flow-based width calculation (data structures implemented)
+- **Comprehensive Water System**: Separate rendering layer for oceans and lakes with transparency, configurable materials, and underwater terrain effects
 - **Resource Clusters**: Natural resource distribution based on biomes (5 resource types)
 - **Structure Placement**: Poisson Disk Sampling for realistic structure distribution (3 structure types)
 - **Multi-Threaded Generation**: Worker pool for parallel chunk generation across CPU cores
@@ -74,11 +73,6 @@ const manager = new ChunkManager({
     ],
     minDistance: 10,
     maxAttempts: 30
-  },
-  riverConfig: {
-    sourceElevation: 0.7,
-    minFlowLength: 10,
-    flowWidth: 2
   }
 });
 
@@ -186,53 +180,6 @@ const chunk = manager.getChunk(0, 0);
 - Slopes: Above tree line, rocky
 - Peaks: Above snow line, snowy
 
-### River Networks
-
-Enhanced river generation with tributaries, lakes, and deltas (data structures implemented):
-
-```typescript
-import { ChunkManager } from 'procedural-world-engine';
-
-const manager = new ChunkManager({
-  seed: 12345,
-  chunkSize: 32,
-  riverNetworkConfig: {
-    // Basic river settings
-    sourceElevation: 0.7,
-    minFlowLength: 10,
-    flowWidth: 2,
-    
-    // Tributaries
-    enableTributaries: true,
-    maxTributaryOrder: 2,      // 1 = no tributaries
-    tributaryProbability: 0.3,
-    
-    // Lakes
-    enableLakes: true,
-    lakeDepressionThreshold: 0.05,
-    maxLakeSize: 100,
-    
-    // Deltas
-    enableDeltas: true,
-    deltaBranchCount: 3,
-    deltaSpreadAngle: Math.PI / 3,
-    
-    // Flow-based width
-    minFlow: 1.0,
-    maxFlow: 100.0,
-    widthScale: 0.5
-  },
-  // ... other config
-});
-
-// River network data includes:
-// - RiverSegment: flow, width, order, connections
-// - Lake: tiles, elevation, outlet
-// - Flow-based width calculation
-```
-
-**Note:** River network data structures are implemented. Full RiverNetworkGenerator with tributary/lake/delta generation is planned for future implementation.
-
 ### Performance Optimizations
 
 #### Worker Pool (Multi-Threading)
@@ -262,7 +209,7 @@ const chunk3 = manager.getChunk(0, 1);
 
 ### Water Rendering System
 
-Comprehensive water rendering with separate layers for oceans, rivers, and lakes:
+Comprehensive water rendering with separate layers for oceans and lakes:
 
 ```typescript
 import type { WaterConfig } from 'procedural-world-engine';
@@ -276,11 +223,6 @@ const waterConfig: Partial<WaterConfig> = {
     color: 0x0066cc,      // Hex color
     opacity: 0.7,         // 0-1
     shininess: 80,        // 0-100
-  },
-  
-  river: {
-    color: 0x3399ff,
-    opacity: 0.6,
   },
   
   lake: {
@@ -307,7 +249,7 @@ viewer.setWaterVisibility(true);
 ```
 
 **Features:**
-- Independent water meshes (ocean, river, lake)
+- Independent water meshes (ocean, lake)
 - Configurable colors, opacity, and materials
 - Underwater terrain color adjustments
 - Performance optimizations (LOD, frustum culling)
@@ -346,7 +288,7 @@ const chunk = manager.getChunk(5, 5);  // Automatically uses appropriate LOD
 - **Seamless Boundaries**: Downsampled heightmaps maintain `(newSize + 1) x (newSize + 1)` structure to prevent gaps between chunks
 - **Bilinear Interpolation**: Smooth height transitions when reducing resolution
 - **Automatic Size Updates**: Chunk size is automatically updated to match downsampled heightmap dimensions
-- **Feature Culling**: Resources rendered only at HIGH LOD; rivers and structures at HIGH/MEDIUM LOD
+- **Feature Culling**: Resources rendered only at HIGH LOD; structures at HIGH/MEDIUM LOD
 - **Performance**: 2-4x frame rate improvement with 50+ chunks loaded
 
 #### Incremental Generation
@@ -371,7 +313,7 @@ const partial = manager.getChunkIncremental(0, 0);
 
 // Check generation progress
 console.log('Stage:', GenerationStage[partial.stage]);
-// Stages: TERRAIN → BIOMES → RIVERS → RESOURCES → STRUCTURES → COMPLETE
+// Stages: TERRAIN → BIOMES → RESOURCES → STRUCTURES → COMPLETE
 
 // Access partial data while generating
 if (partial.stage >= GenerationStage.TERRAIN) {
@@ -601,25 +543,6 @@ const manager = new ChunkManager({
     maxAttempts: 30
   },
   
-  // River Networks (optional, falls back to basic RiverConfig)
-  riverNetworkConfig: {
-    sourceElevation: 0.7,
-    minFlowLength: 10,
-    flowWidth: 2,
-    enableTributaries: true,
-    maxTributaryOrder: 2,
-    tributaryProbability: 0.3,
-    enableLakes: true,
-    lakeDepressionThreshold: 0.05,
-    maxLakeSize: 100,
-    enableDeltas: true,
-    deltaBranchCount: 3,
-    deltaSpreadAngle: Math.PI / 3,
-    minFlow: 1.0,
-    maxFlow: 100.0,
-    widthScale: 0.5
-  },
-  
   // Worker Pool (optional)
   workerPoolConfig: {
     maxWorkers: navigator.hardwareConcurrency,
@@ -677,26 +600,6 @@ const manager = new ChunkManager({
 | `snowLineElevation` | number | 0.8 | Snow line threshold (0-1) |
 | `treeLineElevation` | number | 0.75 | Tree line threshold (0-1) |
 
-#### River Network Configuration
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `sourceElevation` | number | 0.7 | Minimum elevation for river sources |
-| `minFlowLength` | number | 10 | Minimum river length to keep |
-| `flowWidth` | number | 2 | Width of river paths in tiles |
-| `enableTributaries` | boolean | true | Enable tributary generation |
-| `maxTributaryOrder` | number | 2 | Maximum tributary depth |
-| `tributaryProbability` | number | 0.3 | Tributary spawn probability (0-1) |
-| `enableLakes` | boolean | true | Enable lake generation |
-| `lakeDepressionThreshold` | number | 0.05 | Minimum depression depth for lakes |
-| `maxLakeSize` | number | 100 | Maximum lake size in tiles |
-| `enableDeltas` | boolean | true | Enable delta generation |
-| `deltaBranchCount` | number | 3 | Number of delta branches |
-| `deltaSpreadAngle` | number | π/3 | Delta spread angle in radians |
-| `minFlow` | number | 1.0 | Minimum flow for width calculation |
-| `maxFlow` | number | 100.0 | Maximum flow for width calculation |
-| `widthScale` | number | 0.5 | Width scaling factor |
-
 #### LOD Configuration
 
 | Parameter | Type | Default | Description |
@@ -731,14 +634,14 @@ See the `examples/` directory for more usage examples:
 ### Core Types
 
 - `ChunkManager` - Main entry point for world generation
-- `ChunkData` - Complete chunk data with terrain, biomes, resources, structures, rivers
+- `ChunkData` - Complete chunk data with terrain, biomes, resources, structures
 - `BiomeType` - Enum of 8 biome types (OCEAN, BEACH, DESERT, PLAINS, FOREST, TAIGA, TUNDRA, MOUNTAIN)
 - `ResourceType` - Enum of 5 resource types (IRON, GOLD, COAL, STONE, WOOD)
 - `StructureType` - Enum of 3 structure types (VILLAGE, RUINS, TOWER)
 - `MicroBiomeType` - Enum of micro-biome types (OASIS, CLEARING, POND, GROVE)
 - `ElevationBand` - Enum of elevation bands (FOOTHILLS, SLOPES, PEAKS)
 - `LODLevel` - Enum of LOD levels (HIGH, MEDIUM, LOW)
-- `GenerationStage` - Enum of generation stages (TERRAIN, BIOMES, RIVERS, RESOURCES, STRUCTURES, COMPLETE)
+- `GenerationStage` - Enum of generation stages (TERRAIN, BIOMES, RESOURCES, STRUCTURES, COMPLETE)
 - `SerializationFormat` - Enum of serialization formats (JSON, BINARY)
 
 ### Configuration Interfaces
@@ -749,8 +652,6 @@ See the `examples/` directory for more usage examples:
 - `EnhancedBiomeConfig` - Enhanced biome system parameters (transitions, micro-biomes, elevation bands)
 - `ResourceConfig` - Resource generation parameters
 - `StructureConfig` - Structure placement parameters
-- `RiverConfig` - River generation parameters
-- `RiverNetworkConfig` - Enhanced river network parameters (tributaries, lakes, deltas)
 - `Noise3DConfig` - 3D noise generation parameters
 - `WorkerPoolConfig` - Worker pool configuration
 - `LODConfig` - Level of detail configuration
@@ -760,9 +661,6 @@ See the `examples/` directory for more usage examples:
 ### Enhanced Data Structures
 
 - `EnhancedBiomeData` - Biome data with transitions, micro-biomes, and elevation bands
-- `RiverSegment` - River segment with flow, width, and order
-- `Lake` - Lake data with tiles, elevation, and outlet
-- `RiverNetwork` - Complete river network for a chunk
 - `ChunkModification` - Modification record for terrain and structure changes
 - `SerializedWorld` - Serialized world data with checksum
 - `PartialChunkData` - Partial chunk data during incremental generation
@@ -884,8 +782,7 @@ src/
 ├── gen/           # Generation systems
 │   ├── terrain.ts    # Heightmap generation with 2D/3D noise
 │   ├── resources.ts  # Resource cluster generation
-│   ├── structures.ts # Structure placement with Poisson Disk Sampling
-│   └── rivers.ts     # River network generation (data structures + basic generation)
+│   └── structures.ts # Structure placement with Poisson Disk Sampling
 ├── utils/         # Utility functions
 │   └── poisson.ts # Poisson Disk Sampling implementation
 ├── worker.ts      # Web Worker support

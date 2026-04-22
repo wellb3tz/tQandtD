@@ -2,7 +2,7 @@
  * WorldViewer - 3D visualization component using Three.js
  * 
  * Manages Three.js scene, rendering, camera controls, and chunk visualization.
- * Renders terrain heightmaps as 3D meshes with biome-based coloring, rivers,
+ * Renders terrain heightmaps as 3D meshes with biome-based coloring,
  * resources, structures, and chunk boundaries.
  */
 
@@ -38,7 +38,6 @@ export interface Vector3 {
 export enum RenderLayer {
   TERRAIN = 'terrain',
   BIOMES = 'biomes',
-  RIVERS = 'rivers',
   RESOURCES = 'resources',
   STRUCTURES = 'structures',
   CHUNK_BOUNDARIES = 'chunkBoundaries'
@@ -70,8 +69,6 @@ export interface ChunkCoord {
 interface ChunkMesh {
   terrain: THREE.Mesh;
   water?: import('./water/types').WaterLayerData; // New: separate water layer
-  /** @deprecated Use water property instead */
-  rivers?: THREE.Group;
   resources?: THREE.Group;
   structures?: THREE.Group;
   boundaries?: THREE.LineSegments;
@@ -537,18 +534,8 @@ export class WorldViewer {
     }
     
     // Only add complete layers if not partial or if stage is complete
-    // Rivers: Render only on HIGH and MEDIUM LOD
-    if (!partial || (stage !== undefined && stage >= 2)) { // GenerationStage.RIVERS = 2
-      if (this.layerVisibility.get(RenderLayer.RIVERS) && data.rivers && data.rivers.size > 0) {
-        if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
-          chunkMesh.rivers = this.createRiverOverlay(chunkX, chunkY, data);
-          this.scene.add(chunkMesh.rivers);
-        }
-      }
-    }
-    
     // Resources: Render only on HIGH LOD
-    if (!partial || (stage !== undefined && stage >= 3)) { // GenerationStage.RESOURCES = 3
+    if (!partial || (stage !== undefined && stage >= 2)) { // GenerationStage.RESOURCES = 2
       if (data.resources && data.resources.length > 0) {
         if (lodLevel === undefined || lodLevel === 0) { // Only HIGH
           chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
@@ -559,7 +546,7 @@ export class WorldViewer {
     }
     
     // Structures: Render only on HIGH and MEDIUM LOD
-    if (!partial || (stage !== undefined && stage >= 4)) { // GenerationStage.STRUCTURES = 4
+    if (!partial || (stage !== undefined && stage >= 3)) { // GenerationStage.STRUCTURES = 3
       if (data.structures && data.structures.length > 0) {
         if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
           chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
@@ -603,11 +590,6 @@ export class WorldViewer {
       chunkMesh.terrain.material.forEach(m => m.dispose());
     } else {
       chunkMesh.terrain.material.dispose();
-    }
-    
-    if (chunkMesh.rivers) {
-      this.scene.remove(chunkMesh.rivers);
-      this.disposeGroup(chunkMesh.rivers);
     }
     
     if (chunkMesh.resources) {
@@ -832,7 +814,7 @@ export class WorldViewer {
       } else if (stage === 1) { // BIOMES
         partialTint = { r: 0.8, g: 0.8, b: 0.8 };
         partialOpacity = 0.7;
-      } else if (stage < 5) { // RIVERS/RESOURCES/STRUCTURES
+      } else if (stage < 4) { // RESOURCES/STRUCTURES
         partialOpacity = 0.9;
       }
     }
@@ -940,49 +922,6 @@ export class WorldViewer {
     }
     
     return mesh;
-  }
-
-  /**
-   * Create river overlay as a Three.js Group containing river segments
-   * Renders rivers as blue lines/meshes for better visualization
-   */
-  private createRiverOverlay(chunkX: number, chunkY: number, data: ChunkData): THREE.Group {
-    const riverLayer = new THREE.Group();
-    const chunkSize = data.size;
-    
-    // Check if rivers exist
-    if (!data.rivers || data.rivers.size === 0) {
-      return riverLayer;
-    }
-    
-    const vertices: number[] = [];
-    
-    // Convert river indices to world positions
-    for (const index of data.rivers) {
-      const localX = index % chunkSize;
-      const localY = Math.floor(index / chunkSize);
-      
-      // Get height at this position
-      const heightIndex = localY * (chunkSize + 1) + localX;
-      const height = data.heightmap[heightIndex];
-      
-      const worldX = chunkX * chunkSize + localX;
-      const worldZ = chunkY * chunkSize + localY;
-      
-      // Add a small cube at each river tile
-      const geometry = new THREE.BoxGeometry(0.8, 0.3, 0.8);
-      const material = new THREE.MeshBasicMaterial({ 
-        color: 0x0066ff,
-        transparent: true,
-        opacity: 0.7
-      });
-      
-      const riverTile = new THREE.Mesh(geometry, material);
-      riverTile.position.set(worldX + 0.5, height * 50 + 0.2, worldZ + 0.5);
-      riverLayer.add(riverTile);
-    }
-    
-    return riverLayer;
   }
 
   /**
@@ -1153,9 +1092,6 @@ export class WorldViewer {
         case RenderLayer.BIOMES:
           // Toggle between biome colors and grayscale
           this.updateTerrainBiomeColors(chunkMesh.terrain, visible);
-          break;
-        case RenderLayer.RIVERS:
-          if (chunkMesh.rivers) chunkMesh.rivers.visible = visible;
           break;
         case RenderLayer.RESOURCES:
           if (chunkMesh.resources) chunkMesh.resources.visible = visible;
@@ -1544,10 +1480,6 @@ export class WorldViewer {
         
         // Update visibility for all mesh components
         chunkMesh.terrain.visible = isVisible && this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-        
-        if (chunkMesh.rivers) {
-          chunkMesh.rivers.visible = isVisible && this.layerVisibility.get(RenderLayer.RIVERS) !== false;
-        }
         
         if (chunkMesh.resources) {
           chunkMesh.resources.visible = isVisible && this.layerVisibility.get(RenderLayer.RESOURCES) !== false;

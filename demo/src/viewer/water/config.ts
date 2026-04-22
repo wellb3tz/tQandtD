@@ -1,5 +1,8 @@
 /**
  * Water system configuration and constants
+ * 
+ * Provides default configuration for ocean water rendering
+ * and validation utilities.
  */
 
 import type { WaterConfig } from './types';
@@ -10,8 +13,6 @@ import type { WaterConfig } from './types';
  * 
  * This constant is centralized to ensure consistency across:
  * - Ocean mesh generation
- * - River mesh generation
- * - Lake mesh generation
  * - Water elevation validation
  * - Property-based tests
  */
@@ -30,37 +31,18 @@ export const DEFAULT_OCEAN_CONFIG = {
   waveSpeed: 1.0,
 };
 
-/**
- * Default river configuration
- */
-export const DEFAULT_RIVER_CONFIG = {
-  enabled: true,
-  color: 0x4682b4,
-  opacity: 0.7,
-  shininess: 80,
-  enableFlowAnimation: false,
-  flowSpeed: 1.0,
-};
 
-/**
- * Default lake configuration
- */
-export const DEFAULT_LAKE_CONFIG = {
-  enabled: true,
-  color: 0x4169e1,
-  opacity: 0.65,
-  shininess: 90,
-};
 
 /**
  * Default water system configuration
+ * 
+ * Provides sensible defaults for ocean water rendering
+ * with performance optimizations and visual settings.
  */
 export const DEFAULT_WATER_CONFIG: WaterConfig = {
   enabled: true, // Enable water rendering by default
   seaLevel: 0.3,
   ocean: DEFAULT_OCEAN_CONFIG,
-  river: DEFAULT_RIVER_CONFIG,
-  lake: DEFAULT_LAKE_CONFIG,
   rendering: {
     waterOffset: 0.1,
     underwaterDarkenFactor: 0.4,
@@ -91,6 +73,13 @@ function clamp(value: number, min: number, max: number, name?: string): number {
 
 /**
  * Validate and apply defaults to water configuration
+ * 
+ * Validates ocean water configuration parameters and applies
+ * defaults for missing values. Clamps numeric values to valid
+ * ranges and logs warnings for out-of-range values.
+ * 
+ * @param config - Partial water configuration to validate
+ * @returns Complete validated water configuration
  */
 export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterConfig {
   // Validate seaLevel with special handling - use default if out of range
@@ -122,40 +111,6 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
       waveHeight: Math.max(0, config.ocean?.waveHeight ?? DEFAULT_OCEAN_CONFIG.waveHeight),
       waveSpeed: Math.max(0, config.ocean?.waveSpeed ?? DEFAULT_OCEAN_CONFIG.waveSpeed),
       normalMap: config.ocean?.normalMap,
-    },
-    river: {
-      enabled: config.river?.enabled ?? DEFAULT_RIVER_CONFIG.enabled,
-      color: config.river?.color ?? DEFAULT_RIVER_CONFIG.color,
-      opacity: clamp(
-        config.river?.opacity ?? DEFAULT_RIVER_CONFIG.opacity,
-        0,
-        1,
-        'River opacity'
-      ),
-      shininess: clamp(
-        config.river?.shininess ?? DEFAULT_RIVER_CONFIG.shininess,
-        0,
-        100,
-        'River shininess'
-      ),
-      enableFlowAnimation: config.river?.enableFlowAnimation ?? DEFAULT_RIVER_CONFIG.enableFlowAnimation,
-      flowSpeed: Math.max(0, config.river?.flowSpeed ?? DEFAULT_RIVER_CONFIG.flowSpeed),
-    },
-    lake: {
-      enabled: config.lake?.enabled ?? DEFAULT_LAKE_CONFIG.enabled,
-      color: config.lake?.color ?? DEFAULT_LAKE_CONFIG.color,
-      opacity: clamp(
-        config.lake?.opacity ?? DEFAULT_LAKE_CONFIG.opacity,
-        0,
-        1,
-        'Lake opacity'
-      ),
-      shininess: clamp(
-        config.lake?.shininess ?? DEFAULT_LAKE_CONFIG.shininess,
-        0,
-        100,
-        'Lake shininess'
-      ),
     },
     rendering: {
       waterOffset: Math.max(

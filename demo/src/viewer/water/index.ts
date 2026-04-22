@@ -1,7 +1,7 @@
 /**
  * Water system module exports
  * 
- * Water rendering system for oceans.
+ * Water rendering system for ocean water.
  */
 
 // Type definitions
@@ -21,8 +21,6 @@ export {
   validateWaterConfig,
   DEFAULT_WATER_CONFIG,
   DEFAULT_OCEAN_CONFIG,
-  DEFAULT_PERFORMANCE_CONFIG,
-  DEFAULT_RENDERING_CONFIG,
 } from './config';
 
 // Material factory

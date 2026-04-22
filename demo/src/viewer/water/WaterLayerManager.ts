@@ -1,9 +1,9 @@
 /**
- * Water layer manager for managing water mesh lifecycle
+ * Water layer manager for managing ocean water mesh lifecycle
  * 
  * Coordinates ocean water mesh generation and manages water meshes 
  * independently from terrain. Handles adding, removing, updating,
- * and visibility control for water layers.
+ * and visibility control for ocean water layers.
  */
 
 import * as THREE from 'three';
@@ -15,8 +15,9 @@ import { createOceanMaterial } from './WaterMaterialFactory';
 /**
  * Water layer manager class
  * 
- * Manages water mesh lifecycle for chunks, providing methods to add, remove,
- * update, and control visibility of water layers independently from terrain.
+ * Manages ocean water mesh lifecycle for chunks, providing methods to add,
+ * remove, update, and control visibility of ocean water layers independently
+ * from terrain.
  * 
  * **Performance Features:**
  * - LOD support: Reduces water mesh complexity based on distance from camera
@@ -48,10 +49,10 @@ export class WaterLayerManager {
   }
 
   /**
-   * Add water meshes to a chunk
+   * Add ocean water meshes to a chunk
    * 
-   * Generates and adds all water meshes (ocean, rivers, lakes) for a chunk
-   * to the scene. Water meshes are independent from terrain meshes.
+   * Generates and adds ocean water meshes for a chunk to the scene.
+   * Ocean water meshes are independent from terrain meshes.
    * 
    * **Validates: Requirements 7.1, 7.2**
    * 
@@ -80,8 +81,6 @@ export class WaterLayerManager {
     // Create water layer data structure
     const waterLayer: WaterLayerData = {
       ocean: [],
-      rivers: [],
-      lakes: [],
       group: new THREE.Group(),
     };
 
@@ -129,9 +128,9 @@ export class WaterLayerManager {
   }
 
   /**
-   * Remove water meshes from a chunk
+   * Remove ocean water meshes from a chunk
    * 
-   * Removes and disposes all water meshes and resources for a chunk.
+   * Removes and disposes all ocean water meshes and resources for a chunk.
    * Does not affect terrain meshes.
    * 
    * **Validates: Requirements 7.2, 7.5**
@@ -153,30 +152,18 @@ export class WaterLayerManager {
       this.disposeMesh(waterMesh);
     }
 
-    // Dispose river meshes
-    for (const waterMesh of waterLayer.rivers) {
-      this.disposeMesh(waterMesh);
-    }
-
-    // Dispose lake meshes
-    for (const waterMesh of waterLayer.lakes) {
-      this.disposeMesh(waterMesh);
-    }
-
     // Clear arrays
     waterLayer.ocean.length = 0;
-    waterLayer.rivers.length = 0;
-    waterLayer.lakes.length = 0;
 
     // Remove from map
     this.waterLayers.delete(chunkKey);
   }
 
   /**
-   * Update water meshes for a chunk
+   * Update ocean water meshes for a chunk
    * 
-   * Removes existing water meshes and regenerates them with updated chunk data.
-   * Useful when chunk data changes (e.g., terrain editing).
+   * Removes existing ocean water meshes and regenerates them with updated
+   * chunk data. Useful when chunk data changes (e.g., terrain editing).
    * 
    * **Validates: Requirements 7.3, 7.6**
    * 
@@ -199,9 +186,9 @@ export class WaterLayerManager {
   }
 
   /**
-   * Toggle visibility of all water meshes
+   * Toggle visibility of all ocean water meshes
    * 
-   * Controls visibility of all water layers without disposing resources.
+   * Controls visibility of all ocean water layers without disposing resources.
    * 
    * **Validates: Requirements 7.4**
    * 
@@ -214,7 +201,7 @@ export class WaterLayerManager {
   }
 
   /**
-   * Dispose a single water mesh and its resources
+   * Dispose a single ocean water mesh and its resources
    */
   private disposeMesh(waterMesh: WaterMesh): void {
     // Dispose geometry
@@ -231,9 +218,9 @@ export class WaterLayerManager {
   }
 
   /**
-   * Dispose all water resources
+   * Dispose all ocean water resources
    * 
-   * Cleans up all water meshes and resources. Should be called when
+   * Cleans up all ocean water meshes and resources. Should be called when
    * the water system is no longer needed.
    */
   dispose(): void {
@@ -242,17 +229,9 @@ export class WaterLayerManager {
       for (const waterMesh of waterLayer.ocean) {
         this.disposeMesh(waterMesh);
       }
-      for (const waterMesh of waterLayer.rivers) {
-        this.disposeMesh(waterMesh);
-      }
-      for (const waterMesh of waterLayer.lakes) {
-        this.disposeMesh(waterMesh);
-      }
 
       // Clear arrays
       waterLayer.ocean.length = 0;
-      waterLayer.rivers.length = 0;
-      waterLayer.lakes.length = 0;
     }
 
     // Clear map
@@ -289,10 +268,10 @@ export class WaterLayerManager {
   }
   
   /**
-   * Apply LOD to water meshes based on distance from camera
+   * Apply LOD to ocean water meshes based on distance from camera
    * 
-   * Reduces water mesh complexity for distant chunks to improve performance.
-   * Uses simple visibility-based LOD: show/hide water based on distance.
+   * Reduces ocean water mesh complexity for distant chunks to improve performance.
+   * Uses simple visibility-based LOD: show/hide ocean water based on distance.
    * 
    * **Validates: Requirements 8.3**
    * 
@@ -323,16 +302,8 @@ export class WaterLayerManager {
         // Near: Full detail (all water visible)
         waterLayer.group.visible = true;
       } else if (distance < LOD_FAR) {
-        // Medium: Reduce detail (hide rivers and lakes, keep ocean)
+        // Medium: Keep ocean visible
         waterLayer.group.visible = true;
-        
-        // Hide rivers and lakes at medium distance
-        for (const waterMesh of waterLayer.rivers) {
-          waterMesh.mesh.visible = false;
-        }
-        for (const waterMesh of waterLayer.lakes) {
-          waterMesh.mesh.visible = false;
-        }
         
         // Keep ocean visible
         for (const waterMesh of waterLayer.ocean) {
@@ -346,9 +317,9 @@ export class WaterLayerManager {
   }
   
   /**
-   * Apply frustum culling to water meshes
+   * Apply frustum culling to ocean water meshes
    * 
-   * Hides water meshes outside the camera frustum to improve performance.
+   * Hides ocean water meshes outside the camera frustum to improve performance.
    * 
    * **Validates: Requirements 8.4**
    * 
@@ -371,29 +342,11 @@ export class WaterLayerManager {
     for (const [chunkKey, waterLayer] of this.waterLayers.entries()) {
       let isVisible = false;
 
-      // Check if any water mesh is visible in frustum
+      // Check if any ocean mesh is visible in frustum
       for (const waterMesh of waterLayer.ocean) {
         if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
           isVisible = true;
           break;
-        }
-      }
-
-      if (!isVisible) {
-        for (const waterMesh of waterLayer.rivers) {
-          if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
-            isVisible = true;
-            break;
-          }
-        }
-      }
-
-      if (!isVisible) {
-        for (const waterMesh of waterLayer.lakes) {
-          if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
-            isVisible = true;
-            break;
-          }
         }
       }
 

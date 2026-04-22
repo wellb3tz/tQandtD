@@ -6,7 +6,6 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/world/chunk';
 import type { WaterConfig } from './types';
 
 /**
@@ -102,7 +101,7 @@ export function validateZFightingPrevention(
 /**
  * Validate all water elevations in a chunk
  * 
- * Validates ocean water elevations (rivers and lakes are not generated)
+ * Validates ocean water elevations
  * 
  * @param oceanGeometry - Ocean geometry
  * @param config - Water configuration

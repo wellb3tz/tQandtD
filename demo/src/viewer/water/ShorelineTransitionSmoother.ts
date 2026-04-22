@@ -132,40 +132,6 @@ export function getMaxElevationDiscontinuity(transitions: ShorelineTransition[])
 }
 
 /**
- * Smooth river path elevations along segments
- * 
- * Ensures smooth elevation changes along river paths by interpolating
- * between segment elevations
- * 
- * @param segmentElevations - Array of elevations for each river segment
- * @param smoothingFactor - Smoothing factor (0-1), higher = more smoothing
- * @returns Smoothed elevations
- */
-export function smoothRiverPathElevations(
-  segmentElevations: number[],
-  smoothingFactor: number = 0.5
-): number[] {
-  if (segmentElevations.length <= 2) {
-    return [...segmentElevations]; // No smoothing needed
-  }
-
-  const smoothed = [...segmentElevations];
-
-  // Apply simple moving average smoothing
-  for (let i = 1; i < smoothed.length - 1; i++) {
-    const prev = segmentElevations[i - 1];
-    const curr = segmentElevations[i];
-    const next = segmentElevations[i + 1];
-
-    // Weighted average with neighbors
-    const avg = (prev + curr * 2 + next) / 4;
-    smoothed[i] = curr * (1 - smoothingFactor) + avg * smoothingFactor;
-  }
-
-  return smoothed;
-}
-
-/**
  * Blend water edge with terrain at boundaries
  * 
  * Creates a smooth visual transition by adjusting water mesh vertices

@@ -86,8 +86,6 @@ export interface ChunkData {
   resources: Resource[];
   /** Structures placed in this chunk */
   structures: Structure[];
-  /** Set of indices where rivers flow through this chunk */
-  rivers: Set<number>;
 }
 
 /**

@@ -37,7 +37,6 @@ Specialized generators for world features:
 - `terrain.ts`: Heightmap generation using 2D/3D noise
 - `resources.ts`: Resource cluster placement based on biomes
 - `structures.ts`: Structure placement using Poisson Disk Sampling
-- `rivers.ts`: River network generation with flow simulation
 
 ### Utilities (`src/utils/`)
 - `poisson.ts`: Poisson Disk Sampling implementation
@@ -77,7 +76,6 @@ Self-contained usage examples demonstrating specific features:
 - `basic-usage.ts`: Simple world generation
 - `3d-noise-usage.ts`: 3D noise configuration
 - `enhanced-biomes.ts`: Enhanced biome system
-- `river-networks.ts`: River generation
 - `web-worker-usage.ts`: Multi-threading
 - `lod-system.ts`: Level of detail
 - `incremental-generation.ts`: Progressive generation

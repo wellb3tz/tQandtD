@@ -111,7 +111,7 @@ export class StructurePlacer {
     y: number,
     index: number
   ): boolean {
-    const { heightmap, biomeMap, rivers, size } = chunkData;
+    const { heightmap, biomeMap, size } = chunkData;
 
     switch (rule.type) {
       case 'biome': {
@@ -127,9 +127,9 @@ export class StructurePlacer {
       }
 
       case 'nearWater': {
-        const maxDistance = rule.params.maxDistance as number;
-        const distance = this.distanceToWater(rivers, x, y, size);
-        return distance <= maxDistance;
+        // Rivers have been removed from the system
+        // nearWater rule always returns false (no water sources available)
+        return false;
       }
 
       case 'elevation': {
@@ -170,26 +170,6 @@ export class StructurePlacer {
     }
 
     return maxDiff;
-  }
-
-  private distanceToWater(
-    rivers: Set<number>,
-    x: number,
-    y: number,
-    size: number
-  ): number {
-    let minDistance = Infinity;
-
-    for (const riverIndex of rivers) {
-      const riverX = riverIndex % size;
-      const riverY = Math.floor(riverIndex / size);
-      const dx = x - riverX;
-      const dy = y - riverY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      minDistance = Math.min(minDistance, distance);
-    }
-
-    return minDistance;
   }
 
   private selectWeightedRandom(

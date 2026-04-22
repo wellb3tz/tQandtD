@@ -130,7 +130,7 @@ export type WorkerResponse = ReadyResponse | ChunkReadyResponse | CacheClearedRe
 
 /**
  * Serialized chunk data that can be transferred via postMessage
- * TypedArrays and Sets are converted to plain arrays for serialization
+ * TypedArrays are converted to plain arrays for serialization
  */
 export interface SerializedChunkData {
   x: number;
@@ -150,12 +150,11 @@ export interface SerializedChunkData {
     y: number;
     type: number;
   }>;
-  rivers: number[];
 }
 
 /**
  * Serializes ChunkData for transfer via postMessage
- * Converts TypedArrays to regular arrays and Set to array
+ * Converts TypedArrays to regular arrays
  * 
  * @param chunk - The chunk data to serialize
  * @returns Serialized chunk data that can be transferred
@@ -179,13 +178,12 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
       y: s.y,
       type: s.type,
     })),
-    rivers: Array.from(chunk.rivers),
   };
 }
 
 /**
  * Deserializes chunk data received from worker
- * Converts arrays back to TypedArrays and Set
+ * Converts arrays back to TypedArrays
  * 
  * @param serialized - The serialized chunk data
  * @returns Deserialized chunk data
@@ -200,7 +198,6 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
     biomeWeights: new Float32Array(serialized.biomeWeights),
     resources: serialized.resources,
     structures: serialized.structures,
-    rivers: new Set(serialized.rivers),
   };
 }
 

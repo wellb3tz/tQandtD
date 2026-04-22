@@ -1177,8 +1177,6 @@ export class ControlPanel {
   }
 
   /**
-   * Update river configuration
-  /**
    * Update resource configuration
    */
   private updateResourceConfig(key: string, value: number): void {
@@ -1319,7 +1317,7 @@ export class ControlPanel {
   /**
    * Update water configuration
    */
-  private updateWaterConfig(waterType: 'ocean' | 'river' | 'lake', property: string, value: number): void {
+  private updateWaterConfig(waterType: 'ocean' | 'lake', property: string, value: number): void {
     // Store water config in app state and emit event
     if (this.app) {
       const event = new CustomEvent('waterConfigChanged', {

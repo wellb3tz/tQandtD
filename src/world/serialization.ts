@@ -109,7 +109,7 @@ export interface SerializedWorld {
  * Serialized chunk data
  * 
  * Compressed representation of a single chunk's data including terrain,
- * biomes, resources, structures, and rivers.
+ * biomes, resources, and structures.
  */
 export interface SerializedChunk {
   /** Chunk X coordinate */
@@ -129,9 +129,6 @@ export interface SerializedChunk {
   
   /** Array of structures in the chunk */
   structures: Structure[];
-  
-  /** Array of river tile indices */
-  rivers: number[];
 }
 
 /**
@@ -242,9 +239,6 @@ export class WorldSerializer {
     // Convert biomeMap (Uint8Array) to base64
     const biomeMapBase64 = this.uint8ArrayToBase64(chunk.biomeMap, compress);
 
-    // Convert rivers Set to array
-    const rivers = Array.from(chunk.rivers);
-
     return {
       x: chunk.x,
       y: chunk.y,
@@ -252,7 +246,6 @@ export class WorldSerializer {
       biomeMap: biomeMapBase64,
       resources: chunk.resources,
       structures: chunk.structures,
-      rivers,
     };
   }
 
@@ -482,9 +475,6 @@ export class WorldSerializer {
     // Serialize biomeMap (Uint8Array) to binary
     const biomeMapBuffer = this.serializeUint8ArrayBinary(chunk.biomeMap, compress);
 
-    // Convert rivers Set to array
-    const rivers = Array.from(chunk.rivers);
-
     return {
       x: chunk.x,
       y: chunk.y,
@@ -492,7 +482,6 @@ export class WorldSerializer {
       biomeMap: biomeMapBuffer,
       resources: chunk.resources,
       structures: chunk.structures,
-      rivers,
     };
   }
 
@@ -654,8 +643,8 @@ export class WorldSerializer {
     // Decode biomeMap from base64 to Uint8Array
     const biomeMap = this.base64ToUint8Array(serializedChunk.biomeMap as string);
 
-    // Convert rivers array back to Set
-    const rivers = new Set<number>(serializedChunk.rivers);
+    // Backward compatibility: Ignore rivers field if present in legacy data
+    // (rivers field was removed but may exist in old save files)
 
     // Calculate biome weights (reconstruct from biomeMap)
     // Note: We don't have the original biomeWeights in serialized data,
@@ -676,7 +665,6 @@ export class WorldSerializer {
       biomeWeights,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
-      rivers,
     };
   }
 
@@ -694,8 +682,8 @@ export class WorldSerializer {
     // Deserialize biomeMap from binary
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
 
-    // Convert rivers array back to Set
-    const rivers = new Set<number>(serializedChunk.rivers);
+    // Backward compatibility: Ignore rivers field if present in legacy data
+    // (rivers field was removed but may exist in old save files)
 
     // Calculate biome weights (reconstruct from biomeMap)
     const numBiomes = 8;
@@ -714,7 +702,6 @@ export class WorldSerializer {
       biomeWeights,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
-      rivers,
     };
   }
 
@@ -967,15 +954,14 @@ export class WorldSerializer {
     for (const chunk of world.chunks) {
       // Each chunk: x (4) + y (4) + heightmap size (4) + heightmap + biomeMap size (4) + biomeMap
       // + resources JSON length (4) + resources JSON + structures JSON length (4) + structures JSON
-      // + rivers count (4) + rivers data
       const heightmapBuffer = chunk.heightmap as ArrayBuffer;
       const biomeMapBuffer = chunk.biomeMap as ArrayBuffer;
       const resourcesBytes = encoder.encode(JSON.stringify(chunk.resources));
       const structuresBytes = encoder.encode(JSON.stringify(chunk.structures));
       
       chunkDataSize += 4 + 4 + 4 + heightmapBuffer.byteLength + 4 + biomeMapBuffer.byteLength +
-                       4 + resourcesBytes.length + 4 + structuresBytes.length +
-                       4 + chunk.rivers.length * 4;
+                       4 + resourcesBytes.length + 4 + structuresBytes.length;
+      // Rivers data removed - no longer included in chunk data
     }
     
     // Calculate modifications data size
@@ -1070,13 +1056,7 @@ export class WorldSerializer {
       bytes.set(structuresBytes, offset);
       offset += structuresBytes.length;
       
-      // Write rivers
-      view.setUint32(offset, chunk.rivers.length, true);
-      offset += 4;
-      for (const river of chunk.rivers) {
-        view.setInt32(offset, river, true);
-        offset += 4;
-      }
+      // Rivers writing removed - no longer part of chunk data
     }
     
     // Write modifications count
@@ -1335,13 +1315,25 @@ export class WorldSerializer {
       const structures = JSON.parse(new TextDecoder().decode(structuresBytes));
       offset += structuresLength;
 
-      // Read rivers
-      const riversCount = view.getUint32(offset, true);
-      offset += 4;
-      const rivers: number[] = [];
-      for (let j = 0; j < riversCount; j++) {
-        rivers.push(view.getInt32(offset, true));
-        offset += 4;
+      // Backward compatibility: Skip legacy rivers data if present
+      // Legacy format had: rivers count (4 bytes) + rivers data (count * 4 bytes)
+      // We detect legacy rivers by checking if the next value looks like a small count
+      // (rivers count would typically be 0-1000, while chunk coordinates can be any int32)
+      if (offset + 4 <= buffer.byteLength) {
+        const possibleRiversCount = view.getUint32(offset, true);
+        
+        // Heuristic: If the value is small and non-negative, it's likely a rivers count
+        // Chunk coordinates (next expected value) can be negative or very large
+        if (possibleRiversCount >= 0 && possibleRiversCount < 10000) {
+          const expectedRiversDataSize = possibleRiversCount * 4;
+          
+          // Verify we have enough remaining data for this rivers section
+          if (offset + 4 + expectedRiversDataSize <= buffer.byteLength) {
+            // Skip rivers count and data
+            offset += 4; // Skip count
+            offset += expectedRiversDataSize; // Skip river IDs
+          }
+        }
       }
 
       chunks.push({
@@ -1351,7 +1343,7 @@ export class WorldSerializer {
         biomeMap: biomeMapBuffer,
         resources,
         structures,
-        rivers,
+        // rivers field removed - no longer part of SerializedChunk interface
       });
     }
 
@@ -1483,9 +1475,11 @@ export class WorldSerializer {
       if (!chunk.heightmap || !chunk.biomeMap) {
         throw new Error(`Invalid chunk at index ${i}: heightmap and biomeMap are required`);
       }
-      if (!Array.isArray(chunk.resources) || !Array.isArray(chunk.structures) || !Array.isArray(chunk.rivers)) {
-        throw new Error(`Invalid chunk at index ${i}: resources, structures, and rivers must be arrays`);
+      if (!Array.isArray(chunk.resources) || !Array.isArray(chunk.structures)) {
+        throw new Error(`Invalid chunk at index ${i}: resources and structures must be arrays`);
       }
+      // Backward compatibility: rivers field is optional (removed but may exist in legacy data)
+      // Don't validate rivers - it will be ignored during deserialization
     }
   }
 

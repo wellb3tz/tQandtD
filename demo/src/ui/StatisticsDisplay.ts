@@ -2,7 +2,7 @@
  * StatisticsDisplay - World statistics and distribution charts
  * 
  * Displays detailed world statistics including chunk count, biome distribution,
- * resource and structure counts, river count, and height statistics. Provides
+ * resource and structure counts, and height statistics. Provides
  * visual charts for biome distribution (pie chart) and resource counts (bar chart).
  */
 

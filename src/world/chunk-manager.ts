@@ -86,7 +86,7 @@ interface CacheEntry {
 
 /**
  * Manages chunk generation and caching for the procedural world.
- * Orchestrates all generators to create complete chunks with terrain, biomes, resources, structures, and rivers.
+ * Orchestrates all generators to create complete chunks with terrain, biomes, resources, and structures.
  */
 export class ChunkManager {
   private config: WorldConfig;
@@ -348,7 +348,6 @@ export class ChunkManager {
       biomeWeights,
       resources: [],
       structures: [],
-      rivers: new Set<number>(),
     };
 
     // Step 3: Generate resources based on biomes and noise

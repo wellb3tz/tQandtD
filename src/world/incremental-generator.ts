@@ -332,7 +332,6 @@ export class IncrementalGenerator {
       biomeWeights: partial.data.biomeWeights!,
       resources: [],
       structures: [],
-      rivers: partial.data.rivers || new Set<number>(),
     };
     
     // Generate resources using ResourceGenerator
@@ -375,7 +374,6 @@ export class IncrementalGenerator {
       biomeWeights: partial.data.biomeWeights!,
       resources: partial.data.resources || [],
       structures: [],
-      rivers: partial.data.rivers || new Set<number>(),
     };
     
     // Generate structures using StructurePlacer

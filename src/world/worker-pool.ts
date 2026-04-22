@@ -343,7 +343,6 @@ export class WorkerPool {
       biomeWeights: new Float32Array(serialized.biomeWeights),
       resources: serialized.resources,
       structures: serialized.structures,
-      rivers: new Set(serialized.rivers),
     };
   }
 

@@ -1,8 +1,10 @@
 /**
  * Water system type definitions and configuration interfaces
  * 
- * Provides comprehensive configuration for ocean, river, and lake water rendering
+ * Provides comprehensive configuration for ocean water rendering
  * with performance and rendering customization options.
+ * 
+ * The water system exclusively supports ocean water rendering.
  */
 
 import * as THREE from 'three';
@@ -27,33 +29,7 @@ export interface OceanConfig {
   normalMap?: THREE.Texture;
 }
 
-/**
- * River water configuration
- */
-export interface RiverConfig {
-  /** Water color as hex value (e.g., 0x4682b4) */
-  color: number;
-  /** Water opacity (0-1) */
-  opacity: number;
-  /** Material shininess (0-100) */
-  shininess: number;
-  /** Enable flow animation */
-  enableFlowAnimation: boolean;
-  /** Flow animation speed */
-  flowSpeed: number;
-}
 
-/**
- * Lake water configuration
- */
-export interface LakeConfig {
-  /** Water color as hex value (e.g., 0x1e90ff) */
-  color: number;
-  /** Water opacity (0-1) */
-  opacity: number;
-  /** Material shininess (0-100) */
-  shininess: number;
-}
 
 /**
  * Performance optimization settings
@@ -87,6 +63,9 @@ export interface RenderingConfig {
 
 /**
  * Complete water system configuration
+ * 
+ * Configures ocean water rendering with visual properties,
+ * performance optimizations, and rendering settings.
  */
 export interface WaterConfig {
   /** Enable water rendering */
@@ -95,10 +74,6 @@ export interface WaterConfig {
   seaLevel: number;
   /** Ocean water settings */
   ocean: OceanConfig;
-  /** River water settings */
-  river: RiverConfig;
-  /** Lake water settings */
-  lake: LakeConfig;
   /** Performance optimization settings */
   performance: PerformanceConfig;
   /** Rendering settings */
@@ -107,14 +82,19 @@ export interface WaterConfig {
 
 /**
  * Water mesh type identifier
+ * 
+ * Single literal type enforcing ocean-only water rendering.
  */
-export type WaterType = 'ocean' | 'river' | 'lake';
+export type WaterType = 'ocean';
 
 /**
  * Water mesh with metadata
+ * 
+ * Represents an ocean water mesh with rendering properties
+ * and optional animation data.
  */
 export interface WaterMesh {
-  /** Type of water body */
+  /** Type of water body (always 'ocean') */
   type: WaterType;
   /** Three.js mesh */
   mesh: THREE.Mesh;
@@ -131,15 +111,14 @@ export interface WaterMesh {
 
 /**
  * Water layer data for a chunk
+ * 
+ * Contains ocean water meshes and their container group
+ * for a single chunk.
  */
 export interface WaterLayerData {
   /** Ocean water meshes */
   ocean: WaterMesh[];
-  /** River water meshes */
-  rivers: WaterMesh[];
-  /** Lake water meshes */
-  lakes: WaterMesh[];
-  /** Container group for all water meshes */
+  /** Container group for ocean water meshes */
   group: THREE.Group;
 }
 

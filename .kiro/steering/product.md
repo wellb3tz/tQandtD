@@ -11,7 +11,6 @@ A TypeScript-based procedural world generation engine for browser-based applicat
 - **Multi-Layer Terrain**: Realistic heightmaps using fractional Brownian motion and domain warping
 - **3D Noise Support**: Volumetric noise for enhanced terrain features
 - **Enhanced Biome System**: 8 diverse ecosystems with smooth transitions, micro-biomes, and elevation bands
-- **River Networks**: Advanced river generation with tributaries, lakes, and deltas
 - **Resource & Structure Placement**: Natural distribution using Poisson Disk Sampling
 - **Performance Optimizations**: Multi-threaded generation, LOD system, incremental generation
 - **World Persistence**: JSON and binary serialization with compression and modification tracking
