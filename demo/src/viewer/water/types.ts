@@ -35,16 +35,8 @@ export interface OceanConfig {
  * Performance optimization settings
  */
 export interface PerformanceConfig {
-  /** Enable geometry pooling for reuse */
-  enableGeometryPooling: boolean;
-  /** Enable mesh merging for adjacent tiles */
-  enableMeshMerging: boolean;
-  /** Enable level of detail system */
-  enableLOD: boolean;
   /** Enable frustum culling */
   enableFrustumCulling: boolean;
-  /** Use instanced rendering for repeated patterns */
-  useInstancedRendering: boolean;
 }
 
 /**

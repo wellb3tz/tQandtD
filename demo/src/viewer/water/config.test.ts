@@ -208,19 +208,11 @@ describe('Water Configuration - Ocean Only', () => {
     it('should preserve performance configuration', () => {
       const config = validateWaterConfig({
         performance: {
-          enableGeometryPooling: false,
-          enableMeshMerging: false,
-          enableLOD: true,
           enableFrustumCulling: true,
-          useInstancedRendering: true,
         }
       });
 
-      expect(config.performance.enableGeometryPooling).toBe(false);
-      expect(config.performance.enableMeshMerging).toBe(false);
-      expect(config.performance.enableLOD).toBe(true);
       expect(config.performance.enableFrustumCulling).toBe(true);
-      expect(config.performance.useInstancedRendering).toBe(true);
     });
   });
 

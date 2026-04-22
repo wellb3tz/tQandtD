@@ -268,55 +268,6 @@ export class WaterLayerManager {
   }
   
   /**
-   * Apply LOD to ocean water meshes based on distance from camera
-   * 
-   * Reduces ocean water mesh complexity for distant chunks to improve performance.
-   * Uses simple visibility-based LOD: show/hide ocean water based on distance.
-   * 
-   * **Validates: Requirements 8.3**
-   * 
-   * @param cameraPosition - Camera position for distance calculation
-   * @param config - Water configuration with LOD settings
-   */
-  applyLOD(cameraPosition: THREE.Vector3, config: WaterConfig): void {
-    if (!config.performance.enableLOD) {
-      return;
-    }
-
-    // LOD distance thresholds (in world units)
-    const LOD_NEAR = 200;  // Full detail
-    const LOD_FAR = 500;   // Hide water
-
-    for (const [chunkKey, waterLayer] of this.waterLayers.entries()) {
-      // Calculate distance from camera to chunk center
-      const chunkPos = waterLayer.group.position;
-      
-      // Calculate distance manually to handle mocked Vector3 in tests
-      const dx = cameraPosition.x - chunkPos.x;
-      const dy = cameraPosition.y - chunkPos.y;
-      const dz = cameraPosition.z - chunkPos.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-      // Apply LOD based on distance
-      if (distance < LOD_NEAR) {
-        // Near: Full detail (all water visible)
-        waterLayer.group.visible = true;
-      } else if (distance < LOD_FAR) {
-        // Medium: Keep ocean visible
-        waterLayer.group.visible = true;
-        
-        // Keep ocean visible
-        for (const waterMesh of waterLayer.ocean) {
-          waterMesh.mesh.visible = true;
-        }
-      } else {
-        // Far: Hide all water
-        waterLayer.group.visible = false;
-      }
-    }
-  }
-  
-  /**
    * Apply frustum culling to ocean water meshes
    * 
    * Hides ocean water meshes outside the camera frustum to improve performance.

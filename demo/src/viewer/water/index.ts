@@ -41,14 +41,11 @@ export type {
 } from './UnderwaterTerrainProcessor';
 
 export {
-  calculateSaturation,
-  calculateBrightness,
   darkenColor,
   desaturateColor,
   applyDepthGradient,
   adjustUnderwaterColor,
   adjustUnderwaterColors,
-  getUnderwaterAdjustmentDetails,
 } from './UnderwaterTerrainProcessor';
 
 // Water layer manager

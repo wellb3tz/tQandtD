@@ -50,11 +50,7 @@ export const DEFAULT_WATER_CONFIG: WaterConfig = {
     enableDepthGradient: true,
   },
   performance: {
-    enableGeometryPooling: true,
-    enableMeshMerging: true,
-    enableLOD: false,
-    enableFrustumCulling: false, // Temporarily disabled for debugging
-    useInstancedRendering: false,
+    enableFrustumCulling: false,
   },
 };
 
@@ -132,11 +128,7 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
       enableDepthGradient: config.rendering?.enableDepthGradient ?? DEFAULT_WATER_CONFIG.rendering.enableDepthGradient,
     },
     performance: {
-      enableGeometryPooling: config.performance?.enableGeometryPooling ?? DEFAULT_WATER_CONFIG.performance.enableGeometryPooling,
-      enableMeshMerging: config.performance?.enableMeshMerging ?? DEFAULT_WATER_CONFIG.performance.enableMeshMerging,
-      enableLOD: config.performance?.enableLOD ?? DEFAULT_WATER_CONFIG.performance.enableLOD,
       enableFrustumCulling: config.performance?.enableFrustumCulling ?? DEFAULT_WATER_CONFIG.performance.enableFrustumCulling,
-      useInstancedRendering: config.performance?.useInstancedRendering ?? DEFAULT_WATER_CONFIG.performance.useInstancedRendering,
     },
   };
 

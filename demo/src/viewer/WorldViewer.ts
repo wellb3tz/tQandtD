@@ -7,7 +7,6 @@
  */
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ChunkData } from '@engine/index';
 import {
   getBiomeColor,
@@ -17,7 +16,6 @@ import {
   BiomeColor
 } from './materials';
 import { raycastTerrain } from '../utils/coordinates';
-import { GeometryPools } from './GeometryPools';
 import { WaterLayerManager } from './water/WaterLayerManager';
 import { adjustUnderwaterColors } from './water/UnderwaterTerrainProcessor';
 import { DEFAULT_WATER_CONFIG } from './water/config';
@@ -83,7 +81,6 @@ export class WorldViewer {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls | null; // Make optional for free camera mode
   
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -124,7 +121,6 @@ export class WorldViewer {
   private cameraTarget: THREE.Vector3; // Track target even in free camera mode
   
   // Performance optimizations
-  private geometryPools: GeometryPools | null;
   private frustum: THREE.Frustum;
   private frustumMatrix: THREE.Matrix4;
   private enableFrustumCulling: boolean;
@@ -139,7 +135,6 @@ export class WorldViewer {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 2000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.controls = null; // Will be initialized based on camera mode
     
     this.chunkMeshes = new Map();
     this.fogOfWarMeshes = new Map();
@@ -164,8 +159,7 @@ export class WorldViewer {
     this.isOrthographic = false;
     this.cameraTarget = new THREE.Vector3(0, 0, 0); // Default target at origin
     
-    // Initialize performance optimizations (lazy-initialized to avoid issues with mocked Three.js in tests)
-    this.geometryPools = null;
+    // Initialize performance optimizations
     this.frustum = new THREE.Frustum();
     this.frustumMatrix = new THREE.Matrix4();
     this.enableFrustumCulling = true;
@@ -318,50 +312,6 @@ export class WorldViewer {
   }
   
   /**
-   * Update camera position based on keyboard input (for orbit controls mode only)
-   */
-  private updateKeyboardMovement(): void {
-    // Only run this method when using orbit controls (not free camera)
-    if (!this.controls || this.useFreeCamera) return;
-    if (this.keyboardState.size === 0) return;
-    
-    const camera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-    
-    // Get camera forward and right vectors
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    forward.y = 0; // Keep movement horizontal
-    forward.normalize();
-    
-    const right = new THREE.Vector3();
-    right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
-    right.normalize();
-    
-    // Calculate movement vector
-    const movement = new THREE.Vector3();
-    
-    if (this.keyboardState.get('w')) {
-      movement.add(forward.multiplyScalar(this.keyboardMoveSpeed));
-    }
-    if (this.keyboardState.get('s')) {
-      movement.add(forward.multiplyScalar(-this.keyboardMoveSpeed));
-    }
-    if (this.keyboardState.get('a')) {
-      movement.add(right.multiplyScalar(-this.keyboardMoveSpeed));
-    }
-    if (this.keyboardState.get('d')) {
-      movement.add(right.multiplyScalar(this.keyboardMoveSpeed));
-    }
-    
-    // Apply movement to camera and controls target
-    if (movement.length() > 0) {
-      camera.position.add(movement);
-      this.controls.target.add(movement);
-      this.controls.update();
-    }
-  }
-
-  /**
    * Start the render loop
    */
   private startRenderLoop(): void {
@@ -373,17 +323,9 @@ export class WorldViewer {
         this.updateFreeCameraMovement();
       }
       
-      // Update keyboard movement (for orbit controls compatibility)
-      this.updateKeyboardMovement();
-      
       // Update follow terrain mode
       if (this.followTerrainMode) {
         this.updateFollowTerrainMode();
-      }
-      
-      // Update controls (only if using orbit controls)
-      if (this.controls && !this.useFreeCamera) {
-        this.controls.update();
       }
       
       // Perform frustum culling check periodically
@@ -398,11 +340,6 @@ export class WorldViewer {
         // Apply frustum culling to water meshes
         if (this.waterConfig.performance.enableFrustumCulling) {
           this.waterLayerManager.applyFrustumCulling(activeCamera, this.waterConfig);
-        }
-        
-        // Apply LOD to water meshes
-        if (this.waterConfig.performance.enableLOD) {
-          this.waterLayerManager.applyLOD(activeCamera.position, this.waterConfig);
         }
       }
       
@@ -1196,12 +1133,6 @@ export class WorldViewer {
   setCameraTarget(target: Vector3): void {
     // Update internal target
     this.cameraTarget.set(target.x, target.y, target.z);
-    
-    // Update controls target if they exist
-    if (this.controls) {
-      this.controls.target.set(target.x, target.y, target.z);
-      this.controls.update();
-    }
   }
 
   /**
@@ -1228,12 +1159,6 @@ export class WorldViewer {
     
     // Reset internal target
     this.cameraTarget.set(0, 0, 0);
-    
-    // Update orbit controls if they exist
-    if (this.controls) {
-      this.controls.target.set(0, 0, 0);
-      this.controls.update();
-    }
   }
   
   /**
@@ -1262,19 +1187,6 @@ export class WorldViewer {
       // Position orthographic camera for top-down view
       this.orthographicCamera.position.set(0, 200, 0);
       this.orthographicCamera.lookAt(0, 0, 0);
-      
-      // Update controls to use orthographic camera (if controls exist)
-      if (this.controls) {
-        this.controls.object = this.orthographicCamera;
-        this.controls.target.set(0, 0, 0);
-        this.controls.update();
-      }
-    } else {
-      // Switch back to perspective camera
-      if (this.controls) {
-        this.controls.object = this.camera;
-        this.controls.update();
-      }
     }
   }
   
@@ -1296,10 +1208,10 @@ export class WorldViewer {
    * Update camera position to follow terrain at fixed height
    */
   private updateFollowTerrainMode(): void {
-    if (!this.followTerrainMode || !this.controls) return;
+    if (!this.followTerrainMode) return;
     
     const camera = this.camera;
-    const targetPos = this.controls.target;
+    const targetPos = this.cameraTarget;
     
     // Raycast downward from camera position to find terrain height
     const raycaster = new THREE.Raycaster();
@@ -1345,14 +1257,6 @@ export class WorldViewer {
    * Get current camera target
    */
   getCameraTarget(): Vector3 {
-    if (this.controls) {
-      return {
-        x: this.controls.target.x,
-        y: this.controls.target.y,
-        z: this.controls.target.z
-      };
-    }
-    // Return internal target for free camera mode
     return {
       x: this.cameraTarget.x,
       y: this.cameraTarget.y,
@@ -1551,16 +1455,6 @@ export class WorldViewer {
   }
   
   /**
-   * Get geometry pool statistics
-   */
-  getPoolStats() {
-    if (!this.geometryPools) {
-      this.geometryPools = new GeometryPools();
-    }
-    return this.geometryPools.getStats();
-  }
-
-  /**
    * Get render statistics (vertex count, draw calls)
    */
   getRenderStats(): { vertexCount: number; drawCalls: number } {
@@ -1605,16 +1499,6 @@ export class WorldViewer {
     
     // Dispose water layer manager
     this.waterLayerManager.dispose();
-    
-    // Clear geometry pools
-    if (this.geometryPools) {
-      this.geometryPools.clear();
-    }
-    
-    // Dispose controls
-    if (this.controls) {
-      this.controls.dispose();
-    }
     
     // Dispose renderer
     this.renderer.dispose();
