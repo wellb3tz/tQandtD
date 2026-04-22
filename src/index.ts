@@ -51,11 +51,6 @@
  *     ],
  *     minDistance: 10,
  *     maxAttempts: 30
- *   },
- *   riverConfig: {
- *     sourceElevation: 0.7,
- *     minFlowLength: 10,
- *     flowWidth: 2
  *   }
  * });
  * 
@@ -115,13 +110,6 @@ export {
 export { TerrainGenerator, type TerrainConfig } from './gen/terrain';
 export { ResourceGenerator, type ResourceConfig, type ResourceTypeConfig } from './gen/resources';
 export { StructurePlacer, type StructureConfig, type StructureTypeConfig, type PlacementRule } from './gen/structures';
-export {
-  RiverNetworkGenerator,
-  type RiverNetworkConfig,
-  type RiverSegment,
-  type Lake,
-  type RiverNetwork,
-} from './gen/rivers';
 
 // Utilities
 export { poissonDiskSampling, type PoissonConfig } from './utils/poisson';

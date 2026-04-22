@@ -55,7 +55,6 @@ export default defineConfig({
           ],
           'engine-generation': [
             resolve(__dirname, './src/gen/terrain.ts'),
-            resolve(__dirname, './src/gen/rivers.ts'),
             resolve(__dirname, './src/gen/resources.ts'),
             resolve(__dirname, './src/gen/structures.ts')
           ],

@@ -1463,13 +1463,6 @@ export class ControlPanel {
       }
     }
 
-    // Sync river controls
-    if (config.riverNetworkConfig) {
-      this.updateSliderValue('sourceElevation', config.riverNetworkConfig.sourceElevation);
-      this.updateSliderValue('minFlowLength', config.riverNetworkConfig.minFlowLength);
-      this.updateSliderValue('flowWidth', config.riverNetworkConfig.flowWidth);
-    }
-
     // Sync resource controls
     if (config.resourceConfig) {
       if (config.resourceConfig.densityThreshold !== undefined) {

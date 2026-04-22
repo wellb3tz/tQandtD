@@ -96,10 +96,9 @@ export interface ChunkData {
 export enum GenerationStage {
   TERRAIN = 0,
   BIOMES = 1,
-  RIVERS = 2,
-  RESOURCES = 3,
-  STRUCTURES = 4,
-  COMPLETE = 5,
+  RESOURCES = 2,
+  STRUCTURES = 3,
+  COMPLETE = 4,
 }
 
 /**

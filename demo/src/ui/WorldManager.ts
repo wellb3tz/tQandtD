@@ -930,7 +930,6 @@ export class WorldManager {
         seed: config.seed,
         terrainConfig: config.terrainConfig,
         biomeConfig: config.biomeConfig,
-        riverNetworkConfig: config.riverNetworkConfig,
         resourceConfig: config.resourceConfig,
         structureConfig: config.structureConfig,
         lodConfig: config.lodConfig,

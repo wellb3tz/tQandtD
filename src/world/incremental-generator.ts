@@ -2,7 +2,6 @@ import { PartialChunkData, GenerationStage, IncrementalConfig } from './chunk';
 import { WorldConfig } from './chunk-manager';
 import { TerrainGenerator } from '../gen/terrain';
 import { BiomeSystem } from './biome';
-import { RiverNetworkGenerator } from '../gen/rivers';
 import { ResourceGenerator } from '../gen/resources';
 import { StructurePlacer } from '../gen/structures';
 import { chunkSeed } from '../core/hash';
@@ -16,7 +15,6 @@ export class IncrementalGenerator {
   private activeGenerations: Map<string, PartialChunkData>;
   private terrainGenerator: TerrainGenerator;
   private biomeSystem: BiomeSystem;
-  private riverGenerator: RiverNetworkGenerator;
   private resourceGenerator: ResourceGenerator;
   private structurePlacer: StructurePlacer;
   private worldConfig: WorldConfig;
@@ -27,7 +25,6 @@ export class IncrementalGenerator {
    * @param worldConfig - World configuration
    * @param terrainGenerator - Terrain generator instance
    * @param biomeSystem - Biome system instance
-   * @param riverGenerator - River generator instance
    * @param resourceGenerator - Resource generator instance
    * @param structurePlacer - Structure placer instance
    */
@@ -36,7 +33,6 @@ export class IncrementalGenerator {
     worldConfig: WorldConfig,
     terrainGenerator: TerrainGenerator,
     biomeSystem: BiomeSystem,
-    riverGenerator: RiverNetworkGenerator,
     resourceGenerator: ResourceGenerator,
     structurePlacer: StructurePlacer
   ) {
@@ -44,7 +40,6 @@ export class IncrementalGenerator {
     this.worldConfig = worldConfig;
     this.terrainGenerator = terrainGenerator;
     this.biomeSystem = biomeSystem;
-    this.riverGenerator = riverGenerator;
     this.resourceGenerator = resourceGenerator;
     this.structurePlacer = structurePlacer;
     this.activeGenerations = new Map();
@@ -164,8 +159,6 @@ export class IncrementalGenerator {
         return this.executeTerrainStage(partial, startTime);
       case GenerationStage.BIOMES:
         return this.executeBiomesStage(partial, startTime);
-      case GenerationStage.RIVERS:
-        return this.executeRiversStage(partial, startTime);
       case GenerationStage.RESOURCES:
         return this.executeResourcesStage(partial, startTime);
       case GenerationStage.STRUCTURES:
@@ -304,49 +297,6 @@ export class IncrementalGenerator {
     
     // Mark stage as complete
     partial.completedStages.add(GenerationStage.BIOMES);
-    
-    // Advance to next stage
-    partial.stage = GenerationStage.RIVERS;
-    
-    // Check time budget
-    const elapsed = performance.now() - startTime;
-    
-    // Return true if within budget (continue), false if exceeded (yield)
-    return elapsed < this.config.timeBudgetMs;
-  }
-
-  /**
-   * Executes river generation stage
-   * @param partial - Partial chunk data
-   * @param startTime - Stage start time
-   * @returns True if within budget (continue to next stage), false if exceeded (yield)
-   */
-  private executeRiversStage(partial: PartialChunkData, startTime: number): boolean {
-    if (!partial.data.heightmap || !partial.data.biomeMap) {
-      throw new Error('Heightmap and biomes must be generated before rivers');
-    }
-
-    // Generate unique seed for this chunk
-    const seed = chunkSeed(this.worldConfig.seed, partial.x, partial.y);
-    
-    // Create a temporary ChunkData object for river generation
-    const tempChunk = {
-      x: partial.x,
-      y: partial.y,
-      size: this.worldConfig.chunkSize,
-      heightmap: partial.data.heightmap,
-      biomeMap: partial.data.biomeMap,
-      biomeWeights: partial.data.biomeWeights!,
-      resources: [],
-      structures: [],
-      rivers: new Set<number>(),
-    };
-    
-    // Generate rivers using RiverGenerator
-    partial.data.rivers = this.riverGenerator.generateRivers(tempChunk, seed);
-    
-    // Mark stage as complete
-    partial.completedStages.add(GenerationStage.RIVERS);
     
     // Advance to next stage
     partial.stage = GenerationStage.RESOURCES;

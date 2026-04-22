@@ -3,7 +3,6 @@ import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
-import { RiverNetworkConfig, RiverNetworkGenerator } from '../gen/rivers';
 import { chunkSeed } from '../core/hash';
 import { LODManager, LODConfig, LODLevel } from './lod';
 import { IncrementalGenerator } from './incremental-generator';
@@ -36,8 +35,6 @@ export interface ChunkPerformanceMetrics {
   resourceTime: number;
   /** Time spent on structure generation (ms) */
   structureTime: number;
-  /** Time spent on river generation (ms) */
-  riverTime: number;
 }
 
 /**
@@ -61,8 +58,6 @@ export interface WorldConfig {
   resourceConfig: ResourceConfig;
   /** Structure placement configuration */
   structureConfig: StructureConfig;
-  /** River network configuration */
-  riverNetworkConfig: RiverNetworkConfig;
   /** 3D noise configuration (optional) */
   noise3DConfig?: Noise3DConfig;
   /** Enhanced biome configuration (optional) */
@@ -99,7 +94,6 @@ export class ChunkManager {
   private biomeSystem: BiomeSystem;
   private resourceGenerator: ResourceGenerator;
   private structurePlacer: StructurePlacer;
-  private riverGenerator: RiverNetworkGenerator;
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   private workerPool: WorkerPool | null;
@@ -138,30 +132,6 @@ export class ChunkManager {
     this.resourceGenerator = new ResourceGenerator(config.resourceConfig);
     this.structurePlacer = new StructurePlacer(config.structureConfig);
     
-    // Initialize RiverNetworkGenerator for river generation
-    // Provide default configuration if not specified
-    const defaultRiverNetworkConfig: RiverNetworkConfig = {
-      sourceElevation: 0.7,
-      minFlowLength: 10,
-      flowWidth: 2,
-      enableTributaries: true,
-      maxTributaryOrder: 2,
-      tributaryProbability: 0.3,
-      enableLakes: true,
-      lakeDepressionThreshold: 0.05,
-      maxLakeSize: 100,
-      enableDeltas: true,
-      deltaBranchCount: 3,
-      deltaSpreadAngle: Math.PI / 3,
-      minFlow: 1.0,
-      maxFlow: 100.0,
-      widthScale: 0.5
-    };
-    
-    this.riverGenerator = new RiverNetworkGenerator(
-      config.riverNetworkConfig ?? defaultRiverNetworkConfig
-    );
-    
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig
       ? new WorkerPool({
@@ -180,7 +150,6 @@ export class ChunkManager {
           config,
           this.terrainGenerator,
           this.biomeSystem,
-          this.riverGenerator,
           this.resourceGenerator,
           this.structurePlacer
         )
@@ -396,14 +365,6 @@ export class ChunkManager {
     chunk.structures = this.structurePlacer.generateStructures(chunk, seed);
     if (this.config.enablePerformanceMetrics) {
       metrics.structureTime = performance.now() - structureStart;
-    }
-
-    // Step 5: Generate rivers using downhill flow
-    this.config.onProgress?.('rivers', 0.9);
-    const riverStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    chunk.rivers = this.riverGenerator.generateRivers(chunk, seed);
-    if (this.config.enablePerformanceMetrics) {
-      metrics.riverTime = performance.now() - riverStart;
     }
 
     this.config.onProgress?.('complete', 1.0);
