@@ -89,45 +89,6 @@ export interface ChunkData {
 }
 
 /**
- * Generation stage enumeration for incremental chunk generation
- */
-export enum GenerationStage {
-  TERRAIN = 0,
-  BIOMES = 1,
-  RESOURCES = 2,
-  STRUCTURES = 3,
-  COMPLETE = 4,
-}
-
-/**
- * Partial chunk data during incremental generation
- */
-export interface PartialChunkData {
-  /** Chunk X coordinate */
-  x: number;
-  /** Chunk Y coordinate */
-  y: number;
-  /** Current generation stage */
-  stage: GenerationStage;
-  /** Set of stages that have completed their work */
-  completedStages: Set<GenerationStage>;
-  /** Partial chunk data (fields populated as stages complete) */
-  data: Partial<ChunkData>;
-  /** Progress tracking for BIOMES stage (for intra-stage yielding) */
-  biomesProgress?: { currentY: number; currentX: number };
-}
-
-/**
- * Incremental generation configuration
- */
-export interface IncrementalConfig {
-  /** Time budget per stage in ms (default: 16 for 60fps) */
-  timeBudgetMs: number;
-  /** Enable incremental generation (default: false) */
-  enabled: boolean;
-}
-
-/**
  * Convert world coordinates to chunk coordinates
  * @param worldX - World X coordinate
  * @param worldY - World Y coordinate

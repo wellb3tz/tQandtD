@@ -440,11 +440,8 @@ export class WorldViewer {
       this.removeChunk(chunkX, chunkY, false); // Don't create fog of war when replacing
     }
     
-    // Get LOD level from chunk metadata if available
-    const lodLevel = (data as any).lodLevel;
-    
     const chunkMesh: ChunkMesh = {
-      terrain: this.createTerrainMesh(chunkX, chunkY, data, lodLevel, partial, stage),
+      terrain: this.createTerrainMesh(chunkX, chunkY, data, partial, stage),
       visible: true
     };
     
@@ -471,25 +468,21 @@ export class WorldViewer {
     }
     
     // Only add complete layers if not partial or if stage is complete
-    // Resources: Render only on HIGH LOD
-    if (!partial || (stage !== undefined && stage >= 2)) { // GenerationStage.RESOURCES = 2
+    // Resources: always render when available
+    if (!partial || (stage !== undefined && stage >= 2)) {
       if (data.resources && data.resources.length > 0) {
-        if (lodLevel === undefined || lodLevel === 0) { // Only HIGH
-          chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
-          chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
-          this.scene.add(chunkMesh.resources);
-        }
+        chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
+        chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
+        this.scene.add(chunkMesh.resources);
       }
     }
     
-    // Structures: Render only on HIGH and MEDIUM LOD
-    if (!partial || (stage !== undefined && stage >= 3)) { // GenerationStage.STRUCTURES = 3
+    // Structures: render when available
+    if (!partial || (stage !== undefined && stage >= 3)) {
       if (data.structures && data.structures.length > 0) {
-        if (lodLevel === undefined || lodLevel <= 1) { // HIGH or MEDIUM
-          chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
-          chunkMesh.structures.visible = this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
-          this.scene.add(chunkMesh.structures);
-        }
+        chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
+        chunkMesh.structures.visible = this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
+        this.scene.add(chunkMesh.structures);
       }
     }
     
@@ -666,7 +659,6 @@ export class WorldViewer {
 
   /**
    * Create terrain mesh from heightmap data with smooth biome color blending
-   * Optionally applies LOD visualization (tint based on LOD level)
    * Optionally applies partial generation visualization (opacity/color based on stage)
    * 
    * Optimized for performance with large chunk counts:
@@ -674,7 +666,7 @@ export class WorldViewer {
    * - Pre-allocates arrays to avoid resizing
    * - Uses indexed geometry to reduce vertex count
    */
-  private createTerrainMesh(chunkX: number, chunkY: number, data: ChunkData, lodLevel?: number, partial: boolean = false, stage?: number): THREE.Mesh {
+  private createTerrainMesh(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): THREE.Mesh {
     const chunkSize = data.size;
     
     // VALIDATION: Check if heightmap has the correct size
@@ -682,7 +674,7 @@ export class WorldViewer {
     if (data.heightmap.length !== expectedHeightmapSize) {
       console.error(
         `Heightmap size mismatch! Expected ${expectedHeightmapSize} (${chunkSize + 1}x${chunkSize + 1}), ` +
-        `got ${data.heightmap.length}. Chunk: (${chunkX}, ${chunkY}), LOD: ${lodLevel}`
+        `got ${data.heightmap.length}. Chunk: (${chunkX}, ${chunkY})`
       );
       
       // Create fallback heightmap with the correct size
@@ -728,17 +720,6 @@ export class WorldViewer {
         }
       );
     }
-    
-    // LOD visualization tints
-    const lodTints = [
-      { r: 1.0, g: 1.0, b: 1.0 },    // HIGH: No tint (white)
-      { r: 1.0, g: 1.0, b: 0.8 },    // MEDIUM: Slight yellow tint
-      { r: 0.8, g: 0.8, b: 1.0 }     // LOW: Slight blue tint
-    ];
-    
-    const lodTint = lodLevel !== undefined && lodLevel >= 0 && lodLevel < lodTints.length
-      ? lodTints[lodLevel]
-      : { r: 1.0, g: 1.0, b: 1.0 };
     
     // Partial generation visualization
     let partialTint = { r: 1.0, g: 1.0, b: 1.0 };
@@ -800,9 +781,9 @@ export class WorldViewer {
         }
         
         // Apply tints
-        colors[vertexIndex] = color.r * lodTint.r * partialTint.r;
-        colors[vertexIndex + 1] = color.g * lodTint.g * partialTint.g;
-        colors[vertexIndex + 2] = color.b * lodTint.b * partialTint.b;
+        colors[vertexIndex] = color.r * partialTint.r;
+        colors[vertexIndex + 1] = color.g * partialTint.g;
+        colors[vertexIndex + 2] = color.b * partialTint.b;
       }
     }
     
@@ -849,10 +830,7 @@ export class WorldViewer {
     mesh.receiveShadow = true;
     mesh.castShadow = true;
     
-    // Store LOD level and partial status in mesh userData for reference
-    if (lodLevel !== undefined) {
-      mesh.userData.lodLevel = lodLevel;
-    }
+    // Store partial status in mesh userData for reference
     if (partial) {
       mesh.userData.partial = true;
       mesh.userData.stage = stage;

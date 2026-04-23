@@ -6,7 +6,7 @@
  * updates, chunk loading coordination, and event system for component communication.
  */
 
-import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, LODManager, LODLevel } from '@engine/index';
+import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType } from '@engine/index';
 
 /**
  * 3D vector for camera position and target
@@ -36,7 +36,6 @@ export interface AppState {
   chunkManager: ChunkManager | null;
   loadedChunks: Map<string, ChunkData>;
   config: WorldConfig;
-  lodManager: LODManager | null;
   
   // UI state
   cameraPosition: Vector3;
@@ -67,21 +66,12 @@ export interface AppState {
   loadedChunkCount: number;
   renderedVertexCount: number;
   
-  // LOD statistics
-  lodHighCount: number;
-  lodMediumCount: number;
-  lodLowCount: number;
-  
   // Worker pool statistics
   workerPoolEnabled: boolean;
   activeWorkers: number;
   queuedTasks: number;
   completedTasks: number;
   avgWorkerTime: number;
-  
-  // Incremental generation statistics
-  incrementalEnabled: boolean;
-  chunksInProgress: Map<string, number>; // chunk key -> GenerationStage
   
   // Statistics
   biomeDistribution: Map<BiomeType, number>;
@@ -190,7 +180,6 @@ export class DemoApp {
       chunkManager: null,
       loadedChunks: new Map(),
       config: { ...DEFAULT_CONFIG },
-      lodManager: null,
       
       cameraPosition: { x: 50, y: 100, z: 50 },
       cameraTarget: { x: 0, y: 0, z: 0 },
@@ -217,18 +206,11 @@ export class DemoApp {
       loadedChunkCount: 0,
       renderedVertexCount: 0,
       
-      lodHighCount: 0,
-      lodMediumCount: 0,
-      lodLowCount: 0,
-      
       workerPoolEnabled: false,
       activeWorkers: 0,
       queuedTasks: 0,
       completedTasks: 0,
       avgWorkerTime: 0,
-      
-      incrementalEnabled: false,
-      chunksInProgress: new Map(),
       
       biomeDistribution: new Map(),
       resourceCounts: new Map(),
@@ -380,9 +362,6 @@ export class DemoApp {
     let chunksLoaded = 0;
 
     try {
-      // Check if incremental generation is enabled
-      const incrementalEnabled = this.state.config.incrementalConfig?.enabled || false;
-
       // Load chunks in a square grid around center
       for (let dy = -radius; dy <= radius; dy++) {
         for (let dx = -radius; dx <= radius; dx++) {
@@ -395,49 +374,14 @@ export class DemoApp {
             continue;
           }
           
-          // Skip if already in progress
-          if (this.state.chunksInProgress.has(key)) {
-            continue;
-          }
+          // Generate chunk directly
+          const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
           
-          if (incrementalEnabled) {
-            // Start incremental generation
-            const partial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
-            
-            // Track with initial stage
-            this.state.chunksInProgress.set(key, partial.stage);
-            
-            // Mark as explored
-            this.state.exploredChunks.add(key);
-            
-            // Emit initial chunk loaded event with partial data
-            // The continueIncrementalGeneration() method will handle progressive updates
-            this.emit(AppEvent.CHUNK_LOADED, { 
-              chunkX, 
-              chunkY, 
-              chunk: partial.data, 
-              partial: true, 
-              stage: partial.stage 
-            });
-            
-            chunksLoaded++;
-          } else {
-            // Generate chunk immediately
-            let chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
-            
-            // Apply LOD if enabled
-            if (this.state.lodManager) {
-              const lodLevel = this.getChunkLODLevel(chunkX, chunkY);
-              chunk = this.state.lodManager.applyLOD(chunk, lodLevel);
-              (chunk as any).lodLevel = lodLevel;
-            }
-            
-            this.state.loadedChunks.set(key, chunk);
-            this.state.exploredChunks.add(key); // Mark as explored
-            chunksLoaded++;
-            
-            this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
-          }
+          this.state.loadedChunks.set(key, chunk);
+          this.state.exploredChunks.add(key); // Mark as explored
+          chunksLoaded++;
+          
+          this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
         }
       }
       
@@ -445,17 +389,10 @@ export class DemoApp {
       const endTime = performance.now();
       const avgTime = chunksLoaded > 0 ? (endTime - startTime) / chunksLoaded : 0;
       
-      // Update LOD statistics
-      if (this.state.lodManager) {
-        this.updateChunkLODLevels();
-      }
-      
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
         loadedChunkCount: this.state.loadedChunks.size,
         avgGenerationTime: avgTime,
-        incrementalEnabled,
-        chunksInProgress: new Map(this.state.chunksInProgress)
       });
       
       // Only log if chunks were actually loaded (and more than 5 chunks)
@@ -517,87 +454,6 @@ export class DemoApp {
   }
 
   /**
-   * Continue incremental generation for all chunks in progress
-   * Should be called in the render loop
-   * Processes a limited number of chunks per frame to avoid blocking
-   */
-  async continueIncrementalGeneration(): Promise<void> {
-    if (!this.state.chunkManager || !this.state.incrementalEnabled) {
-      return;
-    }
-
-    const chunksToRemove: string[] = [];
-    const maxChunksPerFrame = 3; // Limit to 3 chunks per frame to avoid lag
-    let processedCount = 0;
-
-    // Continue generation for chunks in progress (limited per frame)
-    for (const [key, stage] of this.state.chunksInProgress.entries()) {
-      if (processedCount >= maxChunksPerFrame) {
-        break; // Stop processing to avoid blocking the main thread
-      }
-      
-      const [chunkX, chunkY] = key.split(',').map(Number);
-      
-      try {
-        // Continue generation for this chunk
-        const complete = this.state.chunkManager.continueGeneration(chunkX, chunkY);
-        
-        // Get updated stage
-        const newStage = this.state.chunkManager.getGenerationStage(chunkX, chunkY);
-        
-        if (complete && newStage !== undefined) {
-          // Generation complete - get final chunk
-          const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
-          
-          // Apply LOD if enabled
-          let finalChunk = chunk;
-          if (this.state.lodManager) {
-            const lodLevel = this.getChunkLODLevel(chunkX, chunkY);
-            finalChunk = this.state.lodManager.applyLOD(chunk, lodLevel);
-            (finalChunk as any).lodLevel = lodLevel;
-          }
-          
-          // Move to loaded chunks
-          this.state.loadedChunks.set(key, finalChunk);
-          chunksToRemove.push(key);
-          
-          // Emit completion event
-          this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk: finalChunk, partial: false });
-        } else if (newStage !== undefined && newStage !== stage) {
-          // Stage changed - update progress
-          this.state.chunksInProgress.set(key, newStage);
-          
-          // Get partial chunk data
-          const partial = this.state.chunkManager.getChunkIncremental(chunkX, chunkY);
-          
-          // Emit progress event (viewer will skip if heightmap not ready)
-          this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk: partial.data, partial: true, stage: newStage });
-        }
-        
-        processedCount++;
-      } catch (error) {
-        console.error(`Error continuing generation for chunk (${chunkX}, ${chunkY}):`, error);
-        chunksToRemove.push(key);
-        processedCount++;
-      }
-    }
-
-    // Remove completed chunks from progress map
-    for (const key of chunksToRemove) {
-      this.state.chunksInProgress.delete(key);
-    }
-
-    // Update state if anything changed
-    if (chunksToRemove.length > 0) {
-      this.updateState({
-        loadedChunks: new Map(this.state.loadedChunks),
-        loadedChunkCount: this.state.loadedChunks.size,
-        chunksInProgress: new Map(this.state.chunksInProgress)
-      });
-    }
-  }
-
-  /**
    * Update Worker Pool configuration
    */
   updateEngineConfig(config: Partial<WorldConfig>): void {
@@ -622,7 +478,6 @@ export class DemoApp {
       
       // Check if this requires recreating the ChunkManager
       const shouldRecreateManager = 
-        'incrementalConfig' in config ||
         'maxCacheSize' in config ||
         'workerPoolConfig' in config;
       
@@ -638,12 +493,6 @@ export class DemoApp {
       if (oldManager?.workerPool) {
         console.log('[DemoApp] Shutting down old worker pool');
         oldManager.workerPool.shutdown();
-      }
-      
-      // Update LOD manager if LOD config changed
-      let lodManager = this.state.lodManager;
-      if ('lodConfig' in config) {
-        lodManager = config.lodConfig ? new LODManager(config.lodConfig) : null;
       }
       
       // Handle worker pool configuration
@@ -688,14 +537,9 @@ export class DemoApp {
         this.state.chunkManager = new ChunkManager(newConfig);
       }
       
-      // Update incremental generation enabled state
-      const incrementalEnabled = newConfig.incrementalConfig?.enabled || false;
-      
       this.updateState({ 
-        config: newConfig, 
-        lodManager,
+        config: newConfig,
         workerPoolEnabled,
-        incrementalEnabled
       });
       this.emit(AppEvent.CONFIG_CHANGED, newConfig);
     } finally {
@@ -754,15 +598,10 @@ export class DemoApp {
   }
 
   /**
-   * Update camera position and recalculate LOD levels if needed
+   * Update camera position
    */
   updateCameraPosition(position: Vector3): void {
     this.updateState({ cameraPosition: position });
-    
-    // If LOD is enabled, update chunk LOD levels based on new camera position
-    if (this.state.lodManager) {
-      this.updateChunkLODLevels();
-    }
   }
 
   /**
@@ -832,65 +671,6 @@ export class DemoApp {
     const worldX = hit.point.x;
     const worldY = hit.point.z;
     editor.showBrushPreview(worldX, worldY);
-  }
-
-  /**
-   * Update LOD levels for all loaded chunks based on camera position
-   */
-  private updateChunkLODLevels(): void {
-    if (!this.state.lodManager) return;
-
-    const chunkSize = this.state.config.chunkSize || 32;
-    const cameraChunkX = Math.floor(this.state.cameraPosition.x / chunkSize);
-    const cameraChunkY = Math.floor(this.state.cameraPosition.z / chunkSize);
-
-    let highCount = 0;
-    let mediumCount = 0;
-    let lowCount = 0;
-
-    // Calculate LOD level for each loaded chunk
-    for (const [, chunk] of this.state.loadedChunks.entries()) {
-      const level = this.state.lodManager.getLODLevel(
-        chunk.x,
-        chunk.y,
-        cameraChunkX,
-        cameraChunkY
-      );
-
-      // Count chunks at each LOD level
-      if (level === LODLevel.HIGH) {
-        highCount++;
-      } else if (level === LODLevel.MEDIUM) {
-        mediumCount++;
-      } else {
-        lowCount++;
-      }
-
-      // Store LOD level in chunk metadata for rendering
-      (chunk as any).lodLevel = level;
-    }
-
-    // Update LOD statistics
-    this.updateState({
-      lodHighCount: highCount,
-      lodMediumCount: mediumCount,
-      lodLowCount: lowCount
-    });
-  }
-
-  /**
-   * Get LOD level for a specific chunk
-   */
-  getChunkLODLevel(chunkX: number, chunkY: number): LODLevel {
-    if (!this.state.lodManager) {
-      return LODLevel.HIGH;
-    }
-
-    const chunkSize = this.state.config.chunkSize || 32;
-    const cameraChunkX = Math.floor(this.state.cameraPosition.x / chunkSize);
-    const cameraChunkY = Math.floor(this.state.cameraPosition.z / chunkSize);
-
-    return this.state.lodManager.getLODLevel(chunkX, chunkY, cameraChunkX, cameraChunkY);
   }
 
   /**

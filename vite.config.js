@@ -59,9 +59,7 @@ export default defineConfig({
             resolve(__dirname, './src/gen/structures.ts')
           ],
           'engine-advanced': [
-            resolve(__dirname, './src/world/lod.ts'),
             resolve(__dirname, './src/world/worker-pool.ts'),
-            resolve(__dirname, './src/world/incremental-generator.ts'),
             resolve(__dirname, './src/world/serialization.ts')
           ]
         },

@@ -529,113 +529,6 @@ describe('Preservation: Non-WorkerPool Configuration Updates', () => {
   }, 10000);
 
   /**
-   * Test: LOD configuration updates work correctly
-   * 
-   * Validates that LOD config updates continue to work without affecting
-   * WorkerPool behavior. Note: LOD config alone doesn't trigger ChunkManager
-   * recreation, so lodManager remains null unless combined with other config changes.
-   * 
-   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
-   */
-  it('LOD configuration updates work correctly', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        // Generate random LOD config
-        fc.record({
-          highDetailRadius: fc.integer({ min: 1, max: 3 }),
-          mediumDetailRadius: fc.integer({ min: 2, max: 5 }),
-          lowDetailRadius: fc.integer({ min: 3, max: 8 }),
-          highDetailResolution: fc.integer({ min: 16, max: 64 }),
-          mediumDetailResolution: fc.integer({ min: 8, max: 32 }),
-          lowDetailResolution: fc.integer({ min: 4, max: 16 }),
-        }),
-        async (lodConfig) => {
-          // Clear worker instances from previous property test iterations
-          workerInstances.length = 0;
-          
-          // Dynamically import DemoApp
-          const { DemoApp } = await import('../../demo/src/core/DemoApp');
-          
-          // Create DemoApp instance WITHOUT worker pool
-          const app = new DemoApp();
-          await app.initialize();
-
-          // Update LOD config (should NOT create WorkerPool)
-          app.updateEngineConfig({ lodConfig });
-
-          // Verify no workers created
-          expect(workerInstances.length).toBe(0);
-
-          // Verify LOD config was updated in state
-          const state = app.getState();
-          expect(state.config.lodConfig).toEqual(lodConfig);
-          
-          // Note: lodManager remains null because LOD config alone doesn't trigger
-          // ChunkManager recreation. This is the observed baseline behavior.
-          expect(state.lodManager).toBeNull();
-
-          // Cleanup
-          app.destroy();
-        }
-      ),
-      {
-        numRuns: 10,
-        verbose: true,
-      }
-    );
-  }, 30000);
-
-  /**
-   * Test: Incremental generation configuration updates work correctly
-   * 
-   * Validates that incremental generation config updates continue to work
-   * without affecting WorkerPool behavior.
-   * 
-   * **EXPECTED OUTCOME**: Test PASSES on both unfixed and fixed code
-   */
-  it('Incremental generation configuration updates work correctly', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        // Generate random incremental config
-        fc.record({
-          enabled: fc.boolean(),
-          timeBudgetMs: fc.integer({ min: 5, max: 50 }),
-          stagesPerFrame: fc.integer({ min: 1, max: 3 }),
-        }),
-        async (incrementalConfig) => {
-          // Clear worker instances from previous property test iterations
-          workerInstances.length = 0;
-          
-          // Dynamically import DemoApp
-          const { DemoApp } = await import('../../demo/src/core/DemoApp');
-          
-          // Create DemoApp instance WITHOUT worker pool
-          const app = new DemoApp();
-          await app.initialize();
-
-          // Update incremental config (should recreate ChunkManager but NOT create WorkerPool)
-          app.updateEngineConfig({ incrementalConfig });
-
-          // Verify no workers created
-          expect(workerInstances.length).toBe(0);
-
-          // Verify incremental config was updated
-          const state = app.getState();
-          expect(state.config.incrementalConfig).toEqual(incrementalConfig);
-          expect(state.incrementalEnabled).toBe(incrementalConfig.enabled);
-
-          // Cleanup
-          app.destroy();
-        }
-      ),
-      {
-        numRuns: 10,
-        verbose: true,
-      }
-    );
-  }, 30000);
-
-  /**
    * Test: Multiple non-workerPoolConfig updates in sequence
    * 
    * Validates that multiple configuration updates work correctly without
@@ -683,23 +576,11 @@ describe('Preservation: Non-WorkerPool Configuration Updates', () => {
     app.updateEngineConfig({ maxCacheSize: 500 });
     expect(workerInstances.length).toBe(0);
 
-    // Update incremental config (requires ChunkManager recreation)
-    app.updateEngineConfig({
-      incrementalConfig: {
-        enabled: true,
-        timeBudgetMs: 10,
-        stagesPerFrame: 2,
-      },
-    });
-    expect(workerInstances.length).toBe(0);
-
     // Verify all configs were updated
     const state = app.getState();
     expect(state.config.terrainConfig?.baseScale).toBe(0.02);
     expect(state.config.biomeConfig?.temperatureScale).toBe(0.008);
     expect(state.config.maxCacheSize).toBe(500);
-    expect(state.config.incrementalConfig?.enabled).toBe(true);
-    expect(state.incrementalEnabled).toBe(true);
 
     // Verify ChunkManager still works
     expect(state.chunkManager).not.toBeNull();

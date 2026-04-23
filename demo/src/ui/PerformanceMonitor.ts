@@ -20,15 +20,6 @@ export interface GenerationBreakdown {
 }
 
 /**
- * LOD statistics
- */
-export interface LODStats {
-  highCount: number;
-  mediumCount: number;
-  lowCount: number;
-}
-
-/**
  * Worker pool statistics
  */
 export interface WorkerStats {
@@ -36,14 +27,6 @@ export interface WorkerStats {
   queuedTasks: number;
   completedTasks: number;
   avgWorkerTime: number;
-}
-
-/**
- * Incremental generation statistics
- */
-export interface IncrementalStats {
-  chunksInProgress: Map<string, number>;
-  currentFPS: number;
 }
 
 /**
@@ -69,20 +52,11 @@ export class PerformanceMonitor {
   private resourcesTimeElement: HTMLElement | null = null;
   private structuresTimeElement: HTMLElement | null = null;
   
-  // LOD stats elements
-  private lodHighElement: HTMLElement | null = null;
-  private lodMediumElement: HTMLElement | null = null;
-  private lodLowElement: HTMLElement | null = null;
-  
   // Worker stats elements
   private activeWorkersElement: HTMLElement | null = null;
   private queuedTasksElement: HTMLElement | null = null;
   private completedTasksElement: HTMLElement | null = null;
   private avgWorkerTimeElement: HTMLElement | null = null;
-  
-  // Incremental stats elements
-  private chunksInProgressElement: HTMLElement | null = null;
-  private incrementalFPSElement: HTMLElement | null = null;
   
   // FPS tracking
   private fpsHistory: number[] = [];
@@ -131,9 +105,7 @@ export class PerformanceMonitor {
     this.createGenerationSection();
     this.createMemorySection();
     this.createRenderSection();
-    this.createLODSection();
     this.createWorkerSection();
-    this.createIncrementalSection();
   }
 
   /**
@@ -199,19 +171,6 @@ export class PerformanceMonitor {
   }
 
   /**
-   * Create LOD statistics section
-   */
-  private createLODSection(): void {
-    const section = this.createSection('LOD System');
-    
-    this.lodHighElement = this.createMetric(section, 'High Detail', '0');
-    this.lodMediumElement = this.createMetric(section, 'Medium Detail', '0');
-    this.lodLowElement = this.createMetric(section, 'Low Detail', '0');
-    
-    this.container?.appendChild(section);
-  }
-
-  /**
    * Create worker pool statistics section
    */
   private createWorkerSection(): void {
@@ -221,18 +180,6 @@ export class PerformanceMonitor {
     this.queuedTasksElement = this.createMetric(section, 'Queued Tasks', '0');
     this.completedTasksElement = this.createMetric(section, 'Completed', '0');
     this.avgWorkerTimeElement = this.createMetric(section, 'Avg Time', '0 ms');
-    
-    this.container?.appendChild(section);
-  }
-
-  /**
-   * Create incremental generation section
-   */
-  private createIncrementalSection(): void {
-    const section = this.createSection('Incremental Gen');
-    
-    this.chunksInProgressElement = this.createMetric(section, 'In Progress', '0');
-    this.incrementalFPSElement = this.createMetric(section, 'Target FPS', '60');
     
     this.container?.appendChild(section);
   }
@@ -465,24 +412,6 @@ export class PerformanceMonitor {
   }
 
   /**
-   * Update LOD statistics
-   */
-  updateLODStats(stats: LODStats): void {
-    if (this.lodHighElement) {
-      this.lodHighElement.textContent = stats.highCount.toString();
-      this.lodHighElement.style.color = 'var(--success-color)';
-    }
-    if (this.lodMediumElement) {
-      this.lodMediumElement.textContent = stats.mediumCount.toString();
-      this.lodMediumElement.style.color = 'var(--warning-color)';
-    }
-    if (this.lodLowElement) {
-      this.lodLowElement.textContent = stats.lowCount.toString();
-      this.lodLowElement.style.color = 'var(--text-color)';
-    }
-  }
-
-  /**
    * Update worker pool statistics
    */
   updateWorkerStats(stats: WorkerStats): void {
@@ -497,18 +426,6 @@ export class PerformanceMonitor {
     }
     if (this.avgWorkerTimeElement) {
       this.avgWorkerTimeElement.textContent = `${stats.avgWorkerTime.toFixed(2)} ms`;
-    }
-  }
-
-  /**
-   * Update incremental generation statistics
-   */
-  updateIncrementalStats(stats: IncrementalStats): void {
-    if (this.chunksInProgressElement) {
-      this.chunksInProgressElement.textContent = stats.chunksInProgress.size.toString();
-    }
-    if (this.incrementalFPSElement) {
-      this.incrementalFPSElement.textContent = stats.currentFPS.toString();
     }
   }
 

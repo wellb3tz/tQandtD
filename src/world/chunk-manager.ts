@@ -1,11 +1,9 @@
-import { ChunkData, PartialChunkData, IncrementalConfig, Structure } from './chunk';
+import { ChunkData, Structure } from './chunk';
 import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
 import { chunkSeed } from '../core/hash';
-import { LODManager, LODConfig, LODLevel } from './lod';
-import { IncrementalGenerator } from './incremental-generator';
 import { ChunkModification, WorldSerializer } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
@@ -64,10 +62,6 @@ export interface WorldConfig {
   enhancedBiomeConfig?: EnhancedBiomeConfig;
   /** Worker pool configuration (optional) */
   workerPoolConfig?: WorkerPoolConfig;
-  /** LOD configuration (optional) */
-  lodConfig?: LODConfig;
-  /** Incremental generation configuration (optional) */
-  incrementalConfig?: IncrementalConfig;
   /** Maximum number of chunks to cache (default: 100) */
   maxCacheSize?: number;
   /** Enable performance timing measurements (default: false) */
@@ -97,8 +91,6 @@ export class ChunkManager {
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   private workerPool: WorkerPool | null;
-  private lodManager: LODManager | null;
-  private incrementalGenerator: IncrementalGenerator | null;
   private worldSerializer: WorldSerializer;
   private cache: Map<string, CacheEntry>;
   private maxCacheSize: number;
@@ -140,21 +132,6 @@ export class ChunkManager {
         })
       : null;
     
-    // Initialize LODManager if LOD is enabled (Requirement 10.1)
-    this.lodManager = config.lodConfig ? new LODManager(config.lodConfig) : null;
-    
-    // Initialize IncrementalGenerator if incremental generation is enabled (Requirement 11.1)
-    this.incrementalGenerator = config.incrementalConfig?.enabled
-      ? new IncrementalGenerator(
-          config.incrementalConfig,
-          config,
-          this.terrainGenerator,
-          this.biomeSystem,
-          this.resourceGenerator,
-          this.structurePlacer
-        )
-      : null;
-    
     // Initialize WorldSerializer (always initialized for serialization support) (Requirement 12.1)
     this.worldSerializer = new WorldSerializer();
     
@@ -170,11 +147,10 @@ export class ChunkManager {
    * Gets a chunk at the specified coordinates, using cache if available.
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
-   * @param lodLevel - LOD level for the chunk (default: HIGH)
    * @returns Promise resolving to the chunk data at the specified coordinates
    */
-  async getChunk(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): Promise<ChunkData> {
-    const key = this.getCacheKey(chunkX, chunkY, lodLevel);
+  async getChunk(chunkX: number, chunkY: number): Promise<ChunkData> {
+    const key = this.getCacheKey(chunkX, chunkY);
     
     // Check cache
     const cached = this.cache.get(key);
@@ -198,15 +174,10 @@ export class ChunkManager {
       chunk = this.generateChunk(chunkX, chunkY);
     }
 
-    // Apply LOD if LODManager is configured and LOD level is not HIGH
-    const lodChunk = this.lodManager && lodLevel !== LODLevel.HIGH
-      ? this.lodManager.applyLOD(chunk, lodLevel)
-      : chunk;
-
     // Add to cache with LRU eviction
-    this.addToCache(key, lodChunk);
+    this.addToCache(key, chunk);
 
-    return lodChunk;
+    return chunk;
   }
 
   /**
@@ -221,7 +192,7 @@ export class ChunkManager {
         id: '', // Will be assigned by submitTask
         chunkX,
         chunkY,
-        lodLevel: LODLevel.HIGH, // Always generate at full resolution
+        lodLevel: 0, // Always generate at full resolution
         priority: 0, // Default priority
         onComplete: (chunk: ChunkData) => {
           resolve(chunk);
@@ -240,69 +211,6 @@ export class ChunkManager {
 
       this.workerPool!.submitTask(task);
     });
-  }
-
-  /**
-   * Gets a chunk using incremental generation, allowing access to partial data.
-   * Returns a PartialChunkData object that updates as generation progresses.
-   * Call continueGeneration() repeatedly until complete.
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   * @returns Partial chunk data that updates as generation progresses
-   * @throws Error if incremental generation is not enabled
-   */
-  getChunkIncremental(chunkX: number, chunkY: number): PartialChunkData {
-    if (!this.incrementalGenerator) {
-      throw new Error('Incremental generation is not enabled. Set incrementalConfig.enabled to true in WorldConfig.');
-    }
-
-    // Start or get existing incremental generation
-    return this.incrementalGenerator.startGeneration(chunkX, chunkY);
-  }
-
-  /**
-   * Continues incremental generation for a chunk.
-   * Call repeatedly until it returns true (generation complete).
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   * @returns True if generation is complete, false if more work remains
-   * @throws Error if incremental generation is not enabled or not started
-   */
-  continueGeneration(chunkX: number, chunkY: number): boolean {
-    if (!this.incrementalGenerator) {
-      throw new Error('Incremental generation is not enabled. Set incrementalConfig.enabled to true in WorldConfig.');
-    }
-
-    return this.incrementalGenerator.continueGeneration(chunkX, chunkY);
-  }
-
-  /**
-   * Gets the current generation stage for a chunk.
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   * @returns Current generation stage or undefined if not generating
-   */
-  getGenerationStage(chunkX: number, chunkY: number): number | undefined {
-    if (!this.incrementalGenerator) {
-      return undefined;
-    }
-
-    return this.incrementalGenerator.getStage(chunkX, chunkY);
-  }
-
-  /**
-   * Cancels incremental generation for a chunk.
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   */
-  cancelIncrementalGeneration(chunkX: number, chunkY: number): void {
-    if (this.incrementalGenerator) {
-      this.incrementalGenerator.cancelGeneration(chunkX, chunkY);
-    }
   }
 
   /**
@@ -499,14 +407,13 @@ export class ChunkManager {
   }
 
   /**
-   * Generates a cache key for chunk coordinates and LOD level.
+   * Generates a cache key for chunk coordinates.
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
-   * @param lodLevel - LOD level (default: HIGH)
    * @returns Cache key string
    */
-  private getCacheKey(chunkX: number, chunkY: number, lodLevel: LODLevel = LODLevel.HIGH): string {
-    return `${chunkX},${chunkY},${lodLevel}`;
+  private getCacheKey(chunkX: number, chunkY: number): string {
+    return `${chunkX},${chunkY}`;
   }
 
   /**

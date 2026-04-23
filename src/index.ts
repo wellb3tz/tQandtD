@@ -92,9 +92,6 @@ export {
   BiomeType,
   ResourceType,
   StructureType,
-  GenerationStage,
-  type PartialChunkData,
-  type IncrementalConfig,
   worldToChunk,
   chunkToWorld,
   worldToLocal,
@@ -104,8 +101,6 @@ export {
   getBoundaryVertex,
   getWorldCoordinate,
 } from './world/chunk';
-export { LODManager, LODLevel, type LODConfig } from './world/lod';
-export { IncrementalGenerator } from './world/incremental-generator';
 export { WorkerPool, type WorkerPoolConfig } from './world/worker-pool';
 export {
   WorldSerializer,

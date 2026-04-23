@@ -193,9 +193,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             cameraZDisplay.textContent = cameraPos.z.toFixed(2);
           }
           
-          // Continue incremental generation if enabled
-          app.continueIncrementalGeneration();
-          
           // Update worker pool statistics if enabled
           if (app.getState().workerPoolEnabled) {
             app.updateWorkerPoolStats();
@@ -266,25 +263,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update loaded chunks count
         performanceMonitor.updateLoadedChunks(state.loadedChunkCount);
         
-        // Update LOD statistics
-        performanceMonitor.updateLODStats({
-          highCount: state.lodHighCount,
-          mediumCount: state.lodMediumCount,
-          lowCount: state.lodLowCount
-        });
-        
         // Update worker pool statistics
         performanceMonitor.updateWorkerStats({
           activeWorkers: state.activeWorkers,
           queuedTasks: state.queuedTasks,
           completedTasks: state.completedTasks,
           avgWorkerTime: state.avgWorkerTime
-        });
-        
-        // Update incremental generation statistics
-        performanceMonitor.updateIncrementalStats({
-          chunksInProgress: state.chunksInProgress,
-          currentFPS: state.fps
         });
       }
     });

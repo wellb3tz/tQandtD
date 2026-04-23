@@ -932,9 +932,7 @@ export class WorldManager {
         biomeConfig: config.biomeConfig,
         resourceConfig: config.resourceConfig,
         structureConfig: config.structureConfig,
-        lodConfig: config.lodConfig,
         workerPoolConfig: config.workerPoolConfig,
-        incrementalConfig: config.incrementalConfig
       };
 
       // Convert to JSON string with formatting
