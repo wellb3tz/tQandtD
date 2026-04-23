@@ -15,7 +15,21 @@ export interface EnhancedBiomeConfig extends BiomeConfig {
 
   /** Enable micro-biomes (default: true) */
   enableMicroBiomes: boolean;
-  /** Micro-biome frequency (0-1, default: 0.1) */
+  /**
+   * Micro-biome placement density parameter.
+   *
+   * Valid range: [0.0, 0.5]
+   * - 0.0: No micro-biomes are placed
+   * - 0.25: Moderate density (~50% of noise range passes threshold)
+   * - 0.5: Maximum density (~100% of noise range passes threshold)
+   *
+   * Higher values increase the probability that a position passes the noise threshold check.
+   * Actual placement is further constrained by terrain-aware conditions:
+   * - OASIS/POND require depressions (height below neighbourhood average)
+   * - CLEARING/GROVE require flat terrain (low gradient)
+   *
+   * Default: 0.1
+   */
   microBiomeFrequency: number;
   /** Maximum micro-biome size in tiles (default: 20) */
   microBiomeMaxSize: number;
@@ -51,16 +65,49 @@ export interface EnhancedBiomeConfig extends BiomeConfig {
   climateConfig?: ClimateConfig;
 
   /**
-   * Minimum depression depth for OASIS / POND micro-biome placement (default: 0.05).
-   * A position is considered a depression when (height - neighbourAvg) < -depressionDepthThreshold.
+   * Minimum depression depth for OASIS / POND micro-biome placement.
+   *
+   * A position is classified as a depression when:
+   * (centerHeight - neighbourAvg) < -depressionDepthThreshold
+   *
+   * where neighbourAvg is the average height of the four cardinal neighbours (±1 world unit).
+   *
+   * Recommended range: [0.03, 0.08]
+   * - Lower values (0.03): More sensitive, detects shallow depressions
+   * - Higher values (0.08): Less sensitive, only deep depressions qualify
+   * - 0.0: All positions are potential depressions (falls back to noise-only placement)
+   *
+   * Default: 0.05
    */
   depressionDepthThreshold?: number;
 
   /**
-   * Maximum terrain gradient for CLEARING / GROVE micro-biome placement (default: 0.03).
-   * A position is considered flat when gradient < clearingGradientThreshold.
+   * Maximum terrain gradient for CLEARING / GROVE micro-biome placement.
+   *
+   * A position is classified as flat terrain when:
+   * gradient < clearingGradientThreshold
+   *
+   * where gradient is the root-mean-square of height differences to the four cardinal neighbours:
+   * sqrt((dx1² + dx2² + dy1² + dy2²) / 4)
+   *
+   * Recommended range: [0.02, 0.05]
+   * - Lower values (0.02): Stricter, only very flat terrain qualifies
+   * - Higher values (0.05): More permissive, allows gentle slopes
+   * - Very high values (e.g., 1.0): All positions are flat (falls back to noise-only placement)
+   *
+   * Default: 0.03
    */
   clearingGradientThreshold?: number;
+
+  /**
+   * When true, uses the legacy (buggy) threshold formula
+   * `threshold = 1.0 - microBiomeFrequency * 2` for backward compatibility
+   * with worlds generated before this fix.
+   *
+   * @deprecated Will be removed in the next major version.
+   *             Migrate to the corrected formula by setting this to false (default).
+   */
+  useLegacyMicroBiomeThreshold?: boolean;
 }
 
 /**
@@ -295,20 +342,28 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       case BiomeType.DESERT:
       case BiomeType.PLAINS: {
         // OASIS / POND: only in terrain depressions
-        const neighbourAvg = (
-          getHeight(x + 1, y) +
-          getHeight(x - 1, y) +
-          getHeight(x, y + 1) +
-          getHeight(x, y - 1)
-        ) / 4;
-        // Not a depression → skip
+        // Sample heights at cardinal neighbours using stack-local variables (no heap allocation)
+        const h_xp = getHeight(x + 1, y);
+        const h_xm = getHeight(x - 1, y);
+        const h_yp = getHeight(x, y + 1);
+        const h_ym = getHeight(x, y - 1);
+        const neighbourAvg = (h_xp + h_xm + h_yp + h_ym) / 4;
+        // Gate OASIS/POND placement: only in depressions
+        // When depressionDepthThreshold is 0.0, all positions pass (noise-only fallback)
         if ((height - neighbourAvg) >= -depressionThreshold) return undefined;
         break;
       }
       case BiomeType.FOREST:
       case BiomeType.TUNDRA: {
         // CLEARING / GROVE: only on low-gradient (flat) terrain
-        const gradient = this.computeGradientLocal(x, y, getHeight, height);
+        // Compute gradient using stack-local variables (no heap allocation)
+        const dx1 = getHeight(x + 1, y) - height;
+        const dx2 = getHeight(x - 1, y) - height;
+        const dy1 = getHeight(x, y + 1) - height;
+        const dy2 = getHeight(x, y - 1) - height;
+        const gradient = Math.sqrt((dx1 * dx1 + dx2 * dx2 + dy1 * dy1 + dy2 * dy2) / 4);
+        // Gate CLEARING/GROVE placement: only on flat terrain
+        // When clearingGradientThreshold is very high (e.g. 1.0), all positions pass (noise-only fallback)
         if (gradient >= gradientThreshold) return undefined;
         break;
       }
@@ -318,7 +373,15 @@ export class EnhancedBiomeSystem extends BiomeSystem {
 
     // Noise threshold check (existing logic) — use cached config to avoid per-tile allocation
     const noiseValue = this.microBiomeNoise.fbm(x, y, this.microBiomeNoiseConfig);
-    const threshold = 1.0 - this.enhancedConfig.microBiomeFrequency * 2;
+    
+    // Clamp microBiomeFrequency to [0.0, 0.5] to prevent threshold overflow
+    const clampedFrequency = Math.max(0.0, Math.min(0.5, this.enhancedConfig.microBiomeFrequency));
+    
+    // Compute threshold: legacy path uses * 2, corrected path uses * 4
+    const threshold = this.enhancedConfig.useLegacyMicroBiomeThreshold === true
+      ? 1.0 - clampedFrequency * 2  // legacy (buggy)
+      : 1.0 - clampedFrequency * 4; // corrected
+    
     if (noiseValue < threshold) return undefined;
 
     // Size check — pre-compute trig values to avoid per-iteration Math.cos/sin calls

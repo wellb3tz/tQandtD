@@ -131,6 +131,18 @@ const DEFAULT_CONFIG: WorldConfig = {
     moistureScale: 0.005,
     blendRadius: 5
   },
+  enhancedBiomeConfig: {
+    temperatureScale: 0.005,
+    moistureScale: 0.005,
+    blendRadius: 5,
+    enableTransitions: true,
+    transitionWidth: 3,
+    enableElevationBands: true,
+    elevationBandWidth: 0.1,
+    microBiomeFrequency: 0.15,
+    depressionDepthThreshold: 0.05,
+    clearingGradientThreshold: 0.03
+  },
   resourceConfig: {
     types: [
       { type: 0, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 5 }, // Iron

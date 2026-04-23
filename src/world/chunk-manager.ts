@@ -257,7 +257,7 @@ export class ChunkManager {
     // Step 2: Generate biome data
     this.config.onProgress?.('biomes', 0.4);
     const biomeStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    const { biomeMap, biomeWeights } = this.generateBiomeData(chunkX, chunkY, heightmap);
+    const { biomeMap, biomeWeights, microBiomeMap } = this.generateBiomeData(chunkX, chunkY, heightmap);
     if (this.config.enablePerformanceMetrics) {
       metrics.biomeTime = performance.now() - biomeStart;
     }
@@ -270,6 +270,7 @@ export class ChunkManager {
       heightmap,
       biomeMap,
       biomeWeights,
+      microBiomeMap,
       resources: [],
       structures: [],
     };
@@ -347,13 +348,16 @@ export class ChunkManager {
     chunkX: number,
     chunkY: number,
     heightmap: Float32Array
-  ): { biomeMap: Uint8Array; biomeWeights: Float32Array } {
+  ): { biomeMap: Uint8Array; biomeWeights: Float32Array; microBiomeMap?: Uint8Array } {
     const size = this.config.chunkSize;
     const biomeMap = new Uint8Array(size * size);
     
     // Calculate number of biome types for weights array
     const numBiomes = 8; // BiomeType enum has 8 values (0-7)
     const biomeWeights = new Float32Array(size * size * numBiomes);
+
+    // Initialize micro-biome map if enhanced biome system is available
+    const microBiomeMap = this.enhancedBiomeSystem ? new Uint8Array(size * size).fill(255) : undefined;
 
     // Convert chunk coordinates to world coordinates
     const worldX = chunkX * size;
@@ -398,6 +402,11 @@ export class ChunkManager {
           const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeight);
           biomeMap[index] = enhancedData.biome;
           
+          // Store micro-biome data if present
+          if (microBiomeMap && enhancedData.microBiome !== undefined) {
+            microBiomeMap[index] = enhancedData.microBiome;
+          }
+          
           // Store weights from enhanced biome data
           const weightOffset = index * numBiomes;
           for (let b = 0; b < numBiomes; b++) {
@@ -420,7 +429,7 @@ export class ChunkManager {
       }
     }
 
-    return { biomeMap, biomeWeights };
+    return { biomeMap, biomeWeights, microBiomeMap };
   }
 
   /**

@@ -6,8 +6,8 @@
  * visual charts for biome distribution (pie chart) and resource counts (bar chart).
  */
 
-import { DemoApp, AppState } from '@core/DemoApp';
-import { BiomeType, ResourceType, StructureType } from '@engine/index';
+import { DemoApp, AppState } from '../core/DemoApp';
+import { BiomeType, ResourceType, StructureType } from '../../../src/index';
 
 /**
  * StatisticsDisplay - Shows world statistics and distribution charts
@@ -21,6 +21,7 @@ export class StatisticsDisplay {
   private avgHeightElement: HTMLElement | null = null;
   private minHeightElement: HTMLElement | null = null;
   private maxHeightElement: HTMLElement | null = null;
+  private microBiomeCountElement: HTMLElement | null = null;
   
   // Chart containers
   private biomeChartContainer: HTMLElement | null = null;
@@ -107,6 +108,7 @@ export class StatisticsDisplay {
     this.createGeneralStatsSection();
     this.createHeightStatsSection();
     this.createBiomeSection();
+    this.createMicroBiomeSection();
     this.createResourceSection();
     this.createStructureSection();
   }
@@ -147,6 +149,17 @@ export class StatisticsDisplay {
     this.biomeChartContainer.style.marginTop = 'var(--spacing-md)';
     this.biomeChartContainer.style.minHeight = '200px';
     section.appendChild(this.biomeChartContainer);
+    
+    this.container?.appendChild(section);
+  }
+
+  /**
+   * Create micro-biome section
+   */
+  private createMicroBiomeSection(): void {
+    const section = this.createSection('Micro-Biomes');
+    
+    this.microBiomeCountElement = this.createStatistic(section, 'Micro-Biomes Visible', '0');
     
     this.container?.appendChild(section);
   }
@@ -492,23 +505,41 @@ export class StatisticsDisplay {
     const section = document.getElementById('structure-stats-section');
     if (!section) return;
     
-    // Remove existing structure stats (keep only the heading)
+    // Remove existing structure stats and messages (keep only the heading)
     const existingStats = section.querySelectorAll('.statistic');
     existingStats.forEach(stat => stat.remove());
+    
+    // Remove existing "no structures" message if present
+    const existingMessage = section.querySelector('p');
+    if (existingMessage) {
+      existingMessage.remove();
+    }
     
     // Add structure counts
     for (const [structureType, count] of counts.entries()) {
       this.createStatistic(section, this.structureNames[structureType], count.toString());
     }
     
-    // If no structures, show message
+    // If no structures, show message (only once)
     if (counts.size === 0) {
-      const message = document.createElement('p');
-      message.textContent = 'No structures generated';
-      message.style.textAlign = 'center';
-      message.style.color = 'var(--text-secondary)';
-      message.style.fontSize = '0.875rem';
-      section.appendChild(message);
+      // Check if message already exists to avoid duplicates
+      if (!section.querySelector('p')) {
+        const message = document.createElement('p');
+        message.textContent = 'No structures generated';
+        message.style.textAlign = 'center';
+        message.style.color = 'var(--text-secondary)';
+        message.style.fontSize = '0.875rem';
+        section.appendChild(message);
+      }
+    }
+  }
+
+  /**
+   * Update micro-biome count
+   */
+  updateMicroBiomeCount(count: number): void {
+    if (this.microBiomeCountElement) {
+      this.microBiomeCountElement.textContent = count.toString();
     }
   }
 

@@ -58,6 +58,23 @@ interface CheckboxConfig {
 }
 
 /**
+ * Element ID constants for DOM queries
+ */
+const ELEMENT_IDS = {
+  TERRAIN_CONTROLS: 'terrain-controls',
+  BIOME_CONTROLS: 'biome-controls',
+  RESOURCE_CONTROLS: 'resource-controls',
+  WATER_CONTROLS: 'water-controls',
+  ADVANCED_CONTROLS: 'advanced-controls',
+  TERRAIN_EDITING_CONTROLS: 'terrain-editing-controls',
+  VISIBILITY_CONTROLS: 'visibility-controls',
+  PRESET_SELECT: 'preset-select',
+  PRESET_DESCRIPTION: 'preset-description',
+  UNDO_BTN: 'undo-btn',
+  REDO_BTN: 'redo-btn',
+} as const;
+
+/**
  * ControlPanel class - Manages all UI controls for parameter adjustment
  */
 export class ControlPanel {
@@ -94,10 +111,21 @@ export class ControlPanel {
   }
 
   /**
+   * Calculate decimal places from step size
+   */
+  private getDecimalPlaces(step: number): number {
+    if (step >= 1) return 0;
+    
+    const stepStr = step.toString();
+    const decimalIndex = stepStr.indexOf('.');
+    return decimalIndex !== -1 ? stepStr.length - decimalIndex - 1 : 0;
+  }
+
+  /**
    * Create terrain parameter controls
    */
   private createTerrainControls(): void {
-    const terrainContainer = document.getElementById('terrain-controls');
+    const terrainContainer = document.getElementById(ELEMENT_IDS.TERRAIN_CONTROLS);
     if (!terrainContainer) return;
 
     const sliders: SliderConfig[] = [
@@ -200,7 +228,7 @@ export class ControlPanel {
    * Create biome parameter controls
    */
   private createBiomeControls(): void {
-    const biomeContainer = document.getElementById('biome-controls');
+    const biomeContainer = document.getElementById(ELEMENT_IDS.BIOME_CONTROLS);
     if (!biomeContainer) return;
 
     const basicSliders: SliderConfig[] = [
@@ -296,7 +324,7 @@ export class ControlPanel {
     const microFreqControl = this.createSliderControl({
       id: 'microBiomeFrequency',
       label: 'Micro Biome Frequency',
-      min: 0.01,
+      min: 0.0,
       max: 0.5,
       step: 0.01,
       defaultValue: 0.1,
@@ -341,11 +369,10 @@ export class ControlPanel {
   }
 
   /**
-  /**
    * Create resource and structure controls
    */
   private createResourceControls(): void {
-    const resourceContainer = document.getElementById('resource-controls');
+    const resourceContainer = document.getElementById(ELEMENT_IDS.RESOURCE_CONTROLS);
     if (!resourceContainer) return;
 
     // Resource types section
@@ -426,7 +453,7 @@ export class ControlPanel {
    * Create water configuration controls
    */
   private createWaterControls(): void {
-    const waterContainer = document.getElementById('water-controls');
+    const waterContainer = document.getElementById(ELEMENT_IDS.WATER_CONTROLS);
     if (!waterContainer) return;
 
     // Water color picker
@@ -473,7 +500,7 @@ export class ControlPanel {
    * Create advanced feature controls
    */
   private createAdvancedControls(): void {
-    const advancedContainer = document.getElementById('advanced-controls');
+    const advancedContainer = document.getElementById(ELEMENT_IDS.ADVANCED_CONTROLS);
     if (!advancedContainer) return;
 
     // View Distance slider
@@ -572,7 +599,7 @@ export class ControlPanel {
    * Create terrain editing controls
    */
   private createTerrainEditingControls(): void {
-    const editingContainer = document.getElementById('terrain-editing-controls');
+    const editingContainer = document.getElementById(ELEMENT_IDS.TERRAIN_EDITING_CONTROLS);
     if (!editingContainer) return;
 
     // Tool selection buttons
@@ -683,7 +710,7 @@ export class ControlPanel {
 
     // Undo button
     const undoButton = document.createElement('button');
-    undoButton.id = 'undo-btn';
+    undoButton.id = ELEMENT_IDS.UNDO_BTN;
     undoButton.textContent = '↶ Undo';
     undoButton.style.padding = '8px';
     undoButton.style.borderRadius = '4px';
@@ -704,7 +731,7 @@ export class ControlPanel {
 
     // Redo button
     const redoButton = document.createElement('button');
-    redoButton.id = 'redo-btn';
+    redoButton.id = ELEMENT_IDS.REDO_BTN;
     redoButton.textContent = '↷ Redo';
     redoButton.style.padding = '8px';
     redoButton.style.borderRadius = '4px';
@@ -741,8 +768,8 @@ export class ControlPanel {
   private updateUndoRedoButtons(): void {
     if (!this.terrainEditor) return;
 
-    const undoButton = document.getElementById('undo-btn') as HTMLButtonElement;
-    const redoButton = document.getElementById('redo-btn') as HTMLButtonElement;
+    const undoButton = document.getElementById(ELEMENT_IDS.UNDO_BTN) as HTMLButtonElement;
+    const redoButton = document.getElementById(ELEMENT_IDS.REDO_BTN) as HTMLButtonElement;
 
     if (undoButton) {
       const canUndo = this.terrainEditor.canUndo();
@@ -763,7 +790,7 @@ export class ControlPanel {
    * Create visibility toggle controls
    */
   private createVisibilityToggles(): void {
-    const visibilityContainer = document.getElementById('visibility-controls');
+    const visibilityContainer = document.getElementById(ELEMENT_IDS.VISIBILITY_CONTROLS);
     if (!visibilityContainer) return;
 
     const toggles: CheckboxConfig[] = [
@@ -804,7 +831,8 @@ export class ControlPanel {
 
     const valueDisplay = document.createElement('span');
     valueDisplay.className = 'slider-value';
-    valueDisplay.textContent = config.defaultValue.toString();
+    const decimalPlaces = this.getDecimalPlaces(config.step);
+    valueDisplay.textContent = config.defaultValue.toFixed(decimalPlaces);
 
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -816,7 +844,8 @@ export class ControlPanel {
 
     slider.addEventListener('input', (e) => {
       const value = parseFloat((e.target as HTMLInputElement).value);
-      valueDisplay.textContent = value.toFixed(config.step < 1 ? 3 : 0);
+      const decimalPlaces = this.getDecimalPlaces(config.step);
+      valueDisplay.textContent = value.toFixed(decimalPlaces);
       onChange(value);
     });
 
@@ -1197,7 +1226,7 @@ export class ControlPanel {
     }
 
     // Update description
-    const descriptionDiv = document.getElementById('preset-description');
+    const descriptionDiv = document.getElementById(ELEMENT_IDS.PRESET_DESCRIPTION);
     if (descriptionDiv) {
       descriptionDiv.textContent = preset.description;
     }
@@ -1288,16 +1317,17 @@ export class ControlPanel {
    */
   private updateSliderValue(id: string, value: number): void {
     const slider = document.getElementById(id) as HTMLInputElement;
-    if (slider) {
-      slider.value = value.toString();
-      
-      // Update value display
-      const label = slider.parentElement?.querySelector('label');
-      const valueDisplay = label?.querySelector('.slider-value');
-      if (valueDisplay) {
-        const step = parseFloat(slider.step);
-        valueDisplay.textContent = value.toFixed(step < 1 ? 3 : 0);
-      }
+    if (!slider) return;
+    
+    slider.value = value.toString();
+    
+    // Update value display
+    const label = slider.parentElement?.querySelector('label');
+    const valueDisplay = label?.querySelector('.slider-value');
+    if (valueDisplay) {
+      const step = parseFloat(slider.step);
+      const decimalPlaces = this.getDecimalPlaces(step);
+      valueDisplay.textContent = value.toFixed(decimalPlaces);
     }
   }
 
@@ -1319,8 +1349,8 @@ export class ControlPanel {
         break;
       }
       case 'enableMicroBiomes': {
-        const ctrl = document.getElementById('microBiomeFrequency-group');
-        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        const freqCtrl = document.getElementById('microBiomeFrequency-group');
+        if (freqCtrl) freqCtrl.style.display = checked ? 'block' : 'none';
         break;
       }
       case 'enableElevationBands': {
@@ -1358,7 +1388,7 @@ export class ControlPanel {
       this.customPresets.push(customPreset);
 
       // Update dropdown
-      const select = document.getElementById('preset-select') as HTMLSelectElement;
+      const select = document.getElementById(ELEMENT_IDS.PRESET_SELECT) as HTMLSelectElement;
       if (select) {
         const option = document.createElement('option');
         option.value = customPreset.name;

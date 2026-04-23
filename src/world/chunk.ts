@@ -82,6 +82,8 @@ export interface ChunkData {
   biomeMap: Uint8Array;
   /** Biome blend weights (size * size * numBiomes elements) */
   biomeWeights: Float32Array;
+  /** Micro-biome type for each point (size * size elements), 255 = no micro-biome */
+  microBiomeMap?: Uint8Array;
   /** Resources placed in this chunk */
   resources: Resource[];
   /** Structures placed in this chunk */

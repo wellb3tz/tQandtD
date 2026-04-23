@@ -12,6 +12,7 @@ import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { HelpModal } from './src/ui/HelpModal';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
+import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
 
 console.log('Procedural World Engine Demo - Initializing...');
@@ -24,6 +25,7 @@ let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let helpModal: HelpModal | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
+let statisticsDisplay: StatisticsDisplay | null = null;
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
@@ -183,6 +185,12 @@ document.addEventListener('DOMContentLoaded', async () => {
               performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
             }
             
+            // Update micro-biome count in statistics display
+            if (statisticsDisplay) {
+              const microBiomeCount = worldViewer.getMicroBiomeCount();
+              statisticsDisplay.updateMicroBiomeCount(microBiomeCount);
+            }
+            
             lastPerformanceUpdate = now;
           }
           
@@ -238,6 +246,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       performanceMonitor = new PerformanceMonitor();
       performanceMonitor.initialize(perfMonitorContainer);
       console.log('PerformanceMonitor initialized successfully');
+    }
+    
+    // Initialize StatisticsDisplay
+    const statisticsContainer = document.getElementById('statistics-display');
+    if (statisticsContainer) {
+      statisticsDisplay = new StatisticsDisplay();
+      statisticsDisplay.initialize(statisticsContainer);
+      statisticsDisplay.setApp(app);
+      console.log('StatisticsDisplay initialized successfully');
     }
     
     // Subscribe to state changes and update performance monitor

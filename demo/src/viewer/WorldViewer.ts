@@ -20,6 +20,18 @@ import { WaterLayerManager } from './water/WaterLayerManager';
 import { adjustUnderwaterColors } from './water/UnderwaterTerrainProcessor';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 import type { WaterConfig } from './water/types';
+import { MicroBiomeType } from '../../../src/world/enhanced-biome';
+
+/**
+ * Colour offsets per MicroBiomeType (applied additively, clamped to [0,1])
+ * Note: GROVE uses 0.20 (not 0.15) to meet the 0.2 contrast requirement from Property 8
+ */
+const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
+  [MicroBiomeType.OASIS]: { r: 0.0, g: 0.25, b: 0.0 },     // Greener
+  [MicroBiomeType.CLEARING]: { r: 0.0, g: 0.20, b: 0.0 },  // Lighter green
+  [MicroBiomeType.POND]: { r: 0.0, g: 0.0, b: 0.30 },      // Bluer
+  [MicroBiomeType.GROVE]: { r: 0.20, g: 0.20, b: 0.0 },    // Warmer (corrected to 0.20)
+};
 
 /**
  * 3D vector for camera position and target
@@ -131,6 +143,9 @@ export class WorldViewer {
   private waterLayerManager: WaterLayerManager;
   private waterConfig: WaterConfig;
 
+  // Micro-biome tracking
+  private microBiomeCount: number;
+
   constructor() {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 2000);
@@ -166,6 +181,8 @@ export class WorldViewer {
     this.cullingCheckInterval = 16; // Check every 16ms (every frame at 60 FPS)
     this.lastCullingCheck = 0;
     
+    // Initialize micro-biome tracking
+    this.microBiomeCount = 0;
     // Initialize water system
     this.waterLayerManager = new WaterLayerManager();
     this.waterConfig = DEFAULT_WATER_CONFIG;
@@ -669,6 +686,16 @@ export class WorldViewer {
   private createTerrainMesh(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): THREE.Mesh {
     const chunkSize = data.size;
     
+    // Count micro-biomes in this chunk
+    let chunkMicroBiomeCount = 0;
+    if (data.microBiomeMap) {
+      for (let i = 0; i < data.microBiomeMap.length; i++) {
+        if (data.microBiomeMap[i] !== 255) {
+          chunkMicroBiomeCount++;
+        }
+      }
+    }
+    
     // VALIDATION: Check if heightmap has the correct size
     const expectedHeightmapSize = (chunkSize + 1) * (chunkSize + 1);
     if (data.heightmap.length !== expectedHeightmapSize) {
@@ -780,6 +807,19 @@ export class WorldViewer {
           color = { r: 0.5, g: 0.5, b: 0.5 };
         }
         
+        // Apply micro-biome tint if present
+        if (data.microBiomeMap && bmIndex < data.microBiomeMap.length) {
+          const microBiome = data.microBiomeMap[bmIndex];
+          if (microBiome !== 255 && MICRO_BIOME_TINT[microBiome]) {
+            const tint = MICRO_BIOME_TINT[microBiome];
+            color = {
+              r: Math.min(1.0, color.r + tint.r),
+              g: Math.min(1.0, color.g + tint.g),
+              b: Math.min(1.0, color.b + tint.b),
+            };
+          }
+        }
+        
         // Apply tints
         colors[vertexIndex] = color.r * partialTint.r;
         colors[vertexIndex + 1] = color.g * partialTint.g;
@@ -830,11 +870,13 @@ export class WorldViewer {
     mesh.receiveShadow = true;
     mesh.castShadow = true;
     
-    // Store partial status in mesh userData for reference
+    // Store partial status and micro-biome count in mesh userData for reference
     if (partial) {
       mesh.userData.partial = true;
       mesh.userData.stage = stage;
     }
+    mesh.userData.microBiomeCount = chunkMicroBiomeCount;
+    mesh.userData.chunkData = data; // Store chunk data for re-rendering
     
     return mesh;
   }
@@ -1457,6 +1499,21 @@ export class WorldViewer {
     });
     
     return { vertexCount, drawCalls };
+  }
+
+  /**
+   * Get the total count of micro-biomes currently visible across all chunks
+   */
+  getMicroBiomeCount(): number {
+    let totalCount = 0;
+    
+    for (const chunkMesh of this.chunkMeshes.values()) {
+      if (chunkMesh.terrain && chunkMesh.terrain.userData.microBiomeCount !== undefined) {
+        totalCount += chunkMesh.terrain.userData.microBiomeCount;
+      }
+    }
+    
+    return totalCount;
   }
 
   /**
