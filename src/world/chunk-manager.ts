@@ -98,6 +98,7 @@ export class ChunkManager {
   private modifications: Map<string, ChunkModification>;
   private cacheHits: number;
   private cacheMisses: number;
+  private inFlightRequests: Map<string, Promise<ChunkData>>;
 
   /**
    * Creates a new ChunkManager with the given configuration.
@@ -141,6 +142,7 @@ export class ChunkManager {
     this.modifications = new Map();
     this.cacheHits = 0;
     this.cacheMisses = 0;
+    this.inFlightRequests = new Map();
   }
 
   /**
@@ -160,24 +162,38 @@ export class ChunkManager {
       return cached.chunk;
     }
 
-    // Cache miss
+    // If a generation for this chunk is already in-flight, reuse that promise
+    const inFlight = this.inFlightRequests.get(key);
+    if (inFlight) {
+      this.cacheHits++;
+      return inFlight;
+    }
+
+    // Cache miss — start generation
     this.cacheMisses++;
 
     // Decide generation strategy based on worker pool availability
-    let chunk: ChunkData;
-    
-    if (this.workerPool) {
-      // Asynchronous generation via worker pool
-      chunk = await this.generateChunkAsync(chunkX, chunkY);
-    } else {
-      // Synchronous generation on main thread
-      chunk = this.generateChunk(chunkX, chunkY);
-    }
+    const generationPromise: Promise<ChunkData> = (async () => {
+      let chunk: ChunkData;
+      if (this.workerPool) {
+        chunk = await this.generateChunkAsync(chunkX, chunkY);
+      } else {
+        chunk = this.generateChunk(chunkX, chunkY);
+      }
+      // Add to cache and remove from in-flight map
+      this.addToCache(key, chunk);
+      this.inFlightRequests.delete(key);
+      return chunk;
+    })();
 
-    // Add to cache with LRU eviction
-    this.addToCache(key, chunk);
+    this.inFlightRequests.set(key, generationPromise);
 
-    return chunk;
+    // Ensure we clean up in-flight entry even on error
+    generationPromise.catch(() => {
+      this.inFlightRequests.delete(key);
+    });
+
+    return generationPromise;
   }
 
   /**
@@ -293,6 +309,7 @@ export class ChunkManager {
    */
   clearCache(): void {
     this.cache.clear();
+    this.inFlightRequests.clear();
   }
 
   /**
