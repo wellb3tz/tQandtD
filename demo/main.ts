@@ -13,7 +13,6 @@ import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
 import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
-import { HelpModal } from './src/ui/HelpModal';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
@@ -26,7 +25,6 @@ let controlPanelInstance: ControlPanel | null = null;
 let worldViewer: WorldViewer | null = null;
 let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
-let helpModal: HelpModal | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
 let statisticsDisplay: StatisticsDisplay | null = null;
 
@@ -70,14 +68,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
   const performanceMonitorElement = document.getElementById('performance-monitor');
+  const worldStatisticsElement = document.getElementById('world-statistics');
   const appHeader = document.querySelector('.app-header') as HTMLElement;
-  const worldManagerPanel = document.getElementById('world-manager');
-  
+
   // Camera control buttons
-  const resetCameraBtn = document.getElementById('reset-camera-btn');
+  const resetCameraBtn = document.getElementById('reset-btn');
   const topDownBtn = document.getElementById('top-down-btn');
   const followTerrainBtn = document.getElementById('follow-terrain-btn');
-  
+
   // Camera position display elements
   const cameraXDisplay = document.getElementById('camera-x');
   const cameraYDisplay = document.getElementById('camera-y');
@@ -86,7 +84,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Status bar elements
   const statusSeed     = document.getElementById('status-seed');
   const statusChunks   = document.getElementById('status-chunks');
+  const statusBiome    = document.getElementById('status-biome');
   const statusPosition = document.getElementById('status-position');
+
+  // Compass needle
+  const compassNeedle = document.getElementById('compass-needle');
+
+  // Random seed button
+  document.getElementById('random-seed-btn')?.addEventListener('click', () => {
+    const randomSeed = Math.floor(Math.random() * 999999) + 1;
+    if (seedInput) seedInput.value = randomSeed.toString();
+  });
   
   // Initialize DemoApp
   try {
@@ -215,6 +223,28 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (statusChunks && app) {
             statusChunks.textContent = app.getState().loadedChunkCount.toString();
           }
+          // Update status bar biome (from camera world position)
+          if (statusBiome && app) {
+            const state = app.getState();
+            if (state.biomeDistribution.size > 0) {
+              // Find dominant biome
+              let maxCount = 0;
+              let dominantBiome = '—';
+              const biomeNames: Record<number, string> = {
+                0: 'Forest', 1: 'Desert', 2: 'Tundra', 3: 'Grassland',
+                4: 'Mountain', 5: 'Ocean', 6: 'Beach', 7: 'Swamp'
+              };
+              state.biomeDistribution.forEach((count, biome) => {
+                if (count > maxCount) { maxCount = count; dominantBiome = biomeNames[biome] ?? '—'; }
+              });
+              statusBiome.textContent = dominantBiome;
+            }
+          }
+          // Update compass — rotate needle opposite to camera yaw
+          if (compassNeedle) {
+            const heading = worldViewer.getCameraHeading();
+            compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
+          }
           
           // Update worker pool statistics if enabled
           if (app.getState().workerPoolEnabled) {
@@ -270,16 +300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     worldManager.initialize(app);
     console.log('WorldManager initialized successfully');
     
-    // Make world manager panel visible
-    const worldManagerPanel = document.getElementById('world-manager');
-    if (worldManagerPanel) {
-      worldManagerPanel.classList.remove('hidden');
-    }
-    
-    // Initialize HelpModal (requirement 20.1, 20.2)
-    helpModal = new HelpModal();
-    helpModal.initialize();
-    console.log('HelpModal initialized successfully');
+    // World statistics panel is always visible (part of overlay layout)
     
     // Initialize PerformanceMonitor
     const perfMonitorContainer = document.getElementById('performance-monitor');
@@ -516,11 +537,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     performanceMonitorElement?.classList.toggle('hidden');
   });
   
-  // Help button (requirement 20.1, 20.2)
+  // Help button — placeholder, no functionality
   helpBtn?.addEventListener('click', () => {
-    if (helpModal) {
-      helpModal.show();
-    }
+    // TODO: implement help panel
   });
   
   // Fullscreen button - hide all UI elements (exit with ESC only)
@@ -528,44 +547,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   const toggleFullscreen = () => {
     isFullscreen = !isFullscreen;
-    
     if (isFullscreen) {
-      // Hide all UI elements
-      appHeader?.classList.add('hidden');
-      controlPanel?.classList.add('hidden');
-      performanceMonitorElement?.classList.add('hidden');
-      worldManagerPanel?.classList.add('hidden');
-      document.querySelector('.camera-controls-overlay')?.classList.add('hidden');
-      
-      // Add fullscreen class to body
       document.body.classList.add('fullscreen-mode');
-      
-      // Resize viewer to fill screen
-      if (worldViewer) {
-        setTimeout(() => {
-          worldViewer!.resize(window.innerWidth, window.innerHeight);
-        }, 100);
-      }
+      if (worldViewer) setTimeout(() => worldViewer!.resize(window.innerWidth, window.innerHeight), 100);
     } else {
-      // Show UI elements
-      appHeader?.classList.remove('hidden');
-      controlPanel?.classList.remove('hidden');
-      performanceMonitorElement?.classList.remove('hidden');
-      worldManagerPanel?.classList.remove('hidden');
-      document.querySelector('.camera-controls-overlay')?.classList.remove('hidden');
-      
-      // Remove fullscreen class from body
       document.body.classList.remove('fullscreen-mode');
-      
-      // Resize viewer back to normal
-      if (worldViewer) {
-        const viewerContainer = document.getElementById('viewer');
-        if (viewerContainer) {
-          setTimeout(() => {
-            worldViewer!.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
-          }, 100);
-        }
-      }
+      if (worldViewer) setTimeout(() => worldViewer!.resize(window.innerWidth, window.innerHeight), 100);
     }
   };
   

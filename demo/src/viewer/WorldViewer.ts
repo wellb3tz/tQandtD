@@ -401,6 +401,29 @@ export class WorldViewer {
       if (this.keyboardState.get('d')) {
         movement.x += 1; // Move right (positive X)
       }
+      // Space = zoom in (move camera down = closer), Shift = zoom out
+      if (this.orthographicCamera) {
+        const cam = this.orthographicCamera;
+        const zoomSpeed = moveSpeed * 2;
+        if (this.keyboardState.get('space')) {
+          // Zoom in: shrink frustum
+          const scale = 1 - 0.02;
+          cam.left   *= scale;
+          cam.right  *= scale;
+          cam.top    *= scale;
+          cam.bottom *= scale;
+          cam.updateProjectionMatrix();
+        }
+        if (this.keyboardState.get('shift')) {
+          // Zoom out: expand frustum
+          const scale = 1 + 0.02;
+          cam.left   *= scale;
+          cam.right  *= scale;
+          cam.top    *= scale;
+          cam.bottom *= scale;
+          cam.updateProjectionMatrix();
+        }
+      }
     } else {
       // Free camera mode - use camera direction
       const forward = new THREE.Vector3();
@@ -1204,9 +1227,11 @@ export class WorldViewer {
         );
       }
       
-      // Position orthographic camera for top-down view
-      this.orthographicCamera.position.set(0, 200, 0);
-      this.orthographicCamera.lookAt(0, 0, 0);
+      // Position orthographic camera above current perspective camera position
+      const px = this.camera.position.x;
+      const pz = this.camera.position.z;
+      this.orthographicCamera.position.set(px, 200, pz);
+      this.orthographicCamera.lookAt(px, 0, pz);
     }
   }
   
@@ -1265,12 +1290,35 @@ export class WorldViewer {
   /**
    * Get current camera position
    */
+  /**
+   * Get current camera position.
+   * In orthographic mode returns the orthographic camera's XZ position
+   * so chunk loading stays in sync with what's actually visible.
+   */
   getCameraPosition(): Vector3 {
+    if (this.isOrthographic && this.orthographicCamera) {
+      return {
+        x: this.orthographicCamera.position.x,
+        y: this.orthographicCamera.position.y,
+        z: this.orthographicCamera.position.z
+      };
+    }
     return {
       x: this.camera.position.x,
       y: this.camera.position.y,
       z: this.camera.position.z
     };
+  }
+
+  /**
+   * Get camera heading angle in degrees (0 = North, 90 = East, 180 = South, 270 = West).
+   * Derived from the camera's yaw rotation.
+   */
+  getCameraHeading(): number {
+    // yaw=0 means camera looks toward -Z (North in our world).
+    // Convert to compass degrees: 0° = North, clockwise positive.
+    const deg = ((-this.cameraRotation.yaw) * 180 / Math.PI) % 360;
+    return (deg + 360) % 360;
   }
 
   /**

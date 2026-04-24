@@ -207,12 +207,12 @@ export class ErrorHandler {
    */
   private getToastIcon(type: string): string {
     const icons: Record<string, string> = {
-      success: '✓',
-      error: '✗',
-      warning: '⚠',
-      info: 'ℹ'
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️'
     };
-    return icons[type] || 'ℹ';
+    return icons[type] || 'ℹ️';
   }
 
   /**
