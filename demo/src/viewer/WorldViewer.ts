@@ -192,10 +192,11 @@ export class WorldViewer {
       this.layerVisibility.set(layer, true);
     });
     
-    // Create lighting
+    // Create lighting — actual setup happens in setupScene()
+    // Initialize with placeholders; setupScene() will replace them
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     this.directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    
+
     this.setupScene();
   }
 
@@ -203,29 +204,46 @@ export class WorldViewer {
    * Set up the Three.js scene
    */
   private setupScene(): void {
-    // Set scene background
-    this.scene.background = new THREE.Color(0x87ceeb); // Sky blue
-    
+    // Set scene background — deep sky blue
+    this.scene.background = new THREE.Color(0x87ceeb);
+
+    // Atmospheric exponential fog — adds depth and distance haze
+    // (disabled — produces blue haze rather than realistic fog)
+    // this.scene.fog = new THREE.FogExp2(0x9ab8d4, 0.0035);
+
     // Position camera for free camera mode
     this.camera.position.set(50, 100, 50);
     this.cameraRotation.yaw = 0;
     this.cameraRotation.pitch = -0.3; // Look slightly down
     this.updateCameraRotation();
-    
-    // Configure renderer
+
+    // Configure renderer — tone mapping for cinematic look
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    
-    // Add lighting to scene
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.85; // Slightly underexposed = richer, less washed out
+
+    // Soft ambient — cool overcast sky, low intensity so shadows read clearly
+    this.ambientLight = new THREE.AmbientLight(0xc8ddf0, 0.45);
     this.scene.add(this.ambientLight);
-    
-    this.directionalLight.position.set(50, 100, 50);
+
+    // Main sun — warm but not harsh, lower angle for longer shadows
+    this.directionalLight = new THREE.DirectionalLight(0xfff0d0, 1.0);
+    this.directionalLight.position.set(80, 120, 60);
     this.directionalLight.castShadow = true;
-    this.directionalLight.shadow.camera.left = -100;
-    this.directionalLight.shadow.camera.right = 100;
-    this.directionalLight.shadow.camera.top = 100;
-    this.directionalLight.shadow.camera.bottom = -100;
+    this.directionalLight.shadow.camera.left   = -200;
+    this.directionalLight.shadow.camera.right  =  200;
+    this.directionalLight.shadow.camera.top    =  200;
+    this.directionalLight.shadow.camera.bottom = -200;
+    this.directionalLight.shadow.mapSize.width  = 2048;
+    this.directionalLight.shadow.mapSize.height = 2048;
+    this.directionalLight.shadow.bias = -0.0005;
     this.scene.add(this.directionalLight);
+
+    // Subtle fill light — very dim, just lifts the darkest shadows slightly
+    const fillLight = new THREE.DirectionalLight(0xb0c8e8, 0.15);
+    fillLight.position.set(-60, 40, -40);
+    this.scene.add(fillLight);
   }
   
   /**
@@ -885,9 +903,93 @@ export class WorldViewer {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
+
+    // --- Slope-based and altitude color modulation ---
+    // After normals are computed, read them to darken steep slopes (rock effect)
+    // and modulate brightness by elevation.
+    const normals = geometry.getAttribute('normal') as THREE.BufferAttribute;
+    const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
+
+    // Rock color (gray stone) blended onto steep slopes
+    const ROCK_R = 0.38, ROCK_G = 0.36, ROCK_B = 0.34;
+    // Snow color — only on MOUNTAIN/GLACIER biomes, not volcanic
+    const SNOW_R = 0.92, SNOW_G = 0.93, SNOW_B = 0.95;
+    // Volcanic lava glow — blended onto steep slopes of volcanic peaks
+    const LAVA_R = 0.72, LAVA_G = 0.12, LAVA_B = 0.04;
+
+    for (let i = 0; i < normals.count; i++) {
+      const ny = normals.getY(i); // Y component of normal: 1 = flat, 0 = vertical
+      const vi = i * 3;
+      const rawHeight = vertices[vi + 1] / heightScale; // back to [0,1]
+
+      // Biome at this vertex (clamped to biome map bounds)
+      const bvX = Math.min(Math.round(vertices[vi]     - worldXBase), chunkSize - 1);
+      const bvY = Math.min(Math.round(vertices[vi + 2] - worldZBase), chunkSize - 1);
+      const bmIdx = Math.max(0, bvY) * chunkSize + Math.max(0, bvX);
+      const vertexBiome = data.biomeMap ? data.biomeMap[Math.min(bmIdx, data.biomeMap.length - 1)] : -1;
+
+      // Slope factor: 0 = flat, 1 = vertical cliff
+      const slopeFactor = Math.max(0, 1.0 - ny * ny);
+      const steepness = Math.pow(slopeFactor, 1.5);
+
+      // Subtle altitude brightness: valleys very slightly darker, peaks slightly brighter
+      // Reduced range to avoid washing out high terrain
+      const altitudeBrightness = 0.92 + rawHeight * 0.12;
+
+      let r = colorAttr.getX(i);
+      let g = colorAttr.getY(i);
+      let b = colorAttr.getZ(i);
+
+      const isVolcanic = vertexBiome === 11; // BiomeType.VOLCANIC = 11
+      const isMountain = vertexBiome === 7;  // BiomeType.MOUNTAIN = 7
+      const isGlacier  = vertexBiome === 12; // BiomeType.GLACIER  = 12
+
+      if (isVolcanic) {
+        // Volcanic: steep slopes get lava-glow tint, flat areas stay dark rock
+        r = r + (ROCK_R - r) * steepness * 0.6;
+        g = g + (ROCK_G - g) * steepness * 0.6;
+        b = b + (ROCK_B - b) * steepness * 0.6;
+        // Add lava glow on very steep volcanic slopes
+        const lavaFactor = Math.pow(steepness, 2.5) * 0.5;
+        if (lavaFactor > 0) {
+          r = r + (LAVA_R - r) * lavaFactor;
+          g = g + (LAVA_G - g) * lavaFactor;
+          b = b + (LAVA_B - b) * lavaFactor;
+        }
+      } else {
+        // Non-volcanic: steep slopes become rocky gray
+        r = r + (ROCK_R - r) * steepness;
+        g = g + (ROCK_G - g) * steepness;
+        b = b + (ROCK_B - b) * steepness;
+
+        // Snow on mountain/glacier peaks — height-based, only on flat/gentle slopes
+        if ((isMountain || isGlacier) && rawHeight > 0.76) {
+          const snowFactor = Math.min(1.0, (rawHeight - 0.76) / 0.10) * (1.0 - steepness * 0.7);
+          if (snowFactor > 0) {
+            r = r + (SNOW_R - r) * snowFactor;
+            g = g + (SNOW_G - g) * snowFactor;
+            b = b + (SNOW_B - b) * snowFactor;
+          }
+        }
+      }
+
+      // Apply altitude brightness modulation
+      r = Math.min(1.0, r * altitudeBrightness);
+      g = Math.min(1.0, g * altitudeBrightness);
+      b = Math.min(1.0, b * altitudeBrightness);
+
+      colorAttr.setXYZ(i, r, g, b);
+    }
+    colorAttr.needsUpdate = true;
+    // --- end slope/altitude modulation ---
     
     // Create material using materials module
-    const material = createTerrainMaterial(this.wireframeMode);
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      wireframe: this.wireframeMode,
+      roughness: 0.85,
+      metalness: 0.0,
+    });
     
     // Apply opacity for partial chunks
     if (partial && partialOpacity < 1.0) {

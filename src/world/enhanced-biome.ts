@@ -298,8 +298,11 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   private classifyBiomeFromClimate(height: number, temperature: number, moisture: number): BiomeType {
     if (height < 0.3)  return BiomeType.OCEAN;
     if (height < 0.35) return BiomeType.BEACH;
-    if (height > 0.85) return BiomeType.VOLCANIC; // Extreme peaks
-    if (height > 0.7)  return BiomeType.MOUNTAIN;
+    if (height > 0.7) {
+      // High elevation — volcanic only in warm regions, otherwise mountain
+      if (height > 0.85 && temperature > 0.2) return BiomeType.VOLCANIC;
+      return BiomeType.MOUNTAIN;
+    }
 
     if (temperature < -0.5) {
       // Very cold — glacier at elevation, otherwise tundra/taiga

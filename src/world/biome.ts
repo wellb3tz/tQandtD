@@ -83,10 +83,13 @@ export class BiomeSystem {
     if (height < 0.35) {
       return BiomeType.BEACH;
     }
-    if (height > 0.85) {
-      return BiomeType.VOLCANIC; // Extreme peaks become volcanic
-    }
     if (height > 0.7) {
+      // High elevation — check temperature to decide mountain vs volcanic
+      const temperature = this.getTemperature(x, y);
+      if (height > 0.85 && temperature > 0.2) {
+        // Extreme peaks in warm regions = volcanic
+        return BiomeType.VOLCANIC;
+      }
       return BiomeType.MOUNTAIN;
     }
 
