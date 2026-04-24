@@ -122,15 +122,32 @@ export class BiomeSystem {
   /**
    * Calculates biome blend weights for smooth transitions between biomes.
    * Samples nearby positions and returns weighted biome distribution.
+   * Uses stronger center bias to preserve narrow biomes like beaches.
    * @param x - World X coordinate
    * @param y - World Y coordinate
    * @param getHeight - Callback function to get height at any world position
    * @returns Map of biome types to their blend weights (sum to 1.0)
    */
   getBiomeWeights(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): Map<BiomeType, number> {
+    return this.getBiomeWeightsWithRadius(x, y, getHeight, this.config.blendRadius);
+  }
+
+  /**
+   * Calculates biome blend weights with custom radius.
+   * Used by EnhancedBiomeSystem for transition-aware blending.
+   * @param x - World X coordinate
+   * @param y - World Y coordinate
+   * @param getHeight - Callback function to get height at any world position
+   * @param radius - Custom blend radius
+   * @returns Map of biome types to their blend weights (sum to 1.0)
+   */
+  getBiomeWeightsWithRadius(x: number, y: number, getHeight: (worldX: number, worldY: number) => number, radius: number): Map<BiomeType, number> {
     const weights = new Map<BiomeType, number>();
-    const radius = this.config.blendRadius;
     const samples = 9; // 3x3 grid of samples
+    
+    // Get center biome first
+    const centerHeight = getHeight(x, y);
+    const centerBiome = this.getBiome(x, y, centerHeight);
     
     // Sample biomes in a grid around the position
     const step = radius / Math.sqrt(samples);
@@ -147,9 +164,11 @@ export class BiomeSystem {
         // Get biome at sample position using its own height
         const biome = this.getBiome(sampleX, sampleY, sampleHeight);
         
-        // Calculate weight based on distance (inverse distance weighting)
+        // Calculate weight based on distance with exponential falloff
+        // This gives much stronger weight to center, preserving narrow biomes
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const weight = distance === 0 ? 1 : 1 / (1 + distance);
+        const normalizedDist = distance / radius; // 0 to ~1.4
+        const weight = distance === 0 ? 4.0 : Math.exp(-normalizedDist * 3.0);
         
         // Accumulate weight for this biome
         const currentWeight = weights.get(biome) || 0;

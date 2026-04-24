@@ -127,16 +127,16 @@ const DEFAULT_CONFIG: WorldConfig = {
     zScale: 0.5
   },
   biomeConfig: {
-    temperatureScale: 0.005,
-    moistureScale: 0.005,
-    blendRadius: 5
+    temperatureScale: 0.001,
+    moistureScale: 0.001,
+    blendRadius: 0.5
   },
   enhancedBiomeConfig: {
-    temperatureScale: 0.005,
-    moistureScale: 0.005,
-    blendRadius: 5,
-    enableTransitions: true,
-    transitionWidth: 3,
+    temperatureScale: 0.001,
+    moistureScale: 0.001,
+    blendRadius: 0.5,
+    enableTransitions: false,
+    transitionWidth: 4,
     enableElevationBands: true,
     elevationBandWidth: 0.1,
     microBiomeFrequency: 0.15,

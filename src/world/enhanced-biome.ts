@@ -220,20 +220,50 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       biome = this.getBiome(x, y, height);
     }
 
+    // Calculate transition factor first (needed for adaptive blending)
+    const transitionFactor = this.enhancedConfig.enableTransitions
+      ? this.calculateTransitionFactor(x, y, getHeight)
+      : 0;
+
     // Get blend weights
-    const weights = this.enhancedConfig.enableTransitions
-      ? this.getBiomeWeights(x, y, getHeight)
-      : new Map([[biome, 1.0]]);
+    // Strategy: preserve center biome color, blend only at edges
+    let weights: Map<BiomeType, number>;
+    if (!this.enhancedConfig.enableTransitions) {
+      // No transitions: pure biome colors
+      weights = new Map([[biome, 1.0]]);
+    } else {
+      // Transitions enabled: blend on boundaries while preserving center
+      // Calculate how much to blend based on distance to boundary
+      const blendAmount = transitionFactor * Math.min(this.enhancedConfig.transitionWidth / 10, 1.0);
+      
+      if (blendAmount < 0.1) {
+        // Very low blend: keep pure color
+        weights = new Map([[biome, 1.0]]);
+      } else {
+        // Blend with neighbors, but keep strong center bias
+        // Use small radius to only sample immediate neighbors
+        const sampleRadius = 2.0 + blendAmount * 3.0; // 2-5 units
+        const neighborWeights = this.getBiomeWeightsWithRadius(x, y, getHeight, sampleRadius);
+        
+        // Boost center biome weight to preserve it
+        const centerBoost = 1.0 - blendAmount * 0.5; // 0.5-1.0
+        const centerWeight = neighborWeights.get(biome) || 0;
+        neighborWeights.set(biome, centerWeight + centerBoost);
+        
+        // Renormalize
+        let total = 0;
+        for (const w of neighborWeights.values()) total += w;
+        weights = new Map();
+        for (const [b, w] of neighborWeights.entries()) {
+          weights.set(b, w / total);
+        }
+      }
+    }
 
     // Apply compatibility matrix weight correction when enabled
     if (this.compatibilityMatrix !== null) {
       this.applyCompatibilityCorrection(weights);
     }
-
-    // Calculate transition factor
-    const transitionFactor = this.enhancedConfig.enableTransitions
-      ? this.calculateTransitionFactor(x, y, getHeight)
-      : 0;
 
     // Check for micro-biome (terrain-aware when getHeight is available)
     const microBiome = this.enhancedConfig.enableMicroBiomes
@@ -454,10 +484,11 @@ export class EnhancedBiomeSystem extends BiomeSystem {
 
   /**
    * Calculates transition factor based on distance to biome boundaries.
+   * Uses fixed detection radius to identify boundaries, transitionWidth only affects blend strength.
    * @param x         - World X coordinate.
    * @param y         - World Y coordinate.
    * @param getHeight - Callback function to get height at any world position.
-   * @returns Transition factor (0-1).
+   * @returns Transition factor (0-1), where 1 = on boundary, 0 = center of biome.
    */
   private calculateTransitionFactor(
     x: number,
@@ -467,14 +498,15 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     const centerHeight = getHeight(x, y);
     const centerBiome  = this.getBiome(x, y, centerHeight);
 
-    const sampleRadius = this.enhancedConfig.transitionWidth;
+    // Fixed detection radius to identify biome boundaries
+    const detectionRadius = 8;
     const sampleCount  = 8;
     let differentBiomeCount = 0;
 
     for (let i = 0; i < sampleCount; i++) {
       const angle   = (i / sampleCount) * Math.PI * 2;
-      const sampleX = x + Math.cos(angle) * sampleRadius;
-      const sampleY = y + Math.sin(angle) * sampleRadius;
+      const sampleX = x + Math.cos(angle) * detectionRadius;
+      const sampleY = y + Math.sin(angle) * detectionRadius;
       const sampleHeight = getHeight(sampleX, sampleY);
       const sampleBiome  = this.getBiome(sampleX, sampleY, sampleHeight);
       if (sampleBiome !== centerBiome) {
@@ -482,6 +514,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       }
     }
 
+    // Return 0-1 factor: 0 = pure biome center, 1 = on boundary
     return differentBiomeCount / sampleCount;
   }
 }

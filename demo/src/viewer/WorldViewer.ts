@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { ChunkData } from '@engine/index';
+import { ChunkData } from '../../../src/index';
 import {
   getBiomeColor,
   calculateBlendedColor,
@@ -733,7 +733,7 @@ export class WorldViewer {
     const numBiomes = 8; // Total number of BiomeType enum values
     
     // Apply underwater color adjustments if heightmap and biome data available
-    let underwaterColors: BiomeColor[] | null = null;
+    let underwaterColors: (BiomeColor | null)[] | null = null;
     if (data.heightmap && data.biomeWeights && hasBlendWeights) {
       underwaterColors = adjustUnderwaterColors(
         data.heightmap,
@@ -1431,10 +1431,6 @@ export class WorldViewer {
       for (const chunkMesh of this.chunkMeshes.values()) {
         chunkMesh.visible = true;
         chunkMesh.terrain.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-        
-        if (chunkMesh.rivers) {
-          chunkMesh.rivers.visible = this.layerVisibility.get(RenderLayer.RIVERS) !== false;
-        }
         
         if (chunkMesh.resources) {
           chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;

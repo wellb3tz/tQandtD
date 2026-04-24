@@ -235,29 +235,20 @@ export class ControlPanel {
       {
         id: 'temperatureScale',
         label: 'Temperature Scale',
-        min: 0.001,
-        max: 0.01,
-        step: 0.001,
-        defaultValue: 0.005,
-        tooltip: 'Scale of temperature variation'
+        min: 0.0001,
+        max: 0.05,
+        step: 0.0001,
+        defaultValue: 0.001,
+        tooltip: 'Scale of temperature variation (lower = larger biomes)'
       },
       {
         id: 'moistureScale',
         label: 'Moisture Scale',
-        min: 0.001,
-        max: 0.01,
-        step: 0.001,
-        defaultValue: 0.005,
-        tooltip: 'Scale of moisture variation'
-      },
-      {
-        id: 'blendRadius',
-        label: 'Blend Radius',
-        min: 1,
-        max: 10,
-        step: 1,
-        defaultValue: 5,
-        tooltip: 'Radius for biome blending'
+        min: 0.0001,
+        max: 0.05,
+        step: 0.0001,
+        defaultValue: 0.001,
+        tooltip: 'Scale of moisture variation (lower = larger biomes)'
       }
     ];
 
@@ -277,9 +268,9 @@ export class ControlPanel {
     // Enable transitions
     const transitionsCheckbox = this.createCheckboxControl({
       id: 'enableTransitions',
-      label: 'Enable Transitions',
-      defaultValue: true,
-      tooltip: 'Enable smooth biome transitions'
+      label: 'Enable Biome Blending',
+      defaultValue: false,
+      tooltip: 'Enable smooth color transitions on biome boundaries'
     }, (checked) => {
       this.updateBiomeConfig('enableTransitions', checked);
       const transitionWidthControl = document.getElementById('transitionWidth-group');
@@ -292,16 +283,16 @@ export class ControlPanel {
     // Transition width (conditional)
     const transitionWidthControl = this.createSliderControl({
       id: 'transitionWidth',
-      label: 'Transition Width',
-      min: 5,
-      max: 20,
-      step: 1,
-      defaultValue: 10,
-      tooltip: 'Width of transition zones'
+      label: 'Blend Strength',
+      min: 0.01,
+      max: 50,
+      step: 0.01,
+      defaultValue: 4,
+      tooltip: 'Strength of color blending on biome edges (lower = sharper, higher = smoother)'
     }, (value) => {
       this.updateBiomeConfig('transitionWidth', value);
     });
-    transitionWidthControl.style.display = 'block';
+    transitionWidthControl.style.display = 'none';
     transitionWidthControl.id = 'transitionWidth-group';
     biomeContainer.appendChild(transitionWidthControl);
 

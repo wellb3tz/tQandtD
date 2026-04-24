@@ -222,6 +222,32 @@ document.addEventListener('DOMContentLoaded', async () => {
       controlPanelInstance = new ControlPanel();
       controlPanelInstance.initialize(controlPanelContainer, app, terrainEditor || undefined);
       console.log('ControlPanel initialized successfully');
+
+      // Settings-changed disclaimer
+      const disclaimer = document.createElement('div');
+      disclaimer.id = 'settings-changed-disclaimer';
+      disclaimer.textContent = '⚠ Настройки изменены — требуется сгенерировать мир';
+      disclaimer.style.cssText = [
+        'display:none',
+        'position:fixed',
+        'bottom:16px',
+        'left:50%',
+        'transform:translateX(-50%)',
+        'background:rgba(30,30,30,0.92)',
+        'color:#f5c542',
+        'padding:8px 18px',
+        'border-radius:8px',
+        'font-size:0.82rem',
+        'pointer-events:none',
+        'z-index:9999',
+        'white-space:nowrap',
+        'box-shadow:0 2px 12px rgba(0,0,0,0.4)',
+      ].join(';');
+      document.body.appendChild(disclaimer);
+
+      controlPanelInstance.onParameterChange(() => {
+        disclaimer.style.display = 'block';
+      });
     }
     
     // Initialize WorldManager
@@ -344,6 +370,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (worldViewer) {
         worldViewer.clearFogOfWar();
       }
+      // Hide settings-changed disclaimer
+      const disclaimer = document.getElementById('settings-changed-disclaimer');
+      if (disclaimer) disclaimer.style.display = 'none';
       errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
     });
     
