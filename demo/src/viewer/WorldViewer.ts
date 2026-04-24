@@ -310,18 +310,24 @@ export class WorldViewer {
    * Set up keyboard event listeners for WASD camera movement
    */
   private setupKeyboardControls(): void {
+    // Use e.code (physical key) instead of e.key so layout doesn't matter.
+    // KeyW = W regardless of whether keyboard is in Russian, English, etc.
+    const CODE_MAP: Record<string, string> = {
+      'KeyW': 'w', 'KeyA': 'a', 'KeyS': 's', 'KeyD': 'd',
+      'Space': 'space', 'ShiftLeft': 'shift', 'ShiftRight': 'shift'
+    };
+
     window.addEventListener('keydown', (e) => {
-      // Handle WASD, Space, and Shift keys
-      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', ' ', 'Shift'].includes(e.key)) {
-        const key = e.key === ' ' ? 'space' : e.key === 'Shift' ? 'shift' : e.key.toLowerCase();
+      const key = CODE_MAP[e.code];
+      if (key) {
         this.keyboardState.set(key, true);
         e.preventDefault();
       }
     });
-    
+
     window.addEventListener('keyup', (e) => {
-      if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D', ' ', 'Shift'].includes(e.key)) {
-        const key = e.key === ' ' ? 'space' : e.key === 'Shift' ? 'shift' : e.key.toLowerCase();
+      const key = CODE_MAP[e.code];
+      if (key) {
         this.keyboardState.set(key, false);
         e.preventDefault();
       }

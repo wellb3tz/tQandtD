@@ -207,7 +207,7 @@ export class DemoApp {
       showStructures: false,
       showChunkBoundaries: false,
       showWireframe: false,
-      fogOfWarEnabled: true,
+      fogOfWarEnabled: false,
       
       exploredChunks: new Set(),
       

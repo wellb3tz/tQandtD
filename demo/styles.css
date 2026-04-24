@@ -589,13 +589,13 @@ input.validation-error { border-color: var(--accent-err) !important; box-shadow:
   bottom: calc(var(--status-h) + 12px);
   right: calc(var(--panel-w) * 2 + 12px);
   z-index: 40;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  background: rgba(10,14,20,0.5);
+  border: 1px solid rgba(74,222,128,0.12);
   border-radius: var(--r);
   overflow: hidden;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
 .minimap-header {
   display: flex;

@@ -792,7 +792,7 @@ export class ControlPanel {
       { id: 'showStructures', label: 'Show Structures', defaultValue: false },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
       { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
-      { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: true }
+      { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: false }
     ];
 
     toggles.forEach(config => {

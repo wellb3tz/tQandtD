@@ -52,7 +52,7 @@ export class Minimap {
     ctx.clearRect(0, 0, size, size);
 
     // Background
-    ctx.fillStyle = 'rgba(10,14,20,0.85)';
+    ctx.fillStyle = 'rgba(10,14,20,0.4)';
     ctx.fillRect(0, 0, size, size);
 
     const state = this.app.getState();
