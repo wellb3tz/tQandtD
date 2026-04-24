@@ -286,7 +286,8 @@
           <span id="fps-value" class="metric-value-large">--</span>
           <span class="metric-unit">FPS</span>
         </div>
-        <div class="metric">
+        <canvas id="fps-graph" width="248" height="48" style="display:block;width:100%;border-radius:4px;"></canvas>
+        <div class="metric" style="margin-top:8px">
           <span class="metric-label">Total Chunks</span>
           <span id="total-chunks-value" class="metric-value">0</span>
         </div>
@@ -474,14 +475,6 @@
         MINIMAP
       </div>
       <canvas id="minimap-canvas"></canvas>
-    </div>
-
-    <!-- ═══════════════════════════════════════
-         PERFORMANCE GRAPH (overlay bottom-left)
-    ═══════════════════════════════════════ -->
-    <div class="performance-graph">
-      <div class="graph-label">Performance</div>
-      <canvas id="perf-graph" width="180" height="50"></canvas>
     </div>
 
     <!-- ═══════════════════════════════════════

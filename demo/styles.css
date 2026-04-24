@@ -597,7 +597,6 @@ input.validation-error { border-color: var(--accent-err) !important; box-shadow:
   -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
-
 .minimap-header {
   display: flex;
   align-items: center;
