@@ -5,6 +5,9 @@
  * through an interactive 3D visualization interface built with Three.js.
  */
 
+// Import styles
+import './styles.css';
+
 import { DemoApp, AppEvent, TerrainTool } from './src/core/DemoApp';
 import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
@@ -79,6 +82,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cameraXDisplay = document.getElementById('camera-x');
   const cameraYDisplay = document.getElementById('camera-y');
   const cameraZDisplay = document.getElementById('camera-z');
+
+  // Status bar elements
+  const statusSeed     = document.getElementById('status-seed');
+  const statusChunks   = document.getElementById('status-chunks');
+  const statusPosition = document.getElementById('status-position');
   
   // Initialize DemoApp
   try {
@@ -89,8 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const viewerContainer = document.getElementById('viewer');
     if (viewerContainer) {
       worldViewer = new WorldViewer();
-      worldViewer.initialize(viewerContainer);
-      console.log('WorldViewer initialized successfully');
+      worldViewer.initialize(viewerContainer);      console.log('WorldViewer initialized successfully');
       
       // Apply initial visibility state from DemoApp
       const initialState = app.getState();
@@ -194,11 +201,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             lastPerformanceUpdate = now;
           }
           
-          // Update camera position display (requirement 14.8)
+          // Update camera position display
           if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
             cameraXDisplay.textContent = cameraPos.x.toFixed(2);
             cameraYDisplay.textContent = cameraPos.y.toFixed(2);
             cameraZDisplay.textContent = cameraPos.z.toFixed(2);
+          }
+          // Update status bar position
+          if (statusPosition) {
+            statusPosition.textContent = `${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)}`;
+          }
+          // Update status bar chunks
+          if (statusChunks && app) {
+            statusChunks.textContent = app.getState().loadedChunkCount.toString();
           }
           
           // Update worker pool statistics if enabled
@@ -366,13 +381,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
-      // Clear fog of war when generating new world
-      if (worldViewer) {
-        worldViewer.clearFogOfWar();
-      }
-      // Hide settings-changed disclaimer
+      if (worldViewer) worldViewer.clearFogOfWar();
       const disclaimer = document.getElementById('settings-changed-disclaimer');
       if (disclaimer) disclaimer.style.display = 'none';
+      // Update status bar seed
+      if (statusSeed) statusSeed.textContent = data.seed.toString();
       errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
     });
     
@@ -486,6 +499,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Toggle control panel
   toggleControlsBtn?.addEventListener('click', () => {
     controlPanel?.classList.toggle('collapsed');
+  });
+
+  // Collapsible sections in control panel
+  document.querySelectorAll('.section-header.clickable').forEach((header) => {
+    header.addEventListener('click', () => {
+      const section = header.closest('.panel-section');
+      if (section) {
+        section.classList.toggle('collapsed');
+      }
+    });
   });
   
   // Toggle performance monitor

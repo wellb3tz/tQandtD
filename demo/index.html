@@ -3,203 +3,502 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Procedural World Engine - Comprehensive Demo</title>
+  <title>Procedural World Engine</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div id="app">
-    <!-- Header -->
+
+    <!-- Full-screen 3D Viewer (behind everything) -->
+    <div id="viewer" class="viewer"></div>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="loading-indicator hidden">
+      <div class="spinner"></div>
+      <p>Generating world...</p>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         TOP BAR
+    ═══════════════════════════════════════ -->
     <header class="app-header">
-      <h1>Procedural World Engine Demo</h1>
+      <div class="header-left">
+        <div class="app-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" opacity="0.7"/>
+            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h1>PROCEDURAL WORLD ENGINE</h1>
+        <span class="version-badge">DEMO</span>
+      </div>
       <div class="header-actions">
-        <button id="help-btn" class="icon-btn" title="Help">?</button>
-        <button id="toggle-controls-btn" class="icon-btn" title="Toggle Controls">☰</button>
-        <button id="toggle-monitor-btn" class="icon-btn" title="Toggle Monitor">📊</button>
-        <button id="fullscreen-btn" class="icon-btn" title="Fullscreen View (Hide All UI)">⛶</button>
+        <button id="help-btn" class="icon-btn" title="Help">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
+        <button id="toggle-controls-btn" class="icon-btn" title="Toggle Controls">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <button id="toggle-monitor-btn" class="icon-btn" title="Toggle Monitor">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </button>
+        <button id="fullscreen-btn" class="icon-btn" title="Fullscreen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <div class="app-content">
-      <!-- Control Panel Sidebar -->
-      <aside id="control-panel" class="control-panel">
-        <div class="panel-section">
-          <h2>World Generation</h2>
+    <!-- ═══════════════════════════════════════
+         LEFT PANEL (overlay)
+    ═══════════════════════════════════════ -->
+    <aside id="control-panel" class="control-panel">
+
+      <!-- World Generation -->
+      <div class="panel-section">
+        <div class="section-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <h2>WORLD GENERATION</h2>
+        </div>
+        <div class="section-content">
           <div class="control-group">
-            <label for="seed-input">Seed:</label>
-            <input type="number" id="seed-input" value="12345" />
-          </div>
-          <button id="generate-btn" class="primary-btn">Generate World</button>
-        </div>
-
-        <div class="panel-section">
-          <h3>Terrain Parameters</h3>
-          <div id="terrain-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Biome Parameters</h3>
-          <div id="biome-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Resources & Structures</h3>
-          <div id="resource-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Water Configuration</h3>
-          <div id="water-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Advanced Features</h3>
-          <div id="advanced-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Terrain Editing</h3>
-          <div id="terrain-editing-controls"></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>Visibility Toggles</h3>
-          <div id="visibility-controls"></div>
-        </div>
-      </aside>
-
-      <!-- 3D Viewer -->
-      <main class="viewer-container">
-        <div id="viewer" class="viewer"></div>
-        <div id="loading-indicator" class="loading-indicator hidden">
-          <div class="spinner"></div>
-          <p>Generating world...</p>
-        </div>
-        
-        <!-- Camera Controls Overlay -->
-        <div class="camera-controls-overlay">
-          <div class="camera-buttons">
-            <button id="reset-camera-btn" class="camera-btn" title="Reset Camera (Default View)">🔄 Reset</button>
-            <button id="top-down-btn" class="camera-btn" title="Top-Down Orthographic View">⬇️ Top-Down</button>
-            <button id="follow-terrain-btn" class="camera-btn" title="Follow Terrain Mode">🏔️ Follow</button>
-          </div>
-          <div class="camera-position-display">
-            <div class="position-label">Camera Position:</div>
-            <div class="position-coords">
-              <span>X: <span id="camera-x">0.00</span></span>
-              <span>Y: <span id="camera-y">0.00</span></span>
-              <span>Z: <span id="camera-z">0.00</span></span>
+            <label for="seed-input">Seed</label>
+            <div class="input-with-button">
+              <input type="number" id="seed-input" value="12345" />
+              <button id="random-seed-btn" class="icon-btn-small" title="Random Seed">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+              </button>
             </div>
           </div>
+          <button id="generate-btn" class="primary-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            GENERATE WORLD
+          </button>
         </div>
-      </main>
+      </div>
 
-      <!-- Performance Monitor -->
-      <aside id="performance-monitor" class="performance-monitor">
-        <h3>Performance Monitor</h3>
-        <div class="monitor-section">
-          <h4>Rendering</h4>
-          <div class="metric">
-            <span class="metric-label">FPS:</span>
-            <span id="fps-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Vertices:</span>
-            <span id="vertices-value" class="metric-value">--</span>
-          </div>
+      <!-- Terrain Parameters -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          </svg>
+          <h3>TERRAIN PARAMETERS</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+        <div class="section-content"><div id="terrain-controls"></div></div>
+      </div>
 
-        <div class="monitor-section">
-          <h4>Generation</h4>
-          <div class="metric">
-            <span class="metric-label">Avg Time:</span>
-            <span id="gen-time-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Loaded Chunks:</span>
-            <span id="chunks-value" class="metric-value">--</span>
-          </div>
+      <!-- Biome Parameters -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          <h3>BIOME PARAMETERS</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+        <div class="section-content"><div id="biome-controls"></div></div>
+      </div>
 
-        <div class="monitor-section">
-          <h4>Memory</h4>
-          <div class="metric">
-            <span class="metric-label">Usage:</span>
-            <span id="memory-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Cache Hit Rate:</span>
-            <span id="cache-value" class="metric-value">--</span>
-          </div>
+      <!-- Resources & Structures -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          <h3>RESOURCES & STRUCTURES</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+        <div class="section-content"><div id="resource-controls"></div></div>
+      </div>
 
-        <div class="monitor-section">
-          <h4>LOD System</h4>
-          <div class="metric">
-            <span class="metric-label">High Detail:</span>
-            <span id="lod-high-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Medium Detail:</span>
-            <span id="lod-medium-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Low Detail:</span>
-            <span id="lod-low-value" class="metric-value">--</span>
-          </div>
+      <!-- Water Configuration -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+          </svg>
+          <h3>WATER CONFIGURATION</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+        <div class="section-content"><div id="water-controls"></div></div>
+      </div>
 
-        <div class="monitor-section">
-          <h4>Worker Pool</h4>
-          <div class="metric">
-            <span class="metric-label">Active Workers:</span>
-            <span id="active-workers-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Queued Tasks:</span>
-            <span id="queued-tasks-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Completed:</span>
-            <span id="completed-tasks-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Avg Time:</span>
-            <span id="avg-worker-time-value" class="metric-value">--</span>
-          </div>
+      <!-- Advanced Features -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+          </svg>
+          <h3>ADVANCED FEATURES</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
+        <div class="section-content"><div id="advanced-controls"></div></div>
+      </div>
 
-        <div class="monitor-section">
-          <h4>Incremental Generation</h4>
-          <div class="metric">
-            <span class="metric-label">Chunks In Progress:</span>
-            <span id="chunks-in-progress-value" class="metric-value">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Current Stage:</span>
-            <span id="gen-stage-value" class="metric-value">--</span>
-          </div>
+      <!-- Terrain Editing -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          <h3>TERRAIN EDITING</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </div>
-      </aside>
+        <div class="section-content"><div id="terrain-editing-controls"></div></div>
+      </div>
 
-      <!-- Statistics Display -->
-      <aside id="statistics-display" class="statistics-display">
-      </aside>
+      <!-- Visibility Toggles -->
+      <div class="panel-section collapsible collapsed">
+        <div class="section-header clickable">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <h3>VISIBILITY TOGGLES</h3>
+          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+        <div class="section-content"><div id="visibility-controls"></div></div>
+      </div>
+
+    </aside>
+
+    <!-- ═══════════════════════════════════════
+         TOP-CENTER TOOLBAR (overlay)
+    ═══════════════════════════════════════ -->
+    <div class="top-toolbar">
+      <div class="toolbar-group">
+        <button id="reset-btn" class="toolbar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          </svg>
+          Reset
+        </button>
+        <button id="top-down-btn" class="toolbar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+          </svg>
+          Top-Down
+        </button>
+        <button id="follow-terrain-btn" class="toolbar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          Follow
+        </button>
+      </div>
     </div>
 
-    <!-- World Manager Panel -->
-    <div id="world-manager" class="world-manager hidden">
-      <h3>World Management</h3>
-      <div class="manager-actions">
-        <button id="save-json-btn">Save (JSON)</button>
-        <button id="save-binary-btn">Save (Binary)</button>
-        <button id="load-btn">Load World</button>
-        <button id="export-heightmap-btn">Export Heightmap</button>
-        <button id="export-biome-btn">Export Biome Map</button>
-        <button id="export-config-btn">Export Configuration</button>
-        <button id="copy-seed-btn">Copy Seed</button>
-        <button id="share-url-btn">Generate Shareable URL</button>
+    <!-- ═══════════════════════════════════════
+         COMPASS (overlay top-right)
+    ═══════════════════════════════════════ -->
+    <div class="compass-container">
+      <div class="compass">
+        <div class="compass-ring">
+          <div class="compass-needle" id="compass-needle">
+            <svg width="36" height="36" viewBox="0 0 40 40">
+              <path d="M20 5 L25 20 L20 35 L15 20 Z" fill="#4ade80" opacity="0.9"/>
+              <path d="M20 5 L25 20 L20 35 L15 20 Z" fill="#ef4444" opacity="0.9" transform="rotate(180 20 20)"/>
+            </svg>
+          </div>
+          <div class="compass-label compass-n">N</div>
+          <div class="compass-label compass-e">E</div>
+          <div class="compass-label compass-s">S</div>
+          <div class="compass-label compass-w">W</div>
+        </div>
       </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         CAMERA POSITION (overlay, below compass)
+    ═══════════════════════════════════════ -->
+    <div class="camera-position-display">
+      <div class="position-header">CAMERA POSITION</div>
+      <div class="position-grid">
+        <div class="position-item">
+          <span class="position-label">X</span>
+          <span class="position-value" id="camera-x">0.00</span>
+        </div>
+        <div class="position-item">
+          <span class="position-label">Y</span>
+          <span class="position-value" id="camera-y">0.00</span>
+        </div>
+        <div class="position-item">
+          <span class="position-label">Z</span>
+          <span class="position-value" id="camera-z">0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         PERFORMANCE MONITOR (overlay right)
+    ═══════════════════════════════════════ -->
+    <aside id="performance-monitor" class="performance-monitor">
+      <div class="monitor-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <h2>PERFORMANCE MONITOR</h2>
+      </div>
+
+      <div class="monitor-section">
+        <h4>FRAME RATE</h4>
+        <div class="metric-large">
+          <span id="fps-value" class="metric-value-large">--</span>
+          <span class="metric-unit">FPS</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Total Chunks</span>
+          <span id="total-chunks-value" class="metric-value">0</span>
+        </div>
+      </div>
+
+      <div class="monitor-section">
+        <h4>GENERATION TIME</h4>
+        <div class="metric">
+          <span class="metric-label">Average</span>
+          <span id="gen-time-value" class="metric-value">0.00 ms</span>
+        </div>
+      </div>
+
+      <div class="monitor-section">
+        <h4>MEMORY & CACHE</h4>
+        <div class="metric">
+          <span class="metric-label">Memory Usage</span>
+          <span id="memory-value" class="metric-value">0.00 MB</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Cache Hit Rate</span>
+          <span id="cache-value" class="metric-value">0.0%</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Cache Size</span>
+          <span id="cache-size-value" class="metric-value">0 / 1000</span>
+        </div>
+      </div>
+
+      <div class="monitor-section">
+        <h4>RENDER STATS</h4>
+        <div class="metric">
+          <span class="metric-label">Loaded Chunks</span>
+          <span id="loaded-chunks-value" class="metric-value">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Vertices</span>
+          <span id="vertices-value" class="metric-value">0</span>
+        </div>
+      </div>
+
+      <div class="monitor-section">
+        <h4>WORKER POOL</h4>
+        <div class="metric">
+          <span class="metric-label">Active Workers</span>
+          <span id="active-workers-value" class="metric-value">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Queued Tasks</span>
+          <span id="queued-tasks-value" class="metric-value">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Completed</span>
+          <span id="completed-tasks-value" class="metric-value">0</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Avg Time</span>
+          <span id="avg-worker-time-value" class="metric-value">0.00 ms</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════
+         WORLD STATISTICS (overlay far right)
+    ═══════════════════════════════════════ -->
+    <aside id="world-statistics" class="world-statistics">
+      <div class="monitor-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="20" x2="12" y2="10"/>
+          <line x1="18" y1="20" x2="18" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="16"/>
+        </svg>
+        <h2>WORLD STATISTICS</h2>
+      </div>
+
+      <div id="statistics-display">
+        <div class="monitor-section">
+          <h4>GENERAL</h4>
+          <div class="metric">
+            <span class="metric-label">Total Chunks</span>
+            <span id="stat-chunk-count" class="metric-value">0</span>
+          </div>
+        </div>
+        <div class="monitor-section">
+          <h4>HEIGHT STATISTICS</h4>
+          <div class="metric">
+            <span class="metric-label">Average</span>
+            <span id="stat-height-avg" class="metric-value">0.00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Minimum</span>
+            <span id="stat-height-min" class="metric-value">0.00</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Maximum</span>
+            <span id="stat-height-max" class="metric-value">0.00</span>
+          </div>
+        </div>
+        <div class="monitor-section">
+          <h4>BIOME DISTRIBUTION</h4>
+          <div id="stat-biome-chart">
+            <span class="metric-label">No data available</span>
+          </div>
+        </div>
+        <div class="monitor-section">
+          <h4>MICRO-BIOMES</h4>
+          <div class="metric">
+            <span class="metric-label">Micro-Biomes Visible</span>
+            <span id="micro-biome-count" class="metric-value">0</span>
+          </div>
+        </div>
+        <div class="monitor-section">
+          <h4>RESOURCES</h4>
+          <div id="stat-resource-chart">
+            <span class="metric-label">No data available</span>
+          </div>
+        </div>
+        <div class="monitor-section" id="stat-structure-section">
+          <h4>STRUCTURES</h4>
+        </div>
+      </div>
+
+      <div class="monitor-section">
+        <h4>WORLD MANAGEMENT</h4>
+        <div class="button-group-vertical">
+          <button id="save-json-btn" class="secondary-btn-small">SAVE (JSON)</button>
+          <button id="save-binary-btn" class="secondary-btn-small">SAVE (BINARY)</button>
+          <button id="load-btn" class="secondary-btn-small">LOAD WORLD</button>
+          <button id="export-heightmap-btn" class="secondary-btn-small">EXPORT HEIGHTMAP</button>
+          <button id="export-biome-btn" class="secondary-btn-small">EXPORT BIOME MAP</button>
+          <button id="export-config-btn" class="secondary-btn-small">EXPORT CONFIG</button>
+          <button id="copy-seed-btn" class="secondary-btn-small">COPY SEED</button>
+          <button id="share-url-btn" class="secondary-btn-small success">GENERATE SHAREABLE URL</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════
+         BOTTOM TOOLBAR (overlay center)
+    ═══════════════════════════════════════ -->
+    <div class="bottom-toolbar">
+      <div class="toolbar-group">
+        <button id="tool-select" class="tool-btn active" title="Select" data-tool="none">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+          </svg>
+        </button>
+        <button id="tool-raise" class="tool-btn" title="Raise Terrain" data-tool="raise">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 15l-6-6-6 6"/>
+          </svg>
+        </button>
+        <button id="tool-lower" class="tool-btn" title="Lower Terrain" data-tool="lower">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <button id="tool-flatten" class="tool-btn" title="Flatten" data-tool="flatten">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+          </svg>
+        </button>
+        <button id="tool-smooth" class="tool-btn" title="Smooth" data-tool="smooth">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12 Q12 6 21 12"/>
+          </svg>
+        </button>
+        <button id="tool-inspect" class="tool-btn" title="Inspect" data-tool="inspect">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         PERFORMANCE GRAPH (overlay bottom-left)
+    ═══════════════════════════════════════ -->
+    <div class="performance-graph">
+      <div class="graph-label">Performance</div>
+      <canvas id="perf-graph" width="180" height="50"></canvas>
+    </div>
+
+    <!-- ═══════════════════════════════════════
+         STATUS BAR (overlay bottom)
+    ═══════════════════════════════════════ -->
+    <div class="status-bar">
+      <span class="status-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+        Seed: <span id="status-seed">12345</span>
+      </span>
+      <span class="status-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+        </svg>
+        Chunks: <span id="status-chunks">0</span>
+      </span>
+      <span class="status-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        Biome: <span id="status-biome">—</span>
+      </span>
+      <span class="status-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        </svg>
+        Position: <span id="status-position">0, 0, 0</span>
+      </span>
     </div>
 
     <!-- Toast Notifications -->

@@ -788,8 +788,8 @@ export class ControlPanel {
       { id: 'showTerrain', label: 'Show Terrain', defaultValue: true },
       { id: 'showBiomes', label: 'Show Biome Colors', defaultValue: true },
       { id: 'showWater', label: 'Show Water Layer', defaultValue: true },
-      { id: 'showResources', label: 'Show Resources', defaultValue: true },
-      { id: 'showStructures', label: 'Show Structures', defaultValue: true },
+      { id: 'showResources', label: 'Show Resources', defaultValue: false },
+      { id: 'showStructures', label: 'Show Structures', defaultValue: false },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
       { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
       { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: true }
