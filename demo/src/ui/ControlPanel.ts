@@ -222,6 +222,57 @@ export class ControlPanel {
     zScaleControl.style.display = 'none';
     zScaleControl.id = 'zScale-group';
     terrainContainer.appendChild(zScaleControl);
+
+    // Continental noise section
+    const continentalSection = document.createElement('div');
+    continentalSection.style.marginTop = '16px';
+    continentalSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Continental Shape</h4>';
+    terrainContainer.appendChild(continentalSection);
+
+    // Enable continentalness checkbox
+    const continentalnessCheckbox = this.createCheckboxControl({
+      id: 'enableContinentalness',
+      label: 'Enable Continentalness',
+      defaultValue: true,
+      tooltip: 'Large-scale noise that creates ocean basins and continents'
+    }, (checked) => {
+      this.updateTerrainConfig('enableContinentalness', checked);
+      const scaleCtrl    = document.getElementById('continentalScale-group');
+      const strengthCtrl = document.getElementById('continentalStrength-group');
+      if (scaleCtrl)    scaleCtrl.style.display    = checked ? 'block' : 'none';
+      if (strengthCtrl) strengthCtrl.style.display = checked ? 'block' : 'none';
+    });
+    terrainContainer.appendChild(continentalnessCheckbox);
+
+    // Continental scale slider
+    const continentalScaleControl = this.createSliderControl({
+      id: 'continentalScale',
+      label: 'Continental Scale',
+      min: 0.0005,
+      max: 0.008,
+      step: 0.0005,
+      defaultValue: 0.002,
+      tooltip: 'Size of ocean basins and continents (lower = larger)'
+    }, (value) => {
+      this.updateTerrainConfig('continentalScale', value);
+    });
+    continentalScaleControl.id = 'continentalScale-group';
+    terrainContainer.appendChild(continentalScaleControl);
+
+    // Continental strength slider
+    const continentalStrengthControl = this.createSliderControl({
+      id: 'continentalStrength',
+      label: 'Ocean Coverage',
+      min: 0.1,
+      max: 0.9,
+      step: 0.05,
+      defaultValue: 0.6,
+      tooltip: 'How much of the world is ocean (higher = more ocean)'
+    }, (value) => {
+      this.updateTerrainConfig('continentalStrength', value);
+    });
+    continentalStrengthControl.id = 'continentalStrength-group';
+    terrainContainer.appendChild(continentalStrengthControl);
   }
 
   /**
@@ -1256,6 +1307,19 @@ export class ControlPanel {
       if (config.terrainConfig.zScale !== undefined) {
         this.updateSliderValue('zScale', config.terrainConfig.zScale);
       }
+      if (config.terrainConfig.enableContinentalness !== undefined) {
+        this.updateCheckboxValue('enableContinentalness', config.terrainConfig.enableContinentalness);
+        const scaleCtrl    = document.getElementById('continentalScale-group');
+        const strengthCtrl = document.getElementById('continentalStrength-group');
+        if (scaleCtrl)    scaleCtrl.style.display    = config.terrainConfig.enableContinentalness ? 'block' : 'none';
+        if (strengthCtrl) strengthCtrl.style.display = config.terrainConfig.enableContinentalness ? 'block' : 'none';
+      }
+      if (config.terrainConfig.continentalScale !== undefined) {
+        this.updateSliderValue('continentalScale', config.terrainConfig.continentalScale);
+      }
+      if (config.terrainConfig.continentalStrength !== undefined) {
+        this.updateSliderValue('continentalStrength', config.terrainConfig.continentalStrength);
+      }
     }
 
     // Sync biome controls
@@ -1352,6 +1416,13 @@ export class ControlPanel {
       case 'enable3D': {
         const ctrl = document.getElementById('zScale-group');
         if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
+        break;
+      }
+      case 'enableContinentalness': {
+        const scaleCtrl    = document.getElementById('continentalScale-group');
+        const strengthCtrl = document.getElementById('continentalStrength-group');
+        if (scaleCtrl)    scaleCtrl.style.display    = checked ? 'block' : 'none';
+        if (strengthCtrl) strengthCtrl.style.display = checked ? 'block' : 'none';
         break;
       }
     }

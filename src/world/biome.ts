@@ -80,7 +80,10 @@ export class BiomeSystem {
     if (height < 0.3) {
       return BiomeType.OCEAN;
     }
-    if (height < 0.35) {
+    if (height < 0.42) {
+      // Coastal zone — BEACH only if actually near water.
+      // Without a getHeight callback here we use a wider band as approximation;
+      // the enhanced system overrides this with a proper proximity check.
       return BiomeType.BEACH;
     }
     if (height > 0.7) {

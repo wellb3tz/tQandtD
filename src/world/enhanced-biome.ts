@@ -217,7 +217,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     if (this.climateSystem !== null) {
       const temperature = this.climateSystem.getTemperature(x, y, height);
       const moisture    = this.climateSystem.getMoisture(x, y, height, getHeight);
-      biome = this.classifyBiomeFromClimate(height, temperature, moisture);
+      biome = this.classifyBiomeFromClimate(height, temperature, moisture, x, y, getHeight);
     } else {
       biome = this.getBiome(x, y, height);
     }
@@ -294,38 +294,90 @@ export class EnhancedBiomeSystem extends BiomeSystem {
    * Classifies a biome from pre-computed climate values.
    * Mirrors the logic in BiomeSystem.getBiome but accepts explicit temperature/moisture
    * and supports all 13 biome types including the extended set.
+   *
+   * @param height      - Terrain height [0,1]
+   * @param temperature - Climate temperature [-1,1]
+   * @param moisture    - Climate moisture [-1,1]
+   * @param x           - World X (used for water-proximity beach check)
+   * @param y           - World Y (used for water-proximity beach check)
+   * @param getHeight   - Height sampler (used for water-proximity beach check)
    */
-  private classifyBiomeFromClimate(height: number, temperature: number, moisture: number): BiomeType {
+  private classifyBiomeFromClimate(
+    height: number,
+    temperature: number,
+    moisture: number,
+    x: number,
+    y: number,
+    getHeight: (wx: number, wy: number) => number,
+  ): BiomeType {
     if (height < 0.3)  return BiomeType.OCEAN;
-    if (height < 0.35) return BiomeType.BEACH;
     if (height > 0.7) {
-      // High elevation — volcanic only in warm regions, otherwise mountain
       if (height > 0.85 && temperature > 0.2) return BiomeType.VOLCANIC;
       return BiomeType.MOUNTAIN;
     }
 
+    // Coastal zone: height 0.30–0.42.
+    // Only assign BEACH if ocean water is reachable within a short radius.
+    // This prevents inland "beaches" on plateaus at the same height.
+    if (height < 0.42) {
+      if (this.isNearWater(x, y, getHeight, 24)) {
+        // Steep coastal cliffs → rocky shore instead of sand
+        const dx1 = getHeight(x + 2, y) - height;
+        const dx2 = getHeight(x - 2, y) - height;
+        const dy1 = getHeight(x, y + 2) - height;
+        const dy2 = getHeight(x, y - 2) - height;
+        const gradient = Math.sqrt((dx1*dx1 + dx2*dx2 + dy1*dy1 + dy2*dy2) / 4);
+        // Very steep coast → mountain/rock biome, gentle coast → beach
+        return gradient > 0.08 ? BiomeType.MOUNTAIN : BiomeType.BEACH;
+      }
+      // Not near water — fall through to climate-based classification
+    }
+
     if (temperature < -0.5) {
-      // Very cold — glacier at elevation, otherwise tundra/taiga
       if (height > 0.6) return BiomeType.GLACIER;
       return moisture > 0.1 ? BiomeType.TAIGA : BiomeType.TUNDRA;
     } else if (temperature < -0.3) {
       return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
     } else if (temperature > 0.5) {
-      // Very hot
       if (moisture > 0.4)  return BiomeType.RAINFOREST;
       if (moisture < -0.2) return BiomeType.DESERT;
       return BiomeType.SAVANNA;
     } else if (temperature > 0.3) {
-      // Hot
       if (moisture < -0.2) return BiomeType.DESERT;
       if (moisture > 0.5)  return BiomeType.RAINFOREST;
       return BiomeType.PLAINS;
     } else {
-      // Temperate
       if (moisture > 0.5)  return BiomeType.SWAMP;
       if (moisture > 0.2)  return BiomeType.FOREST;
       return BiomeType.PLAINS;
     }
+  }
+
+  /**
+   * Returns true if any tile within `radius` world units is ocean (height < 0.3).
+   * Uses a sparse 8-direction sample for performance.
+   */
+  private isNearWater(
+    x: number,
+    y: number,
+    getHeight: (wx: number, wy: number) => number,
+    radius: number,
+  ): boolean {
+    const steps = 8;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const sx = x + Math.cos(angle) * radius;
+      const sy = y + Math.sin(angle) * radius;
+      if (getHeight(sx, sy) < 0.3) return true;
+    }
+    // Also check at half radius for closer water
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2 + Math.PI / steps;
+      const sx = x + Math.cos(angle) * (radius * 0.4);
+      const sy = y + Math.sin(angle) * (radius * 0.4);
+      if (getHeight(sx, sy) < 0.3) return true;
+    }
+    return false;
   }
 
   /**

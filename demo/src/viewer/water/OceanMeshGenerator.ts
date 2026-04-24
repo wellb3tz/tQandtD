@@ -88,7 +88,7 @@ export function buildOceanGeometry(
   }
 
   const { size } = chunkData;
-  const waterElevation = (config.seaLevel + config.rendering.waterOffset) * HEIGHT_SCALE;
+  const waterElevation = config.seaLevel * HEIGHT_SCALE;
 
   // Mesh merging optimization: Build merged geometry for all ocean tiles
   // This reduces draw calls from N tiles to 1 mesh per chunk

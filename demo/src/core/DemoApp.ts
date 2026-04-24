@@ -124,7 +124,10 @@ const DEFAULT_CONFIG: WorldConfig = {
     warpStrength: 1,
     heightMultiplier: 1.0,
     enable3D: false,
-    zScale: 0.5
+    zScale: 0.5,
+    enableContinentalness: true,
+    continentalScale: 0.002,
+    continentalStrength: 0.6,
   },
   biomeConfig: {
     temperatureScale: 0.001,

@@ -955,9 +955,32 @@ export class WorldViewer {
       const isVolcanic = vertexBiome === 11; // BiomeType.VOLCANIC = 11
       const isMountain = vertexBiome === 7;  // BiomeType.MOUNTAIN = 7
       const isGlacier  = vertexBiome === 12; // BiomeType.GLACIER  = 12
+      const isBeach    = vertexBiome === 1;  // BiomeType.BEACH    = 1
+      const isOcean    = vertexBiome === 0;  // BiomeType.OCEAN    = 0
 
-      if (isVolcanic) {
-        // Volcanic: steep slopes get lava-glow tint, flat areas stay dark rock
+      if (isOcean) {
+        // Ocean floor: no slope-shading, just altitude brightness
+        // (underwater terrain stays its biome color)
+      } else if (isBeach) {
+        // Beach / coastal: steep slopes become wet dark sand / rocky shore,
+        // NOT gray mountain rock. This eliminates the gray cliff look.
+        const WET_SAND_R = 0.55, WET_SAND_G = 0.48, WET_SAND_B = 0.32;
+        const CLIFF_R = 0.46, CLIFF_G = 0.42, CLIFF_B = 0.36; // dark coastal rock
+        if (steepness > 0.5) {
+          // Very steep coastal cliff — dark rock
+          const cliffFactor = (steepness - 0.5) / 0.5;
+          r = r + (CLIFF_R - r) * cliffFactor;
+          g = g + (CLIFF_G - g) * cliffFactor;
+          b = b + (CLIFF_B - b) * cliffFactor;
+        } else if (steepness > 0.15) {
+          // Moderate slope — wet sand
+          const wetFactor = (steepness - 0.15) / 0.35;
+          r = r + (WET_SAND_R - r) * wetFactor;
+          g = g + (WET_SAND_G - g) * wetFactor;
+          b = b + (WET_SAND_B - b) * wetFactor;
+        }
+        // Flat beach stays pure sand color
+      } else if (isVolcanic) {        // Volcanic: steep slopes get lava-glow tint, flat areas stay dark rock
         r = r + (ROCK_R - r) * steepness * 0.6;
         g = g + (ROCK_G - g) * steepness * 0.6;
         b = b + (ROCK_B - b) * steepness * 0.6;
