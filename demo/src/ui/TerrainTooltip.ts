@@ -7,13 +7,17 @@ import { DemoApp } from '../core/DemoApp';
 import { ChunkData } from '../../../src/index';
 
 const BIOME_NAMES: Record<number, string> = {
-  0: 'Ocean', 1: 'Beach', 2: 'Desert', 3: 'Plains',
-  4: 'Forest', 5: 'Taiga', 6: 'Tundra', 7: 'Mountain'
+  0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
+  4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
+  8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
+  12: 'Glacier'
 };
 
 const BIOME_COLORS: Record<number, string> = {
-  0: '#4169E1', 1: '#F0E68C', 2: '#DAA520', 3: '#90EE90',
-  4: '#228B22', 5: '#326432', 6: '#B0C4DE', 7: '#708090'
+  0:  '#185090', 1:  '#EAD9A5', 2:  '#DEA85A', 3:  '#87BC41',
+  4:  '#1E6E1E', 5:  '#285F46', 6:  '#B7C5B7', 7:  '#808080',
+  8:  '#CDB750', 9:  '#3C5A32', 10: '#0A5018', 11: '#500A0A',
+  12: '#D6EAF4'
 };
 
 export class TerrainTooltip {

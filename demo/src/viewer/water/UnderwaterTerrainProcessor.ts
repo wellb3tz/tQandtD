@@ -178,7 +178,7 @@ export function adjustUnderwaterColors(
   config: UnderwaterAdjustmentConfig
 ): (BiomeColor | null)[] {
   const colors: (BiomeColor | null)[] = [];
-  const numBiomes = 8;
+  const numBiomes = 13;
   
   for (let y = 0; y < chunkSize; y++) {
     for (let x = 0; x < chunkSize; x++) {

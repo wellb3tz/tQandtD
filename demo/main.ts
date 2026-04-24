@@ -235,8 +235,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               let maxCount = 0;
               let dominantBiome = '—';
               const biomeNames: Record<number, string> = {
-                0: 'Forest', 1: 'Desert', 2: 'Tundra', 3: 'Grassland',
-                4: 'Mountain', 5: 'Ocean', 6: 'Beach', 7: 'Swamp'
+                0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
+                4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
+                8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
+                12: 'Glacier'
               };
               state.biomeDistribution.forEach((count, biome) => {
                 if (count > maxCount) { maxCount = count; dominantBiome = biomeNames[biome] ?? '—'; }

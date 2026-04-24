@@ -124,11 +124,13 @@ export class TerrainGenerator {
     let noiseValue: number;
 
     if (use3D) {
-      // Use 3D noise with z-coordinate as a variation parameter
-      // Apply domain warping in 3D space for organic patterns
-      const zScale = this.config.zScale ?? 0.5; // Default to 0.5 if not specified
-      const z = 0; // Use z=0 as base, could be varied for different terrain layers
-      const [warpedX, warpedY, warpedZ] = noise.domainWarp3D(x, y, z * zScale, this.config.warpStrength);
+      // Use 3D noise with zScale controlling the Z-axis slice of the noise volume.
+      // Different zScale values sample different "layers" of the 3D noise field,
+      // producing visually distinct terrain shapes.
+      // zScale also scales X/Y coordinates in Z-space for more variation at higher values.
+      const zScale = this.config.zScale ?? 0.5;
+      const z = zScale; // Use zScale directly as the Z coordinate — non-zero so it has effect
+      const [warpedX, warpedY, warpedZ] = noise.domainWarp3D(x, y, z, this.config.warpStrength);
       
       // Sample 3D fBM noise at warped coordinates
       noiseValue = noise.fbm3D(warpedX, warpedY, warpedZ, noiseConfig);

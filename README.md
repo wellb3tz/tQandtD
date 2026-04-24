@@ -13,8 +13,6 @@ A TypeScript-based procedural world generation engine designed for browser-based
 - **Resource Clusters**: Natural resource distribution based on biomes (5 resource types)
 - **Structure Placement**: Poisson Disk Sampling for realistic structure distribution (3 structure types)
 - **Multi-Threaded Generation**: Worker pool for parallel chunk generation across CPU cores
-- **Level of Detail (LOD)**: Distance-based detail reduction for improved rendering performance
-- **Incremental Generation**: Progressive chunk generation with time budgets for responsive applications
 - **World Persistence**: JSON and binary serialization with compression and modification tracking
 - **Web Worker Support**: Non-blocking chunk generation for smooth browser performance
 - **Performance Monitoring**: Optional timing measurements and progress callbacks

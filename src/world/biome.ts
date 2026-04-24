@@ -83,6 +83,9 @@ export class BiomeSystem {
     if (height < 0.35) {
       return BiomeType.BEACH;
     }
+    if (height > 0.85) {
+      return BiomeType.VOLCANIC; // Extreme peaks become volcanic
+    }
     if (height > 0.7) {
       return BiomeType.MOUNTAIN;
     }
@@ -94,24 +97,39 @@ export class BiomeSystem {
     // Classify based on temperature and moisture
     // Temperature: -1 (cold) to 1 (hot)
     // Moisture: -1 (dry) to 1 (wet)
-    
-    if (temperature < -0.3) {
+
+    if (temperature < -0.5) {
+      // Very cold regions
+      if (height > 0.6) {
+        return BiomeType.GLACIER; // Cold + elevated = glacier
+      }
+      return moisture > 0.1 ? BiomeType.TAIGA : BiomeType.TUNDRA;
+    } else if (temperature < -0.3) {
       // Cold regions
-      if (moisture > 0.2) {
-        return BiomeType.TAIGA; // Cold and wet
+      return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
+    } else if (temperature > 0.5) {
+      // Very hot regions
+      if (moisture > 0.4) {
+        return BiomeType.RAINFOREST; // Hot + very wet
+      } else if (moisture < -0.2) {
+        return BiomeType.DESERT; // Hot + dry
       } else {
-        return BiomeType.TUNDRA; // Cold and dry
+        return BiomeType.SAVANNA; // Hot + moderate moisture
       }
     } else if (temperature > 0.3) {
       // Hot regions
       if (moisture < -0.2) {
         return BiomeType.DESERT; // Hot and dry
+      } else if (moisture > 0.5) {
+        return BiomeType.RAINFOREST; // Hot and very wet
       } else {
         return BiomeType.PLAINS; // Hot and moderate moisture
       }
     } else {
       // Temperate regions
-      if (moisture > 0.2) {
+      if (moisture > 0.5) {
+        return BiomeType.SWAMP; // Temperate + very wet + low elevation
+      } else if (moisture > 0.2) {
         return BiomeType.FOREST; // Temperate and wet
       } else {
         return BiomeType.PLAINS; // Temperate and moderate/dry

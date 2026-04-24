@@ -8,8 +8,10 @@ import { BIOME_COLORS } from '../viewer/materials';
 import { BiomeType } from '../../../src/index';
 
 const BIOME_NAMES: Record<number, string> = {
-  0: 'Ocean', 1: 'Beach', 2: 'Desert', 3: 'Plains',
-  4: 'Forest', 5: 'Taiga', 6: 'Tundra', 7: 'Mountain'
+  0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
+  4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
+  8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
+  12: 'Glacier'
 };
 
 export class Minimap {

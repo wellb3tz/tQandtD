@@ -22,14 +22,21 @@ export interface BiomeColor {
  * Colors are chosen to be visually distinct and represent the biome characteristics
  */
 export const BIOME_COLORS: Record<BiomeType, BiomeColor> = {
-  [BiomeType.OCEAN]: { r: 0.255, g: 0.412, b: 0.882 },      // Deep blue (#4169E1)
-  [BiomeType.BEACH]: { r: 0.941, g: 0.902, b: 0.549 },      // Sandy yellow (#F0E68C)
-  [BiomeType.DESERT]: { r: 0.855, g: 0.647, b: 0.125 },     // Golden sand (#DAA520)
-  [BiomeType.PLAINS]: { r: 0.565, g: 0.933, b: 0.565 },     // Light green (#90EE90)
-  [BiomeType.FOREST]: { r: 0.133, g: 0.545, b: 0.133 },     // Forest green (#228B22)
-  [BiomeType.TAIGA]: { r: 0.196, g: 0.502, b: 0.196 },      // Dark green (#326432)
-  [BiomeType.TUNDRA]: { r: 0.690, g: 0.769, b: 0.871 },     // Icy blue-gray (#B0C4DE)
-  [BiomeType.MOUNTAIN]: { r: 0.439, g: 0.502, b: 0.565 },   // Gray stone (#708090)
+  // Base biomes — refined for better visual realism
+  [BiomeType.OCEAN]:      { r: 0.094, g: 0.314, b: 0.588 },  // Deep ocean blue (#185090)
+  [BiomeType.BEACH]:      { r: 0.918, g: 0.855, b: 0.647 },  // Warm sand (#EAD9A5)
+  [BiomeType.DESERT]:     { r: 0.871, g: 0.722, b: 0.353 },  // Warm golden sand (#DEA85A)
+  [BiomeType.PLAINS]:     { r: 0.529, g: 0.737, b: 0.255 },  // Grass green (#87BC41)
+  [BiomeType.FOREST]:     { r: 0.118, g: 0.431, b: 0.118 },  // Deep forest green (#1E6E1E)
+  [BiomeType.TAIGA]:      { r: 0.157, g: 0.392, b: 0.275 },  // Dark pine green (#285F46)
+  [BiomeType.TUNDRA]:     { r: 0.718, g: 0.773, b: 0.718 },  // Pale gray-green (#B7C5B7)
+  [BiomeType.MOUNTAIN]:   { r: 0.502, g: 0.502, b: 0.502 },  // Neutral stone gray (#808080)
+  // Extended biomes
+  [BiomeType.SAVANNA]:    { r: 0.804, g: 0.718, b: 0.314 },  // Dry golden grass (#CDB750)
+  [BiomeType.SWAMP]:      { r: 0.235, g: 0.353, b: 0.196 },  // Dark murky green (#3C5A32)
+  [BiomeType.RAINFOREST]: { r: 0.047, g: 0.314, b: 0.094 },  // Lush deep green (#0A5018)
+  [BiomeType.VOLCANIC]:   { r: 0.314, g: 0.118, b: 0.039 },  // Dark volcanic rock (#500A0A) with red tint
+  [BiomeType.GLACIER]:    { r: 0.839, g: 0.918, b: 0.957 },  // Icy pale blue-white (#D6EAF4)
 };
 
 /**
@@ -78,7 +85,7 @@ export function blendBiomeColors(biomeWeights: Map<BiomeType, number>): BiomeCol
 export function extractBiomeWeights(
   biomeWeights: Float32Array,
   index: number,
-  numBiomes: number = 8
+  numBiomes: number = 13
 ): Map<BiomeType, number> {
   const weights = new Map<BiomeType, number>();
   
@@ -103,7 +110,7 @@ export function extractBiomeWeights(
 export function calculateBlendedColor(
   biomeWeights: Float32Array,
   index: number,
-  numBiomes: number = 8
+  numBiomes: number = 13
 ): BiomeColor {
   const weights = extractBiomeWeights(biomeWeights, index, numBiomes);
   

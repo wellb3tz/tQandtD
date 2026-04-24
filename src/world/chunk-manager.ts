@@ -353,7 +353,7 @@ export class ChunkManager {
     const biomeMap = new Uint8Array(size * size);
     
     // Calculate number of biome types for weights array
-    const numBiomes = 8; // BiomeType enum has 8 values (0-7)
+    const numBiomes = 13; // BiomeType enum has 13 values (OCEAN=0 … GLACIER=12)
     const biomeWeights = new Float32Array(size * size * numBiomes);
 
     // Initialize micro-biome map if enhanced biome system is available

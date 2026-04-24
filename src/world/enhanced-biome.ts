@@ -47,14 +47,16 @@ export interface EnhancedBiomeConfig extends BiomeConfig {
 
   /**
    * Activates ClimateSystem for temperature and moisture computation.
-   * When false (default), the existing BiomeSystem noise-only path is used,
-   * producing bit-identical results to the pre-feature implementation.
+   * When true (default), uses geographically plausible temperature/moisture
+   * with latitude gradient, altitude cooling, and valley moisture bonus.
+   * Set to false to use the legacy noise-only path for backward compatibility.
    */
   enableClimateSystem?: boolean;
 
   /**
    * Activates biome compatibility enforcement via BiomeCompatibilityMatrix.
-   * When false (default), blend weights are identical to the current behaviour.
+   * When true (default), prevents impossible biome transitions.
+   * Set to false to disable compatibility enforcement.
    */
   enableCompatibilityMatrix?: boolean;
 
@@ -182,13 +184,13 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     this.microBiomeNoise = new NoiseEngine(seed + 2000);
     this.enhancedConfig = config;
 
-    // Instantiate ClimateSystem when opted in
-    this.climateSystem = config.enableClimateSystem === true
+    // Instantiate ClimateSystem when opted in (default: true)
+    this.climateSystem = config.enableClimateSystem !== false
       ? new ClimateSystem(seed, config.climateConfig ?? DEFAULT_CLIMATE_CONFIG)
       : null;
 
-    // Instantiate BiomeCompatibilityMatrix when opted in
-    this.compatibilityMatrix = config.enableCompatibilityMatrix === true
+    // Instantiate BiomeCompatibilityMatrix when opted in (default: true)
+    this.compatibilityMatrix = config.enableCompatibilityMatrix !== false
       ? new BiomeCompatibilityMatrix()
       : null;
   }
@@ -290,19 +292,36 @@ export class EnhancedBiomeSystem extends BiomeSystem {
 
   /**
    * Classifies a biome from pre-computed climate values.
-   * Mirrors the logic in BiomeSystem.getBiome but accepts explicit temperature/moisture.
+   * Mirrors the logic in BiomeSystem.getBiome but accepts explicit temperature/moisture
+   * and supports all 13 biome types including the extended set.
    */
   private classifyBiomeFromClimate(height: number, temperature: number, moisture: number): BiomeType {
-    if (height < 0.3) return BiomeType.OCEAN;
+    if (height < 0.3)  return BiomeType.OCEAN;
     if (height < 0.35) return BiomeType.BEACH;
-    if (height > 0.7) return BiomeType.MOUNTAIN;
+    if (height > 0.85) return BiomeType.VOLCANIC; // Extreme peaks
+    if (height > 0.7)  return BiomeType.MOUNTAIN;
 
-    if (temperature < -0.3) {
+    if (temperature < -0.5) {
+      // Very cold — glacier at elevation, otherwise tundra/taiga
+      if (height > 0.6) return BiomeType.GLACIER;
+      return moisture > 0.1 ? BiomeType.TAIGA : BiomeType.TUNDRA;
+    } else if (temperature < -0.3) {
       return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
+    } else if (temperature > 0.5) {
+      // Very hot
+      if (moisture > 0.4)  return BiomeType.RAINFOREST;
+      if (moisture < -0.2) return BiomeType.DESERT;
+      return BiomeType.SAVANNA;
     } else if (temperature > 0.3) {
-      return moisture < -0.2 ? BiomeType.DESERT : BiomeType.PLAINS;
+      // Hot
+      if (moisture < -0.2) return BiomeType.DESERT;
+      if (moisture > 0.5)  return BiomeType.RAINFOREST;
+      return BiomeType.PLAINS;
     } else {
-      return moisture > 0.2 ? BiomeType.FOREST : BiomeType.PLAINS;
+      // Temperate
+      if (moisture > 0.5)  return BiomeType.SWAMP;
+      if (moisture > 0.2)  return BiomeType.FOREST;
+      return BiomeType.PLAINS;
     }
   }
 

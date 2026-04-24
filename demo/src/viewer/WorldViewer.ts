@@ -759,7 +759,7 @@ export class WorldViewer {
     
     // Determine if we have biome weights for smooth blending
     const hasBlendWeights = data.biomeWeights && data.biomeWeights.length > 0;
-    const numBiomes = 8; // Total number of BiomeType enum values
+    const numBiomes = 13; // Total number of BiomeType enum values (OCEAN=0 … GLACIER=12)
     
     // Apply underwater color adjustments if heightmap and biome data available
     let underwaterColors: (BiomeColor | null)[] | null = null;

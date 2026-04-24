@@ -244,7 +244,12 @@ export class DemoApp {
 
     try {
       // Create ChunkManager with default configuration
-      this.state.chunkManager = new ChunkManager(this.state.config);
+      const initConfig = {
+        ...this.state.config,
+        noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
+      };
+      this.state.chunkManager = new ChunkManager(initConfig);
+      this.state.config = initConfig;
       
       this.initialized = true;
       console.log('DemoApp initialized successfully');
@@ -328,7 +333,11 @@ export class DemoApp {
 
     try {
       // Update configuration with new seed
-      const newConfig = { ...this.state.config, seed };
+      const newConfig = {
+        ...this.state.config,
+        seed,
+        noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
+      };
       
       // Create new ChunkManager with updated config
       const newManager = new ChunkManager(newConfig);
@@ -466,6 +475,23 @@ export class DemoApp {
   }
 
   /**
+   * Builds noise3DConfig from terrainConfig fields (enable3D, zScale).
+   * ChunkManager expects a separate noise3DConfig object, but the UI stores
+   * these values inside terrainConfig for simplicity.
+   */
+  private buildNoise3DConfig(terrainConfig: WorldConfig['terrainConfig']): WorldConfig['noise3DConfig'] | undefined {
+    if (!terrainConfig.enable3D) return undefined;
+    return {
+      enable3D: true,
+      octaves: terrainConfig.octaves,
+      persistence: terrainConfig.persistence,
+      lacunarity: terrainConfig.lacunarity,
+      scale: terrainConfig.baseScale,
+      zScale: terrainConfig.zScale ?? 0.5,
+    };
+  }
+
+  /**
    * Update Worker Pool configuration
    */
   updateEngineConfig(config: Partial<WorldConfig>): void {
@@ -487,9 +513,20 @@ export class DemoApp {
         ...this.state.config,
         ...config
       };
-      
+
+      // Always rebuild noise3DConfig from terrainConfig so enable3D / zScale are honoured
+      newConfig.noise3DConfig = this.buildNoise3DConfig(newConfig.terrainConfig);
+
       // Check if this requires recreating the ChunkManager
-      const shouldRecreateManager = 
+      const shouldRecreateManager =
+        'terrainConfig' in config ||
+        'biomeConfig' in config ||
+        'enhancedBiomeConfig' in config ||
+        'resourceConfig' in config ||
+        'structureConfig' in config ||
+        'noise3DConfig' in config ||
+        'seed' in config ||
+        'chunkSize' in config ||
         'maxCacheSize' in config ||
         'workerPoolConfig' in config;
       

@@ -1,7 +1,7 @@
 import { BiomeType } from './chunk';
 
 /** Total number of BiomeType values. */
-const NUM_BIOMES = 8; // OCEAN=0 … MOUNTAIN=7
+const NUM_BIOMES = 13; // OCEAN=0 … GLACIER=12
 
 /**
  * Plain JSON-safe serialisation of a BiomeCompatibilityMatrix.
@@ -13,12 +13,14 @@ export interface SerializedCompatibilityMatrix {
    * Flat array of length NUM_BIOMES² encoding compatibility.
    * 1 = compatible, 0 = incompatible.
    * Index: a * NUM_BIOMES + b
+   * NUM_BIOMES = 13 (OCEAN=0 … GLACIER=12)
    */
   compatible: number[];
   /**
    * Flat array of length NUM_BIOMES² encoding the intermediate biome index.
    * -1 means no intermediate (pair is compatible).
    * Index: a * NUM_BIOMES + b
+   * NUM_BIOMES = 13 (OCEAN=0 … GLACIER=12)
    */
   intermediate: number[];
 }
@@ -31,10 +33,17 @@ export interface SerializedCompatibilityMatrix {
  * `a * NUM_BIOMES + b`.
  *
  * Built-in incompatible pairs (symmetric):
- * - DESERT ↔ TAIGA   → intermediate: PLAINS
- * - DESERT ↔ TUNDRA  → intermediate: PLAINS
- * - DESERT ↔ FOREST  → intermediate: PLAINS
- * - OCEAN  ↔ MOUNTAIN → intermediate: BEACH
+ * - DESERT ↔ TAIGA      → intermediate: PLAINS
+ * - DESERT ↔ TUNDRA     → intermediate: PLAINS
+ * - DESERT ↔ FOREST     → intermediate: PLAINS
+ * - DESERT ↔ GLACIER    → intermediate: TUNDRA
+ * - OCEAN  ↔ MOUNTAIN   → intermediate: BEACH
+ * - OCEAN  ↔ VOLCANIC   → intermediate: BEACH
+ * - GLACIER ↔ RAINFOREST → intermediate: FOREST
+ * - GLACIER ↔ SWAMP     → intermediate: PLAINS
+ * - SAVANNA ↔ TAIGA     → intermediate: PLAINS
+ * - SAVANNA ↔ TUNDRA    → intermediate: PLAINS
+ * - SAVANNA ↔ GLACIER   → intermediate: TUNDRA
  */
 export class BiomeCompatibilityMatrix {
   /** Flat array: 1 = compatible, 0 = incompatible. */
@@ -54,10 +63,17 @@ export class BiomeCompatibilityMatrix {
     this._compatible.fill(1);
 
     // Register built-in incompatible pairs
-    this.markIncompatible(BiomeType.DESERT,  BiomeType.TAIGA,    BiomeType.PLAINS);
-    this.markIncompatible(BiomeType.DESERT,  BiomeType.TUNDRA,   BiomeType.PLAINS);
-    this.markIncompatible(BiomeType.DESERT,  BiomeType.FOREST,   BiomeType.PLAINS);
-    this.markIncompatible(BiomeType.OCEAN,   BiomeType.MOUNTAIN, BiomeType.BEACH);
+    this.markIncompatible(BiomeType.DESERT,     BiomeType.TAIGA,       BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.DESERT,     BiomeType.TUNDRA,      BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.DESERT,     BiomeType.FOREST,      BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.DESERT,     BiomeType.GLACIER,     BiomeType.TUNDRA);
+    this.markIncompatible(BiomeType.OCEAN,      BiomeType.MOUNTAIN,    BiomeType.BEACH);
+    this.markIncompatible(BiomeType.OCEAN,      BiomeType.VOLCANIC,    BiomeType.BEACH);
+    this.markIncompatible(BiomeType.GLACIER,    BiomeType.RAINFOREST,  BiomeType.FOREST);
+    this.markIncompatible(BiomeType.GLACIER,    BiomeType.SWAMP,       BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.SAVANNA,    BiomeType.TAIGA,       BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.SAVANNA,    BiomeType.TUNDRA,      BiomeType.PLAINS);
+    this.markIncompatible(BiomeType.SAVANNA,    BiomeType.GLACIER,     BiomeType.TUNDRA);
   }
 
   // ---------------------------------------------------------------------------

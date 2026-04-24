@@ -20,7 +20,7 @@ function createMockChunkWithOcean(): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize);
   const biomeMap = new Uint8Array(size * size);
-  const biomeWeights = new Float32Array(size * size * 8); // 8 biomes
+  const biomeWeights = new Float32Array(size * size * 13); // 13 biomes
 
   // Create heightmap with all tiles below sea level (0.3)
   // This ensures ocean tiles are identified
@@ -35,7 +35,7 @@ function createMockChunkWithOcean(): ChunkData {
 
   // Set biome weights (100% ocean)
   for (let i = 0; i < size * size; i++) {
-    biomeWeights[i * 8 + BiomeType.OCEAN] = 1.0;
+    biomeWeights[i * 13 + BiomeType.OCEAN] = 1.0;
   }
 
   return {
@@ -58,7 +58,7 @@ function createMockChunkWithoutWater(): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize);
   const biomeMap = new Uint8Array(size * size);
-  const biomeWeights = new Float32Array(size * size * 8);
+  const biomeWeights = new Float32Array(size * size * 13);
 
   // Create heightmap with all tiles above sea level
   for (let i = 0; i < heightmap.length; i++) {

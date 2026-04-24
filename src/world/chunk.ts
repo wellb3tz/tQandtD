@@ -12,6 +12,12 @@ export enum BiomeType {
   TAIGA = 5,
   TUNDRA = 6,
   MOUNTAIN = 7,
+  // Extended biomes
+  SAVANNA = 8,      // Hot + moderate moisture, transitional between desert and plains
+  SWAMP = 9,        // Warm/temperate + very wet + low elevation
+  RAINFOREST = 10,  // Hot + very wet
+  VOLCANIC = 11,    // Extreme elevation with volcanic features
+  GLACIER = 12,     // Very cold + high elevation, distinct from tundra
 }
 
 /**

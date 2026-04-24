@@ -649,7 +649,7 @@ export class WorldSerializer {
     // Calculate biome weights (reconstruct from biomeMap)
     // Note: We don't have the original biomeWeights in serialized data,
     // so we create a simple weights array with 1.0 for the primary biome
-    const numBiomes = 8;
+    const numBiomes = 13;
     const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
     for (let i = 0; i < biomeMap.length; i++) {
       const biome = biomeMap[i];
@@ -686,7 +686,7 @@ export class WorldSerializer {
     // (rivers field was removed but may exist in old save files)
 
     // Calculate biome weights (reconstruct from biomeMap)
-    const numBiomes = 8;
+    const numBiomes = 13;
     const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
     for (let i = 0; i < biomeMap.length; i++) {
       const biome = biomeMap[i];

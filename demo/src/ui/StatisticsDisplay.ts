@@ -19,14 +19,18 @@ export class StatisticsDisplay {
   private biomeChartContainer:  HTMLElement | null = null;
   private resourceChartContainer: HTMLElement | null = null;
 
-  private readonly biomeNames: Record<BiomeType, string> = {
-    [0]: 'Forest', [1]: 'Desert', [2]: 'Tundra', [3]: 'Grassland',
-    [4]: 'Mountain', [5]: 'Ocean', [6]: 'Beach', [7]: 'Swamp'
+  private readonly biomeNames: Record<number, string> = {
+    [0]: 'Ocean',      [1]: 'Beach',      [2]: 'Desert',     [3]: 'Plains',
+    [4]: 'Forest',     [5]: 'Taiga',      [6]: 'Tundra',     [7]: 'Mountain',
+    [8]: 'Savanna',    [9]: 'Swamp',      [10]: 'Rainforest', [11]: 'Volcanic',
+    [12]: 'Glacier'
   };
 
-  private readonly biomeColors: Record<BiomeType, string> = {
-    [0]: '#228B22', [1]: '#FFE4B5', [2]: '#ADD8E6', [3]: '#90EE90',
-    [4]: '#8B4513', [5]: '#1E90FF', [6]: '#FFFACD', [7]: '#2F4F2F'
+  private readonly biomeColors: Record<number, string> = {
+    [0]:  '#185090', [1]:  '#EAD9A5', [2]:  '#DEA85A', [3]:  '#87BC41',
+    [4]:  '#1E6E1E', [5]:  '#285F46', [6]:  '#B7C5B7', [7]:  '#808080',
+    [8]:  '#CDB750', [9]:  '#3C5A32', [10]: '#0A5018', [11]: '#500A0A',
+    [12]: '#D6EAF4'
   };
 
   private readonly resourceNames: Record<number, string> = {
