@@ -15,6 +15,8 @@ import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
+import { Minimap } from './src/ui/Minimap';
+import { TerrainTooltip } from './src/ui/TerrainTooltip';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
 
 console.log('Procedural World Engine Demo - Initializing...');
@@ -27,6 +29,8 @@ let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
 let statisticsDisplay: StatisticsDisplay | null = null;
+let minimap: Minimap | null = null;
+let terrainTooltip: TerrainTooltip | null = null;
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
@@ -245,6 +249,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const heading = worldViewer.getCameraHeading();
             compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
           }
+          // Redraw minimap
+          if (minimap) {
+            minimap.draw();
+          }
           
           // Update worker pool statistics if enabled
           if (app.getState().workerPoolEnabled) {
@@ -317,6 +325,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       statisticsDisplay.initialize(statisticsContainer);
       statisticsDisplay.setApp(app);
       console.log('StatisticsDisplay initialized successfully');
+    }
+
+    // Initialize Minimap
+    const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement | null;
+    if (minimapCanvas && worldViewer) {
+      minimap = new Minimap();
+      minimap.initialize(
+        minimapCanvas,
+        app,
+        () => worldViewer!.getCameraHeading(),
+        () => worldViewer!.getCameraPosition()
+      );
+      console.log('Minimap initialized successfully');
+    }
+
+    // Initialize TerrainTooltip
+    if (worldViewer) {
+      terrainTooltip = new TerrainTooltip();
+      terrainTooltip.initialize(app, worldViewer);
+      console.log('TerrainTooltip initialized successfully');
     }
     
     // Subscribe to state changes and update performance monitor
