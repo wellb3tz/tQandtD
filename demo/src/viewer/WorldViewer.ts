@@ -556,6 +556,18 @@ export class WorldViewer {
     this.scene.add(chunkMesh.boundaries);
     
     this.chunkMeshes.set(key, chunkMesh);
+
+    // Stitch normals and colors with all loaded neighbours to eliminate seams.
+    // Also re-stitch each neighbour so their boundary attributes are updated too.
+    this.stitchBoundaryNormals(chunkX, chunkY);
+    this.stitchBoundaryColors(chunkX, chunkY);
+    for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
+      const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
+      if (this.chunkMeshes.has(nKey)) {
+        this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
+        this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
+      }
+    }
   }
 
   /**
@@ -1470,6 +1482,149 @@ export class WorldViewer {
    */
   private getChunkKey(chunkX: number, chunkY: number): string {
     return `${chunkX},${chunkY}`;
+  }
+
+  /**
+   * Stitch normals between this chunk and all loaded neighbours.
+   *
+   * Three.js computes vertex normals purely from the triangles inside each mesh.
+   * Boundary vertices therefore get normals that ignore the adjacent chunk's
+   * geometry, producing a visible lighting seam.
+   *
+   * Fix: for every shared edge, average the normals of the two coincident
+   * vertices (one from each mesh) and write the result back to both meshes.
+   *
+   * Called after addChunk() for the new chunk AND for each already-loaded
+   * neighbour so both sides are updated.
+   */
+  private stitchBoundaryNormals(chunkX: number, chunkY: number): void {
+    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
+    if (!mesh) return;
+
+    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
+    const normA = geom.getAttribute('normal') as THREE.BufferAttribute;
+    const posA  = geom.getAttribute('position') as THREE.BufferAttribute;
+
+    // Infer chunkSize from vertex count: verticesPerSide = sqrt(vertexCount)
+    const verticesPerSide = Math.round(Math.sqrt(posA.count));
+    const chunkSize = verticesPerSide - 1;
+
+    // Neighbours: right (+X), bottom (+Z), and diagonal (+X+Z) for corner
+    const neighbours: Array<{ dx: number; dz: number }> = [
+      { dx: 1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 1, dz: 1 },
+    ];
+
+    for (const { dx, dz } of neighbours) {
+      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
+      if (!neighbourMesh) continue;
+
+      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
+      const normB = geomB.getAttribute('normal') as THREE.BufferAttribute;
+
+      if (dx === 1 && dz === 0) {
+        // Right edge of A  ↔  Left edge of B
+        // A: x = chunkSize, y = 0..chunkSize
+        // B: x = 0,         y = 0..chunkSize
+        for (let row = 0; row <= chunkSize; row++) {
+          const idxA = row * verticesPerSide + chunkSize;
+          const idxB = row * verticesPerSide + 0;
+          this._averageNormals(normA, idxA, normB, idxB);
+        }
+      } else if (dx === 0 && dz === 1) {
+        // Bottom edge of A  ↔  Top edge of B
+        // A: y = chunkSize, x = 0..chunkSize
+        // B: y = 0,         x = 0..chunkSize
+        for (let col = 0; col <= chunkSize; col++) {
+          const idxA = chunkSize * verticesPerSide + col;
+          const idxB = 0 * verticesPerSide + col;
+          this._averageNormals(normA, idxA, normB, idxB);
+        }
+      } else {
+        // Corner vertex only
+        const idxA = chunkSize * verticesPerSide + chunkSize;
+        const idxB = 0;
+        this._averageNormals(normA, idxA, normB, idxB);
+      }
+
+      normB.needsUpdate = true;
+    }
+
+    normA.needsUpdate = true;
+  }
+
+  /** Average the normals of two vertices (one in each buffer) and write back to both. */
+  private _averageNormals(
+    normA: THREE.BufferAttribute, idxA: number,
+    normB: THREE.BufferAttribute, idxB: number,
+  ): void {
+    const ax = normA.getX(idxA), ay = normA.getY(idxA), az = normA.getZ(idxA);
+    const bx = normB.getX(idxB), by = normB.getY(idxB), bz = normB.getZ(idxB);
+    // Average and re-normalise
+    let nx = ax + bx, ny = ay + by, nz = az + bz;
+    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len > 0) { nx /= len; ny /= len; nz /= len; }
+    normA.setXYZ(idxA, nx, ny, nz);
+    normB.setXYZ(idxB, nx, ny, nz);
+  }
+
+  /** Average the vertex colors of two coincident boundary vertices and write back to both. */
+  private _averageColors(
+    colA: THREE.BufferAttribute, idxA: number,
+    colB: THREE.BufferAttribute, idxB: number,
+  ): void {
+    const r = (colA.getX(idxA) + colB.getX(idxB)) * 0.5;
+    const g = (colA.getY(idxA) + colB.getY(idxB)) * 0.5;
+    const b = (colA.getZ(idxA) + colB.getZ(idxB)) * 0.5;
+    colA.setXYZ(idxA, r, g, b);
+    colB.setXYZ(idxB, r, g, b);
+  }
+
+  /**
+   * Stitch vertex colors along shared edges between this chunk and loaded neighbours.
+   * Averages the colors of coincident boundary vertices to eliminate color seams
+   * caused by biome blending differences at chunk edges.
+   */
+  private stitchBoundaryColors(chunkX: number, chunkY: number): void {
+    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
+    if (!mesh) return;
+
+    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
+    const colA = geom.getAttribute('color') as THREE.BufferAttribute;
+    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
+    const verticesPerSide = Math.round(Math.sqrt(posA.count));
+    const chunkSize = verticesPerSide - 1;
+
+    const neighbours: Array<{ dx: number; dz: number }> = [
+      { dx: 1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 1, dz: 1 },
+    ];
+
+    for (const { dx, dz } of neighbours) {
+      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
+      if (!neighbourMesh) continue;
+
+      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
+      const colB = geomB.getAttribute('color') as THREE.BufferAttribute;
+
+      if (dx === 1 && dz === 0) {
+        for (let row = 0; row <= chunkSize; row++) {
+          this._averageColors(colA, row * verticesPerSide + chunkSize, colB, row * verticesPerSide + 0);
+        }
+      } else if (dx === 0 && dz === 1) {
+        for (let col = 0; col <= chunkSize; col++) {
+          this._averageColors(colA, chunkSize * verticesPerSide + col, colB, 0 * verticesPerSide + col);
+        }
+      } else {
+        this._averageColors(colA, chunkSize * verticesPerSide + chunkSize, colB, 0);
+      }
+
+      colB.needsUpdate = true;
+    }
+
+    colA.needsUpdate = true;
   }
 
   /**
