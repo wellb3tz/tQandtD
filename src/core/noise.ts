@@ -329,6 +329,40 @@ export class NoiseEngine {
   }
 
   /**
+   * Generates ridge (inverted absolute) fractional Brownian motion noise.
+   * Produces sharp mountain ridges instead of smooth hills by folding the
+   * noise: each octave contributes `1 - |noise|` instead of `noise`.
+   * Result is in approximately [0, 1] range (higher = ridge peak).
+   */
+  ridgeFbm(x: number, y: number, config: NoiseConfig): number {
+    if (config.octaves < 1) throw new Error('Invalid config: octaves must be at least 1');
+    if (config.persistence <= 0) throw new Error('Invalid config: persistence must be greater than 0');
+    if (config.lacunarity <= 0) throw new Error('Invalid config: lacunarity must be greater than 0');
+
+    let total = 0;
+    let frequency = config.scale;
+    let amplitude = 1;
+    let maxValue = 0;
+    let prev = 1.0; // weight from previous octave for sharpening
+
+    for (let i = 0; i < config.octaves; i++) {
+      // Fold: 1 - |n| turns valleys into ridges
+      const n = 1.0 - Math.abs(this.noise2D(x * frequency, y * frequency));
+      // Square to sharpen the ridge peaks
+      const ridge = n * n;
+      // Weight by previous octave so fine detail only appears on ridges
+      total += ridge * amplitude * prev;
+      prev = ridge;
+
+      maxValue += amplitude;
+      amplitude *= config.persistence;
+      frequency *= config.lacunarity;
+    }
+
+    return total / maxValue; // approximately [0, 1]
+  }
+
+  /**
    * Applies domain warping to coordinates for more organic noise patterns.
    * Distorts the input coordinates using noise before sampling.
    * @param x - X coordinate

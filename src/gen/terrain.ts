@@ -49,6 +49,10 @@ export class TerrainGenerator {
   private continentalNoise: NoiseEngine | null = null;
   /** High-frequency noise for coastline erosion / jaggedness (seed offset +8888). */
   private coastlineNoise: NoiseEngine | null = null;
+  /** Mountain mask: mid-scale noise that determines where tall mountain ranges appear (seed offset +9999). */
+  private mountainMaskNoise: NoiseEngine | null = null;
+  /** Ridge noise engine for sharp mountain peaks (seed offset +6666). */
+  private ridgeNoise: NoiseEngine | null = null;
 
   constructor(config: TerrainConfig) {
     this.config = config;
@@ -63,6 +67,8 @@ export class TerrainGenerator {
     if (this.config.enableContinentalness !== false) {
       this.continentalNoise = new NoiseEngine(worldSeed + 7777);
       this.coastlineNoise   = new NoiseEngine(worldSeed + 8888);
+      this.mountainMaskNoise = new NoiseEngine(worldSeed + 9999);
+      this.ridgeNoise        = new NoiseEngine(worldSeed + 6666);
     }
   }
 
@@ -264,12 +270,47 @@ export class TerrainGenerator {
         // detailAmp ramps from 0 at shore to 1 inland (narrow ramp = thin flat beach)
         const landRise = Math.min(1.0, landT / 0.12);
 
-        // height (detail noise) is in [0,1]. Remap to [seaLevel, 1.0] with amplitude scaling.
-        // At shore (landRise=0): flat seaLevel. Inland (landRise=1): full [seaLevel, 1.0].
-        // No base added to height — avoids the base+detail > 1.0 clamp that flattens peaks.
+        // --- Mountain mask: determines where tall mountain ranges exist ---
+        // Mid-scale noise (~5× continental scale) creates broad mountain regions.
+        // mask=0 → flat lowlands, mask=1 → tall mountain range.
+        let mountainMask = 0;
+        if (this.mountainMaskNoise !== null) {
+          const rawMask = this.mountainMaskNoise.fbm(x, y, {
+            octaves: 3,
+            persistence: 0.5,
+            lacunarity: 2.0,
+            scale: cScale * 4,
+          });
+          // Remap [-1,1] → [0,1], then apply threshold so only ~30% of land is mountainous
+          const maskRaw = (rawMask + 1) * 0.5;
+          // Smooth threshold: below 0.55 = lowlands, above 0.75 = full mountains
+          mountainMask = Math.max(0, Math.min(1, (maskRaw - 0.55) / 0.20));
+        }
+
+        // --- Ridge noise: sharp peaks in mountain regions ---
+        let ridgeContrib = 0;
+        if (this.ridgeNoise !== null && mountainMask > 0) {
+          ridgeContrib = this.ridgeNoise.ridgeFbm(x, y, {
+            octaves: 5,
+            persistence: 0.5,
+            lacunarity: 2.1,
+            scale: this.config.baseScale * 1.5,
+          });
+          // ridgeContrib ∈ [0,1], 1 = sharp peak
+        }
+
+        // Blend: in mountain regions, replace some of the smooth detail noise
+        // with ridge noise. Ridge noise can push height much higher.
+        // Outside mountain regions: normal terrain, max height ~0.65
+        // Inside mountain regions: ridge peaks can reach up to 1.0
+        const blendedDetail = height * (1.0 - mountainMask * 0.7) + ridgeContrib * mountainMask * 0.7;
+
+        // Height range scales with mountain mask:
+        // lowlands: [seaLevel, 0.65], mountains: [seaLevel, 1.0]
+        const hiLand = seaLevel + (0.35 + mountainMask * 0.65) * (1.0 - seaLevel);
+
         const lo = seaLevel;
-        const hi = 1.0;
-        height = lo + height * (hi - lo) * landRise;
+        height = lo + blendedDetail * (hiLand - lo) * landRise;
         height = Math.max(seaLevel + 0.001, height);
       }
     }

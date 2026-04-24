@@ -178,9 +178,9 @@ export class ControlPanel {
         id: 'heightMultiplier',
         label: 'Height Multiplier',
         min: 0.5,
-        max: 2.0,
+        max: 5.0,
         step: 0.1,
-        defaultValue: 1.0,
+        defaultValue: 2.0,
         tooltip: 'Overall terrain height scaling'
       }
     ];
@@ -300,6 +300,15 @@ export class ControlPanel {
         step: 0.0001,
         defaultValue: 0.001,
         tooltip: 'Scale of moisture variation (lower = larger biomes)'
+      },
+      {
+        id: 'blendRadius',
+        label: 'Biome Blend Radius',
+        min: 0.5,
+        max: 20,
+        step: 0.5,
+        defaultValue: 0.5,
+        tooltip: 'Radius (world units) used to sample neighbouring biomes for blending'
       }
     ];
 
@@ -378,6 +387,32 @@ export class ControlPanel {
     microFreqControl.id = 'microBiomeFrequency-group';
     biomeContainer.appendChild(microFreqControl);
 
+    // Micro biome max size (conditional, shown with micro biomes)
+    const microMaxSizeControl = this.createSliderControl({
+      id: 'microBiomeMaxSize',
+      label: 'Micro Biome Max Size',
+      min: 5,
+      max: 50,
+      step: 5,
+      defaultValue: 20,
+      tooltip: 'Maximum size of micro biome patches in tiles'
+    }, (value) => {
+      this.updateBiomeConfig('microBiomeMaxSize', value);
+    });
+    microMaxSizeControl.style.display = 'none';
+    microMaxSizeControl.id = 'microBiomeMaxSize-group';
+    biomeContainer.appendChild(microMaxSizeControl);
+
+    // Update micro biomes checkbox to also toggle max size control
+    // (patch the existing checkbox handler by re-registering via DOM)
+    const existingMicroCheck = biomeContainer.querySelector('#enableMicroBiomes') as HTMLInputElement | null;
+    if (existingMicroCheck) {
+      existingMicroCheck.addEventListener('change', () => {
+        const maxSizeCtrl = document.getElementById('microBiomeMaxSize-group');
+        if (maxSizeCtrl) maxSizeCtrl.style.display = existingMicroCheck.checked ? 'block' : 'none';
+      });
+    }
+
     // Enable elevation bands
     const elevationBandsCheckbox = this.createCheckboxControl({
       id: 'enableElevationBands',
@@ -408,6 +443,32 @@ export class ControlPanel {
     snowLineControl.style.display = 'none';
     snowLineControl.id = 'snowLineElevation-group';
     biomeContainer.appendChild(snowLineControl);
+
+    // Micro-biome terrain thresholds section
+    const microTerrainSection = document.createElement('div');
+    microTerrainSection.style.marginTop = '16px';
+    microTerrainSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Micro-Biome Terrain</h4>';
+    biomeContainer.appendChild(microTerrainSection);
+
+    biomeContainer.appendChild(this.createSliderControl({
+      id: 'depressionDepthThreshold',
+      label: 'Depression Depth',
+      min: 0.0,
+      max: 0.15,
+      step: 0.005,
+      defaultValue: 0.05,
+      tooltip: 'Min depth of terrain depression for Oasis/Pond placement (lower = more sensitive)'
+    }, (value) => { this.updateBiomeConfig('depressionDepthThreshold', value); }));
+
+    biomeContainer.appendChild(this.createSliderControl({
+      id: 'clearingGradientThreshold',
+      label: 'Clearing Flatness',
+      min: 0.01,
+      max: 0.1,
+      step: 0.005,
+      defaultValue: 0.03,
+      tooltip: 'Max terrain gradient for Clearing/Grove placement (higher = more permissive)'
+    }, (value) => { this.updateBiomeConfig('clearingGradientThreshold', value); }));
   }
 
   /**
@@ -1349,6 +1410,15 @@ export class ControlPanel {
       }
       if (ebc.snowLineElevation !== undefined) {
         this.updateSliderValue('snowLineElevation', ebc.snowLineElevation);
+      }
+      if (ebc.microBiomeMaxSize !== undefined) {
+        this.updateSliderValue('microBiomeMaxSize', ebc.microBiomeMaxSize);
+      }
+      if (ebc.depressionDepthThreshold !== undefined) {
+        this.updateSliderValue('depressionDepthThreshold', ebc.depressionDepthThreshold);
+      }
+      if (ebc.clearingGradientThreshold !== undefined) {
+        this.updateSliderValue('clearingGradientThreshold', ebc.clearingGradientThreshold);
       }
     }
 

@@ -122,7 +122,7 @@ const DEFAULT_CONFIG: WorldConfig = {
     persistence: 0.5,
     lacunarity: 2.0,
     warpStrength: 1,
-    heightMultiplier: 1.0,
+    heightMultiplier: 2.0,
     enable3D: false,
     zScale: 0.5,
     enableContinentalness: true,
