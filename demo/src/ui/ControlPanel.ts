@@ -360,7 +360,7 @@ export class ControlPanel {
     const microBiomesCheckbox = this.createCheckboxControl({
       id: 'enableMicroBiomes',
       label: 'Enable Micro Biomes',
-      defaultValue: false,
+      defaultValue: true,
       tooltip: 'Enable small-scale biome variations'
     }, (checked) => {
       this.updateBiomeConfig('enableMicroBiomes', checked);
@@ -383,7 +383,7 @@ export class ControlPanel {
     }, (value) => {
       this.updateBiomeConfig('microBiomeFrequency', value);
     });
-    microFreqControl.style.display = 'none';
+    microFreqControl.style.display = 'block';
     microFreqControl.id = 'microBiomeFrequency-group';
     biomeContainer.appendChild(microFreqControl);
 
@@ -1077,7 +1077,7 @@ export class ControlPanel {
         ...this.currentConfig.biomeConfig,
         enableTransitions: true,
         transitionWidth: 10,
-        enableMicroBiomes: false,
+        enableMicroBiomes: true,
         microBiomeFrequency: 0.1,
         microBiomeMaxSize: 20,
         enableElevationBands: false,

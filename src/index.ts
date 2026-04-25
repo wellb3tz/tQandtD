@@ -1,5 +1,5 @@
 /**
- * Procedural World Engine
+ * tQandtD project
  * 
  * A TypeScript-based procedural world generation engine for browser-based applications.
  * Generates infinite, deterministic worlds using seed-based random number generation,

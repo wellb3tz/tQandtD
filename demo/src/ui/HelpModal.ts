@@ -55,7 +55,7 @@ export class HelpModal {
       <div class="help-section">
         <h4>🎮 Getting Started</h4>
         <p>
-          This demo showcases the Procedural World Engine's capabilities through an interactive 3D visualization.
+          This demo showcases the tQandtD project's capabilities through an interactive 3D visualization.
           Use the controls on the left to adjust generation parameters, and explore the generated world in the 3D viewer.
         </p>
       </div>
@@ -169,8 +169,8 @@ export class HelpModal {
         <p>
           For detailed API documentation and integration guides, visit the engine repository:
         </p>
-        <a href="https://github.com/yourusername/procedural-world-engine" target="_blank" rel="noopener noreferrer" class="doc-link">
-          🔗 View Engine Documentation on GitHub
+        <a href="https://github.com/yourusername/tQandtD" target="_blank" rel="noopener noreferrer" class="doc-link">
+          🔗 View tQandtD project Documentation on GitHub
         </a>
       </div>
 

@@ -19,7 +19,7 @@ import { Minimap } from './src/ui/Minimap';
 import { TerrainTooltip } from './src/ui/TerrainTooltip';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
 
-console.log('Procedural World Engine Demo - Initializing...');
+console.log('tQandtD project Demo - Initializing...');
 
 // Global app instance
 let app: DemoApp | null = null;

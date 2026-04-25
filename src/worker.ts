@@ -1,7 +1,7 @@
 /**
  * Web Worker wrapper for non-blocking chunk generation
  * 
- * This module provides Web Worker support for the procedural world engine,
+ * This module provides Web Worker support for the tQandtD project,
  * enabling chunk generation to run in a background thread without blocking
  * the main browser thread.
  * 

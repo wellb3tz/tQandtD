@@ -145,7 +145,7 @@ const DEFAULT_CONFIG: WorldConfig = {
     snowLineElevation: 0.8,
     treeLineElevation: 0.75,
     enableMicroBiomes: true,
-    microBiomeFrequency: 0.15,
+    microBiomeFrequency: 0.10,
     microBiomeMaxSize: 20,
     depressionDepthThreshold: 0.05,
     clearingGradientThreshold: 0.03

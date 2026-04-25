@@ -1,7 +1,7 @@
-Procedural World Engine - Comprehensive Demo
+tQandtD project - Comprehensive Demo
 ============================================
 
-This is the production build of the Procedural World Engine demo application.
+This is the production build of the tQandtD project demo application.
 
 Build Information:
 - Bundle Size: ~157 KB gzipped

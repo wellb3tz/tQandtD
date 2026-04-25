@@ -5,7 +5,7 @@ import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
 import { LakeGenerator, LakeConfig, DEFAULT_LAKE_CONFIG } from '../gen/lakes';
 import { chunkSeed } from '../core/hash';
-import { ChunkModification, WorldSerializer } from './serialization';
+import { ChunkModification, WorldSerializer, ChunkManagerSnapshot } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
 import { WorkerPoolConfig, WorkerPool, WorkerTask } from './worker-pool';
@@ -84,9 +84,10 @@ interface CacheEntry {
 /**
  * Manages chunk generation and caching for the procedural world.
  * Orchestrates all generators to create complete chunks with terrain, biomes, resources, and structures.
+ * Implements ChunkManagerSnapshot so WorldSerializer can read state without any-casts.
  */
-export class ChunkManager {
-  private config: WorldConfig;
+export class ChunkManager implements ChunkManagerSnapshot {
+  readonly config: WorldConfig;
   private terrainGenerator: TerrainGenerator;
   private biomeSystem: BiomeSystem;
   private resourceGenerator: ResourceGenerator;
@@ -94,12 +95,12 @@ export class ChunkManager {
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   private lakeGenerator: LakeGenerator;
-  private workerPool: WorkerPool | null;
+  /** @internal exposed for WorkerPool shutdown in DemoApp */ workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
-  private cache: Map<string, CacheEntry>;
+  /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
   private maxCacheSize: number;
-  private accessCounter: number;
-  private modifications: Map<string, ChunkModification>;
+  /** Satisfies ChunkManagerSnapshot — mutated by WorldSerializer.addChunkToCache */ accessCounter: number;
+  /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly modifications: Map<string, ChunkModification>;
   private cacheHits: number;
   private cacheMisses: number;
   private inFlightRequests: Map<string, Promise<ChunkData>>;

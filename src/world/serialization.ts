@@ -6,8 +6,28 @@
  * modification tracking.
  */
 
+import { deflate, inflate } from 'pako';
 import { ChunkData, Resource, Structure } from './chunk';
+import type { LakeData } from '../gen/lakes';
 import { WorldConfig } from './chunk-manager';
+
+/**
+ * Read-only snapshot of ChunkManager state needed for serialization.
+ * Replaces the previous `any` parameter, making the coupling explicit and
+ * type-safe without exposing private implementation details.
+ */
+export interface ChunkManagerSnapshot {
+  /** World seed */
+  readonly config: WorldConfig;
+  /** LRU cache: key → { chunk, lastAccessed } */
+  readonly cache: ReadonlyMap<string, { chunk: ChunkData; lastAccessed: number }>;
+  /** Modification records keyed by "chunkX,chunkY" */
+  readonly modifications: ReadonlyMap<string, ChunkModification>;
+  /** Monotonically increasing access counter (mutated by deserialize) */
+  accessCounter: number;
+  /** Records a modification back into the manager after deserialization */
+  recordModification(chunkX: number, chunkY: number, mod: ChunkModification): void;
+}
 
 /**
  * Serialization format enumeration
@@ -106,10 +126,20 @@ export interface SerializedWorld {
 }
 
 /**
+ * Serialized lake data — plain JSON-safe representation of LakeData.
+ * `Set<number>` is stored as a plain number array.
+ */
+export interface SerializedLake {
+  waterLevel: number;
+  tiles: number[];
+  maxDepth: number;
+}
+
+/**
  * Serialized chunk data
  * 
  * Compressed representation of a single chunk's data including terrain,
- * biomes, resources, and structures.
+ * biomes, resources, structures, and lakes.
  */
 export interface SerializedChunk {
   /** Chunk X coordinate */
@@ -129,6 +159,9 @@ export interface SerializedChunk {
   
   /** Array of structures in the chunk */
   structures: Structure[];
+
+  /** Lake bodies detected in this chunk (may be empty) */
+  lakes: SerializedLake[];
 }
 
 /**
@@ -157,7 +190,7 @@ export class WorldSerializer {
    * Supports JSON format (task 11.3) and binary format (task 11.4).
    * Handles compression, region filtering, and modification tracking.
    */
-  serialize(chunkManager: any, options: SerializationOptions): SerializedWorld {
+  serialize(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): SerializedWorld {
     if (options.format === SerializationFormat.JSON) {
       return this.serializeJSON(chunkManager, options);
     } else if (options.format === SerializationFormat.BINARY) {
@@ -174,7 +207,7 @@ export class WorldSerializer {
    * @param options - Serialization options
    * @returns Serialized world data with base64-encoded binary data
    */
-  private serializeJSON(chunkManager: any, options: SerializationOptions): SerializedWorld {
+  private serializeJSON(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): SerializedWorld {
     // Get all chunks from the cache
     const cache = chunkManager.cache as Map<string, any>;
     const chunks: SerializedChunk[] = [];
@@ -233,11 +266,14 @@ export class WorldSerializer {
    * @returns Serialized chunk with base64-encoded binary data
    */
   private serializeChunkJSON(chunk: ChunkData, compress: boolean): SerializedChunk {
-    // Convert heightmap (Float32Array) to base64
     const heightmapBase64 = this.float32ArrayToBase64(chunk.heightmap, compress);
-    
-    // Convert biomeMap (Uint8Array) to base64
     const biomeMapBase64 = this.uint8ArrayToBase64(chunk.biomeMap, compress);
+
+    const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
+      waterLevel: lake.waterLevel,
+      tiles: Array.from(lake.tiles),
+      maxDepth: lake.maxDepth,
+    }));
 
     return {
       x: chunk.x,
@@ -246,6 +282,7 @@ export class WorldSerializer {
       biomeMap: biomeMapBase64,
       resources: chunk.resources,
       structures: chunk.structures,
+      lakes,
     };
   }
 
@@ -261,7 +298,7 @@ export class WorldSerializer {
    * a serializable array format. Applies region filtering if specified.
    * Converts Set and Map objects to arrays for JSON compatibility.
    */
-  private serializeModifications(chunkManager: any, options: SerializationOptions): ChunkModification[] {
+  private serializeModifications(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): ChunkModification[] {
     const modifications: ChunkModification[] = [];
     const modificationsMap = chunkManager.modifications as Map<string, ChunkModification> | undefined;
 
@@ -355,10 +392,7 @@ export class WorldSerializer {
    * @returns Compressed data
    */
   private compressUint8Array(data: Uint8Array): Uint8Array {
-    // Dynamic import of pako for compression
-    // @ts-ignore - Dynamic require for Node.js compatibility
-    const pako = require('pako');
-    return pako.deflate(data);
+    return deflate(data);
   }
 
   /**
@@ -410,7 +444,7 @@ export class WorldSerializer {
    * @param options - Serialization options
    * @returns Serialized world data with binary ArrayBuffer data
    */
-  private serializeBinary(chunkManager: any, options: SerializationOptions): SerializedWorld {
+  private serializeBinary(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): SerializedWorld {
     // Get all chunks from the cache
     const cache = chunkManager.cache as Map<string, any>;
     const chunks: SerializedChunk[] = [];
@@ -469,11 +503,14 @@ export class WorldSerializer {
    * @returns Serialized chunk with binary ArrayBuffer data
    */
   private serializeChunkBinary(chunk: ChunkData, compress: boolean): SerializedChunk {
-    // Serialize heightmap (Float32Array) to binary
     const heightmapBuffer = this.serializeFloat32ArrayBinary(chunk.heightmap, compress);
-    
-    // Serialize biomeMap (Uint8Array) to binary
     const biomeMapBuffer = this.serializeUint8ArrayBinary(chunk.biomeMap, compress);
+
+    const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
+      waterLevel: lake.waterLevel,
+      tiles: Array.from(lake.tiles),
+      maxDepth: lake.maxDepth,
+    }));
 
     return {
       x: chunk.x,
@@ -482,6 +519,7 @@ export class WorldSerializer {
       biomeMap: biomeMapBuffer,
       resources: chunk.resources,
       structures: chunk.structures,
+      lakes,
     };
   }
 
@@ -595,7 +633,7 @@ export class WorldSerializer {
    * before restoring chunks to the chunk manager cache. Applies modifications to
    * regenerated chunks to preserve user changes (Requirement 14.5).
    */
-  deserialize(data: SerializedWorld, chunkManager: any): void {
+  deserialize(data: SerializedWorld, chunkManager: ChunkManagerSnapshot): void {
     // Validate version compatibility
     if (data.version !== '1.0.0') {
       throw new Error(`Unsupported serialization version: ${data.version}. Expected 1.0.0`);
@@ -637,24 +675,20 @@ export class WorldSerializer {
    * @returns Deserialized chunk data
    */
   private deserializeChunkJSON(serializedChunk: SerializedChunk, chunkSize: number): ChunkData {
-    // Decode heightmap from base64 to Float32Array
     const heightmap = this.base64ToFloat32Array(serializedChunk.heightmap as string);
-
-    // Decode biomeMap from base64 to Uint8Array
     const biomeMap = this.base64ToUint8Array(serializedChunk.biomeMap as string);
 
-    // Backward compatibility: Ignore rivers field if present in legacy data
-    // (rivers field was removed but may exist in old save files)
-
-    // Calculate biome weights (reconstruct from biomeMap)
-    // Note: We don't have the original biomeWeights in serialized data,
-    // so we create a simple weights array with 1.0 for the primary biome
     const numBiomes = 13;
     const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
     for (let i = 0; i < biomeMap.length; i++) {
-      const biome = biomeMap[i];
-      biomeWeights[i * numBiomes + biome] = 1.0;
+      biomeWeights[i * numBiomes + biomeMap[i]] = 1.0;
     }
+
+    const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
+      waterLevel: sl.waterLevel,
+      tiles: new Set(sl.tiles),
+      maxDepth: sl.maxDepth,
+    }));
 
     return {
       x: serializedChunk.x,
@@ -663,6 +697,7 @@ export class WorldSerializer {
       heightmap,
       biomeMap,
       biomeWeights,
+      lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
     };
@@ -676,22 +711,20 @@ export class WorldSerializer {
    * @returns Deserialized chunk data
    */
   private deserializeChunkBinary(serializedChunk: SerializedChunk, chunkSize: number): ChunkData {
-    // Deserialize heightmap from binary
     const heightmap = this.deserializeFloat32ArrayBinary(serializedChunk.heightmap as ArrayBuffer);
-
-    // Deserialize biomeMap from binary
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
 
-    // Backward compatibility: Ignore rivers field if present in legacy data
-    // (rivers field was removed but may exist in old save files)
-
-    // Calculate biome weights (reconstruct from biomeMap)
     const numBiomes = 13;
     const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
     for (let i = 0; i < biomeMap.length; i++) {
-      const biome = biomeMap[i];
-      biomeWeights[i * numBiomes + biome] = 1.0;
+      biomeWeights[i * numBiomes + biomeMap[i]] = 1.0;
     }
+
+    const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
+      waterLevel: sl.waterLevel,
+      tiles: new Set(sl.tiles),
+      maxDepth: sl.maxDepth,
+    }));
 
     return {
       x: serializedChunk.x,
@@ -700,6 +733,7 @@ export class WorldSerializer {
       heightmap,
       biomeMap,
       biomeWeights,
+      lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
     };
@@ -793,10 +827,7 @@ export class WorldSerializer {
    * @returns Decompressed data
    */
   private decompressUint8Array(data: Uint8Array): Uint8Array {
-    // Dynamic import of pako for decompression
-    // @ts-ignore - Dynamic require for Node.js compatibility
-    const pako = require('pako');
-    return pako.inflate(data);
+    return inflate(data);
   }
 
   /**
@@ -885,12 +916,9 @@ export class WorldSerializer {
    * @param chunkManager - Chunk manager instance
    * @param chunk - Chunk data to add
    */
-  private addChunkToCache(chunkManager: any, chunk: ChunkData): void {
-    // Access the private cache and add the chunk
-    const cache = chunkManager.cache as Map<string, any>;
-    const key = `${chunk.x},${chunk.y},0`; // LOD level 0 (HIGH)
-
-    // Create cache entry
+  private addChunkToCache(chunkManager: ChunkManagerSnapshot, chunk: ChunkData): void {
+    const cache = chunkManager.cache as Map<string, { chunk: ChunkData; lastAccessed: number }>;
+    const key = `${chunk.x},${chunk.y}`;
     cache.set(key, {
       chunk,
       lastAccessed: ++chunkManager.accessCounter,
@@ -909,7 +937,7 @@ export class WorldSerializer {
    * for file export. JSON format returns a string, binary format returns a Blob.
    * Supports selective region export and includes format version metadata.
    */
-  export(chunkManager: any, options: SerializationOptions): Blob | string {
+  export(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): Blob | string {
     // Use the existing serialize method to generate serialized data
     const serializedWorld = this.serialize(chunkManager, options);
 
@@ -958,10 +986,11 @@ export class WorldSerializer {
       const biomeMapBuffer = chunk.biomeMap as ArrayBuffer;
       const resourcesBytes = encoder.encode(JSON.stringify(chunk.resources));
       const structuresBytes = encoder.encode(JSON.stringify(chunk.structures));
+      const lakesBytes = encoder.encode(JSON.stringify(chunk.lakes ?? []));
       
       chunkDataSize += 4 + 4 + 4 + heightmapBuffer.byteLength + 4 + biomeMapBuffer.byteLength +
-                       4 + resourcesBytes.length + 4 + structuresBytes.length;
-      // Rivers data removed - no longer included in chunk data
+                       4 + resourcesBytes.length + 4 + structuresBytes.length +
+                       4 + lakesBytes.length;
     }
     
     // Calculate modifications data size
@@ -1055,8 +1084,13 @@ export class WorldSerializer {
       offset += 4;
       bytes.set(structuresBytes, offset);
       offset += structuresBytes.length;
-      
-      // Rivers writing removed - no longer part of chunk data
+
+      // Write lakes
+      const lakesBytes = encoder.encode(JSON.stringify(chunk.lakes ?? []));
+      view.setUint32(offset, lakesBytes.length, true);
+      offset += 4;
+      bytes.set(lakesBytes, offset);
+      offset += lakesBytes.length;
     }
     
     // Write modifications count
@@ -1315,36 +1349,14 @@ export class WorldSerializer {
       const structures = JSON.parse(new TextDecoder().decode(structuresBytes));
       offset += structuresLength;
 
-      // Backward compatibility: Skip legacy rivers data if present
-      // Legacy format had: rivers count (4 bytes) + rivers data (count * 4 bytes)
-      // We detect legacy rivers by checking if the next value looks like a small count
-      // (rivers count would typically be 0-1000, while chunk coordinates can be any int32)
-      if (offset + 4 <= buffer.byteLength) {
-        const possibleRiversCount = view.getUint32(offset, true);
-        
-        // Heuristic: If the value is small and non-negative, it's likely a rivers count
-        // Chunk coordinates (next expected value) can be negative or very large
-        if (possibleRiversCount >= 0 && possibleRiversCount < 10000) {
-          const expectedRiversDataSize = possibleRiversCount * 4;
-          
-          // Verify we have enough remaining data for this rivers section
-          if (offset + 4 + expectedRiversDataSize <= buffer.byteLength) {
-            // Skip rivers count and data
-            offset += 4; // Skip count
-            offset += expectedRiversDataSize; // Skip river IDs
-          }
-        }
-      }
+      // Read lakes
+      const lakesLength = view.getUint32(offset, true);
+      offset += 4;
+      const lakesBytes = bytes.slice(offset, offset + lakesLength);
+      const serializedLakes: SerializedLake[] = JSON.parse(new TextDecoder().decode(lakesBytes));
+      offset += lakesLength;
 
-      chunks.push({
-        x,
-        y,
-        heightmap: heightmapBuffer,
-        biomeMap: biomeMapBuffer,
-        resources,
-        structures,
-        // rivers field removed - no longer part of SerializedChunk interface
-      });
+      chunks.push({ x, y, heightmap: heightmapBuffer, biomeMap: biomeMapBuffer, resources, structures, lakes: serializedLakes });
     }
 
     // Read modifications count
@@ -1555,7 +1567,7 @@ export class WorldSerializer {
    * Modifications are applied in the order they appear in the array.
    * If a chunk is not in the cache, the modification is skipped with a warning.
    */
-  private applyModifications(modifications: ChunkModification[], chunkManager: any): void {
+  private applyModifications(modifications: ChunkModification[], chunkManager: ChunkManagerSnapshot): void {
     // Process each modification record
     for (const modification of modifications) {
       // Get the chunk from cache
