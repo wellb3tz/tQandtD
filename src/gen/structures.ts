@@ -127,8 +127,34 @@ export class StructurePlacer {
       }
 
       case 'nearWater': {
-        // Rivers have been removed from the system
-        // nearWater rule always returns false (no water sources available)
+        // Check proximity to ocean tiles (height < 0.3) or lake tiles in this chunk
+        const searchRadius = rule.params.radius as number ?? 5;
+        const vSize = size + 1;
+
+        // Check ocean proximity via heightmap
+        for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+          for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+            if (heightmap[ny * vSize + nx] < 0.3) return true;
+          }
+        }
+
+        // Check lake proximity
+        if (chunkData.lakes && chunkData.lakes.length > 0) {
+          const tileIndex = y * size + x;
+          for (const lake of chunkData.lakes) {
+            for (const lakeTile of lake.tiles) {
+              const lx = lakeTile % size;
+              const ly = Math.floor(lakeTile / size);
+              const dist = Math.abs(lx - x) + Math.abs(ly - y); // Manhattan distance
+              if (dist <= searchRadius) return true;
+            }
+            // Early exit if we already found a nearby lake tile
+          }
+        }
+
         return false;
       }
 

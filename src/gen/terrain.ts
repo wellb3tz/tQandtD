@@ -53,6 +53,13 @@ export class TerrainGenerator {
   private mountainMaskNoise: NoiseEngine | null = null;
   /** Ridge noise engine for sharp mountain peaks (seed offset +6666). */
   private ridgeNoise: NoiseEngine | null = null;
+  /**
+   * Cached primary noise engine keyed by world seed.
+   * Avoids allocating a new NoiseEngine on every getHeightAt() call —
+   * the hot path during biome generation for neighbouring chunks.
+   */
+  private cachedNoise: NoiseEngine | null = null;
+  private cachedNoiseSeed: number | null = null;
 
   constructor(config: TerrainConfig) {
     this.config = config;
@@ -126,9 +133,15 @@ export class TerrainGenerator {
    * @returns Height value in [0, 1] range
    */
   getHeightAt(worldX: number, worldY: number, seed: number): number {
-    const noise = new NoiseEngine(seed);
+    // Reuse cached NoiseEngine for the same seed — avoids per-call allocation
+    // which is critical when getHeightAt is called ~32 000 times per chunk
+    // during biome generation for neighbouring positions.
+    if (this.cachedNoiseSeed !== seed) {
+      this.cachedNoise = new NoiseEngine(seed);
+      this.cachedNoiseSeed = seed;
+    }
     const use3D = this.config.enable3D ?? false;
-    return this.getHeightInternal(worldX, worldY, noise, use3D);
+    return this.getHeightInternal(worldX, worldY, this.cachedNoise!, use3D);
   }
 
   /**
