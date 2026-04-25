@@ -266,9 +266,8 @@ export class ControlPanel {
       min: 0.1,
       max: 0.9,
       step: 0.05,
-      defaultValue: 0.6,
-      tooltip: 'How much of the world is ocean (higher = more ocean)',
       defaultValue: 0.45,
+      tooltip: 'How much of the world is ocean (higher = more ocean)',
     }, (value) => {
       this.updateTerrainConfig('continentalStrength', value);
     });

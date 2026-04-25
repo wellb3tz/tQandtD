@@ -210,7 +210,7 @@ export class WorldViewer {
     // Background starts in sky mode (matches default skyBackground: true in AppState).
     // setBackgroundMode(false) switches to dark ocean mode.
     this.scene.background = new THREE.Color(0x87ceeb);
-    this.scene.fog = new THREE.FogExp2(0x87ceeb, 0.0012);
+    // No fog by default — enabled only in dark ocean mode via setBackgroundMode()
 
     // Atmospheric exponential fog — adds depth and distance haze
     // (disabled — produces blue haze rather than realistic fog)

@@ -11,10 +11,10 @@ import type { WaterConfig, OceanTile } from './types';
 import { HEIGHT_SCALE } from './config';
 
 /**
- * Identify ocean tiles in a chunk where terrain height is below sea level
- * 
+ * Identify ocean tiles in a chunk where terrain height is below sea level.
+ *
  * @param chunkData - Chunk data containing heightmap
- * @param seaLevel - Sea level elevation threshold
+ * @param seaLevel  - Sea level elevation threshold
  * @returns Array of ocean tiles with depth and elevation data
  */
 export function identifyOceanTiles(
@@ -25,20 +25,16 @@ export function identifyOceanTiles(
   const { heightmap, size } = chunkData;
   const vertexSize = size + 1;
 
-  // Iterate through tile grid (not vertex grid)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const index = y * size + x;
-      
-      // Sample heightmap at tile center (average of 4 corner vertices)
+
       const v00 = heightmap[y * vertexSize + x];
       const v10 = heightmap[y * vertexSize + (x + 1)];
       const v01 = heightmap[(y + 1) * vertexSize + x];
       const v11 = heightmap[(y + 1) * vertexSize + (x + 1)];
-      
       const terrainHeight = (v00 + v10 + v01 + v11) / 4;
 
-      // Identify tiles below sea level
       if (terrainHeight < seaLevel) {
         oceanTiles.push({
           index,
@@ -104,11 +100,7 @@ export function buildOceanGeometry(
 
   const { size, heightmap } = chunkData;
   const vertexSize = size + 1;
-  const waterY = config.seaLevel * HEIGHT_SCALE + 0.05;
   const seaLevel = config.seaLevel;
-
-  // Build a set of underwater tile indices for fast lookup
-  const underwaterSet = new Set<number>(oceanTiles.map(t => t.index));
 
   const positions: number[] = [];
   const normals:   number[] = [];
@@ -116,43 +108,45 @@ export function buildOceanGeometry(
   const uvs:       number[] = [];
   const indices:   number[] = [];
 
-  // Shared vertex grid — one vertex per grid point, reused by adjacent tiles.
-  // vertexIndex[y * vertexSize + x] = index into positions array (or -1 = unused)
-  const vertexIndex = new Int32Array(vertexSize * vertexSize).fill(-1);
+  // Shared vertex grid — separate maps for ocean (seaLevel) and lake (lakeLevel)
+  // tiles because they sit at different Y elevations.
+  const vertexIndex     = new Int32Array(vertexSize * vertexSize).fill(-1); // ocean
+  const lakeVertexIndex = new Int32Array(vertexSize * vertexSize).fill(-1); // lake
   let vertexCount = 0;
 
   // Helper: get or create a vertex at grid position (vx, vy)
-  const getVertex = (vx: number, vy: number): number => {
+  const getVertex = (vx: number, vy: number, tileWaterElevation: number): number => {
     const key = vy * vertexSize + vx;
-    if (vertexIndex[key] !== -1) return vertexIndex[key];
+    const isLake = tileWaterElevation > seaLevel;
+    const lookup = isLake ? lakeVertexIndex : vertexIndex;
+    if (lookup[key] !== -1) return lookup[key];
 
     const worldX = chunkData.x * size + vx;
     const worldZ = chunkData.y * size + vy;
 
-    // Depth at this vertex from heightmap
     const h = heightmap[key];
-    const depth = Math.max(0, seaLevel - h);
+    const depth = Math.max(0, tileWaterElevation - h);
 
     const [r, g, b] = depthColor(depth, seaLevel);
 
-    positions.push(worldX, waterY, worldZ);
+    positions.push(worldX, tileWaterElevation * HEIGHT_SCALE + 0.15, worldZ);
     normals.push(0, 1, 0);
     colors.push(r, g, b);
     uvs.push(vx / size, vy / size);
 
-    vertexIndex[key] = vertexCount;
+    lookup[key] = vertexCount;
     return vertexCount++;
   };
 
-  // Emit one quad (two triangles) per underwater tile
+  // Emit one quad (two triangles) per underwater/lake tile
   for (const tile of oceanTiles) {
     const tx = tile.index % size;
     const ty = Math.floor(tile.index / size);
 
-    const i00 = getVertex(tx,     ty);
-    const i10 = getVertex(tx + 1, ty);
-    const i01 = getVertex(tx,     ty + 1);
-    const i11 = getVertex(tx + 1, ty + 1);
+    const i00 = getVertex(tx,     ty,     tile.waterElevation);
+    const i10 = getVertex(tx + 1, ty,     tile.waterElevation);
+    const i01 = getVertex(tx,     ty + 1, tile.waterElevation);
+    const i11 = getVertex(tx + 1, ty + 1, tile.waterElevation);
 
     indices.push(i00, i10, i01);
     indices.push(i01, i10, i11);
