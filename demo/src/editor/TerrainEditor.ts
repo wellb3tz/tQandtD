@@ -238,7 +238,9 @@ export class TerrainEditor {
       case TerrainTool.FLATTEN:
         // Get target height at center
         const targetHeight = await this.getHeightAt(worldX, worldY);
-        await this.flattenTerrain(worldX, worldY, this.brushSize, targetHeight);
+        if (targetHeight !== null) {
+          await this.flattenTerrain(worldX, worldY, this.brushSize, targetHeight);
+        }
         break;
       case TerrainTool.SMOOTH:
         await this.smoothTerrain(worldX, worldY, this.brushSize);

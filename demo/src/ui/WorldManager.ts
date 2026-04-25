@@ -579,7 +579,7 @@ export class WorldManager {
 
       // Update app state to trigger re-render
       this.app.updateState({
-        loadedChunks: new Map(state.chunkManager.cache),
+        loadedChunks: new Map(),
         config: serializedWorld.config
       });
 

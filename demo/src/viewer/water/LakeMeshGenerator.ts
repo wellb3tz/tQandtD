@@ -1,0 +1,222 @@
+/**
+ * Lake mesh generator
+ *
+ * Converts LakeData (from the engine's LakeGenerator) into Three.js geometry
+ * for rendering inland water bodies.
+ *
+ * Visual design (temporary, for testing):
+ *   Flat water surface at lakeData.waterLevel * HEIGHT_SCALE.
+ *   Vivid green color (#00ff88) so lakes are immediately distinguishable
+ *   from the ocean (turquoise → navy).  Color will be replaced with a
+ *   realistic palette after visual testing.
+ */
+
+import * as THREE from 'three';
+import type { ChunkData } from '@engine/world/chunk';
+import type { LakeData } from '../../../../src/gen/lakes';
+import type { LakeTile, LakeRenderConfig } from './types';
+import { HEIGHT_SCALE } from './config';
+
+// ─── Tile identification ──────────────────────────────────────────────────────
+
+/**
+ * Convert LakeData tile sets into LakeTile arrays suitable for mesh building.
+ *
+ * @param chunkData - Chunk data (heightmap + size)
+ * @param lakes     - Lake bodies from LakeGenerator
+ * @returns Flat array of LakeTile objects across all lakes in the chunk
+ */
+export function identifyLakeTiles(
+  chunkData: ChunkData,
+  lakes: LakeData[],
+): LakeTile[] {
+  const { heightmap, size } = chunkData;
+  const vertexSize = size + 1;
+  const result: LakeTile[] = [];
+
+  for (const lake of lakes) {
+    for (const tileIdx of lake.tiles) {
+      const tx = tileIdx % size;
+      const ty = Math.floor(tileIdx / size);
+
+      const v00 = heightmap[ty * vertexSize + tx];
+      const v10 = heightmap[ty * vertexSize + (tx + 1)];
+      const v01 = heightmap[(ty + 1) * vertexSize + tx];
+      const v11 = heightmap[(ty + 1) * vertexSize + (tx + 1)];
+      const terrainHeight = (v00 + v10 + v01 + v11) * 0.25;
+
+      result.push({
+        index: tileIdx,
+        terrainHeight,
+        waterElevation: lake.waterLevel,
+        underwaterDepth: lake.waterLevel - terrainHeight,
+      });
+    }
+  }
+
+  return result;
+}
+
+// ─── Color helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Compute lake surface vertex color based on depth.
+ *
+ * Freshwater palette — warmer and greener than the ocean (which goes navy-blue):
+ *   shallow → light cyan-teal  #4fc3d4  (sunlit freshwater)
+ *   deep    → dark teal-green  #1a5c6e  (deep lake)
+ *
+ * Ocean for reference: shallow #29b6d4 → deep #0a1a3a (dark navy).
+ * Lakes are visually distinct: greener mid-tones, lighter deep colour.
+ *
+ * @param depth      - Depth below lake surface (≥ 0)
+ * @param maxDepth   - Maximum depth of this lake body
+ * @returns [r, g, b] in [0, 1]
+ */
+function lakeDepthColor(depth: number, maxDepth: number): [number, number, number] {
+  const t = maxDepth > 0 ? Math.min(depth / maxDepth, 1.0) : 0;
+  const s = t * t; // quadratic curve — emphasise shallow gradient
+
+  // Shallow (t=0): #4fc3d4 → r=0.31, g=0.76, b=0.83
+  // Deep    (t=1): #1a5c6e → r=0.10, g=0.36, b=0.43
+  const r = 0.31 - s * 0.21;
+  const g = 0.76 - s * 0.40;
+  const b = 0.83 - s * 0.40;
+
+  return [r, g, b];
+}
+
+// ─── Geometry builder ─────────────────────────────────────────────────────────
+
+/**
+ * Build a BufferGeometry for all lake tiles in a chunk.
+ *
+ * Each LakeData is a single closed basin with one waterLevel.  All tiles
+ * belonging to the same lake share a single flat vertex grid at that level,
+ * so there are no gaps or steps between adjacent tiles of the same lake.
+ *
+ * Different lakes (different waterLevel values) each get their own vertex
+ * grid, but since they are physically separate basins they never share edges
+ * and therefore never produce visible seams.
+ *
+ * @param lakeTiles - Flat array of lake tiles (all lakes in the chunk)
+ * @param lakes     - Original lake bodies (for maxDepth and tile membership)
+ * @param chunkData - Chunk data
+ * @returns BufferGeometry or null if no lake tiles
+ */
+export function buildLakeGeometry(
+  lakeTiles: LakeTile[],
+  lakes: LakeData[],
+  chunkData: ChunkData,
+): THREE.BufferGeometry | null {
+  if (lakeTiles.length === 0) return null;
+
+  const { size } = chunkData;
+  const vertexSize = size + 1;
+
+  const positions: number[] = [];
+  const normals:   number[] = [];
+  const colors:    number[] = [];
+  const uvs:       number[] = [];
+  const indices:   number[] = [];
+  let vertexCount = 0;
+
+  // Process each lake independently so all its tiles share one flat surface.
+  for (const lake of lakes) {
+    if (lake.tiles.size === 0) continue;
+
+    const maxDepth = lake.maxDepth;
+
+    // Find the minimum terrain height inside the lake to place water just above the deepest point.
+    // Water sits at (minTerrainHeight + waterLevel) / 2 — halfway between floor and rim.
+    let minTerrainH = lake.waterLevel;
+    for (const tileIdx of lake.tiles) {
+      const tx = tileIdx % size;
+      const ty = Math.floor(tileIdx / size);
+      const vertexSize2 = size + 1;
+      for (let dv = 0; dv <= 1; dv++) {
+        for (let du = 0; du <= 1; du++) {
+          const h = chunkData.heightmap[(ty + dv) * vertexSize2 + (tx + du)];
+          if (h < minTerrainH) minTerrainH = h;
+        }
+      }
+    }
+
+    // Place water halfway between the deepest point and the lake rim (waterLevel)
+    const waterY = (minTerrainH + lake.waterLevel) * 0.5;
+
+    // One vertex map per lake — key = vy * vertexSize + vx
+    const vmap = new Int32Array(vertexSize * vertexSize).fill(-1);
+
+    const getVertex = (vx: number, vy: number): number => {
+      const key = vy * vertexSize + vx;
+      if (vmap[key] !== -1) return vmap[key];
+
+      const worldX = chunkData.x * size + vx;
+      const worldZ = chunkData.y * size + vy;
+
+      // Depth at this vertex relative to the lake surface
+      const terrainH = chunkData.heightmap[key];
+      const depth = Math.max(0, waterY - terrainH);
+      const [r, g, b] = lakeDepthColor(depth, maxDepth);
+
+      // Water surface sits halfway between the deepest terrain point and the lake rim
+      positions.push(worldX, waterY * HEIGHT_SCALE + 0.15, worldZ);
+      normals.push(0, 1, 0);
+      colors.push(r, g, b);
+      uvs.push(vx / size, vy / size);
+
+      vmap[key] = vertexCount;
+      return vertexCount++;
+    };
+
+    for (const tileIdx of lake.tiles) {
+      const tx = tileIdx % size;
+      const ty = Math.floor(tileIdx / size);
+
+      const i00 = getVertex(tx,     ty    );
+      const i10 = getVertex(tx + 1, ty    );
+      const i01 = getVertex(tx,     ty + 1);
+      const i11 = getVertex(tx + 1, ty + 1);
+
+      indices.push(i00, i10, i01);
+      indices.push(i01, i10, i11);
+    }
+  }
+
+  if (vertexCount === 0) return null;
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geometry.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(normals),   3));
+  geometry.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),    3));
+  geometry.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(uvs),       2));
+  geometry.setIndex(indices);
+
+  geometry.computeBoundingSphere();
+  geometry.computeBoundingBox();
+
+  return geometry;
+}
+
+// ─── Material factory ─────────────────────────────────────────────────────────
+
+/**
+ * Create a Phong material for lake water.
+ *
+ * Uses vertexColors so the depth gradient baked into the geometry is visible.
+ * The base color is white to avoid tinting the vertex colors.
+ *
+ * @param config - Lake render configuration
+ */
+export function createLakeMaterial(config: LakeRenderConfig): THREE.MeshPhongMaterial {
+  return new THREE.MeshPhongMaterial({
+    color: 0xffffff,       // white base — vertex colors carry the actual hue
+    vertexColors: true,
+    transparent: true,
+    opacity: config.opacity,
+    shininess: config.shininess,
+    side: THREE.DoubleSide,
+    specular: new THREE.Color(0x88ffcc), // greenish specular highlight
+  });
+}

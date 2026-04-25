@@ -341,6 +341,11 @@ export class WorkerPool {
       heightmap: new Float32Array(serialized.heightmap),
       biomeMap: new Uint8Array(serialized.biomeMap),
       biomeWeights: new Float32Array(serialized.biomeWeights),
+      lakes: (serialized.lakes ?? []).map((lake: any) => ({
+        waterLevel: lake.waterLevel,
+        tiles: new Set<number>(lake.tiles),
+        maxDepth: lake.maxDepth,
+      })),
       resources: serialized.resources,
       structures: serialized.structures,
     };

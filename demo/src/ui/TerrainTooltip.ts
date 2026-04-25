@@ -20,6 +20,22 @@ const BIOME_COLORS: Record<number, string> = {
   12: '#D6EAF4'
 };
 
+/** Lake pseudo-biome display values */
+const LAKE_NAME  = 'Lake';
+const LAKE_COLOR = '#4fc3d4'; // matches DEFAULT_LAKE_RENDER_CONFIG shallow color
+
+/**
+ * Check whether a tile index falls inside any lake in the chunk.
+ * Returns the lake water level if found, otherwise null.
+ */
+function getLakeAtTile(chunk: ChunkData, tileIndex: number): number | null {
+  if (!chunk.lakes) return null;
+  for (const lake of chunk.lakes) {
+    if (lake.tiles.has(tileIndex)) return lake.waterLevel;
+  }
+  return null;
+}
+
 export class TerrainTooltip {
   private el: HTMLElement | null = null;
   private app: DemoApp | null = null;
@@ -91,6 +107,15 @@ export class TerrainTooltip {
   }
 
   private update(clientX: number, clientY: number): void {
+    try {
+      this._update(clientX, clientY);
+    } catch (e) {
+      // Never let an error kill the RAF loop
+      this.hide();
+    }
+  }
+
+  private _update(clientX: number, clientY: number): void {
     if (!this.viewer || !this.app) return;
 
     const viewerEl = document.getElementById('viewer');
@@ -108,16 +133,32 @@ export class TerrainTooltip {
     const key   = `${hit.chunkX},${hit.chunkY}`;
     const chunk = state.loadedChunks.get(key) as ChunkData | undefined;
 
-    const biomeName  = chunk
-      ? (BIOME_NAMES[chunk.biomeMap[hit.localY * chunk.size + hit.localX]] ?? 'Unknown')
-      : 'Unknown';
-    const biomeColor = chunk
-      ? (BIOME_COLORS[chunk.biomeMap[hit.localY * chunk.size + hit.localX]] ?? '#9ca3af')
-      : '#9ca3af';
+    // Chunk may not be loaded yet (e.g. right after world regeneration) — hide and wait
+    if (!chunk) { this.hide(); return; }
+
+    const tileIndex  = hit.localY * chunk.size + hit.localX;
+    const lakeLevel  = getLakeAtTile(chunk, tileIndex);
+
+    const biomeName  = lakeLevel !== null
+      ? LAKE_NAME
+      : (BIOME_NAMES[chunk.biomeMap[tileIndex]] ?? 'Unknown');
+    const biomeColor = lakeLevel !== null
+      ? LAKE_COLOR
+      : (BIOME_COLORS[chunk.biomeMap[tileIndex]] ?? '#9ca3af');
 
     const height = hit.height.toFixed(2);
     const wx     = hit.point.x.toFixed(1);
     const wy     = hit.point.z.toFixed(1);
+
+    // Extra row shown only for lakes: water level and depth
+    const extraRow = lakeLevel !== null && chunk
+      ? (() => {
+          const terrainH = chunk.heightmap[hit.localY * (chunk.size + 1) + hit.localX];
+          const depth = Math.max(0, lakeLevel - terrainH);
+          return `<span>Water level</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${lakeLevel.toFixed(2)}</span>
+                  <span>Depth</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${depth.toFixed(2)}</span>`;
+        })()
+      : '';
 
     this.el!.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;border-bottom:1px solid rgba(74,222,128,0.15);padding-bottom:5px">
@@ -128,6 +169,7 @@ export class TerrainTooltip {
         <span>Height</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${height}</span>
         <span>Position</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${wx}, ${wy}</span>
         <span>Chunk</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${hit.chunkX}, ${hit.chunkY}</span>
+        ${extraRow}
       </div>
     `;
 

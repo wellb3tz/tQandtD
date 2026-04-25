@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import type { ChunkData } from '@engine/world/chunk';
 import type { WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
+import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
 import { createOceanMaterial } from './WaterMaterialFactory';
 
 /**
@@ -81,6 +82,7 @@ export class WaterLayerManager {
     // Create water layer data structure
     const waterLayer: WaterLayerData = {
       ocean: [],
+      lake: [],
       group: new THREE.Group(),
     };
 
@@ -91,8 +93,8 @@ export class WaterLayerManager {
       if (oceanGeometry) {
         const oceanMaterial = createOceanMaterial(config.ocean);
         const oceanMesh = new THREE.Mesh(oceanGeometry, oceanMaterial);
-        oceanMesh.renderOrder = 1; // Render after terrain (terrain is 0)
-        oceanMesh.visible = true; // Explicitly set visible
+        oceanMesh.renderOrder = 1;
+        oceanMesh.visible = true;
         
         const boundingBox = new THREE.Box3();
         if (oceanGeometry.boundingBox) {
@@ -113,6 +115,43 @@ export class WaterLayerManager {
         
         waterLayer.ocean.push(waterMesh);
         waterLayer.group.add(oceanMesh);
+      }
+    }
+
+    // Generate lake meshes
+    if (config.lake.enabled && chunkData.lakes && chunkData.lakes.length > 0) {
+      console.log(`[Lakes] chunk ${chunkKey}: ${chunkData.lakes.length} lake(s)`, 
+        chunkData.lakes.map(l => ({ tiles: l.tiles.size, waterLevel: l.waterLevel.toFixed(4), maxDepth: l.maxDepth.toFixed(4) }))
+      );
+      const lakeTiles = identifyLakeTiles(chunkData, chunkData.lakes);
+      if (lakeTiles.length > 0) {
+        const lakeGeometry = buildLakeGeometry(lakeTiles, chunkData.lakes, chunkData);
+        if (lakeGeometry) {
+          const lakeMaterial = createLakeMaterial(config.lake);
+          const lakeMesh = new THREE.Mesh(lakeGeometry, lakeMaterial);
+          lakeMesh.renderOrder = 1;
+          lakeMesh.visible = true;
+
+          const boundingBox = new THREE.Box3();
+          if (lakeGeometry.boundingBox) {
+            boundingBox.copy(lakeGeometry.boundingBox);
+          } else {
+            lakeGeometry.computeBoundingBox();
+            if (lakeGeometry.boundingBox) {
+              boundingBox.copy(lakeGeometry.boundingBox);
+            }
+          }
+
+          const lakeMeshData: WaterMesh = {
+            type: 'lake',
+            mesh: lakeMesh,
+            material: lakeMaterial,
+            boundingBox,
+          };
+
+          waterLayer.lake.push(lakeMeshData);
+          waterLayer.group.add(lakeMesh);
+        }
       }
     }
 
@@ -152,8 +191,14 @@ export class WaterLayerManager {
       this.disposeMesh(waterMesh);
     }
 
+    // Dispose lake meshes
+    for (const waterMesh of waterLayer.lake) {
+      this.disposeMesh(waterMesh);
+    }
+
     // Clear arrays
     waterLayer.ocean.length = 0;
+    waterLayer.lake.length = 0;
 
     // Remove from map
     this.waterLayers.delete(chunkKey);
@@ -229,9 +274,13 @@ export class WaterLayerManager {
       for (const waterMesh of waterLayer.ocean) {
         this.disposeMesh(waterMesh);
       }
+      for (const waterMesh of waterLayer.lake) {
+        this.disposeMesh(waterMesh);
+      }
 
       // Clear arrays
       waterLayer.ocean.length = 0;
+      waterLayer.lake.length = 0;
     }
 
     // Clear map
@@ -298,6 +347,16 @@ export class WaterLayerManager {
         if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
           isVisible = true;
           break;
+        }
+      }
+
+      // Check lake meshes if ocean didn't already make it visible
+      if (!isVisible) {
+        for (const waterMesh of waterLayer.lake) {
+          if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
+            isVisible = true;
+            break;
+          }
         }
       }
 

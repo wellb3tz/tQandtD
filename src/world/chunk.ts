@@ -1,5 +1,7 @@
 // Chunk data structures and coordinate utilities
 
+import type { LakeData } from '../gen/lakes';
+
 /**
  * Biome types for world generation
  */
@@ -90,6 +92,8 @@ export interface ChunkData {
   biomeWeights: Float32Array;
   /** Micro-biome type for each point (size * size elements), 255 = no micro-biome */
   microBiomeMap?: Uint8Array;
+  /** Lake bodies detected inside this chunk (may be empty) */
+  lakes?: LakeData[];
   /** Resources placed in this chunk */
   resources: Resource[];
   /** Structures placed in this chunk */

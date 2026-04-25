@@ -28,6 +28,6 @@
       "@utils/*": ["demo/src/utils/*"]
     }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "dist-demo", "**/*.test.ts", "demo/**/*"]
+  "include": ["src/**/*", "demo/**/*"],
+  "exclude": ["node_modules", "dist", "dist-demo", "**/*.test.ts"]
 }

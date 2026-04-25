@@ -13,6 +13,8 @@ import * as THREE from 'three';
  * Ocean water configuration
  */
 export interface OceanConfig {
+  /** Enable ocean water rendering */
+  enabled: boolean;
   /** Water color as hex value (e.g., 0x1e90ff) */
   color: number;
   /** Water opacity (0-1) */
@@ -66,6 +68,8 @@ export interface WaterConfig {
   seaLevel: number;
   /** Ocean water settings */
   ocean: OceanConfig;
+  /** Lake rendering settings */
+  lake: LakeRenderConfig;
   /** Performance optimization settings */
   performance: PerformanceConfig;
   /** Rendering settings */
@@ -74,10 +78,11 @@ export interface WaterConfig {
 
 /**
  * Water mesh type identifier
- * 
- * Single literal type enforcing ocean-only water rendering.
+ *
+ * 'ocean' = global sea-level water body
+ * 'lake'  = inland water body above sea level
  */
-export type WaterType = 'ocean';
+export type WaterType = 'ocean' | 'lake';
 
 /**
  * Water mesh with metadata
@@ -104,13 +109,15 @@ export interface WaterMesh {
 /**
  * Water layer data for a chunk
  * 
- * Contains ocean water meshes and their container group
+ * Contains ocean and lake water meshes and their container group
  * for a single chunk.
  */
 export interface WaterLayerData {
   /** Ocean water meshes */
   ocean: WaterMesh[];
-  /** Container group for ocean water meshes */
+  /** Lake water meshes */
+  lake: WaterMesh[];
+  /** Container group for all water meshes */
   group: THREE.Group;
 }
 
@@ -126,4 +133,32 @@ export interface OceanTile {
   waterElevation: number;
   /** Depth below sea level */
   underwaterDepth: number;
+}
+
+/**
+ * Lake tile data — same shape as OceanTile but waterElevation > seaLevel.
+ */
+export interface LakeTile {
+  /** Flat tile index (row-major, size × size) */
+  index: number;
+  /** Average terrain height of the tile's four corners */
+  terrainHeight: number;
+  /** Water surface elevation (lake water level, > seaLevel) */
+  waterElevation: number;
+  /** Depth below lake surface */
+  underwaterDepth: number;
+}
+
+/**
+ * Lake configuration for rendering.
+ */
+export interface LakeRenderConfig {
+  /** Enable lake rendering (default: true) */
+  enabled: boolean;
+  /** Lake water color as hex (default: 0x00ff88 — vivid green for testing) */
+  color: number;
+  /** Lake water opacity (default: 0.80) */
+  opacity: number;
+  /** Material shininess (default: 60) */
+  shininess: number;
 }

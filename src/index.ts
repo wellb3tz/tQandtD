@@ -114,6 +114,7 @@ export {
 export { TerrainGenerator, type TerrainConfig } from './gen/terrain';
 export { ResourceGenerator, type ResourceConfig, type ResourceTypeConfig } from './gen/resources';
 export { StructurePlacer, type StructureConfig, type StructureTypeConfig, type PlacementRule } from './gen/structures';
+export { LakeGenerator, type LakeConfig, type LakeData, DEFAULT_LAKE_CONFIG } from './gen/lakes';
 
 // Utilities
 export { poissonDiskSampling, type PoissonConfig } from './utils/poisson';

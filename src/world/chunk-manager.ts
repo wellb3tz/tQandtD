@@ -3,6 +3,7 @@ import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
+import { LakeGenerator, LakeConfig, DEFAULT_LAKE_CONFIG } from '../gen/lakes';
 import { chunkSeed } from '../core/hash';
 import { ChunkModification, WorldSerializer } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
@@ -60,6 +61,8 @@ export interface WorldConfig {
   noise3DConfig?: Noise3DConfig;
   /** Enhanced biome configuration (optional) */
   enhancedBiomeConfig?: EnhancedBiomeConfig;
+  /** Lake generation configuration (optional, enabled by default) */
+  lakeConfig?: LakeConfig;
   /** Worker pool configuration (optional) */
   workerPoolConfig?: WorkerPoolConfig;
   /** Maximum number of chunks to cache (default: 100) */
@@ -90,6 +93,7 @@ export class ChunkManager {
   private structurePlacer: StructurePlacer;
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
+  private lakeGenerator: LakeGenerator;
   private workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
   private cache: Map<string, CacheEntry>;
@@ -124,6 +128,7 @@ export class ChunkManager {
     
     this.resourceGenerator = new ResourceGenerator(config.resourceConfig);
     this.structurePlacer = new StructurePlacer(config.structureConfig);
+    this.lakeGenerator = new LakeGenerator(config.seed, config.lakeConfig ?? DEFAULT_LAKE_CONFIG);
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig
@@ -271,11 +276,40 @@ export class ChunkManager {
       biomeMap,
       biomeWeights,
       microBiomeMap,
+      lakes: [],
       resources: [],
       structures: [],
     };
 
-    // Step 3: Generate resources based on biomes and noise
+    // Step 3: Generate lakes using flood-fill on the heightmap
+    this.config.onProgress?.('lakes', 0.55);
+    chunk.lakes = this.lakeGenerator.generateLakes(
+      chunkX, chunkY, this.config.chunkSize, heightmap, biomeMap,
+    );
+
+    // Step 3b: Carve a depression under each lake.
+    // Every vertex inside the lake footprint is pushed DOWN by a fixed amount
+    // so the terrain visibly dips beneath the water surface.
+    if (chunk.lakes.length > 0) {
+      const size  = this.config.chunkSize;
+      const vSize = size + 1;
+      const CARVE_DEPTH = 0.02; // how deep to dig in [0,1] heightmap space (~1 world unit)
+
+      for (const lake of chunk.lakes) {
+        for (const tileIdx of lake.tiles) {
+          const tx = tileIdx % size;
+          const ty = Math.floor(tileIdx / size);
+          for (let dv = 0; dv <= 1; dv++) {
+            for (let du = 0; du <= 1; du++) {
+              const vi = (ty + dv) * vSize + (tx + du);
+              heightmap[vi] = Math.max(0, heightmap[vi] - CARVE_DEPTH);
+            }
+          }
+        }
+      }
+    }
+
+    // Step 4: Generate resources based on biomes and noise
     this.config.onProgress?.('resources', 0.6);
     const resourceStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
     chunk.resources = this.resourceGenerator.generateResources(chunk, seed);

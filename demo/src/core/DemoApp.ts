@@ -142,8 +142,11 @@ const DEFAULT_CONFIG: WorldConfig = {
     enableTransitions: false,
     transitionWidth: 4,
     enableElevationBands: true,
-    elevationBandWidth: 0.1,
+    snowLineElevation: 0.8,
+    treeLineElevation: 0.75,
+    enableMicroBiomes: true,
     microBiomeFrequency: 0.15,
+    microBiomeMaxSize: 20,
     depressionDepthThreshold: 0.05,
     clearingGradientThreshold: 0.03
   },

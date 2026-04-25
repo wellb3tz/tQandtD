@@ -1,52 +1,53 @@
 /**
  * Unit tests for water configuration
- * Tests type and configuration changes for ocean-only water system
+ * Tests type and configuration for ocean + lake water system
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateWaterConfig, DEFAULT_WATER_CONFIG } from './config';
+import { validateWaterConfig, DEFAULT_WATER_CONFIG, DEFAULT_LAKE_RENDER_CONFIG } from './config';
 import type { WaterConfig, WaterType, WaterLayerData } from './types';
 
-describe('Water Configuration - Ocean Only', () => {
+describe('Water Configuration', () => {
   describe('WaterType', () => {
-    it('should only accept "ocean" as valid WaterType', () => {
-      // This test validates at compile time that WaterType is a single literal type
+    it('should accept "ocean" as valid WaterType', () => {
       const validType: WaterType = 'ocean';
       expect(validType).toBe('ocean');
+    });
 
-      // TypeScript will prevent this at compile time:
-      // const invalidType: WaterType = 'lake'; // ❌ Type error
+    it('should accept "lake" as valid WaterType', () => {
+      const validType: WaterType = 'lake';
+      expect(validType).toBe('lake');
     });
   });
 
   describe('WaterLayerData', () => {
-    it('should not have lakes field', () => {
-      // Create a mock WaterLayerData to verify structure
+    it('should have ocean and lake fields', () => {
       const waterLayerData: WaterLayerData = {
         ocean: [],
+        lake: [],
         group: {} as any, // Mock THREE.Group
       };
 
       expect(waterLayerData).toHaveProperty('ocean');
+      expect(waterLayerData).toHaveProperty('lake');
       expect(waterLayerData).toHaveProperty('group');
-      expect(waterLayerData).not.toHaveProperty('lakes');
     });
   });
 
   describe('WaterConfig', () => {
-    it('should not have lake field', () => {
+    it('should have ocean and lake fields', () => {
       const config: WaterConfig = DEFAULT_WATER_CONFIG;
 
       expect(config).toHaveProperty('ocean');
+      expect(config).toHaveProperty('lake');
       expect(config).toHaveProperty('seaLevel');
       expect(config).toHaveProperty('rendering');
       expect(config).toHaveProperty('performance');
-      expect(config).not.toHaveProperty('lake');
     });
   });
 
   describe('validateWaterConfig', () => {
-    it('should return ocean-only configuration', () => {
+    it('should return configuration with ocean and lake', () => {
       const config = validateWaterConfig({});
 
       expect(config.ocean).toBeDefined();
@@ -54,18 +55,23 @@ describe('Water Configuration - Ocean Only', () => {
       expect(config.ocean).toHaveProperty('color');
       expect(config.ocean).toHaveProperty('opacity');
       expect(config.ocean).toHaveProperty('shininess');
-      expect(config).not.toHaveProperty('lake');
+
+      expect(config.lake).toBeDefined();
+      expect(config.lake).toHaveProperty('enabled');
+      expect(config.lake).toHaveProperty('color');
+      expect(config.lake).toHaveProperty('opacity');
+      expect(config.lake).toHaveProperty('shininess');
     });
 
-    it('should ignore lake properties if provided', () => {
-      // Attempt to pass lake configuration (using 'as any' to bypass TypeScript)
-      const configWithLake = validateWaterConfig({
-        lake: { color: 0x123456, opacity: 0.5, shininess: 50 }
-      } as any);
+    it('should apply custom lake configuration', () => {
+      const config = validateWaterConfig({
+        lake: { enabled: false, color: 0x123456, opacity: 0.5, shininess: 50 },
+      });
 
-      // Verify lake configuration is not present in result
-      expect(configWithLake).not.toHaveProperty('lake');
-      expect(configWithLake.ocean).toBeDefined();
+      expect(config.lake.enabled).toBe(false);
+      expect(config.lake.color).toBe(0x123456);
+      expect(config.lake.opacity).toBe(0.5);
+      expect(config.lake.shininess).toBe(50);
     });
 
     it('should validate ocean configuration correctly', () => {
@@ -168,6 +174,22 @@ describe('Water Configuration - Ocean Only', () => {
       expect(configHigh.ocean.shininess).toBe(100);
     });
 
+    it('should clamp lake opacity to valid range [0, 1]', () => {
+      const configLow = validateWaterConfig({ lake: { enabled: true, color: 0x00ff88, opacity: -0.1, shininess: 60 } });
+      const configHigh = validateWaterConfig({ lake: { enabled: true, color: 0x00ff88, opacity: 1.5, shininess: 60 } });
+
+      expect(configLow.lake.opacity).toBe(0);
+      expect(configHigh.lake.opacity).toBe(1);
+    });
+
+    it('should clamp lake shininess to valid range [0, 100]', () => {
+      const configLow = validateWaterConfig({ lake: { enabled: true, color: 0x00ff88, opacity: 0.8, shininess: -5 } });
+      const configHigh = validateWaterConfig({ lake: { enabled: true, color: 0x00ff88, opacity: 0.8, shininess: 200 } });
+
+      expect(configLow.lake.shininess).toBe(0);
+      expect(configHigh.lake.shininess).toBe(100);
+    });
+
     it('should validate seaLevel correctly', () => {
       const validConfig = validateWaterConfig({
         seaLevel: 0.5
@@ -217,16 +239,18 @@ describe('Water Configuration - Ocean Only', () => {
   });
 
   describe('DEFAULT_WATER_CONFIG', () => {
-    it('should not contain lake configuration', () => {
-      expect(DEFAULT_WATER_CONFIG).not.toHaveProperty('lake');
+    it('should contain lake configuration', () => {
+      expect(DEFAULT_WATER_CONFIG).toHaveProperty('lake');
+      expect(DEFAULT_WATER_CONFIG.lake.enabled).toBe(true);
+      expect(DEFAULT_WATER_CONFIG.lake.color).toBe(0x4fc3d4);
     });
 
     it('should contain ocean configuration', () => {
       expect(DEFAULT_WATER_CONFIG.ocean).toBeDefined();
       expect(DEFAULT_WATER_CONFIG.ocean.enabled).toBe(true);
       expect(DEFAULT_WATER_CONFIG.ocean.color).toBe(0x1e90ff);
-      expect(DEFAULT_WATER_CONFIG.ocean.opacity).toBe(0.6);
-      expect(DEFAULT_WATER_CONFIG.ocean.shininess).toBe(100);
+      expect(DEFAULT_WATER_CONFIG.ocean.opacity).toBe(0.72);
+      expect(DEFAULT_WATER_CONFIG.ocean.shininess).toBe(80);
     });
 
     it('should have valid default values', () => {
@@ -234,6 +258,23 @@ describe('Water Configuration - Ocean Only', () => {
       expect(DEFAULT_WATER_CONFIG.seaLevel).toBe(0.3);
       expect(DEFAULT_WATER_CONFIG.rendering).toBeDefined();
       expect(DEFAULT_WATER_CONFIG.performance).toBeDefined();
+    });
+  });
+
+  describe('DEFAULT_LAKE_RENDER_CONFIG', () => {
+    it('should have freshwater cyan-teal color', () => {
+      expect(DEFAULT_LAKE_RENDER_CONFIG.color).toBe(0x4fc3d4);
+    });
+
+    it('should be enabled by default', () => {
+      expect(DEFAULT_LAKE_RENDER_CONFIG.enabled).toBe(true);
+    });
+
+    it('should have valid opacity and shininess', () => {
+      expect(DEFAULT_LAKE_RENDER_CONFIG.opacity).toBeGreaterThan(0);
+      expect(DEFAULT_LAKE_RENDER_CONFIG.opacity).toBeLessThanOrEqual(1);
+      expect(DEFAULT_LAKE_RENDER_CONFIG.shininess).toBeGreaterThanOrEqual(0);
+      expect(DEFAULT_LAKE_RENDER_CONFIG.shininess).toBeLessThanOrEqual(100);
     });
   });
 });

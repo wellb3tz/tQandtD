@@ -31,6 +31,19 @@ export const DEFAULT_OCEAN_CONFIG = {
   waveSpeed: 1.0,
 };
 
+/**
+ * Default lake render configuration.
+ *
+ * Freshwater palette: shallow cyan-teal #4fc3d4, distinct from ocean (navy-blue).
+ * The `color` field tints the material base; vertex colors carry the depth gradient.
+ */
+export const DEFAULT_LAKE_RENDER_CONFIG = {
+  enabled: true,
+  color: 0x4fc3d4,  // light cyan-teal — freshwater, distinct from ocean navy
+  opacity: 0.80,
+  shininess: 60,
+};
+
 
 
 /**
@@ -43,6 +56,7 @@ export const DEFAULT_WATER_CONFIG: WaterConfig = {
   enabled: true, // Enable water rendering by default
   seaLevel: 0.3,
   ocean: DEFAULT_OCEAN_CONFIG,
+  lake: DEFAULT_LAKE_RENDER_CONFIG,
   rendering: {
     waterOffset: 0.1,
     underwaterDarkenFactor: 0.4,
@@ -107,6 +121,22 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
       waveHeight: Math.max(0, config.ocean?.waveHeight ?? DEFAULT_OCEAN_CONFIG.waveHeight),
       waveSpeed: Math.max(0, config.ocean?.waveSpeed ?? DEFAULT_OCEAN_CONFIG.waveSpeed),
       normalMap: config.ocean?.normalMap,
+    },
+    lake: {
+      enabled: config.lake?.enabled ?? DEFAULT_LAKE_RENDER_CONFIG.enabled,
+      color: config.lake?.color ?? DEFAULT_LAKE_RENDER_CONFIG.color,
+      opacity: clamp(
+        config.lake?.opacity ?? DEFAULT_LAKE_RENDER_CONFIG.opacity,
+        0,
+        1,
+        'Lake opacity'
+      ),
+      shininess: clamp(
+        config.lake?.shininess ?? DEFAULT_LAKE_RENDER_CONFIG.shininess,
+        0,
+        100,
+        'Lake shininess'
+      ),
     },
     rendering: {
       waterOffset: Math.max(
