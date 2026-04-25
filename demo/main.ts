@@ -484,6 +484,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ('fogOfWarEnabled' in visibilityState) {
           worldViewer.setFogOfWarVisibility(visibilityState.fogOfWarEnabled);
         }
+        if ('skyBackground' in visibilityState) {
+          worldViewer.setBackgroundMode(visibilityState.skyBackground);
+        }
         
         const endTime = performance.now();
         const updateTime = endTime - startTime;

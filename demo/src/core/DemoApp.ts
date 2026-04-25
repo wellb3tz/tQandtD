@@ -54,6 +54,7 @@ export interface AppState {
   showChunkBoundaries: boolean;
   showWireframe: boolean;
   fogOfWarEnabled: boolean; // Show explored chunks as gray planes
+  skyBackground: boolean;   // true = sky blue, false = deep ocean
   
   // Chunk tracking
   exploredChunks: Set<string>; // Chunks that have been visited
@@ -127,7 +128,7 @@ const DEFAULT_CONFIG: WorldConfig = {
     zScale: 0.5,
     enableContinentalness: true,
     continentalScale: 0.002,
-    continentalStrength: 0.6,
+    continentalStrength: 0.45,
   },
   biomeConfig: {
     temperatureScale: 0.001,
@@ -211,6 +212,7 @@ export class DemoApp {
       showChunkBoundaries: false,
       showWireframe: false,
       fogOfWarEnabled: false,
+      skyBackground: true,
       
       exploredChunks: new Set(),
       
@@ -280,7 +282,8 @@ export class DemoApp {
     // Check if visibility settings changed
     const visibilityKeys = [
       'showTerrain', 'showBiomes', 'showWater', 'showResources',
-      'showStructures', 'showChunkBoundaries', 'showWireframe', 'fogOfWarEnabled'
+      'showStructures', 'showChunkBoundaries', 'showWireframe', 'fogOfWarEnabled',
+      'skyBackground'
     ];
     
     const visibilityChanged = visibilityKeys.some(key => key in partial);
@@ -305,7 +308,8 @@ export class DemoApp {
         showStructures: this.state.showStructures,
         showChunkBoundaries: this.state.showChunkBoundaries,
         showWireframe: this.state.showWireframe,
-        fogOfWarEnabled: this.state.fogOfWarEnabled
+        fogOfWarEnabled: this.state.fogOfWarEnabled,
+        skyBackground: this.state.skyBackground,
       });
     }
   }

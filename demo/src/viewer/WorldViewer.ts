@@ -143,6 +143,9 @@ export class WorldViewer {
   private waterLayerManager: WaterLayerManager;
   private waterConfig: WaterConfig;
 
+  // Background ocean plane (hidden when sky background mode is active)
+  private bgOceanMesh: THREE.Mesh | null = null;
+
   // Micro-biome tracking
   private microBiomeCount: number;
 
@@ -204,8 +207,10 @@ export class WorldViewer {
    * Set up the Three.js scene
    */
   private setupScene(): void {
-    // Set scene background — deep sky blue
+    // Background starts in sky mode (matches default skyBackground: true in AppState).
+    // setBackgroundMode(false) switches to dark ocean mode.
     this.scene.background = new THREE.Color(0x87ceeb);
+    this.scene.fog = new THREE.FogExp2(0x87ceeb, 0.0012);
 
     // Atmospheric exponential fog — adds depth and distance haze
     // (disabled — produces blue haze rather than realistic fog)
@@ -222,6 +227,27 @@ export class WorldViewer {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.85; // Slightly underexposed = richer, less washed out
+
+    // Large background ocean plane — covers the infinite horizon beyond loaded chunks.
+    // Positioned at sea level (seaLevel * heightScale = 0.3 * 50 = 15).
+    // Size 20 000 units ensures it fills the view at any reasonable camera distance.
+    const bgOceanGeo = new THREE.PlaneGeometry(20000, 20000);
+    bgOceanGeo.rotateX(-Math.PI / 2);
+    const bgOceanMat = new THREE.MeshPhongMaterial({
+      color: 0x0a1a3a,
+      transparent: false,   // opaque — no blending conflicts with chunk water meshes
+      shininess: 40,
+      specular: new THREE.Color(0x112233),
+    });
+    const bgOceanMesh = new THREE.Mesh(bgOceanGeo, bgOceanMat);
+    // Place well below the lowest possible ocean floor (near Y=0) so the
+    // opaque terrain mesh always occludes it — only visible beyond loaded chunks.
+    bgOceanMesh.position.set(0, -200, 0);
+    bgOceanMesh.renderOrder = 0;
+    bgOceanMesh.renderOrder = 0;
+    bgOceanMesh.visible = false; // hidden by default (sky mode is default)
+    this.scene.add(bgOceanMesh);
+    this.bgOceanMesh = bgOceanMesh;
 
     // Soft ambient — cool overcast sky, low intensity so shadows read clearly
     this.ambientLight = new THREE.AmbientLight(0xc8ddf0, 0.45);
@@ -1235,7 +1261,21 @@ export class WorldViewer {
   setWaterVisibility(visible: boolean): void {
     this.waterLayerManager.toggleWaterVisibility(visible);
   }
-  
+
+  /**
+   * Switch between sky (light blue) and ocean (dark navy) background modes.
+   * @param skyMode - true = bright sky #87ceeb, false = deep ocean #0a1a3a
+   */
+  setBackgroundMode(skyMode: boolean): void {
+    const bgColor = skyMode ? 0x87ceeb : 0x0a1a3a;
+    this.scene.background = new THREE.Color(bgColor);
+    // Fog colour always matches background for seamless horizon
+    this.scene.fog = new THREE.FogExp2(bgColor, skyMode ? 0.0012 : 0.0018);
+    if (this.bgOceanMesh) {
+      this.bgOceanMesh.visible = !skyMode;
+    }
+  }
+
   /**
    * Configure water system
    */

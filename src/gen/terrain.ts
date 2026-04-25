@@ -260,8 +260,14 @@ export class TerrainGenerator {
       }
 
       if (base < seaLevel) {
-        // Ocean: detail noise adds very subtle variation, stays below sea level
-        height = Math.min(seaLevel - 0.001, base + height * 0.04);
+        // Ocean bathymetry: depth follows distance from shore.
+        // s ranges from 0 (far ocean) to 0.5 (shoreline).
+        // shelfT = 0 → open ocean (deep), shelfT = 1 → near shore (shallow).
+        const shelfT = Math.min(s / 0.5, 1.0);
+        // Seabed rises quadratically toward the shore, reaching near seaLevel at the beach.
+        const seabedRise = shelfT * shelfT * (seaLevel * 0.85);
+        // Detail noise adds organic variation to the seabed (12% amplitude).
+        height = Math.min(seaLevel - 0.001, seabedRise + height * 0.12);
       } else {
         // Land: detail noise runs in full range [seaLevel, 1.0].
         // landT: 0 at shore, 1 far inland

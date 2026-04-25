@@ -24,8 +24,8 @@ export const HEIGHT_SCALE = 50;
 export const DEFAULT_OCEAN_CONFIG = {
   enabled: true,
   color: 0x1e90ff,
-  opacity: 0.6,
-  shininess: 100,
+  opacity: 0.72,
+  shininess: 80,
   enableWaves: false,
   waveHeight: 0.5,
   waveSpeed: 1.0,

@@ -54,28 +54,43 @@ export function identifyOceanTiles(
 }
 
 /**
- * Build ocean geometry from identified ocean tiles
- * 
- * Creates a merged mesh covering all ocean tiles with vertices positioned
- * at sea level. Ensures boundary vertices use identical world coordinates
- * for seamless chunk boundaries.
- * 
- * **Performance Optimizations:**
- * - Mesh merging: All ocean tiles in a chunk are merged into a single geometry
- * - Geometry pooling: Reuses geometry for chunks with identical ocean patterns
- * - Efficient vertex sharing: Adjacent tiles share vertices to reduce memory
- * 
- * **Boundary Alignment Strategy:**
- * - Vertices are positioned using world coordinates (worldX = chunkX * size + localX)
- * - Adjacent chunks automatically share boundary coordinates:
- *   - Right edge of chunk (0,0): worldX = 0*size + size = size
- *   - Left edge of chunk (1,0): worldX = 1*size + 0 = size (same!)
- * - All boundary vertices use the same elevation (seaLevel + waterOffset)
- * - This ensures perfect alignment with no gaps or overlaps
- * 
- * @param oceanTiles - Array of ocean tiles to create geometry for
- * @param chunkData - Chunk data for coordinate calculations
- * @param config - Water configuration
+ * Calculate water surface color based on depth below sea level.
+ * Shallow water → bright turquoise, deep water → dark navy blue.
+ *
+ * @param depth - Depth below sea level in [0, seaLevel] range
+ * @param seaLevel - Sea level threshold
+ * @returns RGB color components in [0, 1] range
+ */
+function depthColor(depth: number, seaLevel: number): [number, number, number] {
+  // Normalise depth: 0 = surface, 1 = maximum depth
+  const t = Math.min(depth / seaLevel, 1.0);
+
+  // Smooth curve — emphasise shallow gradient more than deep
+  const s = t * t;
+
+  // Shallow (t=0): bright turquoise  #29b6d4  → r=0.16, g=0.71, b=0.83
+  // Deep    (t=1): dark navy         #0a1a3a  → r=0.04, g=0.10, b=0.23
+  const r = 0.16 - s * 0.12;
+  const g = 0.71 - s * 0.61;
+  const b = 0.83 - s * 0.60;
+
+  return [r, g, b];
+}
+
+/**
+ * Build ocean geometry as a single unified grid mesh for the entire chunk.
+ *
+ * Uses a (chunkSize+1) × (chunkSize+1) vertex grid — identical topology to
+ * the terrain mesh — so vertex colors are smoothly interpolated across the
+ * whole chunk with no visible tile boundaries or diamond patterns.
+ *
+ * Only tiles where ALL four corner vertices are below sea level are included;
+ * boundary tiles that straddle the shoreline are skipped so the water edge
+ * aligns cleanly with the terrain beach.
+ *
+ * @param oceanTiles - Array of ocean tiles (used to determine which cells are underwater)
+ * @param chunkData  - Chunk data for heightmap and coordinate calculations
+ * @param config     - Water configuration
  * @returns BufferGeometry for ocean surface, or null if no ocean tiles
  */
 export function buildOceanGeometry(
@@ -87,72 +102,71 @@ export function buildOceanGeometry(
     return null;
   }
 
-  const { size } = chunkData;
-  const waterElevation = config.seaLevel * HEIGHT_SCALE;
+  const { size, heightmap } = chunkData;
+  const vertexSize = size + 1;
+  const waterY = config.seaLevel * HEIGHT_SCALE + 0.05;
+  const seaLevel = config.seaLevel;
 
-  // Mesh merging optimization: Build merged geometry for all ocean tiles
-  // This reduces draw calls from N tiles to 1 mesh per chunk
+  // Build a set of underwater tile indices for fast lookup
+  const underwaterSet = new Set<number>(oceanTiles.map(t => t.index));
+
   const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
+  const normals:   number[] = [];
+  const colors:    number[] = [];
+  const uvs:       number[] = [];
+  const indices:   number[] = [];
 
+  // Shared vertex grid — one vertex per grid point, reused by adjacent tiles.
+  // vertexIndex[y * vertexSize + x] = index into positions array (or -1 = unused)
+  const vertexIndex = new Int32Array(vertexSize * vertexSize).fill(-1);
   let vertexCount = 0;
 
+  // Helper: get or create a vertex at grid position (vx, vy)
+  const getVertex = (vx: number, vy: number): number => {
+    const key = vy * vertexSize + vx;
+    if (vertexIndex[key] !== -1) return vertexIndex[key];
+
+    const worldX = chunkData.x * size + vx;
+    const worldZ = chunkData.y * size + vy;
+
+    // Depth at this vertex from heightmap
+    const h = heightmap[key];
+    const depth = Math.max(0, seaLevel - h);
+
+    const [r, g, b] = depthColor(depth, seaLevel);
+
+    positions.push(worldX, waterY, worldZ);
+    normals.push(0, 1, 0);
+    colors.push(r, g, b);
+    uvs.push(vx / size, vy / size);
+
+    vertexIndex[key] = vertexCount;
+    return vertexCount++;
+  };
+
+  // Emit one quad (two triangles) per underwater tile
   for (const tile of oceanTiles) {
-    // Convert flat index to local coordinates
-    const localX = tile.index % size;
-    const localY = Math.floor(tile.index / size);
+    const tx = tile.index % size;
+    const ty = Math.floor(tile.index / size);
 
-    // Create quad for this tile (2 triangles)
-    // Vertices use world coordinates to match terrain rendering
-    // World coordinates ensure automatic boundary alignment between chunks
-    const x0 = chunkData.x * size + localX;
-    const z0 = chunkData.y * size + localY;
-    const x1 = chunkData.x * size + localX + 1;
-    const z1 = chunkData.y * size + localY + 1;
+    const i00 = getVertex(tx,     ty);
+    const i10 = getVertex(tx + 1, ty);
+    const i01 = getVertex(tx,     ty + 1);
+    const i11 = getVertex(tx + 1, ty + 1);
 
-    // Add 4 vertices for the quad
-    // All vertices at the same elevation (seaLevel + waterOffset) ensures
-    // perfect elevation matching at chunk boundaries
-    positions.push(
-      x0, waterElevation, z0,  // v0: top-left
-      x1, waterElevation, z0,  // v1: top-right
-      x0, waterElevation, z1,  // v2: bottom-left
-      x1, waterElevation, z1   // v3: bottom-right
-    );
-
-    // Normals pointing up
-    for (let i = 0; i < 4; i++) {
-      normals.push(0, 1, 0);
-    }
-
-    // UV coordinates (normalized to tile)
-    uvs.push(
-      0, 0,  // v0
-      1, 0,  // v1
-      0, 1,  // v2
-      1, 1   // v3
-    );
-
-    // Indices for 2 triangles (counter-clockwise winding)
-    const baseIndex = vertexCount;
-    indices.push(
-      baseIndex, baseIndex + 1, baseIndex + 2,  // Triangle 1
-      baseIndex + 2, baseIndex + 1, baseIndex + 3   // Triangle 2
-    );
-
-    vertexCount += 4;
+    indices.push(i00, i10, i01);
+    indices.push(i01, i10, i11);
   }
 
-  // Create geometry
+  if (vertexCount === 0) return null;
+
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
-  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+  geometry.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(normals),   3));
+  geometry.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),    3));
+  geometry.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(uvs),       2));
   geometry.setIndex(indices);
 
-  // Compute bounding sphere and box for frustum culling
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
 

@@ -96,9 +96,9 @@ export function desaturateColor(color: BiomeColor, factor: number): BiomeColor {
 }
 
 /**
- * Apply depth-based gradient to darkening factor
- * Deeper tiles get darker than shallower tiles
- * 
+ * Apply depth-based gradient to darkening factor.
+ * Deeper tiles get significantly darker than shallower tiles.
+ *
  * @param baseDarkenFactor - Base darkening factor (0.3-0.5)
  * @param depth - Depth below sea level (0-1)
  * @param seaLevel - Sea level elevation
@@ -109,22 +109,23 @@ export function applyDepthGradient(
   depth: number,
   seaLevel: number
 ): number {
-  // Normalize depth to 0-1 range (assuming max depth is seaLevel)
+  // Normalise depth to 0-1 range
   const normalizedDepth = Math.min(depth / seaLevel, 1);
-  
-  // Increase darkening factor based on depth
-  // Deeper areas get up to 20% more darkening
-  const depthMultiplier = 1 + (normalizedDepth * 0.2);
-  
-  return Math.min(baseDarkenFactor * depthMultiplier, 1);
+
+  // Quadratic curve — shallow areas stay relatively bright,
+  // deep areas get much darker (up to 2× the base factor)
+  const depthMultiplier = 1 + normalizedDepth * normalizedDepth * 1.5;
+
+  return Math.min(baseDarkenFactor * depthMultiplier, 0.92);
 }
 
 /**
- * Adjust underwater terrain color
- * 
- * Applies darkening, desaturation, and optional depth-based gradient
- * to create realistic underwater appearance.
- * 
+ * Adjust underwater terrain color.
+ *
+ * Applies darkening, desaturation, and a depth-based blue tint to create
+ * a realistic underwater appearance. Shallow areas retain some of their
+ * original colour; deep areas shift strongly towards dark navy blue.
+ *
  * @param originalColor - Original biome color
  * @param terrainHeight - Height of the terrain tile
  * @param config - Underwater adjustment configuration
@@ -135,26 +136,40 @@ export function adjustUnderwaterColor(
   terrainHeight: number,
   config: UnderwaterAdjustmentConfig
 ): BiomeColor {
-  // Calculate depth below sea level
   const depth = config.seaLevel - terrainHeight;
-  
-  // If not underwater, return original color
+
   if (depth <= 0) {
     return originalColor;
   }
-  
-  // Apply depth-based gradient to darkening factor if enabled
+
+  // Depth gradient darkening
   let darkenFactor = config.darkenFactor;
   if (config.enableDepthGradient) {
     darkenFactor = applyDepthGradient(darkenFactor, depth, config.seaLevel);
   }
-  
-  // Apply darkening
+
+  // Darken
   let adjustedColor = darkenColor(originalColor, darkenFactor);
-  
-  // Apply desaturation
+
+  // Desaturate
   adjustedColor = desaturateColor(adjustedColor, config.desaturationFactor);
-  
+
+  // Blue tint — deeper = stronger shift towards dark ocean blue
+  // Shallow (t≈0): subtle tint; deep (t≈1): moderate navy overlay
+  const t = Math.min(depth / config.seaLevel, 1.0);
+  const tintStrength = t * t * 0.30; // quadratic, max 30% tint at full depth
+
+  // Target tint colour: dark navy #0a1a3a
+  const tintR = 0.04;
+  const tintG = 0.10;
+  const tintB = 0.23;
+
+  adjustedColor = {
+    r: adjustedColor.r * (1 - tintStrength) + tintR * tintStrength,
+    g: adjustedColor.g * (1 - tintStrength) + tintG * tintStrength,
+    b: adjustedColor.b * (1 - tintStrength) + tintB * tintStrength,
+  };
+
   return adjustedColor;
 }
 

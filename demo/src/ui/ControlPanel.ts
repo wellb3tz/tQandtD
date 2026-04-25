@@ -267,7 +267,8 @@ export class ControlPanel {
       max: 0.9,
       step: 0.05,
       defaultValue: 0.6,
-      tooltip: 'How much of the world is ocean (higher = more ocean)'
+      tooltip: 'How much of the world is ocean (higher = more ocean)',
+      defaultValue: 0.45,
     }, (value) => {
       this.updateTerrainConfig('continentalStrength', value);
     });
@@ -904,7 +905,8 @@ export class ControlPanel {
       { id: 'showStructures', label: 'Show Structures', defaultValue: false },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
       { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
-      { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: false }
+      { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: false },
+      { id: 'skyBackground', label: 'Sky Background (Blue)', defaultValue: true, tooltip: 'Switch between deep ocean (dark) and sky blue background' },
     ];
 
     toggles.forEach(config => {
