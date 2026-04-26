@@ -177,6 +177,7 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
+      minTerrainHeight: lake.minTerrainHeight,
     })),
     resources: chunk.resources.map(r => ({
       x: r.x,
@@ -211,6 +212,7 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
       waterLevel: lake.waterLevel,
       tiles: new Set(lake.tiles),
       maxDepth: lake.maxDepth,
+      minTerrainHeight: lake.minTerrainHeight,
     })),
     resources: serialized.resources,
     structures: serialized.structures,

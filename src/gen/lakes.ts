@@ -30,6 +30,8 @@ export interface LakeData {
   tiles: Set<number>;
   /** Maximum depth of the lake (waterLevel − min terrain height inside lake) */
   maxDepth: number;
+  /** Minimum terrain height inside the lake (for consistent water positioning across chunks) */
+  minTerrainHeight?: number;
 }
 
 /**
@@ -40,6 +42,13 @@ export interface LakeConfig {
    * Enable lake generation (default: true).
    */
   enabled: boolean;
+
+  /**
+   * Use multi-chunk lake system (default: false for performance).
+   * When false, uses the original single-chunk lake generator.
+   * When true, lakes can span multiple chunks but generation is slower.
+   */
+  useMultiChunk?: boolean;
 
   /**
    * Noise scale for the lake-candidate mask.
@@ -92,6 +101,7 @@ export interface LakeConfig {
 /** Default lake configuration. */
 export const DEFAULT_LAKE_CONFIG: LakeConfig = {
   enabled: true,
+  useMultiChunk: true, // Enabled by default - multi-chunk lakes are now the standard
   noiseScale: 0.01,
   noiseThreshold: 0.62,
   minElevation: 0.32,

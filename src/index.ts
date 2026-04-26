@@ -109,6 +109,7 @@ export {
   type SerializedWorld,
   type ChunkModification,
 } from './world/serialization';
+export { LakeManager, type WorldLakeData } from './world/lake-manager';
 
 // Generators
 export { TerrainGenerator, type TerrainConfig } from './gen/terrain';

@@ -3,12 +3,13 @@ import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
-import { LakeGenerator, LakeConfig, DEFAULT_LAKE_CONFIG } from '../gen/lakes';
+import { LakeConfig, DEFAULT_LAKE_CONFIG, LakeData } from '../gen/lakes';
 import { chunkSeed } from '../core/hash';
 import { ChunkModification, WorldSerializer, ChunkManagerSnapshot } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
 import { WorkerPoolConfig, WorkerPool, WorkerTask } from './worker-pool';
+import { LakeManager, WorldLakeData } from './lake-manager';
 
 /**
  * Configuration for 3D noise generation
@@ -94,7 +95,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private structurePlacer: StructurePlacer;
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
-  private lakeGenerator: LakeGenerator;
+  private lakeManager: LakeManager | null;
   /** @internal exposed for WorkerPool shutdown in DemoApp */ workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
   /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
@@ -129,7 +130,18 @@ export class ChunkManager implements ChunkManagerSnapshot {
     
     this.resourceGenerator = new ResourceGenerator(config.resourceConfig);
     this.structurePlacer = new StructurePlacer(config.structureConfig);
-    this.lakeGenerator = new LakeGenerator(config.seed, config.lakeConfig ?? DEFAULT_LAKE_CONFIG);
+    
+    // Initialize LakeManager if lakes are enabled (multi-chunk lakes are now the only option)
+    const lakeConfig = config.lakeConfig ?? DEFAULT_LAKE_CONFIG;
+    this.lakeManager = lakeConfig.enabled ? new LakeManager(
+      config.seed,
+      lakeConfig,
+      (worldX: number, worldY: number) => this.terrainGenerator.getHeightAt(worldX, worldY, config.seed),
+      (worldX: number, worldY: number) => {
+        const height = this.terrainGenerator.getHeightAt(worldX, worldY, config.seed);
+        return this.biomeSystem.getBiome(worldX, worldY, height);
+      }
+    ) : null;
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig
@@ -180,12 +192,14 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
     // Decide generation strategy based on worker pool availability
     const generationPromise: Promise<ChunkData> = (async () => {
+      console.log(`[ChunkManager] Starting generation for chunk (${chunkX}, ${chunkY})`);
       let chunk: ChunkData;
       if (this.workerPool) {
         chunk = await this.generateChunkAsync(chunkX, chunkY);
       } else {
         chunk = this.generateChunk(chunkX, chunkY);
       }
+      console.log(`[ChunkManager] Finished generation for chunk (${chunkX}, ${chunkY})`);
       // Add to cache and remove from in-flight map
       this.addToCache(key, chunk);
       this.inFlightRequests.delete(key);
@@ -282,32 +296,31 @@ export class ChunkManager implements ChunkManagerSnapshot {
       structures: [],
     };
 
-    // Step 3: Generate lakes using flood-fill on the heightmap
+    // Step 3: Generate lakes using multi-chunk lake manager
     this.config.onProgress?.('lakes', 0.55);
-    chunk.lakes = this.lakeGenerator.generateLakes(
-      chunkX, chunkY, this.config.chunkSize, heightmap, biomeMap,
-    );
-
-    // Step 3b: Carve a depression under each lake.
-    // Every vertex inside the lake footprint is pushed DOWN by a fixed amount
-    // so the terrain visibly dips beneath the water surface.
-    if (chunk.lakes.length > 0) {
-      const size  = this.config.chunkSize;
-      const vSize = size + 1;
-      const CARVE_DEPTH = 0.02; // how deep to dig in [0,1] heightmap space (~1 world unit)
-
-      for (const lake of chunk.lakes) {
-        for (const tileIdx of lake.tiles) {
-          const tx = tileIdx % size;
-          const ty = Math.floor(tileIdx / size);
-          for (let dv = 0; dv <= 1; dv++) {
-            for (let du = 0; du <= 1; du++) {
-              const vi = (ty + dv) * vSize + (tx + du);
-              heightmap[vi] = Math.max(0, heightmap[vi] - CARVE_DEPTH);
-            }
-          }
+    if (this.lakeManager) {
+      // Use multi-chunk lake manager with cache invalidation callback
+      const worldLakes = this.lakeManager.getLakesForChunk(
+        chunkX, 
+        chunkY, 
+        this.config.chunkSize,
+        (cx: number, cy: number) => {
+          // Invalidate cached chunk when new lakes are discovered
+          const key = this.getCacheKey(cx, cy);
+          const wasInCache = this.cache.has(key);
+          this.cache.delete(key);
+          console.log(`[ChunkManager] Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
         }
+      );
+      chunk.lakes = this.convertWorldLakesToChunkLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+      
+      // Carve terrain for multi-chunk lakes using world coordinates
+      if (worldLakes.length > 0) {
+        this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
       }
+    } else {
+      // No lakes if lake manager is disabled
+      chunk.lakes = [];
     }
 
     // Step 4: Generate resources based on biomes and noise
@@ -483,6 +496,8 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * @param chunk - Chunk data to cache
    */
   private addToCache(key: string, chunk: ChunkData): void {
+    console.log(`[ChunkManager] Adding chunk (${chunk.x}, ${chunk.y}) to cache`);
+    
     // If cache is full, evict least recently used entry
     if (this.cache.size >= this.maxCacheSize) {
       let oldestKey: string | null = null;
@@ -803,6 +818,194 @@ export class ChunkManager implements ChunkManagerSnapshot {
    */
   loadWorld(data: import('./serialization').SerializedWorld): void {
     this.worldSerializer.deserialize(data, this);
+  }
+
+  /**
+   * Convert world-space lakes to chunk-local lake data.
+   * Filters tiles to only include those within the chunk bounds.
+   * 
+   * @param worldLakes - Lakes in world coordinates
+   * @param chunkX - Chunk X coordinate
+   * @param chunkY - Chunk Y coordinate
+   * @param chunkSize - Size of the chunk
+   * @returns Array of LakeData with chunk-local tile indices
+   */
+  private convertWorldLakesToChunkLakes(
+    worldLakes: WorldLakeData[],
+    chunkX: number,
+    chunkY: number,
+    chunkSize: number,
+    heightmap: Float32Array
+  ): LakeData[] {
+    const chunkWorldX = chunkX * chunkSize;
+    const chunkWorldY = chunkY * chunkSize;
+    const vertexSize = chunkSize + 1;
+    const result: LakeData[] = [];
+
+    // Helper: average height of tile (localX, localY) using chunk heightmap
+    const tileHeight = (localX: number, localY: number): number => {
+      const v00 = heightmap[localY * vertexSize + localX];
+      const v10 = heightmap[localY * vertexSize + (localX + 1)];
+      const v01 = heightmap[(localY + 1) * vertexSize + localX];
+      const v11 = heightmap[(localY + 1) * vertexSize + (localX + 1)];
+      return (v00 + v10 + v01 + v11) * 0.25;
+    };
+
+    for (const worldLake of worldLakes) {
+      const chunkTiles = new Set<number>();
+
+      // Convert world tiles to chunk-local tiles
+      for (const tileKey of worldLake.tiles) {
+        const [worldX, worldY] = tileKey.split(',').map(Number);
+        
+        // Check if tile is within this chunk
+        if (
+          worldX >= chunkWorldX &&
+          worldX < chunkWorldX + chunkSize &&
+          worldY >= chunkWorldY &&
+          worldY < chunkWorldY + chunkSize
+        ) {
+          const localX = worldX - chunkWorldX;
+          const localY = worldY - chunkWorldY;
+          const localIdx = localY * chunkSize + localX;
+          chunkTiles.add(localIdx);
+        }
+      }
+
+      // Add boundary tiles: for lake tiles in adjacent chunks that share a vertex
+      // with this chunk's edge, add the corresponding edge tile of this chunk if it
+      // is below the water level.  This closes the gap that appears when a lake ends
+      // exactly on a chunk boundary.
+      for (const tileKey of worldLake.tiles) {
+        const [worldX, worldY] = tileKey.split(',').map(Number);
+
+        // Tile is just outside this chunk on the right edge
+        if (worldX === chunkWorldX + chunkSize &&
+            worldY >= chunkWorldY && worldY < chunkWorldY + chunkSize) {
+          const localX = chunkSize - 1;
+          const localY = worldY - chunkWorldY;
+          const localIdx = localY * chunkSize + localX;
+          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
+            chunkTiles.add(localIdx);
+          }
+        }
+
+        // Tile is just outside this chunk on the bottom edge
+        if (worldY === chunkWorldY + chunkSize &&
+            worldX >= chunkWorldX && worldX < chunkWorldX + chunkSize) {
+          const localX = worldX - chunkWorldX;
+          const localY = chunkSize - 1;
+          const localIdx = localY * chunkSize + localX;
+          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
+            chunkTiles.add(localIdx);
+          }
+        }
+
+        // Tile is just outside this chunk on the left edge
+        if (worldX === chunkWorldX - 1 &&
+            worldY >= chunkWorldY && worldY < chunkWorldY + chunkSize) {
+          const localX = 0;
+          const localY = worldY - chunkWorldY;
+          const localIdx = localY * chunkSize + localX;
+          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
+            chunkTiles.add(localIdx);
+          }
+        }
+
+        // Tile is just outside this chunk on the top edge
+        if (worldY === chunkWorldY - 1 &&
+            worldX >= chunkWorldX && worldX < chunkWorldX + chunkSize) {
+          const localX = worldX - chunkWorldX;
+          const localY = 0;
+          const localIdx = localY * chunkSize + localX;
+          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
+            chunkTiles.add(localIdx);
+          }
+        }
+      }
+
+      // Only include lake if it has tiles in this chunk
+      if (chunkTiles.size > 0) {
+        const lakeData = {
+          waterLevel: worldLake.waterLevel,
+          tiles: chunkTiles,
+          maxDepth: worldLake.maxDepth,
+          minTerrainHeight: worldLake.minTerrainHeight,
+        };
+        
+        console.log(`[ChunkManager] Converting world lake to chunk (${chunkX}, ${chunkY}):`, {
+          waterLevel: worldLake.waterLevel,
+          minTerrainHeight: worldLake.minTerrainHeight,
+          chunkTileCount: chunkTiles.size,
+        });
+        
+        result.push(lakeData);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Carve terrain depression for world-space lakes.
+   * Works with world coordinates to ensure consistent carving across chunk boundaries.
+   * 
+   * @param worldLakes - Lakes in world coordinates
+   * @param chunkX - Chunk X coordinate
+   * @param chunkY - Chunk Y coordinate
+   * @param chunkSize - Size of the chunk
+   * @param heightmap - Heightmap to modify
+   */
+  private carveTerrainForWorldLakes(
+    worldLakes: WorldLakeData[],
+    chunkX: number,
+    chunkY: number,
+    chunkSize: number,
+    heightmap: Float32Array
+  ): void {
+    const chunkWorldX = chunkX * chunkSize;
+    const chunkWorldY = chunkY * chunkSize;
+    const vSize = chunkSize + 1;
+    const CARVE_DEPTH = 0.02; // how deep to dig in [0,1] heightmap space
+
+    console.log(`[Carve] Carving terrain for chunk (${chunkX}, ${chunkY}), ${worldLakes.length} lake(s)`);
+
+    for (const worldLake of worldLakes) {
+      let verticesCarved = 0;
+      let verticesSkipped = 0;
+      
+      // Process each tile in the lake
+      for (const tileKey of worldLake.tiles) {
+        const [worldTileX, worldTileY] = tileKey.split(',').map(Number);
+        
+        // Check if this tile affects the current chunk's vertices
+        // A tile affects vertices from (tileX, tileY) to (tileX+1, tileY+1)
+        for (let dv = 0; dv <= 1; dv++) {
+          for (let du = 0; du <= 1; du++) {
+            const worldVertexX = worldTileX + du;
+            const worldVertexY = worldTileY + dv;
+            
+            // Convert to chunk-local vertex coordinates
+            const localVertexX = worldVertexX - chunkWorldX;
+            const localVertexY = worldVertexY - chunkWorldY;
+            
+            // Check if vertex is within this chunk's heightmap bounds
+            if (
+              localVertexX >= 0 && localVertexX <= chunkSize &&
+              localVertexY >= 0 && localVertexY <= chunkSize
+            ) {
+              const vi = localVertexY * vSize + localVertexX;
+              heightmap[vi] = Math.max(0, heightmap[vi] - CARVE_DEPTH);
+              verticesCarved++;
+            } else {
+              verticesSkipped++;
+            }
+          }
+        }
+      }
+      
+      console.log(`[Carve] Lake ${worldLake.id}: carved ${verticesCarved} vertices, skipped ${verticesSkipped} (outside chunk)`);
+    }
   }
 
   /**

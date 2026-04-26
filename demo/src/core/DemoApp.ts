@@ -170,6 +170,17 @@ const DEFAULT_CONFIG: WorldConfig = {
     minDistance: 30,
     maxAttempts: 30
   },
+  lakeConfig: {
+    enabled: true,
+    useMultiChunk: true,  // Changed to true by default
+    noiseScale: 0.01,
+    noiseThreshold: 0.62,
+    minElevation: 0.32,
+    maxElevation: 0.72,
+    allowedBiomes: [3, 4, 5, 6, 7, 8, 9], // PLAINS, FOREST, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA
+    maxLakeTiles: 80,
+    maxFillDepth: 0.06,
+  },
   maxCacheSize: 1000,
   enablePerformanceMetrics: true
 };
@@ -534,6 +545,7 @@ export class DemoApp {
         'enhancedBiomeConfig' in config ||
         'resourceConfig' in config ||
         'structureConfig' in config ||
+        'lakeConfig' in config ||
         'noise3DConfig' in config ||
         'seed' in config ||
         'chunkSize' in config ||

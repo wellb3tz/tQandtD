@@ -345,6 +345,7 @@ export class WorkerPool {
         waterLevel: lake.waterLevel,
         tiles: new Set<number>(lake.tiles),
         maxDepth: lake.maxDepth,
+        minTerrainHeight: lake.minTerrainHeight,
       })),
       resources: serialized.resources,
       structures: serialized.structures,

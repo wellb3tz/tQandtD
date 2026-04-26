@@ -559,6 +559,35 @@ export class ControlPanel {
     const waterContainer = document.getElementById(ELEMENT_IDS.WATER_CONTROLS);
     if (!waterContainer) return;
 
+    // Lakes section
+    const lakesSection = document.createElement('div');
+    lakesSection.style.marginBottom = '16px';
+    lakesSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Lakes</h4>';
+    waterContainer.appendChild(lakesSection);
+
+    // Get current lake config values
+    const currentLakeConfig = this.currentConfig?.lakeConfig;
+    const lakesEnabled = currentLakeConfig?.enabled ?? true;
+
+    // Enable Multi-Chunk Lakes checkbox (replaces both old checkboxes)
+    const enableLakesCheckbox = this.createCheckboxControl({
+      id: 'enableMultiChunkLakes',
+      label: 'Enable Multi-Chunk Lakes',
+      defaultValue: lakesEnabled,
+      tooltip: 'Enable lake generation. Lakes can span multiple chunks for more natural appearance. Enabled by default.'
+    }, (checked) => {
+      this.updateLakeConfig('enabled', checked);
+      this.updateLakeConfig('useMultiChunk', checked);
+    });
+    waterContainer.appendChild(enableLakesCheckbox);
+
+    // Ocean section
+    const oceanSection = document.createElement('div');
+    oceanSection.style.marginTop = '24px';
+    oceanSection.style.marginBottom = '16px';
+    oceanSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Ocean</h4>';
+    waterContainer.appendChild(oceanSection);
+
     // Water color picker
     const colorControl = this.createColorControl({
       id: 'waterColor',
@@ -1265,6 +1294,42 @@ export class ControlPanel {
       });
       window.dispatchEvent(event);
     }
+  }
+
+  /**
+   * Update lake configuration
+   */
+  private updateLakeConfig(property: string, value: boolean): void {
+    console.log('[ControlPanel] updateLakeConfig called:', property, value);
+    
+    if (!this.app || !this.currentConfig) {
+      console.warn('[ControlPanel] Cannot update lake config - missing app or config');
+      return;
+    }
+
+    // Create lakeConfig if it doesn't exist
+    const currentLakeConfig = this.currentConfig.lakeConfig || {
+      enabled: true,
+      useMultiChunk: false,
+      noiseScale: 0.01,
+      noiseThreshold: 0.62,
+      minElevation: 0.32,
+      maxElevation: 0.72,
+      allowedBiomes: [3, 4, 5, 6, 7, 8, 9], // BiomeType values
+      maxLakeTiles: 80,
+      maxFillDepth: 0.06,
+    };
+
+    const newConfig: Partial<WorldConfig> = {
+      lakeConfig: {
+        ...currentLakeConfig,
+        [property]: value
+      } as any // Type assertion needed for dynamic property assignment
+    };
+
+    console.log('[ControlPanel] Updating lake config:', newConfig.lakeConfig);
+    this.app.updateEngineConfig(newConfig);
+    this.notifyParameterChange(newConfig);
   }
 
   /**

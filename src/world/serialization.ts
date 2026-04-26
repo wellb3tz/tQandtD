@@ -133,6 +133,7 @@ export interface SerializedLake {
   waterLevel: number;
   tiles: number[];
   maxDepth: number;
+  minTerrainHeight?: number;
 }
 
 /**
@@ -273,6 +274,7 @@ export class WorldSerializer {
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
+      minTerrainHeight: lake.minTerrainHeight,
     }));
 
     return {
@@ -510,6 +512,7 @@ export class WorldSerializer {
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
+      minTerrainHeight: lake.minTerrainHeight,
     }));
 
     return {
@@ -688,6 +691,7 @@ export class WorldSerializer {
       waterLevel: sl.waterLevel,
       tiles: new Set(sl.tiles),
       maxDepth: sl.maxDepth,
+      minTerrainHeight: sl.minTerrainHeight,
     }));
 
     return {
@@ -724,6 +728,7 @@ export class WorldSerializer {
       waterLevel: sl.waterLevel,
       tiles: new Set(sl.tiles),
       maxDepth: sl.maxDepth,
+      minTerrainHeight: sl.minTerrainHeight,
     }));
 
     return {

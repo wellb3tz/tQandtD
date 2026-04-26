@@ -23,7 +23,7 @@ import { HEIGHT_SCALE } from './config';
  * Convert LakeData tile sets into LakeTile arrays suitable for mesh building.
  *
  * @param chunkData - Chunk data (heightmap + size)
- * @param lakes     - Lake bodies from LakeGenerator
+ * @param lakes     - Lake bodies from LakeGenerator or LakeManager
  * @returns Flat array of LakeTile objects across all lakes in the chunk
  */
 export function identifyLakeTiles(
@@ -36,8 +36,18 @@ export function identifyLakeTiles(
 
   for (const lake of lakes) {
     for (const tileIdx of lake.tiles) {
+      // Ensure tile index is within chunk bounds
+      if (tileIdx < 0 || tileIdx >= size * size) {
+        continue; // Skip tiles outside chunk
+      }
+
       const tx = tileIdx % size;
       const ty = Math.floor(tileIdx / size);
+
+      // Ensure vertex indices are within heightmap bounds
+      if (tx < 0 || tx >= size || ty < 0 || ty >= size) {
+        continue;
+      }
 
       const v00 = heightmap[ty * vertexSize + tx];
       const v10 = heightmap[ty * vertexSize + (tx + 1)];
@@ -127,23 +137,14 @@ export function buildLakeGeometry(
 
     const maxDepth = lake.maxDepth;
 
-    // Find the minimum terrain height inside the lake to place water just above the deepest point.
-    // Water sits at (minTerrainHeight + waterLevel) / 2 — halfway between floor and rim.
-    let minTerrainH = lake.waterLevel;
-    for (const tileIdx of lake.tiles) {
-      const tx = tileIdx % size;
-      const ty = Math.floor(tileIdx / size);
-      const vertexSize2 = size + 1;
-      for (let dv = 0; dv <= 1; dv++) {
-        for (let du = 0; du <= 1; du++) {
-          const h = chunkData.heightmap[(ty + dv) * vertexSize2 + (tx + du)];
-          if (h < minTerrainH) minTerrainH = h;
-        }
-      }
-    }
-
-    // Place water halfway between the deepest point and the lake rim (waterLevel)
-    const waterY = (minTerrainH + lake.waterLevel) * 0.5;
+    // Use consistent water height across all chunks for this lake.
+    // If minTerrainHeight is available (multi-chunk lakes), position water
+    // closer to the bottom for more dramatic visual effect.
+    // Water at 1/3 from bottom: minTerrainHeight + (waterLevel - minTerrainHeight) * 0.33
+    // This gives more visible depth while keeping consistency across chunks.
+    const waterY = lake.minTerrainHeight !== undefined
+      ? lake.minTerrainHeight + (lake.waterLevel - lake.minTerrainHeight) * 0.33
+      : lake.waterLevel;
 
     // One vertex map per lake — key = vy * vertexSize + vx
     const vmap = new Int32Array(vertexSize * vertexSize).fill(-1);
