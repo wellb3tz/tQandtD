@@ -48,6 +48,18 @@ export class LakeManager {
   private lakes: Map<string, WorldLakeData>;
   /** Map of chunk key to lake IDs that intersect that chunk */
   private chunkToLakes: Map<string, Set<string>>;
+  /** Map of lake ID to last access timestamp for LRU eviction */
+  private lakeAccessTime: Map<string, number>;
+  /** Map of chunk key to last access timestamp for LRU eviction */
+  private chunkAccessTime: Map<string, number>;
+  /** Maximum number of lakes to cache (default: 500) */
+  private readonly maxLakes: number;
+  /** Maximum number of chunk entries to cache (default: 1000) */
+  private readonly maxChunkEntries: number;
+  /** Monotonic counter for LRU tracking */
+  private accessCounter: number;
+  /** Pending cache invalidations (deferred to avoid race conditions) */
+  private pendingInvalidations: Set<string>;
   /** Callback to get height at world coordinates */
   private getHeightAt: (worldX: number, worldY: number) => number;
   /** Callback to get biome at world coordinates */
@@ -57,13 +69,21 @@ export class LakeManager {
     worldSeed: number,
     config: LakeConfig,
     getHeightAt: (worldX: number, worldY: number) => number,
-    getBiomeAt: (worldX: number, worldY: number) => BiomeType
+    getBiomeAt: (worldX: number, worldY: number) => BiomeType,
+    maxLakes: number = 500,
+    maxChunkEntries: number = 1000
   ) {
     this.worldSeed = worldSeed;
     this.noise = new NoiseEngine(worldSeed + 54321);
     this.config = config;
     this.lakes = new Map();
     this.chunkToLakes = new Map();
+    this.lakeAccessTime = new Map();
+    this.chunkAccessTime = new Map();
+    this.maxLakes = maxLakes;
+    this.maxChunkEntries = maxChunkEntries;
+    this.accessCounter = 0;
+    this.pendingInvalidations = new Set();
     this.getHeightAt = getHeightAt;
     this.getBiomeAt = getBiomeAt;
   }
@@ -109,6 +129,9 @@ export class LakeManager {
   ): WorldLakeData[] {
     const chunkKey = this.getChunkKey(chunkX, chunkY);
     
+    // Update access time for LRU tracking
+    this.chunkAccessTime.set(chunkKey, ++this.accessCounter);
+    
     // Track which chunks had new lakes generated
     const chunksWithNewLakes = new Set<string>();
     
@@ -133,9 +156,9 @@ export class LakeManager {
       }
     }
 
-    // If new lakes were generated, invalidate affected chunks in the cache
+    // If new lakes were generated, defer invalidations to avoid race conditions
     if (chunksWithNewLakes.size > 0 && onInvalidateChunk) {
-      // For each new lake, invalidate all chunks it intersects
+      // For each new lake, collect chunks that need invalidation
       for (const lake of this.lakes.values()) {
         const minChunkX = Math.floor(lake.bounds.minX / chunkSize);
         const maxChunkX = Math.floor(lake.bounds.maxX / chunkSize);
@@ -154,17 +177,29 @@ export class LakeManager {
           if (isNewLake) break;
         }
         
-        // If it's a new lake, invalidate all chunks it touches
+        // If it's a new lake, mark chunks for deferred invalidation
         if (isNewLake) {
           for (let cy = minChunkY; cy <= maxChunkY; cy++) {
             for (let cx = minChunkX; cx <= maxChunkX; cx++) {
               // Don't invalidate the chunk we're currently generating
               if (cx !== chunkX || cy !== chunkY) {
-                onInvalidateChunk(cx, cy);
+                this.pendingInvalidations.add(this.getChunkKey(cx, cy));
               }
             }
           }
         }
+      }
+      
+      // Process pending invalidations asynchronously to avoid race conditions
+      if (this.pendingInvalidations.size > 0) {
+        // Use microtask to defer invalidations until after current generation completes
+        queueMicrotask(() => {
+          for (const key of this.pendingInvalidations) {
+            const [cx, cy] = key.split(',').map(Number);
+            onInvalidateChunk(cx, cy);
+          }
+          this.pendingInvalidations.clear();
+        });
       }
     }
 
@@ -191,6 +226,8 @@ export class LakeManager {
         lake.bounds.minY <= chunkMaxY
       ) {
         result.push(lake);
+        // Update lake access time for LRU tracking
+        this.lakeAccessTime.set(lake.id, ++this.accessCounter);
       }
     }
 
@@ -436,8 +473,12 @@ export class LakeManager {
    * sets overlap or are 4-connected adjacent (same physical basin found from a
    * different seed or chunk).  Merging keeps the higher waterLevel and recomputes
    * all derived fields so every chunk sees a single consistent water surface.
+   * 
+   * Implements LRU eviction to prevent unbounded memory growth.
    */
   private addLake(lake: WorldLakeData, chunkSize: number): void {
+    // Evict old lakes if we're at capacity
+    this.evictOldLakesIfNeeded();
     // Find all existing lakes that share tiles or are 4-adjacent to the new lake.
     const toMerge: WorldLakeData[] = [];
 
@@ -525,7 +566,102 @@ export class LakeManager {
     };
 
     this.lakes.set(merged.id, merged);
+    this.lakeAccessTime.set(merged.id, ++this.accessCounter);
     this._registerChunks(merged, chunkSize);
+  }
+
+  /**
+   * Evict least recently used lakes if we exceed capacity.
+   * Uses LRU strategy to prevent unbounded memory growth.
+   */
+  private evictOldLakesIfNeeded(): void {
+    // Evict lakes if we're over capacity
+    while (this.lakes.size >= this.maxLakes) {
+      let oldestLakeId: string | null = null;
+      let oldestTime = Infinity;
+
+      for (const [lakeId, accessTime] of this.lakeAccessTime.entries()) {
+        if (accessTime < oldestTime) {
+          oldestTime = accessTime;
+          oldestLakeId = lakeId;
+        }
+      }
+
+      if (oldestLakeId) {
+        this.evictLake(oldestLakeId);
+      } else {
+        // Fallback: evict first lake if no access time found
+        const firstLakeId = this.lakes.keys().next().value;
+        if (firstLakeId) {
+          this.evictLake(firstLakeId);
+        } else {
+          break; // No lakes to evict
+        }
+      }
+    }
+
+    // Evict chunk entries if we're over capacity
+    while (this.chunkToLakes.size >= this.maxChunkEntries) {
+      let oldestChunkKey: string | null = null;
+      let oldestTime = Infinity;
+
+      for (const [chunkKey, accessTime] of this.chunkAccessTime.entries()) {
+        if (accessTime < oldestTime) {
+          oldestTime = accessTime;
+          oldestChunkKey = chunkKey;
+        }
+      }
+
+      if (oldestChunkKey) {
+        this.chunkToLakes.delete(oldestChunkKey);
+        this.chunkAccessTime.delete(oldestChunkKey);
+      } else {
+        // Fallback: evict first chunk entry if no access time found
+        const firstChunkKey = this.chunkToLakes.keys().next().value;
+        if (firstChunkKey) {
+          this.chunkToLakes.delete(firstChunkKey);
+          this.chunkAccessTime.delete(firstChunkKey);
+        } else {
+          break; // No chunk entries to evict
+        }
+      }
+    }
+  }
+
+  /**
+   * Evict a specific lake and clean up all references.
+   */
+  private evictLake(lakeId: string): void {
+    const lake = this.lakes.get(lakeId);
+    if (!lake) return;
+
+    // Remove lake from all chunk registrations
+    for (const [chunkKey, lakeIds] of this.chunkToLakes.entries()) {
+      lakeIds.delete(lakeId);
+      // Clean up empty sets
+      if (lakeIds.size === 0) {
+        this.chunkToLakes.delete(chunkKey);
+        this.chunkAccessTime.delete(chunkKey);
+      }
+    }
+
+    // Remove lake data
+    this.lakes.delete(lakeId);
+    this.lakeAccessTime.delete(lakeId);
+  }
+
+  /**
+   * Notify that a chunk has been evicted from ChunkManager cache.
+   * This allows LakeManager to clean up chunk entries that are no longer needed.
+   * 
+   * @param chunkX - Chunk X coordinate
+   * @param chunkY - Chunk Y coordinate
+   */
+  notifyChunkEvicted(chunkX: number, chunkY: number): void {
+    const chunkKey = this.getChunkKey(chunkX, chunkY);
+    // Don't delete immediately - just mark as old by not updating access time
+    // This allows natural LRU eviction to clean it up later
+    // Immediate deletion could cause regeneration if chunk is accessed again soon
   }
 
   /** Register a lake's chunk intersections in chunkToLakes. */
@@ -542,6 +678,8 @@ export class LakeManager {
           this.chunkToLakes.set(chunkKey, new Set());
         }
         this.chunkToLakes.get(chunkKey)!.add(lake.id);
+        // Update access time for LRU tracking
+        this.chunkAccessTime.set(chunkKey, ++this.accessCounter);
       }
     }
   }

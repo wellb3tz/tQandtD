@@ -144,6 +144,7 @@ export interface SerializedChunkData {
     waterLevel: number;
     tiles: number[];
     maxDepth: number;
+    minTerrainHeight?: number; // Optional for backward compatibility
   }>;
   resources: Array<{
     x: number;

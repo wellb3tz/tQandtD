@@ -511,6 +511,12 @@ export class ChunkManager implements ChunkManagerSnapshot {
       }
 
       if (oldestKey) {
+        // Notify LakeManager about eviction so it can clean up
+        const [evictedChunkX, evictedChunkY] = oldestKey.split(',').map(Number);
+        if (this.lakeManager) {
+          this.lakeManager.notifyChunkEvicted(evictedChunkX, evictedChunkY);
+        }
+        
         this.cache.delete(oldestKey);
       }
     }
