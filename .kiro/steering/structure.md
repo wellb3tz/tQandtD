@@ -23,12 +23,11 @@ Foundation algorithms used throughout the engine:
 
 ### World Management (`src/world/`)
 Chunk orchestration and world-level systems:
-- `chunk.ts`: Core data structures, coordinate utilities
+- `chunk.ts`: Core data structures, coordinate utilities, sparse biome weight helpers
 - `chunk-manager.ts`: Main API entry point, chunk generation orchestration, LRU caching
-- `biome.ts`: Base biome classification (8 biome types)
+- `biome.ts`: Base biome classification (13 biome types)
 - `enhanced-biome.ts`: Advanced biomes with transitions, micro-biomes, elevation bands
-- `lod.ts`: Level of detail management for performance
-- `incremental-generator.ts`: Progressive generation with time budgets
+- `lake-manager.ts`: Lake generation with flood-fill, LRU eviction, race condition prevention
 - `worker-pool.ts`: Multi-threaded chunk generation
 - `serialization.ts`: World persistence and modification tracking
 
@@ -40,6 +39,9 @@ Specialized generators for world features:
 
 ### Utilities (`src/utils/`)
 - `poisson.ts`: Poisson Disk Sampling implementation
+- `validation.ts`: Configuration validation with ValidationError
+- `errors.ts`: Error hierarchy for chunk generation failures
+- `logger.ts`: Structured logging system with levels and categories
 
 ### Entry Points
 - `index.ts`: Main library exports (public API)
@@ -85,15 +87,24 @@ Self-contained usage examples demonstrating specific features:
 ## Tests (`tests/`)
 
 ### Organization
-- `tests/integration/`: End-to-end workflow tests
-- `tests/bugfix/`: Bug-specific regression tests
-- `demo/src/**/*.test.ts`: Co-located unit tests with source
+- `tests/*.test.ts`: Core functionality tests (chunk-manager, terrain, determinism, serialization)
+- `tests/validation.test.ts`: Configuration validation tests
+- `tests/error-handling.test.ts`: Error recovery and handling tests
+- `tests/performance.test.ts`: Performance benchmarks and memory usage tests
+- `demo/src/**/*.test.ts`: Co-located unit tests with demo source
 
 ### Test Patterns
 - Unit tests: Co-located with source files (`.test.ts`)
-- Integration tests: Separate `tests/integration/` directory
+- Integration tests: Test complete generation pipelines
 - Property-based tests: Use fast-check for correctness validation
-- Performance tests: Validate <100ms generation target
+- Performance tests: Validate <100ms generation target and memory usage
+- Error handling tests: Validate graceful degradation and recovery
+
+### Test Coverage
+- 151 tests total
+- 100% pass rate
+- Covers all major systems: terrain, biomes, lakes, resources, structures, serialization
+- Performance benchmarks for 16×16, 32×32, and 64×64 chunks
 
 ## Architecture Patterns
 
@@ -109,11 +120,31 @@ All generators accept a seed parameter and produce identical output for the same
 ### Seamless Boundaries
 Heightmaps use `(chunkSize + 1) × (chunkSize + 1)` vertices where boundary vertices overlap with adjacent chunks, ensuring no gaps in rendering.
 
+### Sparse Biome Weights (v2.0)
+Biome weights use sparse representation to reduce memory:
+- Three parallel arrays: `sparseBiomeTypes`, `sparseBiomeWeights`, `sparseBiomeOffsets`
+- Only non-zero weights are stored
+- 70% memory reduction for biome weights
+- Helper functions: `getBiomeWeightsForTile()`, `getBiomeWeightForTile()`
+
 ### Configuration Objects
 All systems accept configuration interfaces (e.g., `TerrainConfig`, `BiomeConfig`) passed through `WorldConfig` to `ChunkManager`.
 
+### Error Handling
+- Configuration validation on construction (throws `ValidationError`)
+- Graceful degradation with `ErrorRecoveryOptions`
+- Granular error types: `TerrainGenerationError`, `BiomeGenerationError`, `LakeGenerationError`, etc.
+- Fallback to empty chunks on catastrophic failure
+
+### Logging System
+- Structured logging with `Logger` class
+- Log levels: DEBUG, INFO, WARN, ERROR, NONE
+- Log categories: CHUNK, LAKE, WORKER, CACHE, PERFORMANCE, GENERAL
+- Default: WARN level (production-ready)
+- Configurable via `configureLogger()`
+
 ### Optional Features
-Advanced features (3D noise, enhanced biomes, LOD, worker pool) are opt-in via configuration flags, maintaining backward compatibility.
+Advanced features (3D noise, enhanced biomes, lakes, worker pool) are opt-in via configuration flags, maintaining backward compatibility.
 
 ## Naming Conventions
 
