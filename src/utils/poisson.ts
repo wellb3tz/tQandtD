@@ -99,6 +99,7 @@ export function poissonDiskSampling(config: PoissonConfig): Point[] {
   addPoint(initialX, initialY);
 
   // Process active list
+  // Optimization: Use swap-and-pop instead of splice for O(1) removal
   while (activeList.length > 0) {
     // Pick random active point
     const activeIndex = rng.nextInt(0, activeList.length);
@@ -123,8 +124,13 @@ export function poissonDiskSampling(config: PoissonConfig): Point[] {
     }
 
     // If no valid point found, remove from active list
+    // Optimization: swap with last element and pop (O(1) instead of O(n))
     if (!found) {
-      activeList.splice(activeIndex, 1);
+      const lastIndex = activeList.length - 1;
+      if (activeIndex !== lastIndex) {
+        activeList[activeIndex] = activeList[lastIndex];
+      }
+      activeList.pop();
     }
   }
 

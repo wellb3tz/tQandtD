@@ -18,6 +18,7 @@ import { makeMinimalConfig } from './helpers';
 async function buildManager(seed: number) {
   const config = makeMinimalConfig(seed);
   config.lakeConfig = DEFAULT_LAKE_CONFIG;
+  config.maxCacheSize = 100; // Increase cache size to prevent eviction
   const manager = new ChunkManager(config);
   await Promise.all([
     manager.getChunk(0, 0),
@@ -138,7 +139,16 @@ describe('Serialization round-trip', () => {
   });
 
   it('region filter exports only chunks within bounds', async () => {
-    const manager = await buildManager(10);
+    const config = makeMinimalConfig(10);
+    config.lakeConfig = DEFAULT_LAKE_CONFIG;
+    config.maxCacheSize = 100;
+    const manager = new ChunkManager(config);
+    
+    // Load chunks in sequence to avoid race conditions with cache invalidation
+    await manager.getChunk(0, 0);
+    await manager.getChunk(0, 1);
+    await manager.getChunk(1, 0); // Load this last so it stays in cache
+    
     const ser = new WorldSerializer();
     const saved = ser.serialize(manager, {
       format: SerializationFormat.JSON,

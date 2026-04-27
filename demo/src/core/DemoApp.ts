@@ -6,7 +6,7 @@
  * updates, chunk loading coordination, and event system for component communication.
  */
 
-import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType } from '@engine/index';
+import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, configureLogger, LogLevel } from '@engine/index';
 
 /**
  * 3D vector for camera position and target
@@ -152,11 +152,11 @@ const DEFAULT_CONFIG: WorldConfig = {
   },
   resourceConfig: {
     types: [
-      { type: 0, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 5 }, // Iron
-      { type: 1, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 3 }, // Gold
-      { type: 2, rarity: 0.5, biomes: [], minAmount: 2, maxAmount: 6 }, // Coal
-      { type: 3, rarity: 0.5, biomes: [], minAmount: 3, maxAmount: 8 }, // Stone
-      { type: 4, rarity: 0.5, biomes: [], minAmount: 1, maxAmount: 4 }  // Wood
+      { type: 0, rarity: 0.5, biomes: [6, 7, 8], minAmount: 1, maxAmount: 5 }, // Iron - Mountains, Tundra, Taiga
+      { type: 1, rarity: 0.5, biomes: [6, 7], minAmount: 1, maxAmount: 3 }, // Gold - Mountains, Tundra
+      { type: 2, rarity: 0.5, biomes: [3, 4, 5, 6], minAmount: 2, maxAmount: 6 }, // Coal - Plains, Forest, Taiga, Mountains
+      { type: 3, rarity: 0.5, biomes: [6, 7, 8], minAmount: 3, maxAmount: 8 }, // Stone - Mountains, Tundra, Desert
+      { type: 4, rarity: 0.5, biomes: [4, 5, 9], minAmount: 1, maxAmount: 4 }  // Wood - Forest, Taiga, Swamp
     ],
     clusterScale: 20,
     densityThreshold: 0.6
@@ -262,6 +262,15 @@ export class DemoApp {
     }
 
     try {
+      // Configure logger based on environment
+      // In development: show INFO and above
+      // In production: show WARN and above (default)
+      const isDevelopment = import.meta.env?.DEV ?? false;
+      configureLogger({
+        level: isDevelopment ? LogLevel.INFO : LogLevel.WARN,
+        timestamps: isDevelopment,
+      });
+      
       // Create ChunkManager with default configuration
       const initConfig = {
         ...this.state.config,

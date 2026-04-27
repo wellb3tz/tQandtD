@@ -119,6 +119,24 @@ export { LakeGenerator, type LakeConfig, type LakeData, DEFAULT_LAKE_CONFIG } fr
 
 // Utilities
 export { poissonDiskSampling, type PoissonConfig } from './utils/poisson';
+export { validateWorldConfig, ValidationError } from './utils/validation';
+export {
+  ChunkGenerationError,
+  TerrainGenerationError,
+  BiomeGenerationError,
+  LakeGenerationError,
+  ResourceGenerationError,
+  StructureGenerationError,
+  type ErrorRecoveryOptions,
+  DEFAULT_ERROR_RECOVERY,
+} from './utils/errors';
+export {
+  logger,
+  configureLogger,
+  LogLevel,
+  LogCategory,
+  type LoggerConfig,
+} from './utils/logger';
 
 // Web Worker support
 export {

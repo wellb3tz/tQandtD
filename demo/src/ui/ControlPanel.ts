@@ -1177,6 +1177,15 @@ export class ControlPanel {
       'enableWood': 4     // ResourceType.WOOD
     };
 
+    // Default biomes for each resource type
+    const defaultBiomes: Record<number, number[]> = {
+      0: [6, 7, 8],       // Iron - Mountains, Tundra, Taiga
+      1: [6, 7],          // Gold - Mountains, Tundra
+      2: [3, 4, 5, 6],    // Coal - Plains, Forest, Taiga, Mountains
+      3: [6, 7, 8],       // Stone - Mountains, Tundra, Desert
+      4: [4, 5, 9]        // Wood - Forest, Taiga, Swamp
+    };
+
     const resourceTypeIndex = resourceTypeMap[key];
     if (resourceTypeIndex === undefined) return;
 
@@ -1190,7 +1199,7 @@ export class ControlPanel {
         updatedTypes.push({
           type: resourceTypeIndex,
           rarity: 0.5,
-          biomes: [], // Will use default biomes
+          biomes: defaultBiomes[resourceTypeIndex] || [3, 4, 5, 6], // Use default biomes
           minAmount: 1,
           maxAmount: 5
         });

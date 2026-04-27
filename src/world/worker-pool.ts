@@ -1,4 +1,5 @@
 import type { ChunkData } from './chunk.js';
+import { logger, LogCategory } from '../utils/logger';
 
 /**
  * Worker pool configuration
@@ -82,8 +83,7 @@ export class WorkerPool {
 
         // Set up error handler for this worker
         worker.onerror = (error: ErrorEvent) => {
-          console.error(`[WorkerPool] Worker ${i} error:`, {
-            message: error.message,
+          logger.error(LogCategory.WORKER, `Worker ${i} error: ${error.message}`, {
             filename: error.filename,
             lineno: error.lineno,
             colno: error.colno,
@@ -114,7 +114,7 @@ export class WorkerPool {
           });
         }
       } catch (error) {
-        console.error(`[WorkerPool] Failed to create worker ${i}:`, error);
+        logger.error(LogCategory.WORKER, `Failed to create worker ${i}`, error);
         this.initializationError = error as Error;
         throw error;
       }
@@ -122,12 +122,12 @@ export class WorkerPool {
     
     // Mark as initialized if no errors occurred
     this.initialized = true;
-    console.log(`[WorkerPool] Successfully initialized ${this.workers.length} workers`);
+    logger.info(LogCategory.WORKER, `Successfully initialized ${this.workers.length} workers`);
     
     // Wait a bit to see if workers fail to load
     setTimeout(() => {
       if (this.initializationError) {
-        console.error('[WorkerPool] Workers failed to load after initialization');
+        logger.error(LogCategory.WORKER, 'Workers failed to load after initialization');
       }
     }, 100);
   }
@@ -140,7 +140,7 @@ export class WorkerPool {
   submitTask(task: WorkerTask): string {
     // Check if pool is initialized
     if (!this.initialized || this.initializationError) {
-      console.error('[WorkerPool] Cannot submit task - pool not initialized:', this.initializationError);
+      logger.error(LogCategory.WORKER, 'Cannot submit task - pool not initialized', this.initializationError);
       // Immediately call error callback
       task.onError(this.initializationError || new Error('Worker pool not initialized'));
       return '';
@@ -277,7 +277,7 @@ export class WorkerPool {
     // Handle different message types from worker
     if (result.type === 'ready') {
       // Worker initialized successfully
-      console.log(`Worker ${workerId} initialized`);
+      logger.debug(LogCategory.WORKER, `Worker ${workerId} initialized`);
       return;
     }
 
@@ -289,7 +289,7 @@ export class WorkerPool {
 
     if (result.type !== 'chunkReady') {
       // Unknown message type
-      console.warn(`Unknown message type from worker ${workerId}:`, result.type);
+      logger.warn(LogCategory.WORKER, `Unknown message type from worker ${workerId}: ${result.type}`);
       return;
     }
 
@@ -321,7 +321,7 @@ export class WorkerPool {
     try {
       task.onComplete(chunkData);
     } catch (error) {
-      console.error(`Error in task completion callback: ${error}`);
+      logger.error(LogCategory.WORKER, `Error in task completion callback: ${error}`);
     }
 
     // Assign next task if available
@@ -388,7 +388,7 @@ export class WorkerPool {
     try {
       task.onError(error);
     } catch (callbackError) {
-      console.error(`Error in task error callback: ${callbackError}`);
+      logger.error(LogCategory.WORKER, `Error in task error callback: ${callbackError}`);
     }
 
     // Assign next task if available

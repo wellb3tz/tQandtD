@@ -10,6 +10,7 @@ import { deflate, inflate } from 'pako';
 import { ChunkData, Resource, Structure } from './chunk';
 import type { LakeData } from '../gen/lakes';
 import { WorldConfig } from './chunk-manager';
+import { logger, LogCategory } from '../utils/logger';
 
 /**
  * Read-only snapshot of ChunkManager state needed for serialization.
@@ -666,7 +667,7 @@ export class WorldSerializer {
     // Update chunk manager configuration if needed
     // Note: We don't override the existing config, just ensure compatibility
     if (chunkManager.config.seed !== data.seed) {
-      console.warn(`Deserialized world seed (${data.seed}) differs from chunk manager seed (${chunkManager.config.seed})`);
+      logger.warn(LogCategory.GENERAL, `Deserialized world seed (${data.seed}) differs from chunk manager seed (${chunkManager.config.seed})`);
     }
   }
 
@@ -1576,11 +1577,11 @@ export class WorldSerializer {
     // Process each modification record
     for (const modification of modifications) {
       // Get the chunk from cache
-      const key = `${modification.chunkX},${modification.chunkY},0`; // LOD level 0 (HIGH)
+      const key = `${modification.chunkX},${modification.chunkY}`; // Match ChunkManager's cache key format
       const cacheEntry = chunkManager.cache.get(key);
 
       if (!cacheEntry) {
-        console.warn(`Cannot apply modifications to chunk (${modification.chunkX}, ${modification.chunkY}): chunk not in cache`);
+        logger.warn(LogCategory.CHUNK, `Cannot apply modifications to chunk (${modification.chunkX}, ${modification.chunkY}): chunk not in cache`);
         continue;
       }
 
@@ -1591,7 +1592,7 @@ export class WorldSerializer {
         if (tileIndex >= 0 && tileIndex < chunk.heightmap.length) {
           chunk.heightmap[tileIndex] = newHeight;
         } else {
-          console.warn(`Invalid tile index ${tileIndex} in height changes for chunk (${modification.chunkX}, ${modification.chunkY})`);
+          logger.warn(LogCategory.CHUNK, `Invalid tile index ${tileIndex} in height changes for chunk (${modification.chunkX}, ${modification.chunkY})`);
         }
       }
 
@@ -1601,7 +1602,7 @@ export class WorldSerializer {
         if (structureIndex >= 0 && structureIndex < chunk.structures.length) {
           chunk.structures.splice(structureIndex, 1);
         } else {
-          console.warn(`Invalid structure index ${structureIndex} in removals for chunk (${modification.chunkX}, ${modification.chunkY})`);
+          logger.warn(LogCategory.CHUNK, `Invalid structure index ${structureIndex} in removals for chunk (${modification.chunkX}, ${modification.chunkY})`);
         }
       }
 

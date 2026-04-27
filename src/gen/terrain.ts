@@ -60,9 +60,52 @@ export class TerrainGenerator {
    */
   private cachedNoise: NoiseEngine | null = null;
   private cachedNoiseSeed: number | null = null;
+  
+  // Pre-allocated noise configs to avoid object creation in hot path
+  private readonly noiseConfig: NoiseConfig;
+  private readonly continentalConfig: NoiseConfig;
+  private readonly coastlineConfig: NoiseConfig;
+  private readonly mountainMaskConfig: NoiseConfig;
+  private readonly ridgeConfig: NoiseConfig;
 
   constructor(config: TerrainConfig) {
     this.config = config;
+    
+    // Pre-allocate noise configs (reused in getHeightInternal)
+    this.noiseConfig = {
+      octaves: config.octaves,
+      persistence: config.persistence,
+      lacunarity: config.lacunarity,
+      scale: config.baseScale,
+    };
+    
+    this.continentalConfig = {
+      octaves: 2,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: config.continentalScale ?? 0.002,
+    };
+    
+    this.coastlineConfig = {
+      octaves: 4,
+      persistence: 0.55,
+      lacunarity: 2.1,
+      scale: (config.continentalScale ?? 0.002) * 5,
+    };
+    
+    this.mountainMaskConfig = {
+      octaves: 3,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: (config.continentalScale ?? 0.002) * 4,
+    };
+    
+    this.ridgeConfig = {
+      octaves: 5,
+      persistence: 0.5,
+      lacunarity: 2.1,
+      scale: config.baseScale * 1.5,
+    };
   }
 
   /**
@@ -166,71 +209,40 @@ export class TerrainGenerator {
    * @returns Height value in [0, 1] range
    */
   private getHeightInternal(x: number, y: number, noise: NoiseEngine, use3D: boolean = false): number {
-    // Configure fBM parameters
-    const noiseConfig: NoiseConfig = {
-      octaves: this.config.octaves,
-      persistence: this.config.persistence,
-      lacunarity: this.config.lacunarity,
-      scale: this.config.baseScale,
-    };
-
+    // Use pre-allocated noise config (no object creation in hot path)
+    // Config values are already set in constructor
     let noiseValue: number;
 
     if (use3D) {
       // Use 3D noise with zScale controlling the Z-axis slice of the noise volume.
-      // Different zScale values sample different "layers" of the 3D noise field,
-      // producing visually distinct terrain shapes.
-      // zScale also scales X/Y coordinates in Z-space for more variation at higher values.
       const zScale = this.config.zScale ?? 0.5;
-      const z = zScale; // Use zScale directly as the Z coordinate — non-zero so it has effect
+      const z = zScale;
       const [warpedX, warpedY, warpedZ] = noise.domainWarp3D(x, y, z, this.config.warpStrength);
       
       // Sample 3D fBM noise at warped coordinates
-      noiseValue = noise.fbm3D(warpedX, warpedY, warpedZ, noiseConfig);
+      noiseValue = noise.fbm3D(warpedX, warpedY, warpedZ, this.noiseConfig);
     } else {
       // Use 2D noise (backward compatible)
-      // Apply domain warping to coordinates for organic patterns
       const [warpedX, warpedY] = noise.domainWarp(x, y, this.config.warpStrength);
       
       // Sample 2D fBM noise at warped coordinates
-      noiseValue = noise.fbm(warpedX, warpedY, noiseConfig);
+      noiseValue = noise.fbm(warpedX, warpedY, this.noiseConfig);
     }
 
     // Normalize from [-1, 1] to [0, 1] and apply height multiplier
     let height = (noiseValue + 1) * 0.5 * this.config.heightMultiplier;
 
-    // Apply continental noise as a BASE LAYER.
-    //
-    // Key design: use a CONTINUOUS remapping curve (no hard ocean/land split)
-    // so the terrain slopes gradually from deep ocean up to the shoreline.
-    // This eliminates vertical cliff walls at continental edges.
-    //
-    // The curve has three zones:
-    //   deep ocean  [0, seaLevel-shelf]  → maps to [0, seaLevel-0.08]   (flat deep floor)
-    //   shelf       [seaLevel-shelf, seaLevel+shelf] → smooth S-curve    (gradual slope)
-    //   land        [seaLevel+shelf, 1]  → maps to [seaLevel, 1]         (full terrain)
-    //
+    // Apply continental noise as a BASE LAYER
     if (this.continentalNoise !== null && this.coastlineNoise !== null) {
-      const cScale    = this.config.continentalScale    ?? 0.002;
-      const cStrength = this.config.continentalStrength ?? 0.6;
       const seaLevel  = 0.3;
+      const cStrength = this.config.continentalStrength ?? 0.6;
 
       // --- Layer 1: large-scale continental shape ---
-      const rawContinental = this.continentalNoise.fbm(x, y, {
-        octaves: 2,
-        persistence: 0.5,
-        lacunarity: 2.0,
-        scale: cScale,
-      });
+      const rawContinental = this.continentalNoise.fbm(x, y, this.continentalConfig);
       const continental = (rawContinental + 1) * 0.5; // [0,1]
 
       // --- Layer 2: coastline erosion noise ---
-      const rawCoast = this.coastlineNoise.fbm(x, y, {
-        octaves: 4,
-        persistence: 0.55,
-        lacunarity: 2.1,
-        scale: cScale * 5,
-      });
+      const rawCoast = this.coastlineNoise.fbm(x, y, this.coastlineConfig);
       const coastNoise = (rawCoast + 1) * 0.5; // [0,1]
 
       // Erode shoreline: apply coastline noise strongest at the shore boundary
@@ -239,95 +251,49 @@ export class TerrainGenerator {
       const shoreFactor = Math.max(0, 1.0 - distToShore / shoreWidth);
       const eroded = continental + (coastNoise - 0.5) * 0.22 * shoreFactor;
 
-      // --- Continuous remapping: single smooth curve across the entire ocean/land range ---
-      // t < 0 = ocean side, t > 0 = land side, t=0 = shoreline
-      // Map t from [-1, +1] to a height value with no discontinuities.
-      //
-      // Ocean (t < 0): smoothly rises from 0 (far ocean) to seaLevel (shore)
-      // Land  (t > 0): starts at seaLevel and rises to 1.0 inland
-      //
-      // We use a single smooth-step across the full [-1, +1] range so there
-      // are no zone boundaries and therefore no visible seams.
-
+      // Continuous remapping
       let base: number;
-
-      // Normalise eroded relative to shore threshold: -1 = far ocean, 0 = shore, +1 = far inland
       const t = (eroded - cStrength) / cStrength;
-
-      // Remap t from [-1,1] to s in [0,1]
       const tClamped = Math.max(-1.0, Math.min(1.0, t));
-      const s = (tClamped + 1.0) * 0.5; // 0 = far ocean, 0.5 = shore, 1 = far inland
-
-      // Smooth-step: 3s²-2s³  (zero derivative at s=0 and s=1)
+      const s = (tClamped + 1.0) * 0.5;
       const smooth = s * s * (3.0 - 2.0 * s);
 
       if (s < 0.5) {
-        // Ocean side: map [0, 0.5] → [0, seaLevel)
-        // smooth goes 0→0.5 here, remap to 0→seaLevel
-        base = smooth * seaLevel * 2.0; // 0 → seaLevel
+        // Ocean side
+        base = smooth * seaLevel * 2.0;
         base = Math.min(seaLevel - 0.001, base);
       } else {
-        // Land side: map [0.5, 1] → [seaLevel, 1]
-        // smooth goes 0.5→1 here, remap to seaLevel→1
+        // Land side
         base = seaLevel + (smooth - 0.5) * 2.0 * (1.0 - seaLevel);
       }
 
       if (base < seaLevel) {
-        // Ocean bathymetry: depth follows distance from shore.
-        // s ranges from 0 (far ocean) to 0.5 (shoreline).
-        // shelfT = 0 → open ocean (deep), shelfT = 1 → near shore (shallow).
+        // Ocean bathymetry
         const shelfT = Math.min(s / 0.5, 1.0);
-        // Seabed rises quadratically toward the shore, reaching near seaLevel at the beach.
         const seabedRise = shelfT * shelfT * (seaLevel * 0.85);
-        // Detail noise adds organic variation to the seabed (12% amplitude).
         height = Math.min(seaLevel - 0.001, seabedRise + height * 0.12);
       } else {
-        // Land: detail noise runs in full range [seaLevel, 1.0].
-        // landT: 0 at shore, 1 far inland
+        // Land
         const landT = Math.min(1.0, (s - 0.5) / 0.5);
-
-        // detailAmp ramps from 0 at shore to 1 inland (narrow ramp = thin flat beach)
         const landRise = Math.min(1.0, landT / 0.12);
 
-        // --- Mountain mask: determines where tall mountain ranges exist ---
-        // Mid-scale noise (~5× continental scale) creates broad mountain regions.
-        // mask=0 → flat lowlands, mask=1 → tall mountain range.
+        // --- Mountain mask ---
         let mountainMask = 0;
         if (this.mountainMaskNoise !== null) {
-          const rawMask = this.mountainMaskNoise.fbm(x, y, {
-            octaves: 3,
-            persistence: 0.5,
-            lacunarity: 2.0,
-            scale: cScale * 4,
-          });
-          // Remap [-1,1] → [0,1], then apply threshold so only ~30% of land is mountainous
+          const rawMask = this.mountainMaskNoise.fbm(x, y, this.mountainMaskConfig);
           const maskRaw = (rawMask + 1) * 0.5;
-          // Smooth threshold: below 0.55 = lowlands, above 0.75 = full mountains
           mountainMask = Math.max(0, Math.min(1, (maskRaw - 0.55) / 0.20));
         }
 
-        // --- Ridge noise: sharp peaks in mountain regions ---
+        // --- Ridge noise ---
         let ridgeContrib = 0;
         if (this.ridgeNoise !== null && mountainMask > 0) {
-          ridgeContrib = this.ridgeNoise.ridgeFbm(x, y, {
-            octaves: 5,
-            persistence: 0.5,
-            lacunarity: 2.1,
-            scale: this.config.baseScale * 1.5,
-          });
-          // ridgeContrib ∈ [0,1], 1 = sharp peak
+          ridgeContrib = this.ridgeNoise.ridgeFbm(x, y, this.ridgeConfig);
         }
 
-        // Blend: in mountain regions, replace some of the smooth detail noise
-        // with ridge noise. Ridge noise can push height much higher.
-        // Outside mountain regions: normal terrain, max height ~0.65
-        // Inside mountain regions: ridge peaks can reach up to 1.0
+        // Blend detail and ridge noise
         const blendedDetail = height * (1.0 - mountainMask * 0.7) + ridgeContrib * mountainMask * 0.7;
-
-        // Height range scales with mountain mask:
-        // lowlands: [seaLevel, 0.65], mountains: [seaLevel, 1.0]
         const hiLand = seaLevel + (0.35 + mountainMask * 0.65) * (1.0 - seaLevel);
-
         const lo = seaLevel;
         height = lo + blendedDetail * (hiLand - lo) * landRise;
         height = Math.max(seaLevel + 0.001, height);

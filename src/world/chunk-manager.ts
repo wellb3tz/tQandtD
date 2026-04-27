@@ -10,6 +10,18 @@ import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
 import { WorkerPoolConfig, WorkerPool, WorkerTask } from './worker-pool';
 import { LakeManager, WorldLakeData } from './lake-manager';
+import { validateWorldConfig } from '../utils/validation';
+import {
+  ChunkGenerationError,
+  TerrainGenerationError,
+  BiomeGenerationError,
+  LakeGenerationError,
+  ResourceGenerationError,
+  StructureGenerationError,
+  ErrorRecoveryOptions,
+  DEFAULT_ERROR_RECOVERY,
+} from '../utils/errors';
+import { logger, LogCategory } from '../utils/logger';
 
 /**
  * Configuration for 3D noise generation
@@ -72,6 +84,8 @@ export interface WorldConfig {
   enablePerformanceMetrics?: boolean;
   /** Progress callback for long-running operations */
   onProgress?: ProgressCallback;
+  /** Error recovery options (optional) */
+  errorRecovery?: ErrorRecoveryOptions;
 }
 
 /**
@@ -105,12 +119,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private cacheHits: number;
   private cacheMisses: number;
   private inFlightRequests: Map<string, Promise<ChunkData>>;
+  private errorRecovery: ErrorRecoveryOptions;
 
   /**
    * Creates a new ChunkManager with the given configuration.
    * @param config - World generation configuration
+   * @throws {ValidationError} If configuration is invalid
    */
   constructor(config: WorldConfig) {
+    // Validate configuration before initialization
+    validateWorldConfig(config);
+    
     this.config = config;
     this.terrainGenerator = new TerrainGenerator(config.terrainConfig);
     
@@ -161,6 +180,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     this.cacheHits = 0;
     this.cacheMisses = 0;
     this.inFlightRequests = new Map();
+    this.errorRecovery = { ...DEFAULT_ERROR_RECOVERY, ...config.errorRecovery };
   }
 
   /**
@@ -192,14 +212,14 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
     // Decide generation strategy based on worker pool availability
     const generationPromise: Promise<ChunkData> = (async () => {
-      console.log(`[ChunkManager] Starting generation for chunk (${chunkX}, ${chunkY})`);
+      logger.debug(LogCategory.CHUNK, `Starting generation for chunk (${chunkX}, ${chunkY})`);
       let chunk: ChunkData;
       if (this.workerPool) {
         chunk = await this.generateChunkAsync(chunkX, chunkY);
       } else {
         chunk = this.generateChunk(chunkX, chunkY);
       }
-      console.log(`[ChunkManager] Finished generation for chunk (${chunkX}, ${chunkY})`);
+      logger.debug(LogCategory.CHUNK, `Finished generation for chunk (${chunkX}, ${chunkY})`);
       // Add to cache and remove from in-flight map
       this.addToCache(key, chunk);
       this.inFlightRequests.delete(key);
@@ -235,7 +255,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
         },
         onError: (error: Error) => {
           // Fallback to synchronous generation on error
-          console.warn(`Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync:`, error);
+          logger.warn(LogCategory.WORKER, `Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync`, error);
           try {
             const syncChunk = this.generateChunk(chunkX, chunkY);
             resolve(syncChunk);
@@ -251,11 +271,65 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
   /**
    * Generates a chunk at the specified coordinates without caching.
+   * Includes comprehensive error handling with recovery strategies.
+   * 
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
+   * @param retryCount - Current retry attempt (internal use)
    * @returns The generated chunk data
+   * @throws {ChunkGenerationError} If generation fails and recovery is not enabled
    */
-  generateChunk(chunkX: number, chunkY: number): ChunkData {
+  generateChunk(chunkX: number, chunkY: number, retryCount = 0): ChunkData {
+    try {
+      return this.generateChunkInternal(chunkX, chunkY);
+    } catch (error) {
+      // Convert to ChunkGenerationError if not already
+      const chunkError = error instanceof ChunkGenerationError
+        ? error
+        : new ChunkGenerationError(
+            error instanceof Error ? error.message : 'Unknown error',
+            chunkX,
+            chunkY,
+            'unknown',
+            error instanceof Error ? error : undefined
+          );
+
+      // Call custom error handler if provided
+      if (this.errorRecovery.onError) {
+        try {
+          this.errorRecovery.onError(chunkError);
+        } catch (handlerError) {
+          logger.error(LogCategory.CHUNK, 'Error in custom error handler', handlerError);
+        }
+      }
+
+      // Log error with context
+      logger.error(LogCategory.CHUNK, chunkError.toString());
+      if (chunkError.cause) {
+        logger.debug(LogCategory.CHUNK, 'Stack trace', chunkError.cause.stack);
+      }
+
+      // Retry logic
+      if (this.errorRecovery.retryOnFailure && retryCount < (this.errorRecovery.maxRetries ?? 3)) {
+        logger.warn(LogCategory.CHUNK, `Retrying chunk (${chunkX}, ${chunkY}) generation, attempt ${retryCount + 1}/${this.errorRecovery.maxRetries}`);
+        return this.generateChunk(chunkX, chunkY, retryCount + 1);
+      }
+
+      // Return partial chunk if allowed
+      if (this.errorRecovery.allowPartialChunks) {
+        logger.warn(LogCategory.CHUNK, `Returning partial chunk for (${chunkX}, ${chunkY})`);
+        return this.createEmptyChunk(chunkX, chunkY);
+      }
+
+      // Re-throw if no recovery strategy
+      throw chunkError;
+    }
+  }
+
+  /**
+   * Internal chunk generation with granular error handling
+   */
+  private generateChunkInternal(chunkX: number, chunkY: number): ChunkData {
     const startTime = this.config.enablePerformanceMetrics ? performance.now() : 0;
     const metrics: Partial<ChunkPerformanceMetrics> = {};
 
@@ -263,23 +337,56 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const seed = chunkSeed(this.config.seed, chunkX, chunkY);
 
     // Step 1: Generate heightmap using terrain generator
-    this.config.onProgress?.('terrain', 0.2);
-    const terrainStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    // Use 3D noise if noiseEngine3D is available (Requirement 1.3)
-    // Pass world seed (not chunk seed) to ensure seamless boundaries across chunks
-    const heightmap = this.noiseEngine3D
-      ? this.terrainGenerator.generateHeightmap(this.config.seed, this.config.chunkSize, chunkX, chunkY, this.noiseEngine3D)
-      : this.terrainGenerator.generateHeightmap(this.config.seed, this.config.chunkSize, chunkX, chunkY);
-    if (this.config.enablePerformanceMetrics) {
-      metrics.terrainTime = performance.now() - terrainStart;
+    let heightmap: Float32Array;
+    try {
+      this.config.onProgress?.('terrain', 0.2);
+      const terrainStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
+      
+      heightmap = this.noiseEngine3D
+        ? this.terrainGenerator.generateHeightmap(this.config.seed, this.config.chunkSize, chunkX, chunkY, this.noiseEngine3D)
+        : this.terrainGenerator.generateHeightmap(this.config.seed, this.config.chunkSize, chunkX, chunkY);
+      
+      if (this.config.enablePerformanceMetrics) {
+        metrics.terrainTime = performance.now() - terrainStart;
+      }
+
+      // Validate heightmap
+      if (!heightmap || heightmap.length === 0) {
+        throw new Error('Generated heightmap is empty');
+      }
+      
+      const expectedSize = (this.config.chunkSize + 1) * (this.config.chunkSize + 1);
+      if (heightmap.length !== expectedSize) {
+        throw new Error(`Invalid heightmap size: expected ${expectedSize}, got ${heightmap.length}`);
+      }
+    } catch (error) {
+      throw new TerrainGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
     }
 
     // Step 2: Generate biome data
-    this.config.onProgress?.('biomes', 0.4);
-    const biomeStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    const { biomeMap, biomeWeights, microBiomeMap } = this.generateBiomeData(chunkX, chunkY, heightmap);
-    if (this.config.enablePerformanceMetrics) {
-      metrics.biomeTime = performance.now() - biomeStart;
+    let biomeMap: Uint8Array;
+    let biomeWeights: Float32Array;
+    let microBiomeMap: Uint8Array | undefined;
+    
+    try {
+      this.config.onProgress?.('biomes', 0.4);
+      const biomeStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
+      
+      const biomeData = this.generateBiomeData(chunkX, chunkY, heightmap);
+      biomeMap = biomeData.biomeMap;
+      biomeWeights = biomeData.biomeWeights;
+      microBiomeMap = biomeData.microBiomeMap;
+      
+      if (this.config.enablePerformanceMetrics) {
+        metrics.biomeTime = performance.now() - biomeStart;
+      }
+
+      // Validate biome data
+      if (!biomeMap || biomeMap.length === 0) {
+        throw new Error('Generated biome map is empty');
+      }
+    } catch (error) {
+      throw new BiomeGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
     }
 
     // Initialize chunk data with terrain and biomes
@@ -297,46 +404,77 @@ export class ChunkManager implements ChunkManagerSnapshot {
     };
 
     // Step 3: Generate lakes using multi-chunk lake manager
-    this.config.onProgress?.('lakes', 0.55);
-    if (this.lakeManager) {
-      // Use multi-chunk lake manager with cache invalidation callback
-      const worldLakes = this.lakeManager.getLakesForChunk(
-        chunkX, 
-        chunkY, 
-        this.config.chunkSize,
-        (cx: number, cy: number) => {
-          // Invalidate cached chunk when new lakes are discovered
-          const key = this.getCacheKey(cx, cy);
-          const wasInCache = this.cache.has(key);
-          this.cache.delete(key);
-          console.log(`[ChunkManager] Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
-        }
-      );
-      chunk.lakes = this.convertWorldLakesToChunkLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+    try {
+      this.config.onProgress?.('lakes', 0.55);
       
-      // Carve terrain for multi-chunk lakes using world coordinates
-      if (worldLakes.length > 0) {
-        this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+      if (this.lakeManager) {
+        const worldLakes = this.lakeManager.getLakesForChunk(
+          chunkX, 
+          chunkY, 
+          this.config.chunkSize,
+          (cx: number, cy: number) => {
+            const key = this.getCacheKey(cx, cy);
+            const wasInCache = this.cache.has(key);
+            this.cache.delete(key);
+            logger.debug(LogCategory.CACHE, `Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
+          }
+        );
+        
+        chunk.lakes = this.convertWorldLakesToChunkLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+        
+        if (worldLakes.length > 0) {
+          this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+        }
       }
-    } else {
-      // No lakes if lake manager is disabled
+    } catch (error) {
+      // Lakes are optional - log error but continue
+      logger.warn(LogCategory.LAKE, `Lake generation failed for chunk (${chunkX}, ${chunkY}), continuing without lakes`, error);
       chunk.lakes = [];
+      
+      // Only throw if error recovery doesn't allow partial chunks
+      if (!this.errorRecovery.allowPartialChunks) {
+        throw new LakeGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
+      }
     }
 
     // Step 4: Generate resources based on biomes and noise
-    this.config.onProgress?.('resources', 0.6);
-    const resourceStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    chunk.resources = this.resourceGenerator.generateResources(chunk, seed);
-    if (this.config.enablePerformanceMetrics) {
-      metrics.resourceTime = performance.now() - resourceStart;
+    try {
+      this.config.onProgress?.('resources', 0.6);
+      const resourceStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
+      
+      chunk.resources = this.resourceGenerator.generateResources(chunk, seed);
+      
+      if (this.config.enablePerformanceMetrics) {
+        metrics.resourceTime = performance.now() - resourceStart;
+      }
+    } catch (error) {
+      // Resources are optional - log error but continue
+      logger.warn(LogCategory.CHUNK, `Resource generation failed for chunk (${chunkX}, ${chunkY}), continuing without resources`, error);
+      chunk.resources = [];
+      
+      if (!this.errorRecovery.allowPartialChunks) {
+        throw new ResourceGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
+      }
     }
 
-    // Step 4: Generate structures using Poisson Disk Sampling
-    this.config.onProgress?.('structures', 0.8);
-    const structureStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
-    chunk.structures = this.structurePlacer.generateStructures(chunk, seed);
-    if (this.config.enablePerformanceMetrics) {
-      metrics.structureTime = performance.now() - structureStart;
+    // Step 5: Generate structures using Poisson Disk Sampling
+    try {
+      this.config.onProgress?.('structures', 0.8);
+      const structureStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
+      
+      chunk.structures = this.structurePlacer.generateStructures(chunk, seed);
+      
+      if (this.config.enablePerformanceMetrics) {
+        metrics.structureTime = performance.now() - structureStart;
+      }
+    } catch (error) {
+      // Structures are optional - log error but continue
+      logger.warn(LogCategory.CHUNK, `Structure generation failed for chunk (${chunkX}, ${chunkY}), continuing without structures`, error);
+      chunk.structures = [];
+      
+      if (!this.errorRecovery.allowPartialChunks) {
+        throw new StructureGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
+      }
     }
 
     this.config.onProgress?.('complete', 1.0);
@@ -344,13 +482,34 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Log performance metrics if enabled
     if (this.config.enablePerformanceMetrics) {
       metrics.totalTime = performance.now() - startTime;
-      // Only log if total time is unusually high (> 100ms)
       if (metrics.totalTime > 100) {
-        console.log(`Chunk (${chunkX}, ${chunkY}) generation metrics:`, metrics);
+        logger.info(LogCategory.PERFORMANCE, `Chunk (${chunkX}, ${chunkY}) generation metrics`, metrics);
       }
     }
 
     return chunk;
+  }
+
+  /**
+   * Creates an empty chunk with default values (used for error recovery)
+   */
+  private createEmptyChunk(chunkX: number, chunkY: number): ChunkData {
+    const size = this.config.chunkSize;
+    const vertexCount = size + 1;
+    const tileCount = size * size;
+    const numBiomes = 13;
+
+    return {
+      x: chunkX,
+      y: chunkY,
+      size,
+      heightmap: new Float32Array(vertexCount * vertexCount).fill(0.3), // Sea level
+      biomeMap: new Uint8Array(tileCount).fill(0), // OCEAN
+      biomeWeights: new Float32Array(tileCount * numBiomes),
+      lakes: [],
+      resources: [],
+      structures: [],
+    };
   }
 
   /**
@@ -496,7 +655,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * @param chunk - Chunk data to cache
    */
   private addToCache(key: string, chunk: ChunkData): void {
-    console.log(`[ChunkManager] Adding chunk (${chunk.x}, ${chunk.y}) to cache`);
+    logger.debug(LogCategory.CACHE, `Adding chunk (${chunk.x}, ${chunk.y}) to cache`);
     
     // If cache is full, evict least recently used entry
     if (this.cache.size >= this.maxCacheSize) {
@@ -939,7 +1098,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
           minTerrainHeight: worldLake.minTerrainHeight,
         };
         
-        console.log(`[ChunkManager] Converting world lake to chunk (${chunkX}, ${chunkY}):`, {
+        logger.debug(LogCategory.LAKE, `Converting world lake to chunk (${chunkX}, ${chunkY})`, {
           waterLevel: worldLake.waterLevel,
           minTerrainHeight: worldLake.minTerrainHeight,
           chunkTileCount: chunkTiles.size,
@@ -974,7 +1133,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const vSize = chunkSize + 1;
     const CARVE_DEPTH = 0.02; // how deep to dig in [0,1] heightmap space
 
-    console.log(`[Carve] Carving terrain for chunk (${chunkX}, ${chunkY}), ${worldLakes.length} lake(s)`);
+    logger.debug(LogCategory.LAKE, `Carving terrain for chunk (${chunkX}, ${chunkY}), ${worldLakes.length} lake(s)`);
 
     for (const worldLake of worldLakes) {
       let verticesCarved = 0;
@@ -1010,7 +1169,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
         }
       }
       
-      console.log(`[Carve] Lake ${worldLake.id}: carved ${verticesCarved} vertices, skipped ${verticesSkipped} (outside chunk)`);
+      logger.debug(LogCategory.LAKE, `Lake ${worldLake.id}: carved ${verticesCarved} vertices, skipped ${verticesSkipped} (outside chunk)`);
     }
   }
 

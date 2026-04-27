@@ -8,6 +8,7 @@
 import { NoiseEngine } from '../core/noise';
 import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
+import { logger, LogCategory } from '../utils/logger';
 
 /**
  * A lake body that can span multiple chunks.
@@ -369,7 +370,7 @@ export class LakeManager {
           const chunkSpanY = Math.floor((maxY - minY) / chunkSize) + 1;
           const totalChunks = chunkSpanX * chunkSpanY;
           
-          console.log(`[LakeManager:Sync] Created ${lakeSizeCategory} lake ${lakeId}:`, {
+          logger.info(LogCategory.LAKE, `Created ${lakeSizeCategory} lake ${lakeId}`, {
             waterLevel,
             minTerrainHeight: minH,
             maxDepth: waterLevel - minH,
@@ -414,6 +415,8 @@ export class LakeManager {
    * Flood-fill in world space, can cross chunk boundaries.
    * Returns null if the lake is too large or open.
    * 
+   * Uses circular buffer for queue to avoid O(n) shift() operations.
+   * 
    * @param startX - Starting world X coordinate
    * @param startY - Starting world Y coordinate
    * @param waterLevel - Water level to fill to
@@ -426,23 +429,33 @@ export class LakeManager {
     maxSize?: number
   ): Set<string> | null {
     const visited = new Set<string>();
-    const queue: Array<[number, number]> = [[startX, startY]];
+    
+    // Use circular buffer instead of array for O(1) operations
+    const maxQueueSize = 10000; // Reasonable upper bound
+    const queueX = new Int32Array(maxQueueSize);
+    const queueY = new Int32Array(maxQueueSize);
+    let queueHead = 0;
+    let queueTail = 0;
+    
     const startKey = this.encodeTile(startX, startY);
 
     if (this.getTileHeight(startX, startY) >= waterLevel) return null;
 
     visited.add(startKey);
+    queueX[queueTail] = startX;
+    queueY[queueTail] = startY;
+    queueTail++;
 
     const dx = [0, 0, -1, 1];
     const dy = [-1, 1, 0, 0];
 
     // Use provided maxSize or calculate from config
-    // Default: maxLakeTiles * 2 for backward compatibility
-    // Can be overridden for larger lakes
     const maxLakeTiles = maxSize ?? (this.config.maxLakeTiles * 2);
 
-    while (queue.length > 0) {
-      const [cx, cy] = queue.shift()!;
+    while (queueHead < queueTail) {
+      const cx = queueX[queueHead];
+      const cy = queueY[queueHead];
+      queueHead++;
 
       for (let d = 0; d < 4; d++) {
         const nx = cx + dx[d];
@@ -460,7 +473,15 @@ export class LakeManager {
             return null; // Lake too large
           }
 
-          queue.push([nx, ny]);
+          // Check queue capacity
+          if (queueTail >= maxQueueSize) {
+            logger.warn(LogCategory.LAKE, 'Queue overflow in flood-fill, lake may be incomplete');
+            return null;
+          }
+
+          queueX[queueTail] = nx;
+          queueY[queueTail] = ny;
+          queueTail++;
         }
       }
     }
