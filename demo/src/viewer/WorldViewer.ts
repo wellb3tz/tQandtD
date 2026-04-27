@@ -814,15 +814,16 @@ export class WorldViewer {
     const indices = new Uint32Array(indexCount);
     
     // Determine if we have biome weights for smooth blending
-    const hasBlendWeights = data.biomeWeights && data.biomeWeights.length > 0;
-    const numBiomes = 13; // Total number of BiomeType enum values (OCEAN=0 … GLACIER=12)
+    const hasBlendWeights = data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0;
     
     // Apply underwater color adjustments if heightmap and biome data available
     let underwaterColors: (BiomeColor | null)[] | null = null;
-    if (data.heightmap && data.biomeWeights && hasBlendWeights) {
+    if (data.heightmap && hasBlendWeights) {
+      // For underwater colors, we need to convert sparse weights to a format the function can use
+      // We'll pass the chunk data directly and let the function handle sparse access
       underwaterColors = adjustUnderwaterColors(
         data.heightmap,
-        data.biomeWeights,
+        data, // Pass full chunk data for sparse weight access
         chunkSize,
         {
           seaLevel: this.waterConfig.seaLevel,
@@ -884,7 +885,8 @@ export class WorldViewer {
         if (underwaterColors && bmIndex < underwaterColors.length && underwaterColors[bmIndex] !== null) {
           color = underwaterColors[bmIndex]!;
         } else if (hasBlendWeights && data.biomeMap) {
-          color = calculateBlendedColor(data.biomeWeights, bmIndex, numBiomes);
+          // Calculate blended color from sparse biome weights
+          color = this.calculateBlendedColorFromSparse(data, bmIndex);
         } else if (data.biomeMap) {
           const biome = data.biomeMap[bmIndex];
           color = getBiomeColor(biome);
@@ -1538,6 +1540,40 @@ export class WorldViewer {
         }
       }
     });
+  }
+
+  /**
+   * Calculate blended color from sparse biome weights
+   * @param data - Chunk data with sparse biome weights
+   * @param tileIndex - Tile index in the chunk
+   * @returns Blended biome color
+   */
+  private calculateBlendedColorFromSparse(data: ChunkData, tileIndex: number): BiomeColor {
+    // Get sparse weight data for this tile
+    const start = data.sparseBiomeOffsets[tileIndex];
+    const end = tileIndex < data.sparseBiomeOffsets.length - 1
+      ? data.sparseBiomeOffsets[tileIndex + 1]
+      : data.sparseBiomeTypes.length;
+    
+    // If no weights, use biome map
+    if (start === end && data.biomeMap) {
+      return getBiomeColor(data.biomeMap[tileIndex]);
+    }
+    
+    // Blend colors based on weights
+    let r = 0, g = 0, b = 0;
+    
+    for (let i = start; i < end; i++) {
+      const biomeType = data.sparseBiomeTypes[i];
+      const weight = data.sparseBiomeWeights[i];
+      const color = getBiomeColor(biomeType);
+      
+      r += color.r * weight;
+      g += color.g * weight;
+      b += color.b * weight;
+    }
+    
+    return { r, g, b };
   }
 
   /**

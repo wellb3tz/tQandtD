@@ -100,6 +100,9 @@ export {
   type ChunkEdge,
   getBoundaryVertex,
   getWorldCoordinate,
+  getBiomeWeightsForTile,
+  getBiomeWeightForTile,
+  createSparseBiomeWeights,
 } from './world/chunk';
 export { WorkerPool, type WorkerPoolConfig } from './world/worker-pool';
 export {

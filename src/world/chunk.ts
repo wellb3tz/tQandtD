@@ -73,6 +73,13 @@ export interface Structure {
  * - The vertex at local (32, y) in chunk (0, 0) has world x = 32
  * - The vertex at local (0, y) in chunk (1, 0) also has world x = 32
  * - Both vertices sample the same world coordinate, ensuring identical heights
+ * 
+ * **Biome Weights Storage**: Uses sparse representation to save memory.
+ * Instead of storing all 13 biome weights for each tile (most are zero),
+ * only non-zero weights are stored using three parallel arrays:
+ * - sparseBiomeTypes: biome type IDs
+ * - sparseBiomeWeights: corresponding weights
+ * - sparseBiomeOffsets: start index in the arrays for each tile
  */
 export interface ChunkData {
   /** Chunk X coordinate in chunk space */
@@ -88,8 +95,13 @@ export interface ChunkData {
   heightmap: Float32Array;
   /** Biome type for each point (size * size elements) */
   biomeMap: Uint8Array;
-  /** Biome blend weights (size * size * numBiomes elements) */
-  biomeWeights: Float32Array;
+  /** 
+   * Sparse biome weights storage (replaces dense biomeWeights array).
+   * Use getBiomeWeightsForTile() to access weights for a specific tile.
+   */
+  sparseBiomeTypes: Uint8Array;
+  sparseBiomeWeights: Float32Array;
+  sparseBiomeOffsets: Uint16Array;
   /** Micro-biome type for each point (size * size elements), 255 = no micro-biome */
   microBiomeMap?: Uint8Array;
   /** Lake bodies detected inside this chunk (may be empty) */
@@ -246,4 +258,135 @@ export function getWorldCoordinate(chunk: ChunkData, localX: number, localY: num
   const worldY = chunk.y * chunk.size + localY;
   
   return [worldX, worldY];
+}
+
+/**
+ * Get biome weights for a specific tile from sparse representation.
+ * 
+ * Extracts the biome weights stored in sparse format for a given tile index.
+ * Only non-zero weights are stored, so this function reconstructs the weight map.
+ * 
+ * @param chunk - The chunk data containing sparse biome weights
+ * @param tileIndex - Flat tile index (0 to size*size-1)
+ * @returns Map of biome types to their weights (only non-zero weights included)
+ * 
+ * @example
+ * ```typescript
+ * const chunk = manager.getChunk(0, 0);
+ * const tileIndex = localToIndex(5, 10, chunk.size);
+ * const weights = getBiomeWeightsForTile(chunk, tileIndex);
+ * 
+ * console.log(weights.get(BiomeType.FOREST)); // 0.65
+ * console.log(weights.get(BiomeType.PLAINS));  // 0.35
+ * console.log(weights.get(BiomeType.DESERT));  // undefined (zero weight)
+ * ```
+ */
+export function getBiomeWeightsForTile(chunk: ChunkData, tileIndex: number): Map<BiomeType, number> {
+  const weights = new Map<BiomeType, number>();
+  
+  // Get start and end indices for this tile's weights
+  const start = chunk.sparseBiomeOffsets[tileIndex];
+  const end = tileIndex < chunk.sparseBiomeOffsets.length - 1
+    ? chunk.sparseBiomeOffsets[tileIndex + 1]
+    : chunk.sparseBiomeTypes.length;
+  
+  // Extract weights from sparse arrays
+  for (let i = start; i < end; i++) {
+    weights.set(chunk.sparseBiomeTypes[i], chunk.sparseBiomeWeights[i]);
+  }
+  
+  return weights;
+}
+
+/**
+ * Get weight for a specific biome at a tile from sparse representation.
+ * 
+ * Optimized function to get a single biome's weight without constructing
+ * the full weight map. Returns 0 if the biome has no weight at this tile.
+ * 
+ * @param chunk - The chunk data containing sparse biome weights
+ * @param tileIndex - Flat tile index (0 to size*size-1)
+ * @param biomeType - The biome type to query
+ * @returns Weight value (0 if biome not present)
+ * 
+ * @example
+ * ```typescript
+ * const chunk = manager.getChunk(0, 0);
+ * const tileIndex = localToIndex(5, 10, chunk.size);
+ * const forestWeight = getBiomeWeightForTile(chunk, tileIndex, BiomeType.FOREST);
+ * ```
+ */
+export function getBiomeWeightForTile(chunk: ChunkData, tileIndex: number, biomeType: BiomeType): number {
+  const start = chunk.sparseBiomeOffsets[tileIndex];
+  const end = tileIndex < chunk.sparseBiomeOffsets.length - 1
+    ? chunk.sparseBiomeOffsets[tileIndex + 1]
+    : chunk.sparseBiomeTypes.length;
+  
+  // Linear search through this tile's biomes (typically 2-3 entries)
+  for (let i = start; i < end; i++) {
+    if (chunk.sparseBiomeTypes[i] === biomeType) {
+      return chunk.sparseBiomeWeights[i];
+    }
+  }
+  
+  return 0.0;
+}
+
+/**
+ * Create sparse biome weight arrays from a Map of weights per tile.
+ * 
+ * Converts dense biome weight data into sparse representation for memory efficiency.
+ * This is used during chunk generation to create the sparse arrays.
+ * 
+ * @param tileWeights - Array of weight maps, one per tile (size*size elements)
+ * @param numTiles - Total number of tiles (size * size)
+ * @returns Object containing the three sparse arrays
+ * 
+ * @example
+ * ```typescript
+ * const tileWeights: Map<BiomeType, number>[] = [];
+ * for (let i = 0; i < chunkSize * chunkSize; i++) {
+ *   const weights = biomeSystem.getBiomeWeights(x, y, getHeight);
+ *   tileWeights.push(weights);
+ * }
+ * 
+ * const sparse = createSparseBiomeWeights(tileWeights, chunkSize * chunkSize);
+ * chunk.sparseBiomeTypes = sparse.types;
+ * chunk.sparseBiomeWeights = sparse.weights;
+ * chunk.sparseBiomeOffsets = sparse.offsets;
+ * ```
+ */
+export function createSparseBiomeWeights(
+  tileWeights: Map<BiomeType, number>[],
+  numTiles: number
+): {
+  types: Uint8Array;
+  weights: Float32Array;
+  offsets: Uint16Array;
+} {
+  const types: number[] = [];
+  const weights: number[] = [];
+  const offsets: number[] = [];
+  
+  // Process each tile
+  for (let i = 0; i < numTiles; i++) {
+    // Record start offset for this tile
+    offsets.push(types.length);
+    
+    const tileWeightMap = tileWeights[i];
+    
+    // Add non-zero weights (filter out very small weights to save space)
+    for (const [biomeType, weight] of tileWeightMap.entries()) {
+      if (weight > 0.001) {  // Threshold to ignore negligible weights
+        types.push(biomeType);
+        weights.push(weight);
+      }
+    }
+  }
+  
+  return {
+    types: new Uint8Array(types),
+    weights: new Float32Array(weights),
+    offsets: new Uint16Array(offsets),
+  };
 }

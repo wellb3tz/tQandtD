@@ -188,12 +188,11 @@ export function adjustUnderwaterColor(
  */
 export function adjustUnderwaterColors(
   heightmap: Float32Array,
-  biomeWeights: Float32Array,
+  chunkData: any, // ChunkData with sparse biome weights
   chunkSize: number,
   config: UnderwaterAdjustmentConfig
 ): (BiomeColor | null)[] {
   const colors: (BiomeColor | null)[] = [];
-  const numBiomes = 13;
   
   for (let y = 0; y < chunkSize; y++) {
     for (let x = 0; x < chunkSize; x++) {
@@ -209,20 +208,20 @@ export function adjustUnderwaterColors(
         continue;
       }
       
-      // Extract biome weights for this tile
-      const weights = new Map<BiomeType, number>();
-      for (let biome = 0; biome < numBiomes; biome++) {
-        const weight = biomeWeights[tileIndex * numBiomes + biome];
-        if (weight > 0) {
-          weights.set(biome as BiomeType, weight);
-        }
-      }
+      // Extract biome weights for this tile from sparse representation
+      const start = chunkData.sparseBiomeOffsets[tileIndex];
+      const end = tileIndex < chunkData.sparseBiomeOffsets.length - 1
+        ? chunkData.sparseBiomeOffsets[tileIndex + 1]
+        : chunkData.sparseBiomeTypes.length;
       
       // Calculate base color from biome weights, excluding ocean biome
       let baseColor: BiomeColor = { r: 0, g: 0, b: 0 };
       let totalWeight = 0;
       
-      for (const [biome, weight] of weights.entries()) {
+      for (let i = start; i < end; i++) {
+        const biome = chunkData.sparseBiomeTypes[i] as BiomeType;
+        const weight = chunkData.sparseBiomeWeights[i];
+        
         // Exclude ocean biome from underwater terrain colors
         if (biome === BiomeType.OCEAN) {
           continue;

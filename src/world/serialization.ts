@@ -682,10 +682,15 @@ export class WorldSerializer {
     const heightmap = this.base64ToFloat32Array(serializedChunk.heightmap as string);
     const biomeMap = this.base64ToUint8Array(serializedChunk.biomeMap as string);
 
-    const numBiomes = 13;
-    const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
+    // Create sparse biome weights from biomeMap (each tile has 100% weight for its biome)
+    const types: number[] = [];
+    const weights: number[] = [];
+    const offsets: number[] = [];
+    
     for (let i = 0; i < biomeMap.length; i++) {
-      biomeWeights[i * numBiomes + biomeMap[i]] = 1.0;
+      offsets.push(types.length);
+      types.push(biomeMap[i]);
+      weights.push(1.0);
     }
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
@@ -701,7 +706,9 @@ export class WorldSerializer {
       size: chunkSize,
       heightmap,
       biomeMap,
-      biomeWeights,
+      sparseBiomeTypes: new Uint8Array(types),
+      sparseBiomeWeights: new Float32Array(weights),
+      sparseBiomeOffsets: new Uint16Array(offsets),
       lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
@@ -719,10 +726,15 @@ export class WorldSerializer {
     const heightmap = this.deserializeFloat32ArrayBinary(serializedChunk.heightmap as ArrayBuffer);
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
 
-    const numBiomes = 13;
-    const biomeWeights = new Float32Array(chunkSize * chunkSize * numBiomes);
+    // Create sparse biome weights from biomeMap (each tile has 100% weight for its biome)
+    const types: number[] = [];
+    const weights: number[] = [];
+    const offsets: number[] = [];
+    
     for (let i = 0; i < biomeMap.length; i++) {
-      biomeWeights[i * numBiomes + biomeMap[i]] = 1.0;
+      offsets.push(types.length);
+      types.push(biomeMap[i]);
+      weights.push(1.0);
     }
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
@@ -738,7 +750,9 @@ export class WorldSerializer {
       size: chunkSize,
       heightmap,
       biomeMap,
-      biomeWeights,
+      sparseBiomeTypes: new Uint8Array(types),
+      sparseBiomeWeights: new Float32Array(weights),
+      sparseBiomeOffsets: new Uint16Array(offsets),
       lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,

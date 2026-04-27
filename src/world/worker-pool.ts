@@ -340,7 +340,9 @@ export class WorkerPool {
       size: serialized.size,
       heightmap: new Float32Array(serialized.heightmap),
       biomeMap: new Uint8Array(serialized.biomeMap),
-      biomeWeights: new Float32Array(serialized.biomeWeights),
+      sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
+      sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
+      sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
       lakes: (serialized.lakes ?? []).map((lake: any) => ({
         waterLevel: lake.waterLevel,
         tiles: new Set<number>(lake.tiles),

@@ -128,7 +128,9 @@ describe('Error Handling', () => {
       
       expect(chunk.heightmap).toBeInstanceOf(Float32Array);
       expect(chunk.biomeMap).toBeInstanceOf(Uint8Array);
-      expect(chunk.biomeWeights).toBeInstanceOf(Float32Array);
+      expect(chunk.sparseBiomeTypes).toBeInstanceOf(Uint8Array);
+      expect(chunk.sparseBiomeWeights).toBeInstanceOf(Float32Array);
+      expect(chunk.sparseBiomeOffsets).toBeInstanceOf(Uint16Array);
       expect(chunk.resources).toBeInstanceOf(Array);
       expect(chunk.structures).toBeInstanceOf(Array);
       expect(chunk.lakes).toBeInstanceOf(Array);

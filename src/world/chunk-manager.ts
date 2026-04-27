@@ -365,7 +365,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
     // Step 2: Generate biome data
     let biomeMap: Uint8Array;
-    let biomeWeights: Float32Array;
+    let sparseBiomeTypes: Uint8Array;
+    let sparseBiomeWeights: Float32Array;
+    let sparseBiomeOffsets: Uint16Array;
     let microBiomeMap: Uint8Array | undefined;
     
     try {
@@ -374,7 +376,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       
       const biomeData = this.generateBiomeData(chunkX, chunkY, heightmap);
       biomeMap = biomeData.biomeMap;
-      biomeWeights = biomeData.biomeWeights;
+      sparseBiomeTypes = biomeData.sparseBiomeTypes;
+      sparseBiomeWeights = biomeData.sparseBiomeWeights;
+      sparseBiomeOffsets = biomeData.sparseBiomeOffsets;
       microBiomeMap = biomeData.microBiomeMap;
       
       if (this.config.enablePerformanceMetrics) {
@@ -396,7 +400,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       size: this.config.chunkSize,
       heightmap,
       biomeMap,
-      biomeWeights,
+      sparseBiomeTypes,
+      sparseBiomeWeights,
+      sparseBiomeOffsets,
       microBiomeMap,
       lakes: [],
       resources: [],
@@ -497,7 +503,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const size = this.config.chunkSize;
     const vertexCount = size + 1;
     const tileCount = size * size;
-    const numBiomes = 13;
+
+    // Create sparse biome weights for ocean (all tiles have 100% ocean weight)
+    const types: number[] = [];
+    const weights: number[] = [];
+    const offsets: number[] = [];
+    
+    for (let i = 0; i < tileCount; i++) {
+      offsets.push(types.length);
+      types.push(0); // BiomeType.OCEAN
+      weights.push(1.0);
+    }
 
     return {
       x: chunkX,
@@ -505,7 +521,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       size,
       heightmap: new Float32Array(vertexCount * vertexCount).fill(0.3), // Sea level
       biomeMap: new Uint8Array(tileCount).fill(0), // OCEAN
-      biomeWeights: new Float32Array(tileCount * numBiomes),
+      sparseBiomeTypes: new Uint8Array(types),
+      sparseBiomeWeights: new Float32Array(weights),
+      sparseBiomeOffsets: new Uint16Array(offsets),
       lakes: [],
       resources: [],
       structures: [],
@@ -555,16 +573,21 @@ export class ChunkManager implements ChunkManagerSnapshot {
     chunkX: number,
     chunkY: number,
     heightmap: Float32Array
-  ): { biomeMap: Uint8Array; biomeWeights: Float32Array; microBiomeMap?: Uint8Array } {
+  ): { 
+    biomeMap: Uint8Array; 
+    sparseBiomeTypes: Uint8Array;
+    sparseBiomeWeights: Float32Array;
+    sparseBiomeOffsets: Uint16Array;
+    microBiomeMap?: Uint8Array;
+  } {
     const size = this.config.chunkSize;
     const biomeMap = new Uint8Array(size * size);
-    
-    // Calculate number of biome types for weights array
-    const numBiomes = 13; // BiomeType enum has 13 values (OCEAN=0 … GLACIER=12)
-    const biomeWeights = new Float32Array(size * size * numBiomes);
 
     // Initialize micro-biome map if enhanced biome system is available
     const microBiomeMap = this.enhancedBiomeSystem ? new Uint8Array(size * size).fill(255) : undefined;
+
+    // Collect weight maps for all tiles (will convert to sparse at the end)
+    const tileWeights: Map<number, number>[] = [];
 
     // Convert chunk coordinates to world coordinates
     const worldX = chunkX * size;
@@ -614,11 +637,8 @@ export class ChunkManager implements ChunkManagerSnapshot {
             microBiomeMap[index] = enhancedData.microBiome;
           }
           
-          // Store weights from enhanced biome data
-          const weightOffset = index * numBiomes;
-          for (let b = 0; b < numBiomes; b++) {
-            biomeWeights[weightOffset + b] = enhancedData.weights.get(b) || 0;
-          }
+          // Store weights for sparse conversion
+          tileWeights.push(enhancedData.weights);
         } else {
           // Use base BiomeSystem (backward compatible)
           const biome = this.biomeSystem.getBiome(wx, wy, height);
@@ -627,16 +647,39 @@ export class ChunkManager implements ChunkManagerSnapshot {
           // Get biome blend weights
           const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeight);
           
-          // Store weights in the array
-          const weightOffset = index * numBiomes;
-          for (let b = 0; b < numBiomes; b++) {
-            biomeWeights[weightOffset + b] = weights.get(b) || 0;
-          }
+          // Store weights for sparse conversion
+          tileWeights.push(weights);
         }
       }
     }
 
-    return { biomeMap, biomeWeights, microBiomeMap };
+    // Convert dense weight maps to sparse representation
+    const types: number[] = [];
+    const weights: number[] = [];
+    const offsets: number[] = [];
+    
+    for (let i = 0; i < size * size; i++) {
+      // Record start offset for this tile
+      offsets.push(types.length);
+      
+      const tileWeightMap = tileWeights[i];
+      
+      // Add non-zero weights (filter out very small weights to save space)
+      for (const [biomeType, weight] of tileWeightMap.entries()) {
+        if (weight > 0.001) {  // Threshold to ignore negligible weights
+          types.push(biomeType);
+          weights.push(weight);
+        }
+      }
+    }
+
+    return { 
+      biomeMap, 
+      sparseBiomeTypes: new Uint8Array(types),
+      sparseBiomeWeights: new Float32Array(weights),
+      sparseBiomeOffsets: new Uint16Array(offsets),
+      microBiomeMap 
+    };
   }
 
   /**

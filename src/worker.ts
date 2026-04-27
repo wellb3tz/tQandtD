@@ -138,7 +138,9 @@ export interface SerializedChunkData {
   size: number;
   heightmap: number[];
   biomeMap: number[];
-  biomeWeights: number[];
+  sparseBiomeTypes: number[];
+  sparseBiomeWeights: number[];
+  sparseBiomeOffsets: number[];
   /** Serialized lake bodies — tiles stored as plain number arrays */
   lakes: Array<{
     waterLevel: number;
@@ -173,7 +175,9 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
     size: chunk.size,
     heightmap: Array.from(chunk.heightmap),
     biomeMap: Array.from(chunk.biomeMap),
-    biomeWeights: Array.from(chunk.biomeWeights),
+    sparseBiomeTypes: Array.from(chunk.sparseBiomeTypes),
+    sparseBiomeWeights: Array.from(chunk.sparseBiomeWeights),
+    sparseBiomeOffsets: Array.from(chunk.sparseBiomeOffsets),
     lakes: (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
@@ -208,7 +212,9 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
     size: serialized.size,
     heightmap: new Float32Array(serialized.heightmap),
     biomeMap: new Uint8Array(serialized.biomeMap),
-    biomeWeights: new Float32Array(serialized.biomeWeights),
+    sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
+    sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
+    sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
     lakes: (serialized.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: new Set(lake.tiles),
