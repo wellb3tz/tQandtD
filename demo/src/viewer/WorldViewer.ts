@@ -582,6 +582,9 @@ export class WorldViewer {
     this.scene.add(chunkMesh.boundaries);
     
     this.chunkMeshes.set(key, chunkMesh);
+    
+    // Инвалидируем кэш статистики рендеринга
+    this.invalidateRenderStatsCache();
 
     // Stitch normals and colors with all loaded neighbours to eliminate seams.
     // Also re-stitch each neighbour so their boundary attributes are updated too.
@@ -645,6 +648,9 @@ export class WorldViewer {
     }
     
     this.chunkMeshes.delete(key);
+    
+    // Инвалидируем кэш статистики рендеринга
+    this.invalidateRenderStatsCache();
   }
   
   /**
@@ -1882,29 +1888,66 @@ export class WorldViewer {
   
   /**
    * Get render statistics (vertex count, draw calls)
+   * Кэшируем результаты чтобы избежать дорогого scene.traverse()
    */
+  private cachedRenderStats: { vertexCount: number; drawCalls: number } | null = null;
+  private lastRenderStatsUpdate = 0;
+  private readonly RENDER_STATS_CACHE_DURATION = 1000; // Кэшируем на 1 секунду
+  
   getRenderStats(): { vertexCount: number; drawCalls: number } {
+    const now = performance.now();
+    
+    // Возвращаем кэшированные данные если они актуальны
+    if (this.cachedRenderStats && now - this.lastRenderStatsUpdate < this.RENDER_STATS_CACHE_DURATION) {
+      return this.cachedRenderStats;
+    }
+    
     let vertexCount = 0;
     let drawCalls = 0;
     
     // Count vertices and draw calls from all chunk meshes
-    this.scene.traverse((object) => {
-      if (object instanceof THREE.Mesh && object.geometry) {
-        const geometry = object.geometry;
+    // Используем более эффективный подход: считаем только чанки
+    for (const chunkMesh of this.chunkMeshes.values()) {
+      if (chunkMesh.terrain && chunkMesh.terrain.visible) {
+        const geometry = chunkMesh.terrain.geometry;
         
         // Count vertices
         if (geometry.attributes.position) {
           vertexCount += geometry.attributes.position.count;
         }
         
-        // Each mesh is a draw call
-        if (object.visible) {
-          drawCalls++;
-        }
+        // Each terrain mesh is a draw call
+        drawCalls++;
       }
-    });
+      
+      // Count resources
+      if (chunkMesh.resources && chunkMesh.resources.visible) {
+        drawCalls += chunkMesh.resources.children.length;
+      }
+      
+      // Count structures
+      if (chunkMesh.structures && chunkMesh.structures.visible) {
+        drawCalls += chunkMesh.structures.children.length;
+      }
+      
+      // Count boundaries
+      if (chunkMesh.boundaries && chunkMesh.boundaries.visible) {
+        drawCalls++;
+      }
+    }
     
-    return { vertexCount, drawCalls };
+    // Кэшируем результаты
+    this.cachedRenderStats = { vertexCount, drawCalls };
+    this.lastRenderStatsUpdate = now;
+    
+    return this.cachedRenderStats;
+  }
+  
+  /**
+   * Сбросить кэш статистики рендеринга (вызывать при добавлении/удалении чанков)
+   */
+  private invalidateRenderStatsCache(): void {
+    this.cachedRenderStats = null;
   }
 
   /**

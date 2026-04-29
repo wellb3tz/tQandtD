@@ -32,6 +32,11 @@ let statisticsDisplay: StatisticsDisplay | null = null;
 let minimap: Minimap | null = null;
 let terrainTooltip: TerrainTooltip | null = null;
 
+// Global timers for cleanup
+let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
+let chunkLoadTimer: ReturnType<typeof setInterval> | null = null;
+let performanceTimer: ReturnType<typeof setInterval> | null = null;
+
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM loaded, setting up demo application...');
@@ -130,9 +135,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       let lastCameraUpdate = 0;
       let lastChunkLoadCheck = 0;
       let lastPerformanceUpdate = 0;
+      let lastUIUpdate = 0;
       const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
       const chunkLoadCheckInterval = 500; // Check for new chunks every 500ms
-      const performanceUpdateInterval = 500; // Update performance metrics every 500ms
+      const performanceUpdateInterval = 1000; // Update performance metrics every 1000ms (было 500ms)
+      const uiUpdateInterval = 100; // Update UI every 100ms
       
       // FPS tracking
       let frameCount = 0;
@@ -160,108 +167,146 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       renderLoop();
       
-      setInterval(() => {
+      // Разделяем задачи на разные интервалы для избежания пиковой нагрузки
+      
+      // 1. Интервал для обновления UI (каждые 100ms)
+      uiUpdateTimer = setInterval(() => {
         if (worldViewer && app) {
           const cameraPos = worldViewer.getCameraPosition();
           const now = performance.now();
           
-          // Only update if enough time has passed
+          // Обновление позиции камеры в приложении
           if (now - lastCameraUpdate >= cameraUpdateInterval) {
             app.updateCameraPosition(cameraPos);
             lastCameraUpdate = now;
           }
           
-          // Check if we need to load new chunks based on camera position (requirement 2.3, 14.9)
+          // Обновление UI элементов (легкие операции)
+          if (now - lastUIUpdate >= uiUpdateInterval) {
+            // Update camera position display
+            if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
+              cameraXDisplay.textContent = cameraPos.x.toFixed(2);
+              cameraYDisplay.textContent = cameraPos.y.toFixed(2);
+              cameraZDisplay.textContent = cameraPos.z.toFixed(2);
+            }
+            // Update status bar position
+            if (statusPosition) {
+              statusPosition.textContent = `${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)}`;
+            }
+            // Update status bar chunks
+            if (statusChunks && app) {
+              statusChunks.textContent = app.getState().loadedChunkCount.toString();
+            }
+            // Update compass — rotate needle opposite to camera yaw
+            if (compassNeedle) {
+              const heading = worldViewer.getCameraHeading();
+              compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
+            }
+            
+            lastUIUpdate = now;
+          }
+        }
+      }, uiUpdateInterval);
+      
+      // 2. Интервал для загрузки чанков (каждые 500ms) - выполняется асинхронно
+      chunkLoadTimer = setInterval(() => {
+        if (worldViewer && app) {
+          const now = performance.now();
+          
           if (now - lastChunkLoadCheck >= chunkLoadCheckInterval) {
-            const chunkSize = 32; // Default chunk size
-            const loadRadius = app.getState().viewDistance; // Get view distance from state
-            
-            // Convert camera world position to chunk coordinates
-            const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
-            const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
-            
-            // Load chunks around camera position
-            app.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
-            
-            // Unload distant chunks to manage memory
-            const unloadDistance = loadRadius + 2; // Unload chunks beyond load radius + 2
-            app.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
+            // Выполняем в следующем тике event loop чтобы не блокировать рендеринг
+            setTimeout(() => {
+              const cameraPos = worldViewer!.getCameraPosition();
+              const chunkSize = 32; // Default chunk size
+              const loadRadius = app!.getState().viewDistance;
+              
+              // Convert camera world position to chunk coordinates
+              const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
+              const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
+              
+              // Load chunks around camera position
+              app!.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
+              
+              // Unload distant chunks to manage memory
+              const unloadDistance = loadRadius + 2;
+              app!.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
+            }, 0);
             
             lastChunkLoadCheck = now;
           }
+        }
+      }, chunkLoadCheckInterval);
+      
+      // 3. Интервал для обновления метрик производительности (каждые 1000ms) - выполняется асинхронно
+      performanceTimer = setInterval(() => {
+        if (worldViewer && app) {
+          const now = performance.now();
           
-          // Update performance metrics
           if (now - lastPerformanceUpdate >= performanceUpdateInterval) {
-            // Get render stats from WorldViewer
-            const renderStats = worldViewer.getRenderStats();
-            
-            // Calculate memory usage (approximate)
-            const memoryUsage = calculateMemoryUsage(app.getState().loadedChunks.size);
-            
-            // Update performance monitor
-            if (performanceMonitor) {
-              performanceMonitor.updateMemoryUsage(memoryUsage);
-              performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
-            }
-            
-            // Update micro-biome count in statistics display
-            if (statisticsDisplay) {
-              const microBiomeCount = worldViewer.getMicroBiomeCount();
-              statisticsDisplay.updateMicroBiomeCount(microBiomeCount);
-            }
+            // Выполняем в следующем тике event loop
+            setTimeout(() => {
+              // Get render stats from WorldViewer (может быть тяжелой операцией)
+              const renderStats = worldViewer!.getRenderStats();
+              
+              // Calculate memory usage (approximate)
+              const memoryUsage = calculateMemoryUsage(app!.getState().loadedChunks.size);
+              
+              // Update performance monitor
+              if (performanceMonitor) {
+                performanceMonitor.updateMemoryUsage(memoryUsage);
+                performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
+              }
+              
+              // Update micro-biome count in statistics display
+              if (statisticsDisplay) {
+                const microBiomeCount = worldViewer!.getMicroBiomeCount();
+                statisticsDisplay.updateMicroBiomeCount(microBiomeCount);
+              }
+              
+              // Update status bar biome (только если нужно, не каждый раз)
+              if (statusBiome && app) {
+                const state = app!.getState();
+                if (state.biomeDistribution.size > 0) {
+                  // Find dominant biome
+                  let maxCount = 0;
+                  let dominantBiome = '—';
+                  const biomeNames: Record<number, string> = {
+                    0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
+                    4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
+                    8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
+                    12: 'Glacier'
+                  };
+                  state.biomeDistribution.forEach((count, biome) => {
+                    if (count > maxCount) { maxCount = count; dominantBiome = biomeNames[biome] ?? '—'; }
+                  });
+                  statusBiome.textContent = dominantBiome;
+                }
+              }
+              
+              // Redraw minimap (только если нужно)
+              if (minimap) {
+                minimap.draw();
+              }
+              
+              // Update worker pool statistics if enabled
+              if (app!.getState().workerPoolEnabled) {
+                app!.updateWorkerPoolStats();
+              }
+            }, 0);
             
             lastPerformanceUpdate = now;
           }
-          
-          // Update camera position display
-          if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
-            cameraXDisplay.textContent = cameraPos.x.toFixed(2);
-            cameraYDisplay.textContent = cameraPos.y.toFixed(2);
-            cameraZDisplay.textContent = cameraPos.z.toFixed(2);
-          }
-          // Update status bar position
-          if (statusPosition) {
-            statusPosition.textContent = `${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)}`;
-          }
-          // Update status bar chunks
-          if (statusChunks && app) {
-            statusChunks.textContent = app.getState().loadedChunkCount.toString();
-          }
-          // Update status bar biome (from camera world position)
-          if (statusBiome && app) {
-            const state = app.getState();
-            if (state.biomeDistribution.size > 0) {
-              // Find dominant biome
-              let maxCount = 0;
-              let dominantBiome = '—';
-              const biomeNames: Record<number, string> = {
-                0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
-                4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
-                8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
-                12: 'Glacier'
-              };
-              state.biomeDistribution.forEach((count, biome) => {
-                if (count > maxCount) { maxCount = count; dominantBiome = biomeNames[biome] ?? '—'; }
-              });
-              statusBiome.textContent = dominantBiome;
-            }
-          }
-          // Update compass — rotate needle opposite to camera yaw
-          if (compassNeedle) {
-            const heading = worldViewer.getCameraHeading();
-            compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
-          }
-          // Redraw minimap
-          if (minimap) {
-            minimap.draw();
-          }
-          
-          // Update worker pool statistics if enabled
-          if (app.getState().workerPoolEnabled) {
-            app.updateWorkerPoolStats();
-          }
         }
-      }, cameraUpdateInterval);
+      }, performanceUpdateInterval);
+      
+      // Очистка таймеров при закрытии страницы
+      window.addEventListener('beforeunload', () => {
+        if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
+        if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
+        if (performanceTimer !== null) clearInterval(performanceTimer);
+        if (worldViewer) worldViewer.dispose();
+        if (app) app.destroy();
+      });
       
       // Handle window resize
       window.addEventListener('resize', () => {
@@ -539,6 +584,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('DemoApp initialized successfully');
   } catch (error) {
     console.error('Failed to initialize DemoApp:', error);
+    
+    // Clean up any timers that might have been created
+    if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
+    if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
+    if (performanceTimer !== null) clearInterval(performanceTimer);
+    
     errorHandler.handleError(new DemoError(
       'Application initialization failed',
       ErrorCategory.INITIALIZATION,
