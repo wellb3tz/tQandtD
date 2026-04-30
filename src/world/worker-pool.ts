@@ -150,9 +150,19 @@ export class WorkerPool {
       task.id = `task-${this.taskIdCounter++}`;
     }
 
-    // Add to queue with priority ordering
-    this.taskQueue.push(task);
-    this.taskQueue.sort((a, b) => b.priority - a.priority);
+    // Insert into queue maintaining priority order (binary insertion — O(n) shift
+    // but avoids a full O(n log n) sort on every submit).
+    let lo = 0;
+    let hi = this.taskQueue.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (this.taskQueue[mid].priority >= task.priority) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    this.taskQueue.splice(lo, 0, task);
 
     // Track as active task
     this.activeTasks.set(task.id, task);
@@ -216,9 +226,28 @@ export class WorkerPool {
   }
 
   /**
-   * Shuts down all workers
+   * Shuts down all workers and cancels all pending/active tasks.
+   * Clears any outstanding timeouts to prevent post-shutdown callbacks.
    */
   shutdown(): void {
+    // Cancel timeouts for all active tasks before terminating workers.
+    for (const workerState of this.workers) {
+      if (workerState.currentTask) {
+        const timeoutId = (workerState.currentTask as any).timeoutId;
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      }
+    }
+    // Cancel timeouts for queued tasks (they may have been assigned timeouts
+    // by a previous assignNextTask call that hasn't fired yet).
+    for (const task of this.taskQueue) {
+      const timeoutId = (task as any).timeoutId;
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
+
     for (const workerState of this.workers) {
       workerState.worker.terminate();
     }
