@@ -155,6 +155,17 @@ export interface SerializedChunk {
   
   /** Compressed biome map data (ArrayBuffer for binary, base64 string for JSON) */
   biomeMap: ArrayBuffer | string;
+
+  /**
+   * Sparse biome weight arrays — serialized alongside biomeMap so that
+   * biome-blend rendering is preserved after a save/load cycle.
+   *
+   * All three arrays are stored as base64 strings (JSON) or ArrayBuffers (binary).
+   * They are optional for backward compatibility with saves that pre-date this field.
+   */
+  sparseBiomeTypes?: ArrayBuffer | string;
+  sparseBiomeWeights?: ArrayBuffer | string;
+  sparseBiomeOffsets?: ArrayBuffer | string;
   
   /** Array of resources in the chunk */
   resources: Resource[];
@@ -270,6 +281,9 @@ export class WorldSerializer {
   private serializeChunkJSON(chunk: ChunkData, compress: boolean): SerializedChunk {
     const heightmapBase64 = this.float32ArrayToBase64(chunk.heightmap, compress);
     const biomeMapBase64 = this.uint8ArrayToBase64(chunk.biomeMap, compress);
+    const sparseBiomeTypesBase64 = this.uint8ArrayToBase64(chunk.sparseBiomeTypes, compress);
+    const sparseBiomeWeightsBase64 = this.float32ArrayToBase64(chunk.sparseBiomeWeights, compress);
+    const sparseBiomeOffsetsBase64 = this.uint16ArrayToBase64(chunk.sparseBiomeOffsets, compress);
 
     const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
@@ -283,6 +297,9 @@ export class WorldSerializer {
       y: chunk.y,
       heightmap: heightmapBase64,
       biomeMap: biomeMapBase64,
+      sparseBiomeTypes: sparseBiomeTypesBase64,
+      sparseBiomeWeights: sparseBiomeWeightsBase64,
+      sparseBiomeOffsets: sparseBiomeOffsetsBase64,
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
@@ -361,6 +378,23 @@ export class WorldSerializer {
       return this.uint8ArrayToBase64String(compressed);
     } else {
       return this.uint8ArrayToBase64String(array);
+    }
+  }
+
+  /**
+   * Converts Uint16Array to base64 string
+   * 
+   * @param array - Uint16Array to convert
+   * @param compress - Whether to compress the data
+   * @returns Base64-encoded string
+   */
+  private uint16ArrayToBase64(array: Uint16Array, compress: boolean): string {
+    const uint8 = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+    if (compress) {
+      const compressed = this.compressUint8Array(uint8);
+      return this.uint8ArrayToBase64String(compressed);
+    } else {
+      return this.uint8ArrayToBase64String(uint8);
     }
   }
 
@@ -508,6 +542,9 @@ export class WorldSerializer {
   private serializeChunkBinary(chunk: ChunkData, compress: boolean): SerializedChunk {
     const heightmapBuffer = this.serializeFloat32ArrayBinary(chunk.heightmap, compress);
     const biomeMapBuffer = this.serializeUint8ArrayBinary(chunk.biomeMap, compress);
+    const sparseBiomeTypesBuffer = this.serializeUint8ArrayBinary(chunk.sparseBiomeTypes, compress);
+    const sparseBiomeWeightsBuffer = this.serializeFloat32ArrayBinary(chunk.sparseBiomeWeights, compress);
+    const sparseBiomeOffsetsBuffer = this.serializeUint16ArrayBinary(chunk.sparseBiomeOffsets, compress);
 
     const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
@@ -521,6 +558,9 @@ export class WorldSerializer {
       y: chunk.y,
       heightmap: heightmapBuffer,
       biomeMap: biomeMapBuffer,
+      sparseBiomeTypes: sparseBiomeTypesBuffer,
+      sparseBiomeWeights: sparseBiomeWeightsBuffer,
+      sparseBiomeOffsets: sparseBiomeOffsetsBuffer,
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
@@ -627,6 +667,39 @@ export class WorldSerializer {
   }
 
   /**
+   * Serializes Uint16Array to binary format with type marker (0x03)
+   * 
+   * @param array - Uint16Array to serialize
+   * @param compress - Whether to compress the data
+   * @returns ArrayBuffer with type marker and data
+   */
+  private serializeUint16ArrayBinary(array: Uint16Array, compress: boolean): ArrayBuffer {
+    const dataBytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
+
+    if (compress) {
+      const compressed = this.compressUint8Array(dataBytes);
+      const buffer = new ArrayBuffer(1 + 1 + 4 + 4 + compressed.length);
+      const view = new DataView(buffer);
+      const bytes = new Uint8Array(buffer);
+      view.setUint8(0, 0x03); // type marker: Uint16Array
+      view.setUint8(1, 0x01); // compressed
+      view.setUint32(2, array.length, true);
+      view.setUint32(6, compressed.length, true);
+      bytes.set(compressed, 10);
+      return buffer;
+    } else {
+      const buffer = new ArrayBuffer(1 + 1 + 4 + dataBytes.length);
+      const view = new DataView(buffer);
+      const bytes = new Uint8Array(buffer);
+      view.setUint8(0, 0x03); // type marker: Uint16Array
+      view.setUint8(1, 0x00); // not compressed
+      view.setUint32(2, array.length, true);
+      bytes.set(dataBytes, 6);
+      return buffer;
+    }
+  }
+
+  /**
    * Deserializes world data and restores to chunk manager
    * 
    * @param data - Serialized world data
@@ -682,15 +755,33 @@ export class WorldSerializer {
     const heightmap = this.base64ToFloat32Array(serializedChunk.heightmap as string);
     const biomeMap = this.base64ToUint8Array(serializedChunk.biomeMap as string);
 
-    // Create sparse biome weights from biomeMap (each tile has 100% weight for its biome)
-    const types: number[] = [];
-    const weights: number[] = [];
-    const offsets: number[] = [];
-    
-    for (let i = 0; i < biomeMap.length; i++) {
-      offsets.push(types.length);
-      types.push(biomeMap[i]);
-      weights.push(1.0);
+    // Restore sparse biome weights if present (saves created after the fix).
+    // Fall back to 100%-weight-per-tile reconstruction for legacy saves.
+    let sparseBiomeTypes: Uint8Array;
+    let sparseBiomeWeights: Float32Array;
+    let sparseBiomeOffsets: Uint16Array;
+
+    if (
+      serializedChunk.sparseBiomeTypes !== undefined &&
+      serializedChunk.sparseBiomeWeights !== undefined &&
+      serializedChunk.sparseBiomeOffsets !== undefined
+    ) {
+      sparseBiomeTypes   = this.base64ToUint8Array(serializedChunk.sparseBiomeTypes as string);
+      sparseBiomeWeights = this.base64ToFloat32Array(serializedChunk.sparseBiomeWeights as string);
+      sparseBiomeOffsets = this.base64ToUint16Array(serializedChunk.sparseBiomeOffsets as string);
+    } else {
+      // Legacy fallback: each tile gets 100% weight for its dominant biome.
+      const types: number[] = [];
+      const weights: number[] = [];
+      const offsets: number[] = [];
+      for (let i = 0; i < biomeMap.length; i++) {
+        offsets.push(types.length);
+        types.push(biomeMap[i]);
+        weights.push(1.0);
+      }
+      sparseBiomeTypes   = new Uint8Array(types);
+      sparseBiomeWeights = new Float32Array(weights);
+      sparseBiomeOffsets = new Uint16Array(offsets);
     }
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
@@ -706,9 +797,9 @@ export class WorldSerializer {
       size: chunkSize,
       heightmap,
       biomeMap,
-      sparseBiomeTypes: new Uint8Array(types),
-      sparseBiomeWeights: new Float32Array(weights),
-      sparseBiomeOffsets: new Uint16Array(offsets),
+      sparseBiomeTypes,
+      sparseBiomeWeights,
+      sparseBiomeOffsets,
       lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
@@ -726,15 +817,32 @@ export class WorldSerializer {
     const heightmap = this.deserializeFloat32ArrayBinary(serializedChunk.heightmap as ArrayBuffer);
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
 
-    // Create sparse biome weights from biomeMap (each tile has 100% weight for its biome)
-    const types: number[] = [];
-    const weights: number[] = [];
-    const offsets: number[] = [];
-    
-    for (let i = 0; i < biomeMap.length; i++) {
-      offsets.push(types.length);
-      types.push(biomeMap[i]);
-      weights.push(1.0);
+    // Restore sparse biome weights if present; fall back to legacy reconstruction.
+    let sparseBiomeTypes: Uint8Array;
+    let sparseBiomeWeights: Float32Array;
+    let sparseBiomeOffsets: Uint16Array;
+
+    if (
+      serializedChunk.sparseBiomeTypes !== undefined &&
+      serializedChunk.sparseBiomeWeights !== undefined &&
+      serializedChunk.sparseBiomeOffsets !== undefined
+    ) {
+      sparseBiomeTypes   = this.deserializeUint8ArrayBinary(serializedChunk.sparseBiomeTypes as ArrayBuffer);
+      sparseBiomeWeights = this.deserializeFloat32ArrayBinary(serializedChunk.sparseBiomeWeights as ArrayBuffer);
+      sparseBiomeOffsets = this.deserializeUint16ArrayBinary(serializedChunk.sparseBiomeOffsets as ArrayBuffer);
+    } else {
+      // Legacy fallback
+      const types: number[] = [];
+      const weights: number[] = [];
+      const offsets: number[] = [];
+      for (let i = 0; i < biomeMap.length; i++) {
+        offsets.push(types.length);
+        types.push(biomeMap[i]);
+        weights.push(1.0);
+      }
+      sparseBiomeTypes   = new Uint8Array(types);
+      sparseBiomeWeights = new Float32Array(weights);
+      sparseBiomeOffsets = new Uint16Array(offsets);
     }
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
@@ -750,9 +858,9 @@ export class WorldSerializer {
       size: chunkSize,
       heightmap,
       biomeMap,
-      sparseBiomeTypes: new Uint8Array(types),
-      sparseBiomeWeights: new Float32Array(weights),
-      sparseBiomeOffsets: new Uint16Array(offsets),
+      sparseBiomeTypes,
+      sparseBiomeWeights,
+      sparseBiomeOffsets,
       lakes,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
@@ -811,6 +919,27 @@ export class WorldSerializer {
     } else {
       return uint8Array;
     }
+  }
+
+  /**
+   * Converts base64 string to Uint16Array.
+   * Handles both compressed and uncompressed data.
+   *
+   * @param base64 - Base64-encoded string
+   * @returns Uint16Array
+   */
+  private base64ToUint16Array(base64: string): Uint16Array {
+    const uint8Array = this.base64StringToUint8Array(base64);
+    const isCompressed = uint8Array.length > 2 && uint8Array[0] === 0x78;
+    const bytes = isCompressed ? this.decompressUint8Array(uint8Array) : uint8Array;
+
+    // Ensure 2-byte alignment
+    if (bytes.byteOffset % 2 !== 0) {
+      const aligned = new Uint8Array(bytes.length);
+      aligned.set(bytes);
+      return new Uint16Array(aligned.buffer, 0, aligned.byteLength / 2);
+    }
+    return new Uint16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
   }
 
   /**
@@ -927,6 +1056,35 @@ export class WorldSerializer {
 
       // Extract data
       return bytes.slice(6, 6 + length);
+    }
+  }
+
+  /**
+   * Deserializes Uint16Array from binary format (type marker 0x03)
+   *
+   * @param buffer - ArrayBuffer with type marker and data
+   * @returns Uint16Array
+   */
+  private deserializeUint16ArrayBinary(buffer: ArrayBuffer): Uint16Array {
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+
+    const typeMarker = view.getUint8(0);
+    if (typeMarker !== 0x03) {
+      throw new Error(`Invalid type marker for Uint16Array: 0x${typeMarker.toString(16)}`);
+    }
+
+    const isCompressed = view.getUint8(1) === 0x01;
+
+    if (isCompressed) {
+      const compressedLength = view.getUint32(6, true);
+      const compressedData = bytes.slice(10, 10 + compressedLength);
+      const decompressed = this.decompressUint8Array(compressedData);
+      return new Uint16Array(decompressed.buffer, decompressed.byteOffset, decompressed.byteLength / 2);
+    } else {
+      const length = view.getUint32(2, true);
+      const data = bytes.slice(6, 6 + length * 2);
+      return new Uint16Array(data.buffer, data.byteOffset, length);
     }
   }
 

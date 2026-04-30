@@ -162,3 +162,59 @@ describe('Serialization round-trip', () => {
     expect(saved.chunks[0].y).toBe(0);
   });
 });
+
+describe('Serialization — sparse biome weights round-trip', () => {
+  for (const [label, format, compress] of [
+    ['JSON uncompressed',   SerializationFormat.JSON,   false],
+    ['JSON compressed',     SerializationFormat.JSON,   true],
+    ['Binary uncompressed', SerializationFormat.BINARY, false],
+    ['Binary compressed',   SerializationFormat.BINARY, true],
+  ] as const) {
+    it(`preserves sparseBiomeTypes/Weights/Offsets — ${label}`, async () => {
+      const manager = await buildManager(99);
+      const ser = new WorldSerializer();
+      const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });
+      const loaded = restore(saved, 99);
+
+      const orig  = await manager.getChunk(0, 0);
+      const fresh = await loaded.getChunk(0, 0);
+
+      // All three sparse arrays must survive the round-trip exactly.
+      expect(Array.from(fresh.sparseBiomeTypes)).toEqual(Array.from(orig.sparseBiomeTypes));
+      expect(Array.from(fresh.sparseBiomeWeights)).toEqual(Array.from(orig.sparseBiomeWeights));
+      expect(Array.from(fresh.sparseBiomeOffsets)).toEqual(Array.from(orig.sparseBiomeOffsets));
+    });
+  }
+
+  it('legacy save (no sparse fields) falls back to 100% weight per tile', async () => {
+    // Simulate a save that pre-dates the sparse-weight serialization fix.
+    const manager = await buildManager(55);
+    const ser = new WorldSerializer();
+    const saved = ser.serialize(manager, {
+      format: SerializationFormat.JSON,
+      compress: false,
+      modifiedOnly: false,
+    });
+
+    // Strip the sparse fields from every chunk to mimic a legacy save.
+    const legacy = {
+      ...saved,
+      chunks: saved.chunks.map(({ sparseBiomeTypes: _t, sparseBiomeWeights: _w, sparseBiomeOffsets: _o, ...rest }) => rest),
+    };
+    // Recalculate checksum so deserialize doesn't reject it.
+    // We bypass checksum validation by patching the private method via a cast.
+    (legacy as any).checksum = (ser as any).calculateChecksum(legacy);
+
+    const fresh = new ChunkManager(makeMinimalConfig(55));
+    expect(() => ser.deserialize(legacy as any, fresh)).not.toThrow();
+
+    const chunk = await fresh.getChunk(0, 0);
+    // Each tile should have exactly one entry with weight 1.0.
+    const tileCount = chunk.size * chunk.size;
+    expect(chunk.sparseBiomeOffsets.length).toBe(tileCount);
+    expect(chunk.sparseBiomeWeights.length).toBe(tileCount);
+    for (let i = 0; i < tileCount; i++) {
+      expect(chunk.sparseBiomeWeights[i]).toBeCloseTo(1.0, 5);
+    }
+  });
+});

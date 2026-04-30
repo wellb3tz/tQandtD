@@ -53,6 +53,11 @@ export class LakeManager {
   private lakeAccessTime: Map<string, number>;
   /** Map of chunk key to last access timestamp for LRU eviction */
   private chunkAccessTime: Map<string, number>;
+  /**
+   * Global tile → lake-ID index for O(1) membership checks.
+   * Replaces the previous O(lakes) linear scan in isTileInAnyLake().
+   */
+  private tileToLakeId: Map<string, string>;
   /** Maximum number of lakes to cache (default: 500) */
   private readonly maxLakes: number;
   /** Maximum number of chunk entries to cache (default: 1000) */
@@ -81,6 +86,7 @@ export class LakeManager {
     this.chunkToLakes = new Map();
     this.lakeAccessTime = new Map();
     this.chunkAccessTime = new Map();
+    this.tileToLakeId = new Map();
     this.maxLakes = maxLakes;
     this.maxChunkEntries = maxChunkEntries;
     this.accessCounter = 0;
@@ -391,12 +397,10 @@ export class LakeManager {
 
   /**
    * Check if a tile is already part of any lake.
+   * O(1) lookup via the tileToLakeId index.
    */
   private isTileInAnyLake(tileKey: string): boolean {
-    for (const lake of this.lakes.values()) {
-      if (lake.tiles.has(tileKey)) return true;
-    }
-    return false;
+    return this.tileToLakeId.has(tileKey);
   }
 
   /**
@@ -413,14 +417,15 @@ export class LakeManager {
 
   /**
    * Flood-fill in world space, can cross chunk boundaries.
-   * Returns null if the lake is too large or open.
-   * 
-   * Uses circular buffer for queue to avoid O(n) shift() operations.
-   * 
-   * @param startX - Starting world X coordinate
-   * @param startY - Starting world Y coordinate
+   * Returns null if the lake is too large or open (no natural spill point found).
+   *
+   * Uses a plain array as a queue — push/shift is avoided by tracking a head
+   * index, giving O(1) dequeue without a fixed-size pre-allocation.
+   *
+   * @param startX     - Starting world X coordinate
+   * @param startY     - Starting world Y coordinate
    * @param waterLevel - Water level to fill to
-   * @param maxSize - Maximum lake size in tiles (optional, uses config default if not provided)
+   * @param maxSize    - Maximum lake size in tiles (optional, uses config default if not provided)
    */
   private floodFillWorld(
     startX: number,
@@ -429,30 +434,27 @@ export class LakeManager {
     maxSize?: number
   ): Set<string> | null {
     const visited = new Set<string>();
-    
-    // Use circular buffer instead of array for O(1) operations
-    const maxQueueSize = 10000; // Reasonable upper bound
-    const queueX = new Int32Array(maxQueueSize);
-    const queueY = new Int32Array(maxQueueSize);
+
+    // Dynamic arrays — grow as needed, no fixed upper bound.
+    const queueX: number[] = [];
+    const queueY: number[] = [];
     let queueHead = 0;
-    let queueTail = 0;
-    
+
     const startKey = this.encodeTile(startX, startY);
 
     if (this.getTileHeight(startX, startY) >= waterLevel) return null;
 
     visited.add(startKey);
-    queueX[queueTail] = startX;
-    queueY[queueTail] = startY;
-    queueTail++;
+    queueX.push(startX);
+    queueY.push(startY);
 
     const dx = [0, 0, -1, 1];
     const dy = [-1, 1, 0, 0];
 
-    // Use provided maxSize or calculate from config
+    // Use provided maxSize or fall back to config default (×2 for world-space lakes).
     const maxLakeTiles = maxSize ?? (this.config.maxLakeTiles * 2);
 
-    while (queueHead < queueTail) {
+    while (queueHead < queueX.length) {
       const cx = queueX[queueHead];
       const cy = queueY[queueHead];
       queueHead++;
@@ -463,25 +465,18 @@ export class LakeManager {
         const nKey = this.encodeTile(nx, ny);
 
         if (visited.has(nKey)) continue;
-        if (this.isTileInAnyLake(nKey)) continue;
+        if (this.tileToLakeId.has(nKey)) continue; // O(1) — replaces isTileInAnyLake
 
         const nh = this.getTileHeight(nx, ny);
         if (nh < waterLevel) {
           visited.add(nKey);
 
           if (visited.size > maxLakeTiles) {
-            return null; // Lake too large
+            return null; // Lake too large — treat as open basin
           }
 
-          // Check queue capacity
-          if (queueTail >= maxQueueSize) {
-            logger.warn(LogCategory.LAKE, 'Queue overflow in flood-fill, lake may be incomplete');
-            return null;
-          }
-
-          queueX[queueTail] = nx;
-          queueY[queueTail] = ny;
-          queueTail++;
+          queueX.push(nx);
+          queueY.push(ny);
         }
       }
     }
@@ -536,6 +531,7 @@ export class LakeManager {
     if (toMerge.length === 0) {
       // No overlap — just register the new lake as-is.
       this.lakes.set(lake.id, lake);
+      this._indexTiles(lake);
       this._registerChunks(lake, chunkSize);
       return;
     }
@@ -557,6 +553,7 @@ export class LakeManager {
       maxY = Math.max(maxY, existing.bounds.maxY);
 
       // Remove old lake and its chunk registrations
+      this._unindexTiles(existing);
       this.lakes.delete(existing.id);
       for (const chunkLakes of this.chunkToLakes.values()) {
         chunkLakes.delete(existing.id);
@@ -588,6 +585,7 @@ export class LakeManager {
 
     this.lakes.set(merged.id, merged);
     this.lakeAccessTime.set(merged.id, ++this.accessCounter);
+    this._indexTiles(merged);
     this._registerChunks(merged, chunkSize);
   }
 
@@ -656,6 +654,9 @@ export class LakeManager {
     const lake = this.lakes.get(lakeId);
     if (!lake) return;
 
+    // Remove tile index entries for this lake
+    this._unindexTiles(lake);
+
     // Remove lake from all chunk registrations
     for (const [chunkKey, lakeIds] of this.chunkToLakes.entries()) {
       lakeIds.delete(lakeId);
@@ -673,16 +674,45 @@ export class LakeManager {
 
   /**
    * Notify that a chunk has been evicted from ChunkManager cache.
-   * This allows LakeManager to clean up chunk entries that are no longer needed.
-   * 
+   * Marks the chunk entry as the oldest in the LRU so it will be the first
+   * candidate for eviction when the chunk-entry limit is reached.
+   *
+   * We do not delete immediately because the chunk may be re-requested soon
+   * (e.g. the player moves back), and regenerating lake data is expensive.
+   *
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
    */
   notifyChunkEvicted(chunkX: number, chunkY: number): void {
     const chunkKey = this.getChunkKey(chunkX, chunkY);
-    // Don't delete immediately - just mark as old by not updating access time
-    // This allows natural LRU eviction to clean it up later
-    // Immediate deletion could cause regeneration if chunk is accessed again soon
+    // Set access time to 0 so this entry is the first evicted under LRU pressure.
+    if (this.chunkAccessTime.has(chunkKey)) {
+      this.chunkAccessTime.set(chunkKey, 0);
+    }
+  }
+
+  /**
+   * Add all tiles of a lake to the global tile → lake-ID index.
+   * Must be called whenever a lake is stored in `this.lakes`.
+   */
+  private _indexTiles(lake: WorldLakeData): void {
+    for (const tileKey of lake.tiles) {
+      this.tileToLakeId.set(tileKey, lake.id);
+    }
+  }
+
+  /**
+   * Remove all tiles of a lake from the global tile → lake-ID index.
+   * Must be called before a lake is removed from `this.lakes`.
+   */
+  private _unindexTiles(lake: WorldLakeData): void {
+    for (const tileKey of lake.tiles) {
+      // Only delete if this lake still owns the tile (a merge may have
+      // already re-assigned the tile to the merged lake's id).
+      if (this.tileToLakeId.get(tileKey) === lake.id) {
+        this.tileToLakeId.delete(tileKey);
+      }
+    }
   }
 
   /** Register a lake's chunk intersections in chunkToLakes. */
@@ -718,5 +748,8 @@ export class LakeManager {
   clear(): void {
     this.lakes.clear();
     this.chunkToLakes.clear();
+    this.tileToLakeId.clear();
+    this.lakeAccessTime.clear();
+    this.chunkAccessTime.clear();
   }
 }
