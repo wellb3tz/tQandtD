@@ -55,6 +55,12 @@ export interface ChunkPerformanceMetrics {
 export type ProgressCallback = (stage: string, progress: number) => void;
 
 /**
+ * Called when generation discovers that an already cached chunk must be
+ * regenerated, for example when a newly found multi-chunk lake crosses into it.
+ */
+export type ChunkInvalidationCallback = (chunkX: number, chunkY: number) => void;
+
+/**
  * Configuration for world generation
  */
 export interface WorldConfig {
@@ -84,6 +90,8 @@ export interface WorldConfig {
   enablePerformanceMetrics?: boolean;
   /** Progress callback for long-running operations */
   onProgress?: ProgressCallback;
+  /** Callback for chunks invalidated by cross-chunk generation side effects */
+  onChunkInvalidated?: ChunkInvalidationCallback;
   /** Error recovery options (optional) */
   errorRecovery?: ErrorRecoveryOptions;
 }
@@ -195,6 +203,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Check cache
     const cached = this.cache.get(key);
     if (cached) {
+      this.reconcileBoundaryHeights(cached.chunk);
       cached.lastAccessed = ++this.accessCounter;
       this.cacheHits++;
       return cached.chunk;
@@ -423,6 +432,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
             const wasInCache = this.cache.has(key);
             this.cache.delete(key);
             logger.debug(LogCategory.CACHE, `Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
+            this.config.onChunkInvalidated?.(cx, cy);
           }
         );
         
@@ -724,10 +734,87 @@ export class ChunkManager implements ChunkManagerSnapshot {
     }
 
     // Add new entry with incremented counter
+    this.reconcileBoundaryHeights(chunk);
     this.cache.set(key, {
       chunk,
       lastAccessed: ++this.accessCounter,
     });
+  }
+
+  /**
+   * Keep duplicated boundary vertices identical when a newly generated chunk
+   * meets an already cached neighbour. Terrain generation is naturally seamless;
+   * lake carving can be discovered from either side later, so the lower carved
+   * height wins and is copied to both chunk meshes.
+   */
+  private reconcileBoundaryHeights(chunk: ChunkData): void {
+    const size = chunk.size;
+    const vertexSize = size + 1;
+    const epsilon = 1e-6;
+    const changedNeighbours = new Set<string>();
+
+    const reconcileVertical = (
+      neighbourChunk: ChunkData,
+      currentX: number,
+      neighbourX: number
+    ): void => {
+      let changed = false;
+      for (let y = 0; y <= size; y++) {
+        const currentIndex = y * vertexSize + currentX;
+        const neighbourIndex = y * vertexSize + neighbourX;
+        const sharedHeight = Math.min(chunk.heightmap[currentIndex], neighbourChunk.heightmap[neighbourIndex]);
+        if (Math.abs(chunk.heightmap[currentIndex] - sharedHeight) > epsilon) {
+          chunk.heightmap[currentIndex] = sharedHeight;
+        }
+        if (Math.abs(neighbourChunk.heightmap[neighbourIndex] - sharedHeight) > epsilon) {
+          neighbourChunk.heightmap[neighbourIndex] = sharedHeight;
+          changed = true;
+        }
+      }
+      if (changed) {
+        changedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
+      }
+    };
+
+    const reconcileHorizontal = (
+      neighbourChunk: ChunkData,
+      currentY: number,
+      neighbourY: number
+    ): void => {
+      let changed = false;
+      for (let x = 0; x <= size; x++) {
+        const currentIndex = currentY * vertexSize + x;
+        const neighbourIndex = neighbourY * vertexSize + x;
+        const sharedHeight = Math.min(chunk.heightmap[currentIndex], neighbourChunk.heightmap[neighbourIndex]);
+        if (Math.abs(chunk.heightmap[currentIndex] - sharedHeight) > epsilon) {
+          chunk.heightmap[currentIndex] = sharedHeight;
+        }
+        if (Math.abs(neighbourChunk.heightmap[neighbourIndex] - sharedHeight) > epsilon) {
+          neighbourChunk.heightmap[neighbourIndex] = sharedHeight;
+          changed = true;
+        }
+      }
+      if (changed) {
+        changedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
+      }
+    };
+
+    const left = this.cache.get(this.getCacheKey(chunk.x - 1, chunk.y))?.chunk;
+    if (left) reconcileVertical(left, 0, size);
+
+    const right = this.cache.get(this.getCacheKey(chunk.x + 1, chunk.y))?.chunk;
+    if (right) reconcileVertical(right, size, 0);
+
+    const top = this.cache.get(this.getCacheKey(chunk.x, chunk.y - 1))?.chunk;
+    if (top) reconcileHorizontal(top, 0, size);
+
+    const bottom = this.cache.get(this.getCacheKey(chunk.x, chunk.y + 1))?.chunk;
+    if (bottom) reconcileHorizontal(bottom, size, 0);
+
+    for (const key of changedNeighbours) {
+      const [cx, cy] = key.split(',').map(Number);
+      this.config.onChunkInvalidated?.(cx, cy);
+    }
   }
 
   /**
@@ -1047,17 +1134,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
   ): LakeData[] {
     const chunkWorldX = chunkX * chunkSize;
     const chunkWorldY = chunkY * chunkSize;
-    const vertexSize = chunkSize + 1;
     const result: LakeData[] = [];
-
-    // Helper: average height of tile (localX, localY) using chunk heightmap
-    const tileHeight = (localX: number, localY: number): number => {
-      const v00 = heightmap[localY * vertexSize + localX];
-      const v10 = heightmap[localY * vertexSize + (localX + 1)];
-      const v01 = heightmap[(localY + 1) * vertexSize + localX];
-      const v11 = heightmap[(localY + 1) * vertexSize + (localX + 1)];
-      return (v00 + v10 + v01 + v11) * 0.25;
-    };
 
     for (const worldLake of worldLakes) {
       const chunkTiles = new Set<number>();
@@ -1077,58 +1154,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
           const localY = worldY - chunkWorldY;
           const localIdx = localY * chunkSize + localX;
           chunkTiles.add(localIdx);
-        }
-      }
-
-      // Add boundary tiles: for lake tiles in adjacent chunks that share a vertex
-      // with this chunk's edge, add the corresponding edge tile of this chunk if it
-      // is below the water level.  This closes the gap that appears when a lake ends
-      // exactly on a chunk boundary.
-      for (const tileKey of worldLake.tiles) {
-        const [worldX, worldY] = tileKey.split(',').map(Number);
-
-        // Tile is just outside this chunk on the right edge
-        if (worldX === chunkWorldX + chunkSize &&
-            worldY >= chunkWorldY && worldY < chunkWorldY + chunkSize) {
-          const localX = chunkSize - 1;
-          const localY = worldY - chunkWorldY;
-          const localIdx = localY * chunkSize + localX;
-          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
-            chunkTiles.add(localIdx);
-          }
-        }
-
-        // Tile is just outside this chunk on the bottom edge
-        if (worldY === chunkWorldY + chunkSize &&
-            worldX >= chunkWorldX && worldX < chunkWorldX + chunkSize) {
-          const localX = worldX - chunkWorldX;
-          const localY = chunkSize - 1;
-          const localIdx = localY * chunkSize + localX;
-          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
-            chunkTiles.add(localIdx);
-          }
-        }
-
-        // Tile is just outside this chunk on the left edge
-        if (worldX === chunkWorldX - 1 &&
-            worldY >= chunkWorldY && worldY < chunkWorldY + chunkSize) {
-          const localX = 0;
-          const localY = worldY - chunkWorldY;
-          const localIdx = localY * chunkSize + localX;
-          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
-            chunkTiles.add(localIdx);
-          }
-        }
-
-        // Tile is just outside this chunk on the top edge
-        if (worldY === chunkWorldY - 1 &&
-            worldX >= chunkWorldX && worldX < chunkWorldX + chunkSize) {
-          const localX = worldX - chunkWorldX;
-          const localY = 0;
-          const localIdx = localY * chunkSize + localX;
-          if (!chunkTiles.has(localIdx) && tileHeight(localX, localY) < worldLake.waterLevel) {
-            chunkTiles.add(localIdx);
-          }
         }
       }
 
@@ -1180,39 +1205,33 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
     for (const worldLake of worldLakes) {
       let verticesCarved = 0;
-      let verticesSkipped = 0;
-      
-      // Process each tile in the lake
-      for (const tileKey of worldLake.tiles) {
-        const [worldTileX, worldTileY] = tileKey.split(',').map(Number);
-        
-        // Check if this tile affects the current chunk's vertices
-        // A tile affects vertices from (tileX, tileY) to (tileX+1, tileY+1)
-        for (let dv = 0; dv <= 1; dv++) {
-          for (let du = 0; du <= 1; du++) {
-            const worldVertexX = worldTileX + du;
-            const worldVertexY = worldTileY + dv;
-            
-            // Convert to chunk-local vertex coordinates
-            const localVertexX = worldVertexX - chunkWorldX;
-            const localVertexY = worldVertexY - chunkWorldY;
-            
-            // Check if vertex is within this chunk's heightmap bounds
-            if (
-              localVertexX >= 0 && localVertexX <= chunkSize &&
-              localVertexY >= 0 && localVertexY <= chunkSize
-            ) {
-              const vi = localVertexY * vSize + localVertexX;
-              heightmap[vi] = Math.max(0, heightmap[vi] - CARVE_DEPTH);
-              verticesCarved++;
-            } else {
-              verticesSkipped++;
-            }
+      const targetHeight = Math.max(0, worldLake.waterLevel - CARVE_DEPTH);
+
+      // Carve by world vertex, not by tile corner count. This keeps duplicated
+      // boundary vertices identical across neighbouring chunk meshes.
+      for (let localY = 0; localY <= chunkSize; localY++) {
+        const worldVertexY = chunkWorldY + localY;
+
+        for (let localX = 0; localX <= chunkSize; localX++) {
+          const worldVertexX = chunkWorldX + localX;
+          const touchesLake =
+            worldLake.tiles.has(`${worldVertexX},${worldVertexY}`) ||
+            worldLake.tiles.has(`${worldVertexX - 1},${worldVertexY}`) ||
+            worldLake.tiles.has(`${worldVertexX},${worldVertexY - 1}`) ||
+            worldLake.tiles.has(`${worldVertexX - 1},${worldVertexY - 1}`);
+
+          if (!touchesLake) continue;
+
+          const vi = localY * vSize + localX;
+          const carvedHeight = Math.min(heightmap[vi], targetHeight);
+          if (carvedHeight < heightmap[vi]) {
+            heightmap[vi] = carvedHeight;
+            verticesCarved++;
           }
         }
       }
       
-      logger.debug(LogCategory.LAKE, `Lake ${worldLake.id}: carved ${verticesCarved} vertices, skipped ${verticesSkipped} (outside chunk)`);
+      logger.debug(LogCategory.LAKE, `Lake ${worldLake.id}: carved ${verticesCarved} vertices`);
     }
   }
 

@@ -491,6 +491,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         worldViewer.addChunk(data.chunkX, data.chunkY, data.chunk, data.partial, data.stage);
       }
     });
+
+    app.on(AppEvent.CHUNK_UPDATED, (data) => {
+      if (worldViewer) {
+        worldViewer.updateChunk(data.chunkX, data.chunkY, data.chunk);
+      }
+    });
     
     app.on(AppEvent.CHUNK_UNLOADED, (data) => {
       // Remove chunk from viewer

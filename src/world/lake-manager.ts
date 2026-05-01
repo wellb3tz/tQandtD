@@ -5,7 +5,7 @@
  * and flood-fill algorithm that crosses chunk boundaries.
  */
 
-import { NoiseEngine } from '../core/noise';
+import { NoiseEngine, type NoiseConfig } from '../core/noise';
 import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
 import { logger, LogCategory } from '../utils/logger';
@@ -45,10 +45,15 @@ export class LakeManager {
   private readonly noise: NoiseEngine;
   private readonly config: LakeConfig;
   private readonly worldSeed: number;
+  private readonly allowedBiomes: Set<number>;
+  private readonly lakeNoiseConfig: NoiseConfig;
+  private readonly sizeNoiseConfig: NoiseConfig;
   /** Map of lake ID to lake data */
   private lakes: Map<string, WorldLakeData>;
   /** Map of chunk key to lake IDs that intersect that chunk */
   private chunkToLakes: Map<string, Set<string>>;
+  /** Chunk regions whose own lake candidates have already been evaluated */
+  private generatedRegions: Set<string>;
   /** Map of lake ID to last access timestamp for LRU eviction */
   private lakeAccessTime: Map<string, number>;
   /** Map of chunk key to last access timestamp for LRU eviction */
@@ -82,8 +87,22 @@ export class LakeManager {
     this.worldSeed = worldSeed;
     this.noise = new NoiseEngine(worldSeed + 54321);
     this.config = config;
+    this.allowedBiomes = new Set<number>(config.allowedBiomes);
+    this.lakeNoiseConfig = {
+      octaves: 3,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: config.noiseScale,
+    };
+    this.sizeNoiseConfig = {
+      octaves: 2,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: config.noiseScale * 0.3,
+    };
     this.lakes = new Map();
     this.chunkToLakes = new Map();
+    this.generatedRegions = new Set();
     this.lakeAccessTime = new Map();
     this.chunkAccessTime = new Map();
     this.tileToLakeId = new Map();
@@ -143,34 +162,22 @@ export class LakeManager {
     const chunksWithNewLakes = new Set<string>();
     
     // Generate lakes for this chunk if not already done
-    if (!this.chunkToLakes.has(chunkKey)) {
+    if (!this.generatedRegions.has(chunkKey)) {
       this.generateLakesForRegion(chunkX, chunkY, chunkSize);
+      this.generatedRegions.add(chunkKey);
       chunksWithNewLakes.add(chunkKey);
     }
 
-    // Also check neighboring chunks for lakes that might extend into this chunk
-    // This ensures we catch lakes that were generated in adjacent chunks
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue; // Skip current chunk
-        
-        const neighborKey = this.getChunkKey(chunkX + dx, chunkY + dy);
-        if (!this.chunkToLakes.has(neighborKey)) {
-          // Generate lakes for neighbor if not done yet
-          this.generateLakesForRegion(chunkX + dx, chunkY + dy, chunkSize);
-          chunksWithNewLakes.add(neighborKey);
-        }
-      }
-    }
+    // Neighbor regions are generated lazily when those chunks are requested.
+    // When a later neighbor lake overlaps this chunk, the invalidation path below
+    // refreshes cached chunks without making every first chunk request pay for a
+    // 3x3 lake-generation burst.
 
     // If new lakes were generated, defer invalidations to avoid race conditions
     if (chunksWithNewLakes.size > 0 && onInvalidateChunk) {
       // For each new lake, collect chunks that need invalidation
       for (const lake of this.lakes.values()) {
-        const minChunkX = Math.floor(lake.bounds.minX / chunkSize);
-        const maxChunkX = Math.floor(lake.bounds.maxX / chunkSize);
-        const minChunkY = Math.floor(lake.bounds.minY / chunkSize);
-        const maxChunkY = Math.floor(lake.bounds.maxY / chunkSize);
+        const { minChunkX, maxChunkX, minChunkY, maxChunkY } = this.getAffectedChunkBounds(lake, chunkSize);
         
         // Check if this lake was just generated
         let isNewLake = false;
@@ -197,16 +204,14 @@ export class LakeManager {
         }
       }
       
-      // Process pending invalidations asynchronously to avoid race conditions
+      // Process pending invalidations before returning so subsequent getChunk()
+      // calls cannot observe stale heightmaps along lake-carved boundaries.
       if (this.pendingInvalidations.size > 0) {
-        // Use microtask to defer invalidations until after current generation completes
-        queueMicrotask(() => {
-          for (const key of this.pendingInvalidations) {
-            const [cx, cy] = key.split(',').map(Number);
-            onInvalidateChunk(cx, cy);
-          }
-          this.pendingInvalidations.clear();
-        });
+        for (const key of this.pendingInvalidations) {
+          const [cx, cy] = key.split(',').map(Number);
+          onInvalidateChunk(cx, cy);
+        }
+        this.pendingInvalidations.clear();
       }
     }
 
@@ -250,7 +255,7 @@ export class LakeManager {
     if (!this.config.enabled) return;
 
     const seaLevel = 0.3;
-    const allowedSet = new Set<number>(this.config.allowedBiomes);
+    const heightCache = new Map<string, number>();
 
     // Only search in the requested chunk for performance
     // Lakes from neighboring chunks will be detected when those chunks are generated
@@ -270,21 +275,16 @@ export class LakeManager {
         if (this.isTileInAnyLake(tileKey)) continue;
 
         const biome = this.getBiomeAt(worldX, worldY);
-        if (!allowedSet.has(biome)) continue;
+        if (!this.allowedBiomes.has(biome)) continue;
 
-        const h = this.getTileHeight(worldX, worldY);
+        const h = this.getTileHeightCached(worldX, worldY, heightCache);
         if (h < this.config.minElevation || h > this.config.maxElevation) continue;
         if (h <= seaLevel) continue;
 
         // Check lake noise
         const wx = worldX + 0.5;
         const wy = worldY + 0.5;
-        const raw = this.noise.fbm(wx, wy, {
-          octaves: 3,
-          persistence: 0.5,
-          lacunarity: 2.0,
-          scale: this.config.noiseScale,
-        });
+        const raw = this.noise.fbm(wx, wy, this.lakeNoiseConfig);
         const noiseVal = (raw + 1) * 0.5;
 
         if (noiseVal >= this.config.noiseThreshold) {
@@ -302,18 +302,13 @@ export class LakeManager {
       const tileKey = this.encodeTile(seedX, seedY);
       if (this.isTileInAnyLake(tileKey)) continue;
 
-      const seedH = this.getTileHeight(seedX, seedY);
+      const seedH = this.getTileHeightCached(seedX, seedY, heightCache);
 
       // Determine lake size category using a second noise layer
       // This creates variety: some lakes are small, some are huge
       const wx = seedX + 0.5;
       const wy = seedY + 0.5;
-      const sizeNoise = this.noise.fbm(wx * 0.5, wy * 0.5, {
-        octaves: 2,
-        persistence: 0.5,
-        lacunarity: 2.0,
-        scale: this.config.noiseScale * 0.3, // Lower frequency for size variation
-      });
+      const sizeNoise = this.noise.fbm(wx * 0.5, wy * 0.5, this.sizeNoiseConfig);
       const sizeValue = (sizeNoise + 1) * 0.5; // [0, 1]
 
       // Categorize lake size based on noise
@@ -342,7 +337,7 @@ export class LakeManager {
         const waterLevel = seedH + (this.config.maxFillDepth * step) / waterLevelSteps;
         if (waterLevel > this.config.maxElevation) break;
 
-        const tiles = this.floodFillWorld(seedX, seedY, waterLevel, maxLakeSize);
+        const tiles = this.floodFillWorld(seedX, seedY, waterLevel, maxLakeSize, heightCache);
 
         if (tiles !== null && tiles.size >= 2) {
           // Compute bounds and max depth
@@ -357,7 +352,7 @@ export class LakeManager {
             minY = Math.min(minY, wy);
             maxY = Math.max(maxY, wy);
 
-            const h = this.getTileHeight(wx, wy);
+            const h = this.getTileHeightCached(wx, wy, heightCache);
             if (h < minH) minH = h;
           }
 
@@ -416,6 +411,23 @@ export class LakeManager {
   }
 
   /**
+   * Cached tile-height lookup for a single lake-generation pass. Flood-fill
+   * revisits neighbouring basin walls many times across water-level attempts,
+   * so memoizing these four-corner samples cuts a large amount of terrain work.
+   */
+  private getTileHeightCached(worldX: number, worldY: number, cache: Map<string, number>): number {
+    const key = this.encodeTile(worldX, worldY);
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const height = this.getTileHeight(worldX, worldY);
+    cache.set(key, height);
+    return height;
+  }
+
+  /**
    * Flood-fill in world space, can cross chunk boundaries.
    * Returns null if the lake is too large or open (no natural spill point found).
    *
@@ -431,7 +443,8 @@ export class LakeManager {
     startX: number,
     startY: number,
     waterLevel: number,
-    maxSize?: number
+    maxSize?: number,
+    heightCache?: Map<string, number>
   ): Set<string> | null {
     const visited = new Set<string>();
 
@@ -442,7 +455,11 @@ export class LakeManager {
 
     const startKey = this.encodeTile(startX, startY);
 
-    if (this.getTileHeight(startX, startY) >= waterLevel) return null;
+    const getHeight = heightCache
+      ? (x: number, y: number) => this.getTileHeightCached(x, y, heightCache)
+      : (x: number, y: number) => this.getTileHeight(x, y);
+
+    if (getHeight(startX, startY) >= waterLevel) return null;
 
     visited.add(startKey);
     queueX.push(startX);
@@ -467,7 +484,7 @@ export class LakeManager {
         if (visited.has(nKey)) continue;
         if (this.tileToLakeId.has(nKey)) continue; // O(1) — replaces isTileInAnyLake
 
-        const nh = this.getTileHeight(nx, ny);
+        const nh = getHeight(nx, ny);
         if (nh < waterLevel) {
           visited.add(nKey);
 
@@ -717,10 +734,7 @@ export class LakeManager {
 
   /** Register a lake's chunk intersections in chunkToLakes. */
   private _registerChunks(lake: WorldLakeData, chunkSize: number): void {
-    const minChunkX = Math.floor(lake.bounds.minX / chunkSize);
-    const maxChunkX = Math.floor(lake.bounds.maxX / chunkSize);
-    const minChunkY = Math.floor(lake.bounds.minY / chunkSize);
-    const maxChunkY = Math.floor(lake.bounds.maxY / chunkSize);
+    const { minChunkX, maxChunkX, minChunkY, maxChunkY } = this.getAffectedChunkBounds(lake, chunkSize);
 
     for (let cy = minChunkY; cy <= maxChunkY; cy++) {
       for (let cx = minChunkX; cx <= maxChunkX; cx++) {
@@ -736,6 +750,23 @@ export class LakeManager {
   }
 
   /**
+   * Chunks affected by a lake's terrain carving. Lake tiles affect their four
+   * corner vertices; vertices on chunk borders are duplicated by adjacent chunk
+   * meshes, so registration and invalidation must include neighbouring chunks.
+   */
+  private getAffectedChunkBounds(
+    lake: WorldLakeData,
+    chunkSize: number
+  ): { minChunkX: number; maxChunkX: number; minChunkY: number; maxChunkY: number } {
+    return {
+      minChunkX: Math.floor((lake.bounds.minX - 1) / chunkSize),
+      maxChunkX: Math.floor((lake.bounds.maxX + 1) / chunkSize),
+      minChunkY: Math.floor((lake.bounds.minY - 1) / chunkSize),
+      maxChunkY: Math.floor((lake.bounds.maxY + 1) / chunkSize),
+    };
+  }
+
+  /**
    * Get all lakes in the world.
    */
   getAllLakes(): WorldLakeData[] {
@@ -748,6 +779,7 @@ export class LakeManager {
   clear(): void {
     this.lakes.clear();
     this.chunkToLakes.clear();
+    this.generatedRegions.clear();
     this.tileToLakeId.clear();
     this.lakeAccessTime.clear();
     this.chunkAccessTime.clear();

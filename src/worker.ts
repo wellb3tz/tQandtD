@@ -37,14 +37,14 @@ import { ChunkData } from './world/chunk';
  * Interface for posting messages (allows dependency injection for testing)
  */
 interface MessagePoster {
-  postMessage(message: WorkerResponse): void;
+  postMessage(message: WorkerResponse, transfer?: Transferable[]): void;
 }
 
 // Default message poster using globalThis
 const defaultPoster: MessagePoster = {
-  postMessage: (message: WorkerResponse) => {
+  postMessage: (message: WorkerResponse, transfer?: Transferable[]) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).postMessage(message);
+    (globalThis as any).postMessage(message, transfer ?? []);
   },
 };
 
@@ -129,18 +129,19 @@ export interface ErrorResponse {
 export type WorkerResponse = ReadyResponse | ChunkReadyResponse | CacheClearedResponse | ErrorResponse;
 
 /**
- * Serialized chunk data that can be transferred via postMessage
- * TypedArrays are converted to plain arrays for serialization
+ * Serialized chunk data that can be transferred via postMessage.
+ * TypedArrays are sent as ArrayBuffers so Worker postMessage can transfer
+ * ownership instead of cloning large numeric arrays.
  */
 export interface SerializedChunkData {
   x: number;
   y: number;
   size: number;
-  heightmap: number[];
-  biomeMap: number[];
-  sparseBiomeTypes: number[];
-  sparseBiomeWeights: number[];
-  sparseBiomeOffsets: number[];
+  heightmap: ArrayBuffer | ArrayLike<number>;
+  biomeMap: ArrayBuffer | ArrayLike<number>;
+  sparseBiomeTypes: ArrayBuffer | ArrayLike<number>;
+  sparseBiomeWeights: ArrayBuffer | ArrayLike<number>;
+  sparseBiomeOffsets: ArrayBuffer | ArrayLike<number>;
   /** Serialized lake bodies — tiles stored as plain number arrays */
   lakes: Array<{
     waterLevel: number;
@@ -161,9 +162,23 @@ export interface SerializedChunkData {
   }>;
 }
 
+function toTransferableBuffer(view: ArrayBufferView): ArrayBuffer {
+  if (
+    view.buffer instanceof ArrayBuffer &&
+    view.byteOffset === 0 &&
+    view.byteLength === view.buffer.byteLength
+  ) {
+    return view.buffer;
+  }
+
+  const bytes = new Uint8Array(view.byteLength);
+  bytes.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  return bytes.buffer;
+}
+
 /**
  * Serializes ChunkData for transfer via postMessage
- * Converts TypedArrays to regular arrays
+ * Keeps TypedArray backing buffers transferable.
  * 
  * @param chunk - The chunk data to serialize
  * @returns Serialized chunk data that can be transferred
@@ -173,11 +188,11 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
     x: chunk.x,
     y: chunk.y,
     size: chunk.size,
-    heightmap: Array.from(chunk.heightmap),
-    biomeMap: Array.from(chunk.biomeMap),
-    sparseBiomeTypes: Array.from(chunk.sparseBiomeTypes),
-    sparseBiomeWeights: Array.from(chunk.sparseBiomeWeights),
-    sparseBiomeOffsets: Array.from(chunk.sparseBiomeOffsets),
+    heightmap: toTransferableBuffer(chunk.heightmap),
+    biomeMap: toTransferableBuffer(chunk.biomeMap),
+    sparseBiomeTypes: toTransferableBuffer(chunk.sparseBiomeTypes),
+    sparseBiomeWeights: toTransferableBuffer(chunk.sparseBiomeWeights),
+    sparseBiomeOffsets: toTransferableBuffer(chunk.sparseBiomeOffsets),
     lakes: (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
@@ -199,8 +214,28 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
 }
 
 /**
+ * Returns transferable buffers for a serialized chunk payload.
+ */
+export function getChunkTransferList(serialized: SerializedChunkData): Transferable[] {
+  const transfer: Transferable[] = [];
+  const maybeAdd = (value: ArrayBuffer | ArrayLike<number>): void => {
+    if (value instanceof ArrayBuffer) {
+      transfer.push(value);
+    }
+  };
+
+  maybeAdd(serialized.heightmap);
+  maybeAdd(serialized.biomeMap);
+  maybeAdd(serialized.sparseBiomeTypes);
+  maybeAdd(serialized.sparseBiomeWeights);
+  maybeAdd(serialized.sparseBiomeOffsets);
+
+  return transfer;
+}
+
+/**
  * Deserializes chunk data received from worker
- * Converts arrays back to TypedArrays
+ * Converts transferred ArrayBuffers or legacy arrays back to TypedArrays.
  * 
  * @param serialized - The serialized chunk data
  * @returns Deserialized chunk data
@@ -276,13 +311,14 @@ export function handleWorkerMessage(event: { data: WorkerRequest }): void {
         
         // Serialize and send back to main thread
         const serialized = serializeChunkData(chunk);
+        const transfer = getChunkTransferList(serialized);
         const response: ChunkReadyResponse = {
           type: 'chunkReady',
           chunkX: message.chunkX,
           chunkY: message.chunkY,
           chunk: serialized,
         };
-        messagePoster.postMessage(response);
+        messagePoster.postMessage(response, transfer);
         break;
       }
 

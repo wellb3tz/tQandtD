@@ -98,6 +98,7 @@ export type Unsubscribe = () => void;
  */
 export enum AppEvent {
   CHUNK_LOADED = 'chunk_loaded',
+  CHUNK_UPDATED = 'chunk_updated',
   CHUNK_UNLOADED = 'chunk_unloaded',
   WORLD_GENERATED = 'world_generated',
   CONFIG_CHANGED = 'config_changed',
@@ -198,12 +199,14 @@ export class DemoApp {
   private eventListeners: Map<AppEvent, Set<EventCallback>>;
   private initialized: boolean;
   private isUpdatingConfig: boolean; // Prevent recursive config updates
+  private invalidatingChunks: Set<string>;
 
   constructor() {
     this.initialized = false;
     this.subscribers = new Set();
     this.eventListeners = new Map();
     this.isUpdatingConfig = false;
+    this.invalidatingChunks = new Set();
     
     // Initialize state with defaults
     this.state = {
@@ -275,6 +278,7 @@ export class DemoApp {
       const initConfig = {
         ...this.state.config,
         noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
+        onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       };
       this.state.chunkManager = new ChunkManager(initConfig);
       this.state.config = initConfig;
@@ -367,6 +371,7 @@ export class DemoApp {
         ...this.state.config,
         seed,
         noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
+        onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       };
       
       // Create new ChunkManager with updated config
@@ -505,6 +510,49 @@ export class DemoApp {
   }
 
   /**
+   * Refresh a visible chunk after cross-chunk lake generation invalidates it.
+   * This keeps terrain carving and lake water meshes aligned at chunk borders.
+   */
+  private handleChunkInvalidated(chunkX: number, chunkY: number): void {
+    const key = this.getChunkKey(chunkX, chunkY);
+    if (!this.state.loadedChunks.has(key) || this.invalidatingChunks.has(key)) {
+      return;
+    }
+
+    const manager = this.state.chunkManager;
+    if (!manager) {
+      return;
+    }
+
+    this.invalidatingChunks.add(key);
+
+    queueMicrotask(async () => {
+      try {
+        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key)) {
+          return;
+        }
+
+        const chunk = await manager.getChunk(chunkX, chunkY);
+
+        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key)) {
+          return;
+        }
+
+        this.state.loadedChunks.set(key, chunk);
+        this.updateState({
+          loadedChunks: new Map(this.state.loadedChunks),
+        });
+        this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
+      } catch (error) {
+        console.error(`Failed to refresh invalidated chunk (${chunkX}, ${chunkY}):`, error);
+        this.emit(AppEvent.ERROR, { message: 'Chunk refresh failed', error });
+      } finally {
+        this.invalidatingChunks.delete(key);
+      }
+    });
+  }
+
+  /**
    * Builds noise3DConfig from terrainConfig fields (enable3D, zScale).
    * ChunkManager expects a separate noise3DConfig object, but the UI stores
    * these values inside terrainConfig for simplicity.
@@ -546,6 +594,7 @@ export class DemoApp {
 
       // Always rebuild noise3DConfig from terrainConfig so enable3D / zScale are honoured
       newConfig.noise3DConfig = this.buildNoise3DConfig(newConfig.terrainConfig);
+      newConfig.onChunkInvalidated = (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY);
 
       // Check if this requires recreating the ChunkManager
       const shouldRecreateManager =

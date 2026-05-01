@@ -1,4 +1,5 @@
 import type { ChunkData } from './chunk.js';
+import type { SerializedChunkData } from '../worker';
 import { logger, LogCategory } from '../utils/logger';
 
 /**
@@ -107,10 +108,16 @@ export class WorkerPool {
         // Initialize worker with world config if provided
         // CRITICAL: Remove workerPoolConfig to prevent recursive WorkerPool creation
         if (config.worldConfig) {
-          const { workerPoolConfig, ...configWithoutWorkerPool } = config.worldConfig;
+          const { workerPoolConfig, onProgress, onChunkInvalidated, errorRecovery, ...configWithoutWorkerPool } = config.worldConfig;
           worker.postMessage({
             type: 'init',
-            config: configWithoutWorkerPool,
+            config: {
+              ...configWithoutWorkerPool,
+              errorRecovery: errorRecovery ? {
+                ...errorRecovery,
+                onError: undefined,
+              } : undefined,
+            },
           });
         }
       } catch (error) {
@@ -362,7 +369,7 @@ export class WorkerPool {
    * @param serialized - Serialized chunk data from worker
    * @returns Deserialized ChunkData
    */
-  private deserializeChunkData(serialized: any): ChunkData {
+  private deserializeChunkData(serialized: SerializedChunkData): ChunkData {
     return {
       x: serialized.x,
       y: serialized.y,
@@ -372,7 +379,7 @@ export class WorkerPool {
       sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
       sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
       sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
-      lakes: (serialized.lakes ?? []).map((lake: any) => ({
+      lakes: (serialized.lakes ?? []).map(lake => ({
         waterLevel: lake.waterLevel,
         tiles: new Set<number>(lake.tiles),
         maxDepth: lake.maxDepth,

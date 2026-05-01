@@ -231,6 +231,92 @@ export class WaterLayerManager {
   }
 
   /**
+   * Stitch coincident water vertices between two chunks. Lake geometry is built
+   * per chunk, so a multi-chunk lake can otherwise show a tiny vertical crack
+   * when neighbouring meshes derive their surface height independently.
+   */
+  stitchWaterBoundaryHeights(chunkKey: string, neighborKey: string): void {
+    const layerA = this.waterLayers.get(chunkKey);
+    const layerB = this.waterLayers.get(neighborKey);
+    if (!layerA || !layerB) {
+      return;
+    }
+
+    const meshesA = [...layerA.lake];
+    const meshesB = [...layerB.lake];
+    if (meshesA.length === 0 || meshesB.length === 0) {
+      return;
+    }
+
+    let changedA = false;
+    let changedB = false;
+
+    for (const waterA of meshesA) {
+      const posA = waterA.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+      if (!posA) continue;
+
+      for (const waterB of meshesB) {
+        const posB = waterB.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (!posB) continue;
+
+        const bByXZ = new Map<string, number[]>();
+        for (let i = 0; i < posB.count; i++) {
+          const key = this.waterVertexKey(posB.getX(i), posB.getZ(i));
+          const bucket = bByXZ.get(key);
+          if (bucket) {
+            bucket.push(i);
+          } else {
+            bByXZ.set(key, [i]);
+          }
+        }
+
+        for (let i = 0; i < posA.count; i++) {
+          const matches = bByXZ.get(this.waterVertexKey(posA.getX(i), posA.getZ(i)));
+          if (!matches) continue;
+
+          for (const j of matches) {
+            const sharedY = (posA.getY(i) + posB.getY(j)) * 0.5;
+            if (Math.abs(posA.getY(i) - sharedY) > 0.001) {
+              posA.setY(i, sharedY);
+              changedA = true;
+            }
+            if (Math.abs(posB.getY(j) - sharedY) > 0.001) {
+              posB.setY(j, sharedY);
+              changedB = true;
+            }
+          }
+        }
+      }
+
+      if (changedA) {
+        posA.needsUpdate = true;
+        waterA.mesh.geometry.computeBoundingBox();
+        waterA.mesh.geometry.computeBoundingSphere();
+        if (waterA.mesh.geometry.boundingBox) {
+          waterA.boundingBox.copy(waterA.mesh.geometry.boundingBox);
+        }
+      }
+    }
+
+    if (changedB) {
+      for (const waterB of meshesB) {
+        const posB = waterB.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (!posB) continue;
+        posB.needsUpdate = true;
+        waterB.mesh.geometry.computeBoundingBox();
+        waterB.mesh.geometry.computeBoundingSphere();
+        if (waterB.mesh.geometry.boundingBox) {
+          waterB.boundingBox.copy(waterB.mesh.geometry.boundingBox);
+        }
+      }
+    }
+  }
+
+  private waterVertexKey(x: number, z: number): string {
+    return `${Math.round(x * 1000)},${Math.round(z * 1000)}`;
+  }
+
+  /**
    * Toggle visibility of all ocean water meshes
    * 
    * Controls visibility of all ocean water layers without disposing resources.

@@ -586,15 +586,19 @@ export class WorldViewer {
     // Инвалидируем кэш статистики рендеринга
     this.invalidateRenderStatsCache();
 
-    // Stitch normals and colors with all loaded neighbours to eliminate seams.
+    // Stitch boundary positions first, then normals and colors with all loaded
+    // neighbours to eliminate lake-carving seams.
     // Also re-stitch each neighbour so their boundary attributes are updated too.
+    this.stitchBoundaryPositions(chunkX, chunkY);
     this.stitchBoundaryNormals(chunkX, chunkY);
     this.stitchBoundaryColors(chunkX, chunkY);
     for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
       const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
       if (this.chunkMeshes.has(nKey)) {
+        this.stitchBoundaryPositions(chunkX + dx, chunkY + dz);
         this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
         this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
+        this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey);
       }
     }
   }
@@ -1587,6 +1591,68 @@ export class WorldViewer {
    */
   private getChunkKey(chunkX: number, chunkY: number): string {
     return `${chunkX},${chunkY}`;
+  }
+
+  /**
+   * Stitch duplicated boundary vertex positions between adjacent chunk meshes.
+   * Lake carving can be discovered from either side after chunks are already
+   * visible; taking the lower Y value closes cracks at cross-chunk lake edges.
+   */
+  private stitchBoundaryPositions(chunkX: number, chunkY: number): void {
+    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
+    if (!mesh) return;
+
+    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
+    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
+    const verticesPerSide = Math.round(Math.sqrt(posA.count));
+    const chunkSize = verticesPerSide - 1;
+
+    const neighbours: Array<{ dx: number; dz: number }> = [
+      { dx: 1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 1, dz: 1 },
+    ];
+
+    for (const { dx, dz } of neighbours) {
+      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
+      if (!neighbourMesh) continue;
+
+      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
+      const posB = geomB.getAttribute('position') as THREE.BufferAttribute;
+
+      if (dx === 1 && dz === 0) {
+        for (let row = 0; row <= chunkSize; row++) {
+          this._stitchVertexHeight(posA, row * verticesPerSide + chunkSize, posB, row * verticesPerSide);
+        }
+      } else if (dx === 0 && dz === 1) {
+        for (let col = 0; col <= chunkSize; col++) {
+          this._stitchVertexHeight(posA, chunkSize * verticesPerSide + col, posB, col);
+        }
+      } else {
+        this._stitchVertexHeight(posA, chunkSize * verticesPerSide + chunkSize, posB, 0);
+      }
+
+      posB.needsUpdate = true;
+      geomB.computeVertexNormals();
+      geomB.computeBoundingBox();
+      geomB.computeBoundingSphere();
+    }
+
+    posA.needsUpdate = true;
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+    geom.computeBoundingSphere();
+  }
+
+  private _stitchVertexHeight(
+    posA: THREE.BufferAttribute,
+    idxA: number,
+    posB: THREE.BufferAttribute,
+    idxB: number,
+  ): void {
+    const sharedY = Math.min(posA.getY(idxA), posB.getY(idxB));
+    posA.setY(idxA, sharedY);
+    posB.setY(idxB, sharedY);
   }
 
   /**
