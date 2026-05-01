@@ -90,6 +90,16 @@ interface ChunkMesh {
  * WorldViewer - Manages 3D visualization of the procedural world
  */
 export class WorldViewer {
+  private static readonly KEYBOARD_CODE_MAP: Record<string, string> = {
+    'KeyW': 'w',
+    'KeyA': 'a',
+    'KeyS': 's',
+    'KeyD': 'd',
+    'Space': 'space',
+    'ShiftLeft': 'shift',
+    'ShiftRight': 'shift',
+  };
+
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
@@ -148,6 +158,46 @@ export class WorldViewer {
 
   // Micro-biome tracking
   private microBiomeCount: number;
+
+  private readonly handleContainerClick = (): void => {
+    if (this.useFreeCamera && !this.isPointerLocked) {
+      this.container?.requestPointerLock();
+    }
+  };
+
+  private readonly handlePointerLockChange = (): void => {
+    this.isPointerLocked = document.pointerLockElement === this.container;
+  };
+
+  private readonly handlePointerLockedMouseMove = (e: MouseEvent): void => {
+    if (this.isPointerLocked && this.useFreeCamera) {
+      this.cameraRotation.yaw -= e.movementX * this.mouseSensitivity;
+      this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
+      this.updateCameraRotation();
+    }
+  };
+
+  private readonly handlePointerLockEscape = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && this.isPointerLocked) {
+      document.exitPointerLock();
+    }
+  };
+
+  private readonly handleKeyboardDown = (e: KeyboardEvent): void => {
+    const key = WorldViewer.KEYBOARD_CODE_MAP[e.code];
+    if (key) {
+      this.keyboardState.set(key, true);
+      e.preventDefault();
+    }
+  };
+
+  private readonly handleKeyboardUp = (e: KeyboardEvent): void => {
+    const key = WorldViewer.KEYBOARD_CODE_MAP[e.code];
+    if (key) {
+      this.keyboardState.set(key, false);
+      e.preventDefault();
+    }
+  };
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -322,32 +372,16 @@ export class WorldViewer {
     if (!this.container) return;
     
     // Click to lock pointer
-    this.container.addEventListener('click', () => {
-      if (this.useFreeCamera && !this.isPointerLocked) {
-        this.container?.requestPointerLock();
-      }
-    });
+    this.container.addEventListener('click', this.handleContainerClick);
     
     // Handle pointer lock change
-    document.addEventListener('pointerlockchange', () => {
-      this.isPointerLocked = document.pointerLockElement === this.container;
-    });
+    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     
     // Handle mouse movement when pointer is locked
-    document.addEventListener('mousemove', (e) => {
-      if (this.isPointerLocked && this.useFreeCamera) {
-        this.cameraRotation.yaw -= e.movementX * this.mouseSensitivity;
-        this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
-        this.updateCameraRotation();
-      }
-    });
+    document.addEventListener('mousemove', this.handlePointerLockedMouseMove);
     
     // Exit pointer lock on Escape
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isPointerLocked) {
-        document.exitPointerLock();
-      }
-    });
+    document.addEventListener('keydown', this.handlePointerLockEscape);
   }
   
   /**
@@ -356,26 +390,8 @@ export class WorldViewer {
   private setupKeyboardControls(): void {
     // Use e.code (physical key) instead of e.key so layout doesn't matter.
     // KeyW = W regardless of whether keyboard is in Russian, English, etc.
-    const CODE_MAP: Record<string, string> = {
-      'KeyW': 'w', 'KeyA': 'a', 'KeyS': 's', 'KeyD': 'd',
-      'Space': 'space', 'ShiftLeft': 'shift', 'ShiftRight': 'shift'
-    };
-
-    window.addEventListener('keydown', (e) => {
-      const key = CODE_MAP[e.code];
-      if (key) {
-        this.keyboardState.set(key, true);
-        e.preventDefault();
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      const key = CODE_MAP[e.code];
-      if (key) {
-        this.keyboardState.set(key, false);
-        e.preventDefault();
-      }
-    });
+    window.addEventListener('keydown', this.handleKeyboardDown);
+    window.addEventListener('keyup', this.handleKeyboardUp);
   }
   
   /**
@@ -2162,6 +2178,17 @@ export class WorldViewer {
     // Dispose renderer
     this.renderer.dispose();
     
+    // Remove input listeners registered during initialize()
+    if (this.container) {
+      this.container.removeEventListener('click', this.handleContainerClick);
+    }
+    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.removeEventListener('mousemove', this.handlePointerLockedMouseMove);
+    document.removeEventListener('keydown', this.handlePointerLockEscape);
+    window.removeEventListener('keydown', this.handleKeyboardDown);
+    window.removeEventListener('keyup', this.handleKeyboardUp);
+    this.keyboardState.clear();
+
     // Remove canvas from container
     if (this.container && this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
