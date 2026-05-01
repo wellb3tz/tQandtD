@@ -8,7 +8,7 @@
 import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
 import type { WorldConfig } from '../../../src/world/chunk-manager';
 import { TerrainEditor } from '../editor/TerrainEditor';
-import { getWorkerUrl } from '../../worker-loader';
+import { createWorker, getWorkerUrl } from '../../worker-loader';
 
 /**
  * Parameter change callback type
@@ -698,6 +698,7 @@ export class ControlPanel {
           workerPoolConfig: {
             maxWorkers: defaultMaxWorkers,
             workerScriptUrl: workerUrl,
+            createWorker: () => createWorker(),
             taskTimeout: 5000 // 5 second timeout for faster fallback
           }
         };

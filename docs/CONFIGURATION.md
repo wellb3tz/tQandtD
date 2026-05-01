@@ -1063,7 +1063,7 @@ try {
 | Field | Min | Max | Default |
 |-------|-----|-----|---------|
 | `chunkSize` | 4 | 256 | — |
-| `maxCacheSize` | 1 | 10000 | 1000 |
+| `maxCacheSize` | 1 | 10000 | 100 |
 | `terrainConfig.baseScale` | 0.001 | 0.1 | — |
 | `terrainConfig.octaves` | 1 | 16 | — |
 | `terrainConfig.persistence` | 0 | 1 | — |

@@ -1,9 +1,21 @@
 {
-  "name": "tqandtd-project",
+  "name": "procedural-world-engine",
   "version": "1.0.0",
   "description": "A TypeScript-based procedural world generation engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "require": "./dist/worker.js",
+      "default": "./dist/worker.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "build:demo": "vite build",
@@ -11,6 +23,7 @@
     "build:verify": "node scripts/verify-build.js",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:bench": "vitest run tests/performance.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "demo": "vite"

@@ -391,6 +391,7 @@ npm run preview     # Preview production build
 ```bash
 npm run build           # Compile library → dist/
 npm test                # Run all tests once
+npm run test:bench      # Run machine-dependent performance benchmarks
 npm run test:watch      # Watch mode
 npm run test:coverage   # Coverage report → coverage/
 npm run build:verify    # Verify build output integrity

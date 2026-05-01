@@ -637,8 +637,9 @@ export class DemoApp {
             
             // Check if worker pool was actually created and initialized
             const workerPool = (newManager as any).workerPool;
-            if (workerPool && workerPool.initializationError) {
-              throw workerPool.initializationError;
+            const initializationError = workerPool?.getInitializationError?.();
+            if (initializationError) {
+              throw initializationError;
             }
             
             this.state.chunkManager = newManager;

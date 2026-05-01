@@ -1,5 +1,6 @@
 import type { ChunkData } from './chunk.js';
 import type { SerializedChunkData } from '../worker';
+import type { WorldConfig } from './chunk-manager';
 import { logger, LogCategory } from '../utils/logger';
 
 /**
@@ -13,7 +14,9 @@ export interface WorkerPoolConfig {
   /** Timeout for worker tasks in ms (default: 30000) */
   taskTimeout: number;
   /** World configuration to send to workers */
-  worldConfig?: any;
+  worldConfig?: WorldConfig;
+  /** Optional worker factory for bundlers that expose compiled worker URLs/constructors */
+  createWorker?: (workerScriptUrl: string) => Worker;
 }
 
 /**
@@ -75,7 +78,9 @@ export class WorkerPool {
     // Initialize workers
     for (let i = 0; i < config.maxWorkers; i++) {
       try {
-        const worker = new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
+        const worker = config.createWorker
+          ? config.createWorker(config.workerScriptUrl)
+          : new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
         
         // Set up message handler for this worker
         worker.onmessage = (event: MessageEvent) => {
@@ -388,6 +393,10 @@ export class WorkerPool {
       resources: serialized.resources,
       structures: serialized.structures,
     };
+  }
+
+  getInitializationError(): Error | null {
+    return this.initializationError;
   }
 
   /**

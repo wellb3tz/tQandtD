@@ -166,7 +166,7 @@ interface WorldConfig {
   resourceConfig?: ResourceConfig;
   structureConfig?: StructureConfig;
   lakeConfig?: LakeConfig;
-  maxCacheSize?: number;           // Default: 1000
+  maxCacheSize?: number;           // Default: 100
   workerPoolConfig?: WorkerPoolConfig;
   errorRecovery?: ErrorRecoveryOptions;
   enablePerformanceMetrics?: boolean;
@@ -325,6 +325,7 @@ interface WorkerPoolConfig {
   workerScriptUrl: string;       // Worker script URL
   taskTimeout: number;           // Task timeout (ms)
   worldConfig?: any;             // Config to send to workers
+  createWorker?: (workerScriptUrl: string) => Worker;
 }
 ```
 
