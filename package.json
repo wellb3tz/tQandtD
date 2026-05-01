@@ -4,6 +4,11 @@
   "description": "A TypeScript-based procedural world generation engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "docs",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,12 +22,19 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "node scripts/clean.js",
+    "build": "npm run clean -- dist && tsc",
     "build:demo": "vite build",
     "build:analyze": "vite build --mode analyze",
     "build:verify": "node scripts/verify-build.js",
+    "prepack": "npm run build && npm run build:verify",
+    "verify": "npm run build && npm run build:verify && npm run typecheck && npm run typecheck:demo && npm test",
+    "verify:release": "npm run verify && npm run build:demo && npm run test:e2e",
+    "typecheck": "tsc --noEmit",
+    "typecheck:demo": "tsc -p tsconfig.demo.json --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "test:bench": "vitest run tests/performance.test.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

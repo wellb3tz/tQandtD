@@ -23,7 +23,7 @@ A TypeScript library for generating infinite, deterministic procedural worlds in
 npm install procedural-world-engine
 ```
 
-> **Peer dependency**: `pako` is required for world serialization with compression.
+> **Runtime dependency**: `pako` is installed automatically and used for world serialization with compression.
 > Three.js is only needed if you use the demo application.
 
 ## Documentation

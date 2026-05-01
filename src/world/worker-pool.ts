@@ -1,5 +1,5 @@
 import type { ChunkData } from './chunk.js';
-import type { SerializedChunkData } from '../worker';
+import type { SerializedChunkData, WorkerResponse } from '../worker';
 import type { WorldConfig } from './chunk-manager';
 import { logger, LogCategory } from '../utils/logger';
 
@@ -36,6 +36,8 @@ export interface WorkerTask {
   onComplete: (chunk: ChunkData) => void;
   /** Callback for task error */
   onError: (error: Error) => void;
+  /** Active task timeout handle, set while the task is assigned to a worker */
+  timeoutId?: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -78,9 +80,10 @@ export class WorkerPool {
     // Initialize workers
     for (let i = 0; i < config.maxWorkers; i++) {
       try {
+        const WorkerConstructor = globalThis.Worker;
         const worker = config.createWorker
           ? config.createWorker(config.workerScriptUrl)
-          : new (globalThis as any).Worker(config.workerScriptUrl, { type: 'module' }) as Worker;
+          : new WorkerConstructor(config.workerScriptUrl, { type: 'module' });
         
         // Set up message handler for this worker
         worker.onmessage = (event: MessageEvent) => {
@@ -245,7 +248,7 @@ export class WorkerPool {
     // Cancel timeouts for all active tasks before terminating workers.
     for (const workerState of this.workers) {
       if (workerState.currentTask) {
-        const timeoutId = (workerState.currentTask as any).timeoutId;
+        const timeoutId = workerState.currentTask.timeoutId;
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId);
         }
@@ -254,7 +257,7 @@ export class WorkerPool {
     // Cancel timeouts for queued tasks (they may have been assigned timeouts
     // by a previous assignNextTask call that hasn't fired yet).
     for (const task of this.taskQueue) {
-      const timeoutId = (task as any).timeoutId;
+      const timeoutId = task.timeoutId;
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
       }
@@ -299,7 +302,7 @@ export class WorkerPool {
     }, this.config.taskTimeout);
 
     // Store timeout ID on task for cleanup
-    (task as any).timeoutId = timeoutId;
+    task.timeoutId = timeoutId;
   }
 
   /**
@@ -307,7 +310,7 @@ export class WorkerPool {
    * @param workerId - Worker index
    * @param result - Worker response message
    */
-  private handleTaskComplete(workerId: number, result: any): void {
+  private handleTaskComplete(workerId: number, result: WorkerResponse): void {
     const workerState = this.workers[workerId];
     const task = workerState.currentTask;
 
@@ -335,8 +338,8 @@ export class WorkerPool {
     }
 
     // Clear timeout
-    if ((task as any).timeoutId) {
-      clearTimeout((task as any).timeoutId);
+    if (task.timeoutId) {
+      clearTimeout(task.timeoutId);
     }
 
     // Check if task was cancelled
@@ -413,8 +416,8 @@ export class WorkerPool {
     }
 
     // Clear timeout
-    if ((task as any).timeoutId) {
-      clearTimeout((task as any).timeoutId);
+    if (task.timeoutId) {
+      clearTimeout(task.timeoutId);
     }
 
     // Check if task was cancelled

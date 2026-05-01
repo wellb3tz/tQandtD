@@ -12,6 +12,11 @@ import type { LakeData } from '../gen/lakes';
 import { WorldConfig } from './chunk-manager';
 import { logger, LogCategory } from '../utils/logger';
 
+declare const Buffer: {
+  from(data: Uint8Array): { toString(encoding: 'base64'): string };
+  from(data: string, encoding: 'base64'): { toString(encoding: 'binary'): string };
+};
+
 /**
  * Read-only snapshot of ChunkManager state needed for serialization.
  * Replaces the previous `any` parameter, making the coupling explicit and
@@ -222,11 +227,10 @@ export class WorldSerializer {
    */
   private serializeJSON(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): SerializedWorld {
     // Get all chunks from the cache
-    const cache = chunkManager.cache as Map<string, any>;
     const chunks: SerializedChunk[] = [];
 
     // Filter chunks based on options
-    for (const [, entry] of cache.entries()) {
+    for (const [, entry] of chunkManager.cache.entries()) {
       const chunk = entry.chunk;
       
       // Apply region filter if specified
@@ -417,7 +421,6 @@ export class WorldSerializer {
       return btoa(binaryString);
     } else {
       // Node.js environment
-      // @ts-ignore - Buffer is available in Node.js
       return Buffer.from(array).toString('base64');
     }
   }
@@ -483,11 +486,10 @@ export class WorldSerializer {
    */
   private serializeBinary(chunkManager: ChunkManagerSnapshot, options: SerializationOptions): SerializedWorld {
     // Get all chunks from the cache
-    const cache = chunkManager.cache as Map<string, any>;
     const chunks: SerializedChunk[] = [];
 
     // Filter chunks based on options
-    for (const [, entry] of cache.entries()) {
+    for (const [, entry] of chunkManager.cache.entries()) {
       const chunk = entry.chunk;
       
       // Apply region filter if specified
@@ -956,7 +958,6 @@ export class WorldSerializer {
       binaryString = atob(base64);
     } else {
       // Node.js environment
-      // @ts-ignore - Buffer is available in Node.js
       binaryString = Buffer.from(base64, 'base64').toString('binary');
     }
 

@@ -17,6 +17,7 @@ import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
 import { Minimap } from './src/ui/Minimap';
 import { TerrainTooltip } from './src/ui/TerrainTooltip';
+import { HelpModal } from './src/ui/HelpModal';
 import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
 
 console.log('tQandtD project Demo - Initializing...');
@@ -31,6 +32,7 @@ let performanceMonitor: PerformanceMonitor | null = null;
 let statisticsDisplay: StatisticsDisplay | null = null;
 let minimap: Minimap | null = null;
 let terrainTooltip: TerrainTooltip | null = null;
+let helpModal: HelpModal | null = null;
 
 // Global timers for cleanup
 let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -114,7 +116,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const viewerContainer = document.getElementById('viewer');
     if (viewerContainer) {
       worldViewer = new WorldViewer();
-      worldViewer.initialize(viewerContainer);      console.log('WorldViewer initialized successfully');
+      worldViewer.initialize(viewerContainer);
+      console.log('WorldViewer initialized successfully');
       
       // Apply initial visibility state from DemoApp
       const initialState = app.getState();
@@ -393,6 +396,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       terrainTooltip.initialize(app, worldViewer);
       console.log('TerrainTooltip initialized successfully');
     }
+
+    helpModal = new HelpModal();
+    helpModal.initialize();
     
     // Subscribe to state changes and update performance monitor
     app.subscribeToState((state) => {
@@ -630,9 +636,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     performanceMonitorElement?.classList.toggle('hidden');
   });
   
-  // Help button — placeholder, no functionality
+  // Help button
   helpBtn?.addEventListener('click', () => {
-    // TODO: implement help panel
+    helpModal?.toggle();
   });
   
   // Fullscreen button - hide all UI elements (exit with ESC only)

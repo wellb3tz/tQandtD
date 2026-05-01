@@ -3,11 +3,19 @@
  * Tests type and configuration for ocean + lake water system
  */
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateWaterConfig, DEFAULT_WATER_CONFIG, DEFAULT_LAKE_RENDER_CONFIG } from './config';
 import type { WaterConfig, WaterType, WaterLayerData } from './types';
 
 describe('Water Configuration', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('WaterType', () => {
     it('should accept "ocean" as valid WaterType', () => {
       const validType: WaterType = 'ocean';

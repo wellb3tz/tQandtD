@@ -8,6 +8,10 @@
 /**
  * Base error class for chunk generation errors
  */
+interface ErrorConstructorWithStackTrace extends ErrorConstructor {
+  captureStackTrace?: (targetObject: object, constructorOpt?: Function) => void;
+}
+
 export class ChunkGenerationError extends Error {
   constructor(
     message: string,
@@ -20,8 +24,9 @@ export class ChunkGenerationError extends Error {
     this.name = 'ChunkGenerationError';
     
     // Maintain proper stack trace (V8 only)
-    if (typeof (Error as any).captureStackTrace === 'function') {
-      (Error as any).captureStackTrace(this, ChunkGenerationError);
+    const errorConstructor = Error as ErrorConstructorWithStackTrace;
+    if (typeof errorConstructor.captureStackTrace === 'function') {
+      errorConstructor.captureStackTrace(this, ChunkGenerationError);
     }
   }
 

@@ -8,9 +8,9 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
-    headless: false, // Show browser so we can see what's happening
+    headless: true,
     viewport: { width: 1280, height: 720 },
   },
   projects: [
@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run demo',
-    url: 'http://localhost:3001',
+    url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 30000,
   },
