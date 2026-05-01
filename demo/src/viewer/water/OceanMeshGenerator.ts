@@ -1,8 +1,8 @@
 /**
- * Ocean mesh generator for water system
- * 
- * Identifies ocean tiles (height < seaLevel) and creates water surface meshes
- * at sea level with proper positioning and boundary alignment.
+ * Ocean mesh generator for water system.
+ *
+ * Identifies ocean cells and builds a sea-level mesh clipped to the terrain
+ * contour, so coastlines follow the heightmap instead of square tile edges.
  */
 
 import * as THREE from 'three';
@@ -10,8 +10,17 @@ import type { ChunkData } from '@engine/world/chunk';
 import type { WaterConfig, OceanTile } from './types';
 import { HEIGHT_SCALE } from './config';
 
+const CONTOUR_EPSILON = 1e-6;
+
+interface ContourPoint {
+  x: number;
+  z: number;
+  field: number;
+  terrainHeight: number;
+}
+
 /**
- * Identify ocean tiles in a chunk where terrain height is below sea level.
+ * Identify ocean tiles in a chunk where terrain touches or falls below sea level.
  *
  * @param chunkData - Chunk data containing heightmap
  * @param seaLevel  - Sea level elevation threshold
@@ -34,13 +43,14 @@ export function identifyOceanTiles(
       const v01 = heightmap[(y + 1) * vertexSize + x];
       const v11 = heightmap[(y + 1) * vertexSize + (x + 1)];
       const terrainHeight = (v00 + v10 + v01 + v11) / 4;
+      const minTerrainHeight = Math.min(v00, v10, v01, v11);
 
-      if (terrainHeight < seaLevel) {
+      if (minTerrainHeight < seaLevel) {
         oceanTiles.push({
           index,
           terrainHeight,
           waterElevation: seaLevel,
-          underwaterDepth: seaLevel - terrainHeight,
+          underwaterDepth: seaLevel - minTerrainHeight,
         });
       }
     }
@@ -51,21 +61,15 @@ export function identifyOceanTiles(
 
 /**
  * Calculate water surface color based on depth below sea level.
- * Shallow water → bright turquoise, deep water → dark navy blue.
  *
- * @param depth - Depth below sea level in [0, seaLevel] range
+ * @param depth    - Depth below sea level
  * @param seaLevel - Sea level threshold
  * @returns RGB color components in [0, 1] range
  */
 function depthColor(depth: number, seaLevel: number): [number, number, number] {
-  // Normalise depth: 0 = surface, 1 = maximum depth
   const t = Math.min(depth / seaLevel, 1.0);
-
-  // Smooth curve — emphasise shallow gradient more than deep
   const s = t * t;
 
-  // Shallow (t=0): bright turquoise  #29b6d4  → r=0.16, g=0.71, b=0.83
-  // Deep    (t=1): dark navy         #0a1a3a  → r=0.04, g=0.10, b=0.23
   const r = 0.16 - s * 0.12;
   const g = 0.71 - s * 0.61;
   const b = 0.83 - s * 0.60;
@@ -74,17 +78,12 @@ function depthColor(depth: number, seaLevel: number): [number, number, number] {
 }
 
 /**
- * Build ocean geometry as a single unified grid mesh for the entire chunk.
+ * Build ocean geometry clipped to the sea-level contour.
  *
- * Uses a (chunkSize+1) × (chunkSize+1) vertex grid — identical topology to
- * the terrain mesh — so vertex colors are smoothly interpolated across the
- * whole chunk with no visible tile boundaries or diamond patterns.
+ * Fully submerged cells become quads. Shoreline cells become clipped polygons
+ * whose border vertices lie where terrain height crosses sea level.
  *
- * Only tiles where ALL four corner vertices are below sea level are included;
- * boundary tiles that straddle the shoreline are skipped so the water edge
- * aligns cleanly with the terrain beach.
- *
- * @param oceanTiles - Array of ocean tiles (used to determine which cells are underwater)
+ * @param oceanTiles - Array of ocean tiles
  * @param chunkData  - Chunk data for heightmap and coordinate calculations
  * @param config     - Water configuration
  * @returns BufferGeometry for ocean surface, or null if no ocean tiles
@@ -98,71 +97,115 @@ export function buildOceanGeometry(
     return null;
   }
 
-  const { size, heightmap } = chunkData;
-  const vertexSize = size + 1;
+  const { size } = chunkData;
   const seaLevel = config.seaLevel;
 
   const positions: number[] = [];
-  const normals:   number[] = [];
-  const colors:    number[] = [];
-  const uvs:       number[] = [];
-  const indices:   number[] = [];
-
-  // Shared vertex grid — separate maps for ocean (seaLevel) and lake (lakeLevel)
-  // tiles because they sit at different Y elevations.
-  const vertexIndex     = new Int32Array(vertexSize * vertexSize).fill(-1); // ocean
-  const lakeVertexIndex = new Int32Array(vertexSize * vertexSize).fill(-1); // lake
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
   let vertexCount = 0;
 
-  // Helper: get or create a vertex at grid position (vx, vy)
-  const getVertex = (vx: number, vy: number, tileWaterElevation: number): number => {
-    const key = vy * vertexSize + vx;
-    const isLake = tileWaterElevation > seaLevel;
-    const lookup = isLake ? lakeVertexIndex : vertexIndex;
-    if (lookup[key] !== -1) return lookup[key];
-
-    const worldX = chunkData.x * size + vx;
-    const worldZ = chunkData.y * size + vy;
-
-    const h = heightmap[key];
-    const depth = Math.max(0, tileWaterElevation - h);
-
-    const [r, g, b] = depthColor(depth, seaLevel);
-
-    positions.push(worldX, tileWaterElevation * HEIGHT_SCALE + 0.15, worldZ);
-    normals.push(0, 1, 0);
-    colors.push(r, g, b);
-    uvs.push(vx / size, vy / size);
-
-    lookup[key] = vertexCount;
-    return vertexCount++;
-  };
-
-  // Emit one quad (two triangles) per underwater/lake tile
   for (const tile of oceanTiles) {
     const tx = tile.index % size;
     const ty = Math.floor(tile.index / size);
+    const polygon = buildSeaLevelPolygon(tx, ty, chunkData, seaLevel);
 
-    const i00 = getVertex(tx,     ty,     tile.waterElevation);
-    const i10 = getVertex(tx + 1, ty,     tile.waterElevation);
-    const i01 = getVertex(tx,     ty + 1, tile.waterElevation);
-    const i11 = getVertex(tx + 1, ty + 1, tile.waterElevation);
+    if (polygon.length < 3) {
+      continue;
+    }
 
-    indices.push(i00, i10, i01);
-    indices.push(i01, i10, i11);
+    const baseIndex = vertexCount;
+    for (const point of polygon) {
+      const worldX = chunkData.x * size + point.x;
+      const worldZ = chunkData.y * size + point.z;
+      const depth = Math.max(0, seaLevel - point.terrainHeight);
+      const [r, g, b] = depthColor(depth, seaLevel);
+
+      positions.push(worldX, seaLevel * HEIGHT_SCALE + 0.15, worldZ);
+      normals.push(0, 1, 0);
+      colors.push(r, g, b);
+      uvs.push(point.x / size, point.z / size);
+      vertexCount++;
+    }
+
+    for (let i = 1; i < polygon.length - 1; i++) {
+      indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
+    }
   }
 
   if (vertexCount === 0) return null;
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-  geometry.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(normals),   3));
-  geometry.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),    3));
-  geometry.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(uvs),       2));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
   geometry.setIndex(indices);
 
   geometry.computeBoundingSphere();
   geometry.computeBoundingBox();
 
   return geometry;
+}
+
+function buildSeaLevelPolygon(
+  tx: number,
+  ty: number,
+  chunkData: ChunkData,
+  seaLevel: number,
+): ContourPoint[] {
+  const corners = [
+    sampleContourPoint(tx, ty, chunkData, seaLevel),
+    sampleContourPoint(tx + 1, ty, chunkData, seaLevel),
+    sampleContourPoint(tx + 1, ty + 1, chunkData, seaLevel),
+    sampleContourPoint(tx, ty + 1, chunkData, seaLevel),
+  ];
+
+  const polygon: ContourPoint[] = [];
+  for (let i = 0; i < corners.length; i++) {
+    const current = corners[i];
+    const previous = corners[(i + corners.length - 1) % corners.length];
+    const currentInside = current.field >= 0;
+    const previousInside = previous.field >= 0;
+
+    if (currentInside !== previousInside) {
+      polygon.push(interpolateContourPoint(previous, current));
+    }
+    if (currentInside) {
+      polygon.push(current);
+    }
+  }
+
+  return polygon;
+}
+
+function sampleContourPoint(
+  vx: number,
+  vy: number,
+  chunkData: ChunkData,
+  seaLevel: number,
+): ContourPoint {
+  const { heightmap, size } = chunkData;
+  const vertexSize = size + 1;
+  const terrainHeight = heightmap[vy * vertexSize + vx];
+  const field = seaLevel - terrainHeight;
+
+  return { x: vx, z: vy, field, terrainHeight };
+}
+
+function interpolateContourPoint(a: ContourPoint, b: ContourPoint): ContourPoint {
+  const denominator = a.field - b.field;
+  const t = Math.abs(denominator) > CONTOUR_EPSILON
+    ? a.field / denominator
+    : 0.5;
+  const clamped = Math.min(Math.max(t, 0), 1);
+
+  return {
+    x: a.x + (b.x - a.x) * clamped,
+    z: a.z + (b.z - a.z) * clamped,
+    field: 0,
+    terrainHeight: a.terrainHeight + (b.terrainHeight - a.terrainHeight) * clamped,
+  };
 }
