@@ -445,11 +445,13 @@ export class DemoApp {
       const endTime = performance.now();
       const avgTime = chunksLoaded > 0 ? (endTime - startTime) / chunksLoaded : 0;
       
-      this.updateState({
-        loadedChunks: new Map(this.state.loadedChunks),
-        loadedChunkCount: this.state.loadedChunks.size,
-        avgGenerationTime: avgTime,
-      });
+      if (chunksLoaded > 0) {
+        this.updateState({
+          loadedChunks: new Map(this.state.loadedChunks),
+          loadedChunkCount: this.state.loadedChunks.size,
+          avgGenerationTime: avgTime,
+        });
+      }
       
       // Only log if chunks were actually loaded (and more than 5 chunks)
       if (chunksLoaded > 5) {
@@ -730,6 +732,15 @@ export class DemoApp {
    * Update camera position
    */
   updateCameraPosition(position: Vector3): void {
+    const current = this.state.cameraPosition;
+    if (
+      Math.abs(current.x - position.x) < 0.001 &&
+      Math.abs(current.y - position.y) < 0.001 &&
+      Math.abs(current.z - position.z) < 0.001
+    ) {
+      return;
+    }
+
     this.updateState({ cameraPosition: position });
   }
 

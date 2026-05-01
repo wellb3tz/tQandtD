@@ -235,7 +235,7 @@ export class WaterLayerManager {
    * per chunk, so a multi-chunk lake can otherwise show a tiny vertical crack
    * when neighbouring meshes derive their surface height independently.
    */
-  stitchWaterBoundaryHeights(chunkKey: string, neighborKey: string): void {
+  stitchWaterBoundaryHeights(chunkKey: string, neighborKey: string, chunkSize: number): void {
     const layerA = this.waterLayers.get(chunkKey);
     const layerB = this.waterLayers.get(neighborKey);
     if (!layerA || !layerB) {
@@ -248,6 +248,20 @@ export class WaterLayerManager {
       return;
     }
 
+    const [chunkAX, chunkAY] = chunkKey.split(',').map(Number);
+    const [chunkBX, chunkBY] = neighborKey.split(',').map(Number);
+    const dx = chunkBX - chunkAX;
+    const dz = chunkBY - chunkAY;
+
+    if (Math.abs(dx) > 1 || Math.abs(dz) > 1 || (dx === 0 && dz === 0)) {
+      return;
+    }
+
+    const shared = this.getSharedWaterBoundary(chunkAX, chunkAY, dx, dz, chunkSize);
+    if (!shared) {
+      return;
+    }
+
     let changedA = false;
     let changedB = false;
 
@@ -255,34 +269,31 @@ export class WaterLayerManager {
       const posA = waterA.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
       if (!posA) continue;
 
+      const aBoundary = this.collectWaterBoundaryVertices(posA, shared);
+      if (aBoundary.size === 0) continue;
+
       for (const waterB of meshesB) {
         const posB = waterB.mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
         if (!posB) continue;
 
-        const bByXZ = new Map<string, number[]>();
-        for (let i = 0; i < posB.count; i++) {
-          const key = this.waterVertexKey(posB.getX(i), posB.getZ(i));
-          const bucket = bByXZ.get(key);
-          if (bucket) {
-            bucket.push(i);
-          } else {
-            bByXZ.set(key, [i]);
-          }
-        }
+        const bBoundary = this.collectWaterBoundaryVertices(posB, shared);
+        if (bBoundary.size === 0) continue;
 
-        for (let i = 0; i < posA.count; i++) {
-          const matches = bByXZ.get(this.waterVertexKey(posA.getX(i), posA.getZ(i)));
+        for (const [key, indicesA] of aBoundary.entries()) {
+          const matches = bBoundary.get(key);
           if (!matches) continue;
 
-          for (const j of matches) {
-            const sharedY = (posA.getY(i) + posB.getY(j)) * 0.5;
-            if (Math.abs(posA.getY(i) - sharedY) > 0.001) {
-              posA.setY(i, sharedY);
-              changedA = true;
-            }
-            if (Math.abs(posB.getY(j) - sharedY) > 0.001) {
-              posB.setY(j, sharedY);
-              changedB = true;
+          for (const i of indicesA) {
+            for (const j of matches) {
+              const sharedY = (posA.getY(i) + posB.getY(j)) * 0.5;
+              if (Math.abs(posA.getY(i) - sharedY) > 0.001) {
+                posA.setY(i, sharedY);
+                changedA = true;
+              }
+              if (Math.abs(posB.getY(j) - sharedY) > 0.001) {
+                posB.setY(j, sharedY);
+                changedB = true;
+              }
             }
           }
         }
@@ -314,6 +325,69 @@ export class WaterLayerManager {
 
   private waterVertexKey(x: number, z: number): string {
     return `${Math.round(x * 1000)},${Math.round(z * 1000)}`;
+  }
+
+  private getSharedWaterBoundary(
+    chunkX: number,
+    chunkY: number,
+    dx: number,
+    dz: number,
+    chunkSize: number
+  ): { minX: number; maxX: number; minZ: number; maxZ: number } | null {
+    const baseX = chunkX * chunkSize;
+    const baseZ = chunkY * chunkSize;
+
+    if (dx === 1 && dz === 0) {
+      const x = baseX + chunkSize;
+      return { minX: x, maxX: x, minZ: baseZ, maxZ: baseZ + chunkSize };
+    }
+    if (dx === -1 && dz === 0) {
+      const x = baseX;
+      return { minX: x, maxX: x, minZ: baseZ, maxZ: baseZ + chunkSize };
+    }
+    if (dx === 0 && dz === 1) {
+      const z = baseZ + chunkSize;
+      return { minX: baseX, maxX: baseX + chunkSize, minZ: z, maxZ: z };
+    }
+    if (dx === 0 && dz === -1) {
+      const z = baseZ;
+      return { minX: baseX, maxX: baseX + chunkSize, minZ: z, maxZ: z };
+    }
+
+    const x = baseX + (dx > 0 ? chunkSize : 0);
+    const z = baseZ + (dz > 0 ? chunkSize : 0);
+    return { minX: x, maxX: x, minZ: z, maxZ: z };
+  }
+
+  private collectWaterBoundaryVertices(
+    position: THREE.BufferAttribute,
+    boundary: { minX: number; maxX: number; minZ: number; maxZ: number }
+  ): Map<string, number[]> {
+    const result = new Map<string, number[]>();
+    const epsilon = 0.001;
+
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i);
+      const z = position.getZ(i);
+      if (
+        x < boundary.minX - epsilon ||
+        x > boundary.maxX + epsilon ||
+        z < boundary.minZ - epsilon ||
+        z > boundary.maxZ + epsilon
+      ) {
+        continue;
+      }
+
+      const key = this.waterVertexKey(x, z);
+      const bucket = result.get(key);
+      if (bucket) {
+        bucket.push(i);
+      } else {
+        result.set(key, [i]);
+      }
+    }
+
+    return result;
   }
 
   /**

@@ -20,6 +20,8 @@ export class Minimap {
   private app: DemoApp | null = null;
   private getHeading: (() => number) | null = null;
   private getCamPos: (() => { x: number; y: number; z: number }) | null = null;
+  private lastDrawnChunks: unknown = null;
+  private chunkColorCache = new WeakMap<object, string>();
 
   private readonly CHUNK_SIZE = 32;
   private readonly CELL_PX   = 6;   // pixels per chunk on minimap
@@ -40,8 +42,12 @@ export class Minimap {
     canvas.width  = this.SIZE_PX;
     canvas.height = this.SIZE_PX;
 
-    // Redraw on state change
-    app.subscribeToState(() => this.draw());
+    // Redraw the expensive chunk layer only when the loaded chunk map changes.
+    app.subscribeToState((state) => {
+      if (state.loadedChunks !== this.lastDrawnChunks) {
+        this.draw();
+      }
+    });
   }
 
   draw(): void {
@@ -59,6 +65,7 @@ export class Minimap {
 
     const state = this.app.getState();
     const chunks = state.loadedChunks;
+    this.lastDrawnChunks = chunks;
     if (chunks.size === 0) {
       ctx.fillStyle = 'rgba(74,222,128,0.3)';
       ctx.font = '10px Inter, sans-serif';
@@ -95,21 +102,7 @@ export class Minimap {
       const px = offX + (chunk.x - minX) * cellS;
       const py = offY + (chunk.y - minY) * cellS;
 
-      // Dominant biome color
-      const biomeCount = new Map<number, number>();
-      for (let i = 0; i < chunk.biomeMap.length; i++) {
-        const b = chunk.biomeMap[i];
-        biomeCount.set(b, (biomeCount.get(b) ?? 0) + 1);
-      }
-      let dominant = 0, maxCount = 0;
-      biomeCount.forEach((cnt, b) => { if (cnt > maxCount) { maxCount = cnt; dominant = b; } });
-
-      const col = BIOME_COLORS[dominant as BiomeType] ?? { r: 0.5, g: 0.5, b: 0.5 };
-      const r   = Math.round(col.r * 255);
-      const g   = Math.round(col.g * 255);
-      const b   = Math.round(col.b * 255);
-
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillStyle = this.getChunkColor(chunk);
       ctx.fillRect(px, py, cellS - 1, cellS - 1);
     }
 
@@ -161,6 +154,31 @@ export class Minimap {
     ctx.strokeStyle = 'rgba(74,222,128,0.25)';
     ctx.lineWidth   = 1;
     ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+  }
+
+  private getChunkColor(chunk: { biomeMap: Uint8Array }): string {
+    const cached = this.chunkColorCache.get(chunk);
+    if (cached) return cached;
+
+    const biomeCount = new Map<number, number>();
+    for (let i = 0; i < chunk.biomeMap.length; i++) {
+      const biome = chunk.biomeMap[i];
+      biomeCount.set(biome, (biomeCount.get(biome) ?? 0) + 1);
+    }
+
+    let dominant = 0;
+    let maxCount = 0;
+    biomeCount.forEach((count, biome) => {
+      if (count > maxCount) {
+        maxCount = count;
+        dominant = biome;
+      }
+    });
+
+    const color = BIOME_COLORS[dominant as BiomeType] ?? { r: 0.5, g: 0.5, b: 0.5 };
+    const cssColor = `rgb(${Math.round(color.r * 255)},${Math.round(color.g * 255)},${Math.round(color.b * 255)})`;
+    this.chunkColorCache.set(chunk, cssColor);
+    return cssColor;
   }
 
   /** Returns biome name at canvas pixel (for tooltip on minimap hover) */

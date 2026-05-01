@@ -18,6 +18,13 @@ export class StatisticsDisplay {
   private microBiomeCountElement: HTMLElement | null = null;
   private biomeChartContainer:  HTMLElement | null = null;
   private resourceChartContainer: HTMLElement | null = null;
+  private lastLoadedChunkCount: number | null = null;
+  private lastBiomeDistribution: Map<BiomeType, number> | null = null;
+  private lastResourceCounts: Map<ResourceType, number> | null = null;
+  private lastStructureCounts: Map<StructureType, number> | null = null;
+  private lastAvgHeight: number | null = null;
+  private lastMinHeight: number | null = null;
+  private lastMaxHeight: number | null = null;
 
   private readonly biomeNames: Record<number, string> = {
     [0]: 'Ocean',      [1]: 'Beach',      [2]: 'Desert',     [3]: 'Plains',
@@ -216,11 +223,36 @@ export class StatisticsDisplay {
   setApp(app: DemoApp): void {
     this.app = app;
     app.subscribeToState((state: AppState) => {
-      this.updateChunkCount(state.loadedChunkCount);
-      this.updateHeightStats(state.avgHeight, state.minHeight, state.maxHeight);
-      this.updateBiomeDistribution(state.biomeDistribution);
-      this.updateResourceCounts(state.resourceCounts);
-      this.updateStructureCounts(state.structureCounts);
+      if (state.loadedChunkCount !== this.lastLoadedChunkCount) {
+        this.updateChunkCount(state.loadedChunkCount);
+        this.lastLoadedChunkCount = state.loadedChunkCount;
+      }
+
+      if (
+        state.avgHeight !== this.lastAvgHeight ||
+        state.minHeight !== this.lastMinHeight ||
+        state.maxHeight !== this.lastMaxHeight
+      ) {
+        this.updateHeightStats(state.avgHeight, state.minHeight, state.maxHeight);
+        this.lastAvgHeight = state.avgHeight;
+        this.lastMinHeight = state.minHeight;
+        this.lastMaxHeight = state.maxHeight;
+      }
+
+      if (state.biomeDistribution !== this.lastBiomeDistribution) {
+        this.updateBiomeDistribution(state.biomeDistribution);
+        this.lastBiomeDistribution = state.biomeDistribution;
+      }
+
+      if (state.resourceCounts !== this.lastResourceCounts) {
+        this.updateResourceCounts(state.resourceCounts);
+        this.lastResourceCounts = state.resourceCounts;
+      }
+
+      if (state.structureCounts !== this.lastStructureCounts) {
+        this.updateStructureCounts(state.structureCounts);
+        this.lastStructureCounts = state.structureCounts;
+      }
     });
   }
 

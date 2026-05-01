@@ -477,7 +477,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
-      if (worldViewer) worldViewer.clearFogOfWar();
+      if (worldViewer) {
+        worldViewer.clearChunks();
+        worldViewer.clearFogOfWar();
+      }
       const disclaimer = document.getElementById('settings-changed-disclaimer');
       if (disclaimer) disclaimer.style.display = 'none';
       // Update status bar seed

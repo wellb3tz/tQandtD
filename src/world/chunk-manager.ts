@@ -1199,7 +1199,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const chunkWorldX = chunkX * chunkSize;
     const chunkWorldY = chunkY * chunkSize;
     const vSize = chunkSize + 1;
-    const CARVE_DEPTH = 0.02; // how deep to dig in [0,1] heightmap space
+    const CARVE_DEPTH = 0.04; // how deep to dig in [0,1] heightmap space
 
     logger.debug(LogCategory.LAKE, `Carving terrain for chunk (${chunkX}, ${chunkY}), ${worldLakes.length} lake(s)`);
 

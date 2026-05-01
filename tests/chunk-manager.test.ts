@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { worldToChunk, chunkToWorld, worldToLocal, BiomeType } from '../src/world/chunk';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
+import { LakeManager } from '../src/world/lake-manager';
 import { makeMinimalConfig } from './helpers';
 
 // ─── Coordinate utilities ─────────────────────────────────────────────────────
@@ -161,5 +162,35 @@ describe('ChunkData integrity', () => {
         }
       }
     }
+  });
+});
+
+describe('Multi-chunk lake discovery', () => {
+  it('includes lakes seeded in a neighbouring chunk before that chunk is requested', () => {
+    const chunkSize = 16;
+    const lakeManager = new LakeManager(
+      123,
+      {
+        ...DEFAULT_LAKE_CONFIG,
+        noiseThreshold: -1,
+        minElevation: 0.3,
+        maxElevation: 0.8,
+        maxFillDepth: 0.08,
+      },
+      (worldX: number, worldY: number) => {
+        const insideCrossBoundaryBasin =
+          worldX >= 12 && worldX <= 21 &&
+          worldY >= 4 && worldY <= 13;
+        return insideCrossBoundaryBasin ? 0.35 : 0.5;
+      },
+      () => BiomeType.PLAINS,
+    );
+
+    const lakes = lakeManager.getLakesForChunk(0, 0, chunkSize);
+    const crossingLake = lakes.find(lake =>
+      lake.tiles.has('15,8') && lake.tiles.has('16,8')
+    );
+
+    expect(crossingLake).toBeDefined();
   });
 });

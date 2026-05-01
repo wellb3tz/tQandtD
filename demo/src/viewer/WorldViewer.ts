@@ -586,19 +586,19 @@ export class WorldViewer {
     // Инвалидируем кэш статистики рендеринга
     this.invalidateRenderStatsCache();
 
-    // Stitch boundary positions first, then normals and colors with all loaded
-    // neighbours to eliminate lake-carving seams.
-    // Also re-stitch each neighbour so their boundary attributes are updated too.
-    this.stitchBoundaryPositions(chunkX, chunkY);
+    // Stitch only lake-touching terrain positions. A full-edge position stitch
+    // can create trenches, but lake boundary vertices still need exact agreement
+    // to hide cracks where carved basins cross chunk borders.
+    this.stitchLakeBoundaryPositions(chunkX, chunkY);
     this.stitchBoundaryNormals(chunkX, chunkY);
     this.stitchBoundaryColors(chunkX, chunkY);
     for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
       const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
       if (this.chunkMeshes.has(nKey)) {
-        this.stitchBoundaryPositions(chunkX + dx, chunkY + dz);
+        this.stitchLakeBoundaryPositions(chunkX + dx, chunkY + dz);
         this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
         this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
-        this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey);
+        this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey, data.size);
       }
     }
   }
@@ -657,6 +657,21 @@ export class WorldViewer {
     this.invalidateRenderStatsCache();
   }
   
+  /**
+   * Remove all currently rendered chunks from the scene.
+   * Used when regenerating the world so old-seed terrain cannot remain around
+   * the newly generated starting area.
+   */
+  clearChunks(): void {
+    const keys = Array.from(this.chunkMeshes.keys());
+    for (const key of keys) {
+      const [chunkX, chunkY] = key.split(',').map(Number);
+      this.removeChunk(chunkX, chunkY, false);
+    }
+
+    this.invalidateRenderStatsCache();
+  }
+
   /**
    * Create a fog of war plane for an explored chunk
    */
@@ -1594,18 +1609,22 @@ export class WorldViewer {
   }
 
   /**
-   * Stitch duplicated boundary vertex positions between adjacent chunk meshes.
-   * Lake carving can be discovered from either side after chunks are already
-   * visible; taking the lower Y value closes cracks at cross-chunk lake edges.
+   * Stitch duplicated boundary vertex positions only where an edge vertex is
+   * part of a lake basin. This closes lake cracks without pulling entire chunk
+   * borders down into trenches.
    */
-  private stitchBoundaryPositions(chunkX: number, chunkY: number): void {
+  private stitchLakeBoundaryPositions(chunkX: number, chunkY: number): void {
     const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
     if (!mesh) return;
 
-    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
-    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
+    const dataA = mesh.terrain.userData.chunkData as ChunkData | undefined;
+    if (!dataA) return;
+
+    const geomA = mesh.terrain.geometry as THREE.BufferGeometry;
+    const posA = geomA.getAttribute('position') as THREE.BufferAttribute;
     const verticesPerSide = Math.round(Math.sqrt(posA.count));
     const chunkSize = verticesPerSide - 1;
+    let changedA = false;
 
     const neighbours: Array<{ dx: number; dz: number }> = [
       { dx: 1, dz: 0 },
@@ -1617,42 +1636,132 @@ export class WorldViewer {
       const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
       if (!neighbourMesh) continue;
 
+      const dataB = neighbourMesh.terrain.userData.chunkData as ChunkData | undefined;
+      if (!dataB) continue;
+
       const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
       const posB = geomB.getAttribute('position') as THREE.BufferAttribute;
+      let changedB = false;
 
       if (dx === 1 && dz === 0) {
         for (let row = 0; row <= chunkSize; row++) {
-          this._stitchVertexHeight(posA, row * verticesPerSide + chunkSize, posB, row * verticesPerSide);
+          const idxA = row * verticesPerSide + chunkSize;
+          const idxB = row * verticesPerSide;
+          const touchesLake =
+            this.vertexTouchesLake(dataA, chunkSize, row) ||
+            this.vertexTouchesLake(dataB, 0, row);
+          if (!touchesLake && !this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) continue;
+
+          const changed = this.stitchVertexHeightIfDifferent(
+            posA,
+            idxA,
+            posB,
+            idxB,
+          );
+          changedA ||= changed;
+          changedB ||= changed;
         }
       } else if (dx === 0 && dz === 1) {
         for (let col = 0; col <= chunkSize; col++) {
-          this._stitchVertexHeight(posA, chunkSize * verticesPerSide + col, posB, col);
+          const idxA = chunkSize * verticesPerSide + col;
+          const idxB = col;
+          const touchesLake =
+            this.vertexTouchesLake(dataA, col, chunkSize) ||
+            this.vertexTouchesLake(dataB, col, 0);
+          if (!touchesLake && !this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) continue;
+
+          const changed = this.stitchVertexHeightIfDifferent(
+            posA,
+            idxA,
+            posB,
+            idxB,
+          );
+          changedA ||= changed;
+          changedB ||= changed;
         }
       } else {
-        this._stitchVertexHeight(posA, chunkSize * verticesPerSide + chunkSize, posB, 0);
+        const touchesLake =
+          this.vertexTouchesLake(dataA, chunkSize, chunkSize) ||
+          this.vertexTouchesLake(dataB, 0, 0);
+        const idxA = chunkSize * verticesPerSide + chunkSize;
+        const idxB = 0;
+        if (touchesLake || this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) {
+          const changed = this.stitchVertexHeightIfDifferent(
+            posA,
+            idxA,
+            posB,
+            idxB,
+          );
+          changedA ||= changed;
+          changedB ||= changed;
+        }
       }
 
-      posB.needsUpdate = true;
-      geomB.computeVertexNormals();
-      geomB.computeBoundingBox();
-      geomB.computeBoundingSphere();
+      if (changedB) {
+        posB.needsUpdate = true;
+        geomB.computeVertexNormals();
+        geomB.computeBoundingBox();
+        geomB.computeBoundingSphere();
+      }
     }
 
-    posA.needsUpdate = true;
-    geom.computeVertexNormals();
-    geom.computeBoundingBox();
-    geom.computeBoundingSphere();
+    if (changedA) {
+      posA.needsUpdate = true;
+      geomA.computeVertexNormals();
+      geomA.computeBoundingBox();
+      geomA.computeBoundingSphere();
+    }
   }
 
-  private _stitchVertexHeight(
+  private vertexTouchesLake(data: ChunkData, vx: number, vy: number): boolean {
+    const size = data.size;
+    const lakes = data.lakes ?? [];
+    if (lakes.length === 0) return false;
+
+    for (const lake of lakes) {
+      if (
+        this.lakeHasTile(lake.tiles, vx, vy, size) ||
+        this.lakeHasTile(lake.tiles, vx - 1, vy, size) ||
+        this.lakeHasTile(lake.tiles, vx, vy - 1, size) ||
+        this.lakeHasTile(lake.tiles, vx - 1, vy - 1, size)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private lakeHasTile(tiles: Set<number>, tx: number, ty: number, size: number): boolean {
+    return tx >= 0 && ty >= 0 && tx < size && ty < size && tiles.has(ty * size + tx);
+  }
+
+  private isLikelyLakeBoundaryHeightGap(
     posA: THREE.BufferAttribute,
     idxA: number,
     posB: THREE.BufferAttribute,
     idxB: number,
-  ): void {
+  ): boolean {
+    const heightGap = Math.abs(posA.getY(idxA) - posB.getY(idxB));
+    // Terrain generated from the same world coordinates should already match.
+    // Lake carving can leave a larger local gap when only one side owns the
+    // lake tile; keep this threshold above normal floating point noise.
+    return heightGap > 0.25;
+  }
+
+  private stitchVertexHeightIfDifferent(
+    posA: THREE.BufferAttribute,
+    idxA: number,
+    posB: THREE.BufferAttribute,
+    idxB: number,
+  ): boolean {
     const sharedY = Math.min(posA.getY(idxA), posB.getY(idxB));
-    posA.setY(idxA, sharedY);
-    posB.setY(idxB, sharedY);
+    const changed = posA.getY(idxA) !== sharedY || posB.getY(idxB) !== sharedY;
+    if (changed) {
+      posA.setY(idxA, sharedY);
+      posB.setY(idxB, sharedY);
+    }
+    return changed;
   }
 
   /**

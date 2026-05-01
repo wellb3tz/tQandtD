@@ -17,6 +17,8 @@ import type { LakeData } from '../../../../src/gen/lakes';
 import type { LakeTile, LakeRenderConfig } from './types';
 import { HEIGHT_SCALE } from './config';
 
+const SHORELINE_EXPANSION = 1.15;
+
 // ─── Tile identification ──────────────────────────────────────────────────────
 
 /**
@@ -153,8 +155,9 @@ export function buildLakeGeometry(
       const key = vy * vertexSize + vx;
       if (vmap[key] !== -1) return vmap[key];
 
-      const worldX = chunkData.x * size + vx;
-      const worldZ = chunkData.y * size + vy;
+      const shorelineOffset = getShorelineOffset(vx, vy, lake.tiles, size);
+      const worldX = chunkData.x * size + vx + shorelineOffset.x;
+      const worldZ = chunkData.y * size + vy + shorelineOffset.z;
 
       // Depth at this vertex relative to the lake surface
       const terrainH = chunkData.heightmap[key];
@@ -201,6 +204,54 @@ export function buildLakeGeometry(
 }
 
 // ─── Material factory ─────────────────────────────────────────────────────────
+
+/**
+ * Push edge vertices slightly outward so the rendered surface overlaps the
+ * carved basin rim and hides square tile boundaries along the shoreline.
+ */
+function getShorelineOffset(
+  vx: number,
+  vy: number,
+  lakeTiles: Set<number>,
+  size: number,
+): { x: number; z: number } {
+  const hasTile = (tx: number, ty: number): boolean => {
+    return tx >= 0 && ty >= 0 && tx < size && ty < size && lakeTiles.has(ty * size + tx);
+  };
+
+  const topLeft = hasTile(vx - 1, vy - 1);
+  const topRight = hasTile(vx, vy - 1);
+  const bottomLeft = hasTile(vx - 1, vy);
+  const bottomRight = hasTile(vx, vy);
+
+  const hasLeft = topLeft || bottomLeft;
+  const hasRight = topRight || bottomRight;
+  const hasTop = topLeft || topRight;
+  const hasBottom = bottomLeft || bottomRight;
+
+  let x = 0;
+  let z = 0;
+
+  if (hasRight && !hasLeft) x -= SHORELINE_EXPANSION;
+  if (hasLeft && !hasRight) x += SHORELINE_EXPANSION;
+  if (hasBottom && !hasTop) z -= SHORELINE_EXPANSION;
+  if (hasTop && !hasBottom) z += SHORELINE_EXPANSION;
+
+  // Keep visual overlap inside the owning chunk. Neighbor chunks render their
+  // own water mesh, so crossing this boundary can create z-fighting/overlap.
+  if (vx === 0 && x < 0) x = 0;
+  if (vx === size && x > 0) x = 0;
+  if (vy === 0 && z < 0) z = 0;
+  if (vy === size && z > 0) z = 0;
+
+  if (x !== 0 && z !== 0) {
+    const diagonalScale = 1 / Math.sqrt(2);
+    x *= diagonalScale;
+    z *= diagonalScale;
+  }
+
+  return { x, z };
+}
 
 /**
  * Create a Phong material for lake water.

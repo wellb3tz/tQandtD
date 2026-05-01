@@ -161,17 +161,20 @@ export class LakeManager {
     // Track which chunks had new lakes generated
     const chunksWithNewLakes = new Set<string>();
     
-    // Generate lakes for this chunk if not already done
-    if (!this.generatedRegions.has(chunkKey)) {
-      this.generateLakesForRegion(chunkX, chunkY, chunkSize);
-      this.generatedRegions.add(chunkKey);
-      chunksWithNewLakes.add(chunkKey);
-    }
+    // Generate lake candidates for this chunk and its immediate neighbours.
+    // A multi-chunk lake can be seeded just across a chunk boundary while still
+    // covering the requested chunk; evaluating the 3x3 ring here prevents the
+    // requested chunk from briefly rendering a clipped lake edge.
+    for (let regionY = chunkY - 1; regionY <= chunkY + 1; regionY++) {
+      for (let regionX = chunkX - 1; regionX <= chunkX + 1; regionX++) {
+        const regionKey = this.getChunkKey(regionX, regionY);
+        if (this.generatedRegions.has(regionKey)) continue;
 
-    // Neighbor regions are generated lazily when those chunks are requested.
-    // When a later neighbor lake overlaps this chunk, the invalidation path below
-    // refreshes cached chunks without making every first chunk request pay for a
-    // 3x3 lake-generation burst.
+        this.generateLakesForRegion(regionX, regionY, chunkSize);
+        this.generatedRegions.add(regionKey);
+        chunksWithNewLakes.add(regionKey);
+      }
+    }
 
     // If new lakes were generated, defer invalidations to avoid race conditions
     if (chunksWithNewLakes.size > 0 && onInvalidateChunk) {
