@@ -1,14 +1,9 @@
 /**
  * Lake mesh generator
  *
- * Converts LakeData (from the engine's LakeGenerator) into Three.js geometry
- * for rendering inland water bodies.
- *
- * Visual design (temporary, for testing):
- *   Flat water surface at lakeData.waterLevel * HEIGHT_SCALE.
- *   Vivid green color (#00ff88) so lakes are immediately distinguishable
- *   from the ocean (turquoise → navy).  Color will be replaced with a
- *   realistic palette after visual testing.
+ * Converts LakeData into Three.js geometry for rendering inland water bodies.
+ * Lake shorelines are generated with marching squares so the rendered water
+ * follows the basin contour instead of exposing square tile edges.
  */
 
 import * as THREE from 'three';
@@ -17,9 +12,9 @@ import type { LakeData } from '../../../../src/gen/lakes';
 import type { LakeTile, LakeRenderConfig } from './types';
 import { HEIGHT_SCALE } from './config';
 
-const SHORELINE_EXPANSION = 1.15;
+const OUTSIDE_LAKE_EPSILON = 1e-6;
 
-// ─── Tile identification ──────────────────────────────────────────────────────
+// Tile identification
 
 /**
  * Convert LakeData tile sets into LakeTile arrays suitable for mesh building.
@@ -38,15 +33,13 @@ export function identifyLakeTiles(
 
   for (const lake of lakes) {
     for (const tileIdx of lake.tiles) {
-      // Ensure tile index is within chunk bounds
       if (tileIdx < 0 || tileIdx >= size * size) {
-        continue; // Skip tiles outside chunk
+        continue;
       }
 
       const tx = tileIdx % size;
       const ty = Math.floor(tileIdx / size);
 
-      // Ensure vertex indices are within heightmap bounds
       if (tx < 0 || tx >= size || ty < 0 || ty >= size) {
         continue;
       }
@@ -69,28 +62,19 @@ export function identifyLakeTiles(
   return result;
 }
 
-// ─── Color helpers ────────────────────────────────────────────────────────────
+// Color helpers
 
 /**
  * Compute lake surface vertex color based on depth.
  *
- * Freshwater palette — warmer and greener than the ocean (which goes navy-blue):
- *   shallow → light cyan-teal  #4fc3d4  (sunlit freshwater)
- *   deep    → dark teal-green  #1a5c6e  (deep lake)
- *
- * Ocean for reference: shallow #29b6d4 → deep #0a1a3a (dark navy).
- * Lakes are visually distinct: greener mid-tones, lighter deep colour.
- *
- * @param depth      - Depth below lake surface (≥ 0)
- * @param maxDepth   - Maximum depth of this lake body
+ * @param depth    - Depth below lake surface
+ * @param maxDepth - Maximum depth of this lake body
  * @returns [r, g, b] in [0, 1]
  */
 function lakeDepthColor(depth: number, maxDepth: number): [number, number, number] {
   const t = maxDepth > 0 ? Math.min(depth / maxDepth, 1.0) : 0;
-  const s = t * t; // quadratic curve — emphasise shallow gradient
+  const s = t * t;
 
-  // Shallow (t=0): #4fc3d4 → r=0.31, g=0.76, b=0.83
-  // Deep    (t=1): #1a5c6e → r=0.10, g=0.36, b=0.43
   const r = 0.31 - s * 0.21;
   const g = 0.76 - s * 0.40;
   const b = 0.83 - s * 0.40;
@@ -98,21 +82,24 @@ function lakeDepthColor(depth: number, maxDepth: number): [number, number, numbe
   return [r, g, b];
 }
 
-// ─── Geometry builder ─────────────────────────────────────────────────────────
+interface ContourPoint {
+  x: number;
+  z: number;
+  field: number;
+  terrainHeight: number;
+}
+
+// Geometry builder
 
 /**
  * Build a BufferGeometry for all lake tiles in a chunk.
  *
- * Each LakeData is a single closed basin with one waterLevel.  All tiles
- * belonging to the same lake share a single flat vertex grid at that level,
- * so there are no gaps or steps between adjacent tiles of the same lake.
- *
- * Different lakes (different waterLevel values) each get their own vertex
- * grid, but since they are physically separate basins they never share edges
- * and therefore never produce visible seams.
+ * Each lake is clipped against the local terrain height field with marching
+ * squares. Interior cells become full quads; shoreline cells become clipped
+ * polygons whose edges sit on the water-level contour of the basin.
  *
  * @param lakeTiles - Flat array of lake tiles (all lakes in the chunk)
- * @param lakes     - Original lake bodies (for maxDepth and tile membership)
+ * @param lakes     - Original lake bodies
  * @param chunkData - Chunk data
  * @returns BufferGeometry or null if no lake tiles
  */
@@ -124,67 +111,46 @@ export function buildLakeGeometry(
   if (lakeTiles.length === 0) return null;
 
   const { size } = chunkData;
-  const vertexSize = size + 1;
-
   const positions: number[] = [];
-  const normals:   number[] = [];
-  const colors:    number[] = [];
-  const uvs:       number[] = [];
-  const indices:   number[] = [];
+  const normals: number[] = [];
+  const colors: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
   let vertexCount = 0;
 
-  // Process each lake independently so all its tiles share one flat surface.
   for (const lake of lakes) {
     if (lake.tiles.size === 0) continue;
 
+    const waterY = lake.waterLevel;
     const maxDepth = lake.maxDepth;
+    const candidateCells = collectLakeContourCells(lake.tiles, size);
 
-    // Use consistent water height across all chunks for this lake.
-    // If minTerrainHeight is available (multi-chunk lakes), position water
-    // closer to the bottom for more dramatic visual effect.
-    // Water at 1/3 from bottom: minTerrainHeight + (waterLevel - minTerrainHeight) * 0.33
-    // This gives more visible depth while keeping consistency across chunks.
-    const waterY = lake.minTerrainHeight !== undefined
-      ? lake.minTerrainHeight + (lake.waterLevel - lake.minTerrainHeight) * 0.33
-      : lake.waterLevel;
+    for (const cellIdx of candidateCells) {
+      const tx = cellIdx % size;
+      const ty = Math.floor(cellIdx / size);
+      const polygon = buildMarchingSquarePolygon(tx, ty, lake.tiles, chunkData, waterY);
 
-    // One vertex map per lake — key = vy * vertexSize + vx
-    const vmap = new Int32Array(vertexSize * vertexSize).fill(-1);
+      if (polygon.length < 3) {
+        continue;
+      }
 
-    const getVertex = (vx: number, vy: number): number => {
-      const key = vy * vertexSize + vx;
-      if (vmap[key] !== -1) return vmap[key];
+      const baseIndex = vertexCount;
+      for (const point of polygon) {
+        const worldX = chunkData.x * size + point.x;
+        const worldZ = chunkData.y * size + point.z;
+        const depth = Math.max(0, waterY - point.terrainHeight);
+        const [r, g, b] = lakeDepthColor(depth, maxDepth);
 
-      const shorelineOffset = getShorelineOffset(vx, vy, lake.tiles, size);
-      const worldX = chunkData.x * size + vx + shorelineOffset.x;
-      const worldZ = chunkData.y * size + vy + shorelineOffset.z;
+        positions.push(worldX, waterY * HEIGHT_SCALE + 0.15, worldZ);
+        normals.push(0, 1, 0);
+        colors.push(r, g, b);
+        uvs.push(point.x / size, point.z / size);
+        vertexCount++;
+      }
 
-      // Depth at this vertex relative to the lake surface
-      const terrainH = chunkData.heightmap[key];
-      const depth = Math.max(0, waterY - terrainH);
-      const [r, g, b] = lakeDepthColor(depth, maxDepth);
-
-      // Water surface sits halfway between the deepest terrain point and the lake rim
-      positions.push(worldX, waterY * HEIGHT_SCALE + 0.15, worldZ);
-      normals.push(0, 1, 0);
-      colors.push(r, g, b);
-      uvs.push(vx / size, vy / size);
-
-      vmap[key] = vertexCount;
-      return vertexCount++;
-    };
-
-    for (const tileIdx of lake.tiles) {
-      const tx = tileIdx % size;
-      const ty = Math.floor(tileIdx / size);
-
-      const i00 = getVertex(tx,     ty    );
-      const i10 = getVertex(tx + 1, ty    );
-      const i01 = getVertex(tx,     ty + 1);
-      const i11 = getVertex(tx + 1, ty + 1);
-
-      indices.push(i00, i10, i01);
-      indices.push(i01, i10, i11);
+      for (let i = 1; i < polygon.length - 1; i++) {
+        indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
+      }
     }
   }
 
@@ -192,9 +158,9 @@ export function buildLakeGeometry(
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-  geometry.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(normals),   3));
-  geometry.setAttribute('color',    new THREE.BufferAttribute(new Float32Array(colors),    3));
-  geometry.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(uvs),       2));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
   geometry.setIndex(indices);
 
   geometry.computeBoundingSphere();
@@ -203,55 +169,112 @@ export function buildLakeGeometry(
   return geometry;
 }
 
-// ─── Material factory ─────────────────────────────────────────────────────────
+function collectLakeContourCells(lakeTiles: Set<number>, size: number): Set<number> {
+  const cells = new Set<number>();
 
-/**
- * Push edge vertices slightly outward so the rendered surface overlaps the
- * carved basin rim and hides square tile boundaries along the shoreline.
- */
-function getShorelineOffset(
+  for (const tileIdx of lakeTiles) {
+    const tx = tileIdx % size;
+    const ty = Math.floor(tileIdx / size);
+
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const cx = tx + ox;
+        const cy = ty + oy;
+        if (cx < 0 || cy < 0 || cx >= size || cy >= size) {
+          continue;
+        }
+        cells.add(cy * size + cx);
+      }
+    }
+  }
+
+  return cells;
+}
+
+function buildMarchingSquarePolygon(
+  tx: number,
+  ty: number,
+  lakeTiles: Set<number>,
+  chunkData: ChunkData,
+  waterY: number,
+): ContourPoint[] {
+  const corners = [
+    sampleLakeContourPoint(tx, ty, lakeTiles, chunkData, waterY),
+    sampleLakeContourPoint(tx + 1, ty, lakeTiles, chunkData, waterY),
+    sampleLakeContourPoint(tx + 1, ty + 1, lakeTiles, chunkData, waterY),
+    sampleLakeContourPoint(tx, ty + 1, lakeTiles, chunkData, waterY),
+  ];
+
+  const polygon: ContourPoint[] = [];
+  for (let i = 0; i < corners.length; i++) {
+    const current = corners[i];
+    const previous = corners[(i + corners.length - 1) % corners.length];
+    const currentInside = current.field >= 0;
+    const previousInside = previous.field >= 0;
+
+    if (currentInside !== previousInside) {
+      polygon.push(interpolateContourPoint(previous, current));
+    }
+    if (currentInside) {
+      polygon.push(current);
+    }
+  }
+
+  return polygon;
+}
+
+function sampleLakeContourPoint(
+  vx: number,
+  vy: number,
+  lakeTiles: Set<number>,
+  chunkData: ChunkData,
+  waterY: number,
+): ContourPoint {
+  const { heightmap, size } = chunkData;
+  const vertexSize = size + 1;
+  const terrainHeight = heightmap[vy * vertexSize + vx];
+  const touchesLake = lakeVertexTouchesTile(vx, vy, lakeTiles, size);
+  const field = touchesLake
+    ? waterY - terrainHeight
+    : Math.min(waterY - terrainHeight, -OUTSIDE_LAKE_EPSILON);
+
+  return { x: vx, z: vy, field, terrainHeight };
+}
+
+function interpolateContourPoint(a: ContourPoint, b: ContourPoint): ContourPoint {
+  const denominator = a.field - b.field;
+  const t = Math.abs(denominator) > OUTSIDE_LAKE_EPSILON
+    ? a.field / denominator
+    : 0.5;
+  const clamped = Math.min(Math.max(t, 0), 1);
+
+  return {
+    x: a.x + (b.x - a.x) * clamped,
+    z: a.z + (b.z - a.z) * clamped,
+    field: 0,
+    terrainHeight: a.terrainHeight + (b.terrainHeight - a.terrainHeight) * clamped,
+  };
+}
+
+function lakeVertexTouchesTile(
   vx: number,
   vy: number,
   lakeTiles: Set<number>,
   size: number,
-): { x: number; z: number } {
+): boolean {
   const hasTile = (tx: number, ty: number): boolean => {
     return tx >= 0 && ty >= 0 && tx < size && ty < size && lakeTiles.has(ty * size + tx);
   };
 
-  const topLeft = hasTile(vx - 1, vy - 1);
-  const topRight = hasTile(vx, vy - 1);
-  const bottomLeft = hasTile(vx - 1, vy);
-  const bottomRight = hasTile(vx, vy);
-
-  const hasLeft = topLeft || bottomLeft;
-  const hasRight = topRight || bottomRight;
-  const hasTop = topLeft || topRight;
-  const hasBottom = bottomLeft || bottomRight;
-
-  let x = 0;
-  let z = 0;
-
-  if (hasRight && !hasLeft) x -= SHORELINE_EXPANSION;
-  if (hasLeft && !hasRight) x += SHORELINE_EXPANSION;
-  if (hasBottom && !hasTop) z -= SHORELINE_EXPANSION;
-  if (hasTop && !hasBottom) z += SHORELINE_EXPANSION;
-
-  // Keep visual overlap inside the owning chunk. Neighbor chunks render their
-  // own water mesh, so crossing this boundary can create z-fighting/overlap.
-  if (vx === 0 && x < 0) x = 0;
-  if (vx === size && x > 0) x = 0;
-  if (vy === 0 && z < 0) z = 0;
-  if (vy === size && z > 0) z = 0;
-
-  if (x !== 0 && z !== 0) {
-    const diagonalScale = 1 / Math.sqrt(2);
-    x *= diagonalScale;
-    z *= diagonalScale;
-  }
-
-  return { x, z };
+  return (
+    hasTile(vx - 1, vy - 1) ||
+    hasTile(vx, vy - 1) ||
+    hasTile(vx - 1, vy) ||
+    hasTile(vx, vy)
+  );
 }
+
+// Material factory
 
 /**
  * Create a Phong material for lake water.
@@ -263,12 +286,12 @@ function getShorelineOffset(
  */
 export function createLakeMaterial(config: LakeRenderConfig): THREE.MeshPhongMaterial {
   return new THREE.MeshPhongMaterial({
-    color: 0xffffff,       // white base — vertex colors carry the actual hue
+    color: 0xffffff,
     vertexColors: true,
     transparent: true,
     opacity: config.opacity,
     shininess: config.shininess,
     side: THREE.DoubleSide,
-    specular: new THREE.Color(0x88ffcc), // greenish specular highlight
+    specular: new THREE.Color(0x88ffcc),
   });
 }
