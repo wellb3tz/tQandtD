@@ -9,6 +9,7 @@ export type {
   WaterConfig,
   OceanConfig,
   LakeRenderConfig,
+  RiverRenderConfig,
   PerformanceConfig,
   RenderingConfig,
   WaterType,
@@ -24,6 +25,7 @@ export {
   DEFAULT_WATER_CONFIG,
   DEFAULT_OCEAN_CONFIG,
   DEFAULT_LAKE_RENDER_CONFIG,
+  DEFAULT_RIVER_RENDER_CONFIG,
 } from './config';
 
 // Material factory
@@ -43,6 +45,11 @@ export {
   buildLakeGeometry,
   createLakeMaterial,
 } from './LakeMeshGenerator';
+
+export {
+  buildRiverGeometry,
+  createRiverMaterial,
+} from './RiverMeshGenerator';
 
 // Underwater terrain processor
 export type {

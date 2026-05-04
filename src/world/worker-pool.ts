@@ -393,6 +393,13 @@ export class WorkerPool {
         maxDepth: lake.maxDepth,
         minTerrainHeight: lake.minTerrainHeight,
       })),
+      rivers: (serialized.rivers ?? []).map(river => ({
+        riverId: river.riverId,
+        pathId: river.pathId,
+        isTributary: river.isTributary,
+        points: river.points.map(point => ({ ...point })),
+        bounds: river.bounds,
+      })),
       resources: serialized.resources,
       structures: serialized.structures,
     };
@@ -409,6 +416,10 @@ export class WorkerPool {
    */
   private handleTaskError(workerId: number, error: Error): void {
     const workerState = this.workers[workerId];
+    if (!workerState) {
+      return;
+    }
+
     const task = workerState.currentTask;
 
     if (!task) {

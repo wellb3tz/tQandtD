@@ -149,6 +149,27 @@ export interface SerializedChunkData {
     maxDepth: number;
     minTerrainHeight?: number; // Optional for backward compatibility
   }>;
+  rivers: Array<{
+    riverId: string;
+    pathId: string;
+    isTributary: boolean;
+    points: Array<{
+      x: number;
+      y: number;
+      height: number;
+      surfaceLevel: number;
+      width: number;
+      depth: number;
+      flow?: number;
+      channelWidth?: number;
+      valleyWidth?: number;
+      channelDepth?: number;
+      valleyDepth?: number;
+      flowX: number;
+      flowY: number;
+    }>;
+    bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  }>;
   resources: Array<{
     x: number;
     y: number;
@@ -198,6 +219,13 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+    })),
+    rivers: (chunk.rivers ?? []).map(river => ({
+      riverId: river.riverId,
+      pathId: river.pathId,
+      isTributary: river.isTributary,
+      points: river.points.map(point => ({ ...point })),
+      bounds: river.bounds,
     })),
     resources: chunk.resources.map(r => ({
       x: r.x,
@@ -255,6 +283,13 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
       tiles: new Set(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+    })),
+    rivers: (serialized.rivers ?? []).map(river => ({
+      riverId: river.riverId,
+      pathId: river.pathId,
+      isTributary: river.isTributary,
+      points: river.points.map(point => ({ ...point })),
+      bounds: river.bounds,
     })),
     resources: serialized.resources,
     structures: serialized.structures,

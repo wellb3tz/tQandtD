@@ -70,6 +70,16 @@ export class LakeGenerationError extends ChunkGenerationError {
 }
 
 /**
+ * Error thrown when river generation fails
+ */
+export class RiverGenerationError extends ChunkGenerationError {
+  constructor(chunkX: number, chunkY: number, cause?: Error) {
+    super('River generation failed', chunkX, chunkY, 'rivers', cause);
+    this.name = 'RiverGenerationError';
+  }
+}
+
+/**
  * Error thrown when resource generation fails
  */
 export class ResourceGenerationError extends ChunkGenerationError {

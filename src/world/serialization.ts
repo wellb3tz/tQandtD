@@ -9,6 +9,7 @@
 import { deflate, inflate } from 'pako';
 import { ChunkData, Resource, Structure } from './chunk';
 import type { LakeData } from '../gen/lakes';
+import type { RiverData, RiverPoint } from '../gen/rivers';
 import { WorldConfig } from './chunk-manager';
 import { logger, LogCategory } from '../utils/logger';
 
@@ -142,6 +143,30 @@ export interface SerializedLake {
   minTerrainHeight?: number;
 }
 
+export interface SerializedRiverPoint {
+  x: number;
+  y: number;
+  height: number;
+  surfaceLevel: number;
+  width: number;
+  depth: number;
+  flow?: number;
+  channelWidth?: number;
+  valleyWidth?: number;
+  channelDepth?: number;
+  valleyDepth?: number;
+  flowX: number;
+  flowY: number;
+}
+
+export interface SerializedRiver {
+  riverId: string;
+  pathId: string;
+  isTributary: boolean;
+  points: SerializedRiverPoint[];
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+}
+
 /**
  * Serialized chunk data
  * 
@@ -180,6 +205,9 @@ export interface SerializedChunk {
 
   /** Lake bodies detected in this chunk (may be empty) */
   lakes: SerializedLake[];
+
+  /** River paths intersecting this chunk (may be empty) */
+  rivers: SerializedRiver[];
 }
 
 /**
@@ -295,6 +323,13 @@ export class WorldSerializer {
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
     }));
+    const rivers: SerializedRiver[] = (chunk.rivers ?? []).map(river => ({
+      riverId: river.riverId,
+      pathId: river.pathId,
+      isTributary: river.isTributary,
+      points: river.points.map(point => ({ ...point })),
+      bounds: river.bounds,
+    }));
 
     return {
       x: chunk.x,
@@ -307,6 +342,7 @@ export class WorldSerializer {
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
+      rivers,
     };
   }
 
@@ -554,6 +590,13 @@ export class WorldSerializer {
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
     }));
+    const rivers: SerializedRiver[] = (chunk.rivers ?? []).map(river => ({
+      riverId: river.riverId,
+      pathId: river.pathId,
+      isTributary: river.isTributary,
+      points: river.points.map(point => ({ ...point })),
+      bounds: river.bounds,
+    }));
 
     return {
       x: chunk.x,
@@ -566,6 +609,7 @@ export class WorldSerializer {
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
+      rivers,
     };
   }
 
@@ -792,6 +836,13 @@ export class WorldSerializer {
       maxDepth: sl.maxDepth,
       minTerrainHeight: sl.minTerrainHeight,
     }));
+    const rivers: RiverData[] = (serializedChunk.rivers ?? []).map(sr => ({
+      riverId: sr.riverId,
+      pathId: sr.pathId,
+      isTributary: sr.isTributary,
+      points: sr.points.map((point: RiverPoint) => ({ ...point })),
+      bounds: sr.bounds,
+    }));
 
     return {
       x: serializedChunk.x,
@@ -803,6 +854,7 @@ export class WorldSerializer {
       sparseBiomeWeights,
       sparseBiomeOffsets,
       lakes,
+      rivers,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
     };
@@ -853,6 +905,13 @@ export class WorldSerializer {
       maxDepth: sl.maxDepth,
       minTerrainHeight: sl.minTerrainHeight,
     }));
+    const rivers: RiverData[] = (serializedChunk.rivers ?? []).map(sr => ({
+      riverId: sr.riverId,
+      pathId: sr.pathId,
+      isTributary: sr.isTributary,
+      points: sr.points.map((point: RiverPoint) => ({ ...point })),
+      bounds: sr.bounds,
+    }));
 
     return {
       x: serializedChunk.x,
@@ -864,6 +923,7 @@ export class WorldSerializer {
       sparseBiomeWeights,
       sparseBiomeOffsets,
       lakes,
+      rivers,
       resources: serializedChunk.resources,
       structures: serializedChunk.structures,
     };
@@ -1166,10 +1226,11 @@ export class WorldSerializer {
       const resourcesBytes = encoder.encode(JSON.stringify(chunk.resources));
       const structuresBytes = encoder.encode(JSON.stringify(chunk.structures));
       const lakesBytes = encoder.encode(JSON.stringify(chunk.lakes ?? []));
+      const riversBytes = encoder.encode(JSON.stringify(chunk.rivers ?? []));
       
       chunkDataSize += 4 + 4 + 4 + heightmapBuffer.byteLength + 4 + biomeMapBuffer.byteLength +
                        4 + resourcesBytes.length + 4 + structuresBytes.length +
-                       4 + lakesBytes.length;
+                       4 + lakesBytes.length + 4 + riversBytes.length;
     }
     
     // Calculate modifications data size
@@ -1270,6 +1331,13 @@ export class WorldSerializer {
       offset += 4;
       bytes.set(lakesBytes, offset);
       offset += lakesBytes.length;
+
+      // Write rivers
+      const riversBytes = encoder.encode(JSON.stringify(chunk.rivers ?? []));
+      view.setUint32(offset, riversBytes.length, true);
+      offset += 4;
+      bytes.set(riversBytes, offset);
+      offset += riversBytes.length;
     }
     
     // Write modifications count
@@ -1535,7 +1603,23 @@ export class WorldSerializer {
       const serializedLakes: SerializedLake[] = JSON.parse(new TextDecoder().decode(lakesBytes));
       offset += lakesLength;
 
-      chunks.push({ x, y, heightmap: heightmapBuffer, biomeMap: biomeMapBuffer, resources, structures, lakes: serializedLakes });
+      // Read rivers
+      const riversLength = view.getUint32(offset, true);
+      offset += 4;
+      const riversBytes = bytes.slice(offset, offset + riversLength);
+      const serializedRivers: SerializedRiver[] = JSON.parse(new TextDecoder().decode(riversBytes));
+      offset += riversLength;
+
+      chunks.push({
+        x,
+        y,
+        heightmap: heightmapBuffer,
+        biomeMap: biomeMapBuffer,
+        resources,
+        structures,
+        lakes: serializedLakes,
+        rivers: serializedRivers,
+      });
     }
 
     // Read modifications count

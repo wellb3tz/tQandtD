@@ -44,7 +44,12 @@ export const DEFAULT_LAKE_RENDER_CONFIG = {
   shininess: 60,
 };
 
-
+export const DEFAULT_RIVER_RENDER_CONFIG = {
+  enabled: true,
+  color: DEFAULT_OCEAN_CONFIG.color,
+  opacity: DEFAULT_OCEAN_CONFIG.opacity,
+  shininess: DEFAULT_OCEAN_CONFIG.shininess,
+};
 
 /**
  * Default water system configuration
@@ -57,6 +62,7 @@ export const DEFAULT_WATER_CONFIG: WaterConfig = {
   seaLevel: 0.3,
   ocean: DEFAULT_OCEAN_CONFIG,
   lake: DEFAULT_LAKE_RENDER_CONFIG,
+  river: DEFAULT_RIVER_RENDER_CONFIG,
   rendering: {
     waterOffset: 0.1,
     underwaterDarkenFactor: 0.4,
@@ -136,6 +142,22 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
         0,
         100,
         'Lake shininess'
+      ),
+    },
+    river: {
+      enabled: config.river?.enabled ?? DEFAULT_RIVER_RENDER_CONFIG.enabled,
+      color: config.river?.color ?? DEFAULT_RIVER_RENDER_CONFIG.color,
+      opacity: clamp(
+        config.river?.opacity ?? DEFAULT_RIVER_RENDER_CONFIG.opacity,
+        0,
+        1,
+        'River opacity'
+      ),
+      shininess: clamp(
+        config.river?.shininess ?? DEFAULT_RIVER_RENDER_CONFIG.shininess,
+        0,
+        100,
+        'River shininess'
       ),
     },
     rendering: {

@@ -70,6 +70,8 @@ export interface WaterConfig {
   ocean: OceanConfig;
   /** Lake rendering settings */
   lake: LakeRenderConfig;
+  /** River rendering settings */
+  river: RiverRenderConfig;
   /** Performance optimization settings */
   performance: PerformanceConfig;
   /** Rendering settings */
@@ -82,7 +84,7 @@ export interface WaterConfig {
  * 'ocean' = global sea-level water body
  * 'lake'  = inland water body above sea level
  */
-export type WaterType = 'ocean' | 'lake';
+export type WaterType = 'ocean' | 'lake' | 'river';
 
 /**
  * Water mesh with metadata
@@ -117,6 +119,8 @@ export interface WaterLayerData {
   ocean: WaterMesh[];
   /** Lake water meshes */
   lake: WaterMesh[];
+  /** River water meshes */
+  river: WaterMesh[];
   /** Container group for all water meshes */
   group: THREE.Group;
 }
@@ -160,5 +164,19 @@ export interface LakeRenderConfig {
   /** Lake water opacity (default: 0.80) */
   opacity: number;
   /** Material shininess (default: 60) */
+  shininess: number;
+}
+
+/**
+ * River configuration for rendering.
+ */
+export interface RiverRenderConfig {
+  /** Enable river rendering (default: true) */
+  enabled: boolean;
+  /** River water color as hex */
+  color: number;
+  /** River water opacity */
+  opacity: number;
+  /** Material shininess */
   shininess: number;
 }

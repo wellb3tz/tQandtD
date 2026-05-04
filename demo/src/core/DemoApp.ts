@@ -6,7 +6,7 @@
  * updates, chunk loading coordination, and event system for component communication.
  */
 
-import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, configureLogger, LogLevel } from '@engine/index';
+import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, configureLogger, LogLevel, DEFAULT_RIVER_CONFIG } from '@engine/index';
 
 /**
  * 3D vector for camera position and target
@@ -182,6 +182,7 @@ const DEFAULT_CONFIG: WorldConfig = {
     maxLakeTiles: 80,
     maxFillDepth: 0.06,
   },
+  riverConfig: DEFAULT_RIVER_CONFIG,
   maxCacheSize: 1000,
   enablePerformanceMetrics: true
 };
@@ -606,6 +607,7 @@ export class DemoApp {
         'resourceConfig' in config ||
         'structureConfig' in config ||
         'lakeConfig' in config ||
+        'riverConfig' in config ||
         'noise3DConfig' in config ||
         'seed' in config ||
         'chunkSize' in config ||

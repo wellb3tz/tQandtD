@@ -113,12 +113,29 @@ export {
   type ChunkModification,
 } from './world/serialization';
 export { LakeManager, type WorldLakeData } from './world/lake-manager';
+export { RiverManager } from './world/river-manager';
 
 // Generators
 export { TerrainGenerator, type TerrainConfig } from './gen/terrain';
 export { ResourceGenerator, type ResourceConfig, type ResourceTypeConfig } from './gen/resources';
 export { StructurePlacer, type StructureConfig, type StructureTypeConfig, type PlacementRule } from './gen/structures';
 export { LakeGenerator, type LakeConfig, type LakeData, DEFAULT_LAKE_CONFIG } from './gen/lakes';
+export {
+  type RiverConfig,
+  type RiverData,
+  type RiverPath,
+  type RiverPoint,
+  type WorldRiverData,
+  createRiverCorridorPoints,
+  createSmoothedRiverPoints,
+  DEFAULT_RIVER_CONFIG,
+  getRiverChannelDepth,
+  getRiverChannelWidth,
+  getRiverFlow,
+  getRiverValleyDepth,
+  getRiverValleyWidth,
+  getRiverWaterLevel,
+} from './gen/rivers';
 
 // Utilities
 export { poissonDiskSampling, type PoissonConfig } from './utils/poisson';
@@ -128,6 +145,7 @@ export {
   TerrainGenerationError,
   BiomeGenerationError,
   LakeGenerationError,
+  RiverGenerationError,
   ResourceGenerationError,
   StructureGenerationError,
   type ErrorRecoveryOptions,

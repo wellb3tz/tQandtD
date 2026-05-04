@@ -220,6 +220,53 @@ describe('Configuration Validation', () => {
     });
   });
 
+  describe('River configuration', () => {
+    it('rejects invalid source elevation range', () => {
+      const config = makeMinimalConfig(12345);
+      config.riverConfig = {
+        enabled: true,
+        sourceNoiseScale: 0.006,
+        sourceThreshold: 0.72,
+        minSourceElevation: 0.8,
+        maxSourceElevation: 0.5,
+        allowedSourceBiomes: [BiomeType.MOUNTAIN],
+        maxLength: 512,
+        maxUphillBudget: 0.08,
+        minRiverLength: 32,
+        maxRiversPerRegion: 2,
+        maxTributaries: 2,
+        baseWidth: 1.6,
+        baseDepth: 0.035,
+        carveBankWidth: 2.5,
+      };
+
+      expect(() => validateWorldConfig(config)).toThrow(ValidationError);
+      expect(() => validateWorldConfig(config)).toThrow('minSourceElevation');
+    });
+
+    it('accepts valid river config', () => {
+      const config = makeMinimalConfig(12345);
+      config.riverConfig = {
+        enabled: true,
+        sourceNoiseScale: 0.006,
+        sourceThreshold: 0.72,
+        minSourceElevation: 0.45,
+        maxSourceElevation: 0.85,
+        allowedSourceBiomes: [BiomeType.MOUNTAIN, BiomeType.FOREST],
+        maxLength: 512,
+        maxUphillBudget: 0.08,
+        minRiverLength: 32,
+        maxRiversPerRegion: 2,
+        maxTributaries: 2,
+        baseWidth: 1.6,
+        baseDepth: 0.035,
+        carveBankWidth: 2.5,
+      };
+
+      expect(() => validateWorldConfig(config)).not.toThrow();
+    });
+  });
+
   describe('Optional configurations', () => {
     it('rejects invalid maxCacheSize', () => {
       const config = makeMinimalConfig(12345);

@@ -7,6 +7,7 @@
 
 import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
 import type { WorldConfig } from '../../../src/world/chunk-manager';
+import { DEFAULT_RIVER_CONFIG } from '../../../src/gen/rivers';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 
@@ -580,6 +581,25 @@ export class ControlPanel {
       this.updateLakeConfig('useMultiChunk', checked);
     });
     waterContainer.appendChild(enableLakesCheckbox);
+
+    // Rivers section
+    const riversSection = document.createElement('div');
+    riversSection.style.marginBottom = '16px';
+    riversSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Rivers</h4>';
+    waterContainer.appendChild(riversSection);
+
+    const currentRiverConfig = this.currentConfig?.riverConfig;
+    const riversEnabled = currentRiverConfig?.enabled ?? true;
+
+    const enableRiversCheckbox = this.createCheckboxControl({
+      id: 'enableRivers',
+      label: 'Enable Rivers',
+      defaultValue: riversEnabled,
+      tooltip: 'Enable terrain-aware rivers that carve channels and flow to ocean.'
+    }, (checked) => {
+      this.updateRiverConfig('enabled', checked);
+    });
+    riversSection.appendChild(enableRiversCheckbox);
 
     // Ocean section
     const oceanSection = document.createElement('div');
@@ -1338,6 +1358,25 @@ export class ControlPanel {
     };
 
     console.log('[ControlPanel] Updating lake config:', newConfig.lakeConfig);
+    this.app.updateEngineConfig(newConfig);
+    this.notifyParameterChange(newConfig);
+  }
+
+  private updateRiverConfig(property: string, value: boolean | number): void {
+    if (!this.app || !this.currentConfig) {
+      console.warn('[ControlPanel] Cannot update river config - missing app or config');
+      return;
+    }
+
+    const currentRiverConfig = this.currentConfig.riverConfig || DEFAULT_RIVER_CONFIG;
+    const newConfig = {
+      ...this.currentConfig,
+      riverConfig: {
+        ...currentRiverConfig,
+        [property]: value,
+      },
+    };
+
     this.app.updateEngineConfig(newConfig);
     this.notifyParameterChange(newConfig);
   }

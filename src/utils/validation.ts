@@ -11,6 +11,7 @@ import type { BiomeConfig } from '../world/biome';
 import type { ResourceConfig } from '../gen/resources';
 import type { StructureConfig } from '../gen/structures';
 import type { LakeConfig } from '../gen/lakes';
+import type { RiverConfig } from '../gen/rivers';
 
 /**
  * Validation error with detailed context
@@ -182,6 +183,63 @@ export function validateLakeConfig(config: LakeConfig): void {
 }
 
 /**
+ * Validates river generation configuration
+ */
+export function validateRiverConfig(config: RiverConfig): void {
+  validatePositive('riverConfig.sourceNoiseScale', config.sourceNoiseScale);
+  validateRange('riverConfig.sourceThreshold', config.sourceThreshold, 0, 1);
+  validateRange('riverConfig.minSourceElevation', config.minSourceElevation, 0, 1);
+  validateRange('riverConfig.maxSourceElevation', config.maxSourceElevation, 0, 1);
+
+  if (config.minSourceElevation >= config.maxSourceElevation) {
+    throw new ValidationError(
+      'riverConfig.minSourceElevation',
+      config.minSourceElevation,
+      `Must be < maxSourceElevation (${config.maxSourceElevation})`
+    );
+  }
+
+  validatePositive('riverConfig.maxLength', config.maxLength);
+  validatePositive('riverConfig.minRiverLength', config.minRiverLength);
+  validatePositive('riverConfig.baseWidth', config.baseWidth);
+  validatePositive('riverConfig.baseDepth', config.baseDepth);
+  validatePositive('riverConfig.carveBankWidth', config.carveBankWidth);
+  validateNonNegative('riverConfig.maxUphillBudget', config.maxUphillBudget);
+
+  if (config.minRiverLength >= config.maxLength) {
+    throw new ValidationError(
+      'riverConfig.minRiverLength',
+      config.minRiverLength,
+      `Must be < maxLength (${config.maxLength})`
+    );
+  }
+
+  if (!Array.isArray(config.allowedSourceBiomes) || config.allowedSourceBiomes.length === 0) {
+    throw new ValidationError(
+      'riverConfig.allowedSourceBiomes',
+      config.allowedSourceBiomes,
+      'Must be a non-empty array'
+    );
+  }
+
+  if (!Number.isInteger(config.maxRiversPerRegion) || config.maxRiversPerRegion < 0) {
+    throw new ValidationError(
+      'riverConfig.maxRiversPerRegion',
+      config.maxRiversPerRegion,
+      'Must be a non-negative integer'
+    );
+  }
+
+  if (!Number.isInteger(config.maxTributaries) || config.maxTributaries < 0 || config.maxTributaries > 4) {
+    throw new ValidationError(
+      'riverConfig.maxTributaries',
+      config.maxTributaries,
+      'Must be an integer between 0 and 4'
+    );
+  }
+}
+
+/**
  * Validates complete world generation configuration
  * 
  * @param config - World configuration to validate
@@ -212,6 +270,10 @@ export function validateWorldConfig(config: WorldConfig): void {
   // Validate optional configurations
   if (config.lakeConfig) {
     validateLakeConfig(config.lakeConfig);
+  }
+
+  if (config.riverConfig) {
+    validateRiverConfig(config.riverConfig);
   }
 
   if (config.maxCacheSize !== undefined) {

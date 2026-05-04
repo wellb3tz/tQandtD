@@ -4,18 +4,32 @@ import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
 import { StructurePlacer, StructureConfig } from '../gen/structures';
 import { LakeConfig, DEFAULT_LAKE_CONFIG, LakeData } from '../gen/lakes';
+import {
+  DEFAULT_RIVER_CONFIG,
+  createSmoothedRiverPoints,
+  getRiverChannelDepth,
+  getRiverChannelWidth,
+  getRiverValleyDepth,
+  getRiverValleyWidth,
+  type RiverConfig,
+  type RiverData,
+  type RiverPoint,
+  type WorldRiverData,
+} from '../gen/rivers';
 import { chunkSeed } from '../core/hash';
 import { ChunkModification, WorldSerializer, ChunkManagerSnapshot } from './serialization';
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { EnhancedBiomeConfig, EnhancedBiomeSystem } from './enhanced-biome';
 import { WorkerPoolConfig, WorkerPool, WorkerTask } from './worker-pool';
 import { LakeManager, WorldLakeData } from './lake-manager';
+import { RiverManager } from './river-manager';
 import { validateWorldConfig } from '../utils/validation';
 import {
   ChunkGenerationError,
   TerrainGenerationError,
   BiomeGenerationError,
   LakeGenerationError,
+  RiverGenerationError,
   ResourceGenerationError,
   StructureGenerationError,
   ErrorRecoveryOptions,
@@ -82,6 +96,8 @@ export interface WorldConfig {
   enhancedBiomeConfig?: EnhancedBiomeConfig;
   /** Lake generation configuration (optional, enabled by default) */
   lakeConfig?: LakeConfig;
+  /** River generation configuration (optional, enabled by default) */
+  riverConfig?: RiverConfig;
   /** Worker pool configuration (optional) */
   workerPoolConfig?: WorkerPoolConfig;
   /** Maximum number of chunks to cache (default: 100) */
@@ -118,6 +134,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private noiseEngine3D: NoiseEngine | null;
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   private lakeManager: LakeManager | null;
+  private riverManager: RiverManager | null;
   /** @internal exposed for WorkerPool shutdown in DemoApp */ workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
   /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
@@ -163,6 +180,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
     this.lakeManager = lakeConfig.enabled ? new LakeManager(
       config.seed,
       lakeConfig,
+      (worldX: number, worldY: number) => this.terrainGenerator.getHeightAt(worldX, worldY, config.seed),
+      (worldX: number, worldY: number) => {
+        const height = this.terrainGenerator.getHeightAt(worldX, worldY, config.seed);
+        return this.biomeSystem.getBiome(worldX, worldY, height);
+      }
+    ) : null;
+
+    const riverConfig = config.riverConfig ?? DEFAULT_RIVER_CONFIG;
+    this.riverManager = riverConfig.enabled ? new RiverManager(
+      config.seed,
+      riverConfig,
       (worldX: number, worldY: number) => this.terrainGenerator.getHeightAt(worldX, worldY, config.seed),
       (worldX: number, worldY: number) => {
         const height = this.terrainGenerator.getHeightAt(worldX, worldY, config.seed);
@@ -414,6 +442,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeOffsets,
       microBiomeMap,
       lakes: [],
+      rivers: [],
       resources: [],
       structures: [],
     };
@@ -453,7 +482,32 @@ export class ChunkManager implements ChunkManagerSnapshot {
       }
     }
 
-    // Step 4: Generate resources based on biomes and noise
+    // Step 4: Generate rivers using multi-chunk river manager
+    try {
+      this.config.onProgress?.('rivers', 0.58);
+
+      if (this.riverManager) {
+        const worldRivers = this.riverManager.getRiversForChunk(
+          chunkX,
+          chunkY,
+          this.config.chunkSize
+        );
+        chunk.rivers = this.convertWorldRiversToChunkRivers(worldRivers, chunkX, chunkY, this.config.chunkSize);
+
+        if (chunk.rivers.length > 0) {
+          this.carveTerrainForRivers(chunk.rivers, heightmap, this.config.chunkSize);
+        }
+      }
+    } catch (error) {
+      logger.warn(LogCategory.RIVER, `River generation failed for chunk (${chunkX}, ${chunkY}), continuing without rivers`, error);
+      chunk.rivers = [];
+
+      if (!this.errorRecovery.allowPartialChunks) {
+        throw new RiverGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
+      }
+    }
+
+    // Step 5: Generate resources based on biomes and noise
     try {
       this.config.onProgress?.('resources', 0.6);
       const resourceStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
@@ -535,6 +589,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeWeights: new Float32Array(weights),
       sparseBiomeOffsets: new Uint16Array(offsets),
       lakes: [],
+      rivers: [],
       resources: [],
       structures: [],
     };
@@ -546,6 +601,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
   clearCache(): void {
     this.cache.clear();
     this.inFlightRequests.clear();
+    this.riverManager?.clear();
   }
 
   /**
@@ -728,6 +784,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
         if (this.lakeManager) {
           this.lakeManager.notifyChunkEvicted(evictedChunkX, evictedChunkY);
         }
+        this.riverManager?.notifyChunkEvicted(evictedChunkX, evictedChunkY);
         
         this.cache.delete(oldestKey);
       }
@@ -1233,6 +1290,200 @@ export class ChunkManager implements ChunkManagerSnapshot {
       
       logger.debug(LogCategory.LAKE, `Lake ${worldLake.id}: carved ${verticesCarved} vertices`);
     }
+  }
+
+  private convertWorldRiversToChunkRivers(
+    worldRivers: WorldRiverData[],
+    chunkX: number,
+    chunkY: number,
+    chunkSize: number
+  ): RiverData[] {
+    const chunkWorldX = chunkX * chunkSize;
+    const chunkWorldY = chunkY * chunkSize;
+    const result: RiverData[] = [];
+
+    const convertPath = (
+      riverId: string,
+      pathId: string,
+      isTributary: boolean,
+      points: RiverPoint[]
+    ): void => {
+      const smoothed = createSmoothedRiverPoints(points);
+      const selectedRuns: RiverPoint[][] = [];
+      let currentRun: RiverPoint[] | null = null;
+
+      const flushCurrentRun = (): void => {
+        if (currentRun && currentRun.length >= 2) {
+          selectedRuns.push(currentRun);
+        }
+        currentRun = null;
+      };
+
+      for (let i = 0; i < smoothed.length - 1; i++) {
+        const a = smoothed[i];
+        const b = smoothed[i + 1];
+        const valleyRadius = Math.max(getRiverValleyWidth(a), getRiverValleyWidth(b)) * 0.5;
+        const segmentMinX = Math.min(a.x, b.x) - valleyRadius;
+        const segmentMaxX = Math.max(a.x, b.x) + valleyRadius;
+        const segmentMinY = Math.min(a.y, b.y) - valleyRadius;
+        const segmentMaxY = Math.max(a.y, b.y) + valleyRadius;
+        const intersectsChunk =
+          segmentMaxX >= chunkWorldX &&
+          segmentMinX <= chunkWorldX + chunkSize &&
+          segmentMaxY >= chunkWorldY &&
+          segmentMinY <= chunkWorldY + chunkSize;
+
+        if (intersectsChunk) {
+          if (!currentRun) {
+            currentRun = [a, b];
+          } else {
+            currentRun.push(b);
+          }
+        } else {
+          flushCurrentRun();
+        }
+      }
+
+      flushCurrentRun();
+
+      const localRuns = selectedRuns
+        .map(run => run.map(point => ({
+          ...point,
+          x: point.x - chunkWorldX,
+          y: point.y - chunkWorldY,
+        })))
+        .filter(run => run.length >= 2);
+
+      localRuns.forEach((local, index) => {
+        const xs = local.map(point => point.x);
+        const ys = local.map(point => point.y);
+        result.push({
+          riverId,
+          pathId: localRuns.length === 1 ? pathId : `${pathId}:span${index}`,
+          isTributary,
+          points: local,
+          bounds: {
+            minX: Math.min(...xs),
+            maxX: Math.max(...xs),
+            minY: Math.min(...ys),
+            maxY: Math.max(...ys),
+          },
+        });
+      });
+    };
+
+    for (const river of worldRivers) {
+      convertPath(river.id, `${river.id}:main`, false, river.mainPath);
+      for (const tributary of river.tributaries) {
+        convertPath(river.id, tributary.id, true, tributary.points);
+      }
+    }
+
+    return result;
+  }
+
+  private carveTerrainForRivers(
+    rivers: RiverData[],
+    heightmap: Float32Array,
+    chunkSize: number
+  ): void {
+    const vertexSize = chunkSize + 1;
+
+    for (const river of rivers) {
+      const points = river.points;
+      const maxValleyRadius = points.reduce(
+        (max, point) => Math.max(max, getRiverValleyWidth(point) * 0.5),
+        this.config.riverConfig?.carveBankWidth ?? DEFAULT_RIVER_CONFIG.carveBankWidth
+      );
+      const minPointX = Math.min(...points.map(point => point.x));
+      const maxPointX = Math.max(...points.map(point => point.x));
+      const minPointY = Math.min(...points.map(point => point.y));
+      const maxPointY = Math.max(...points.map(point => point.y));
+      const minX = Math.max(0, Math.floor(minPointX - maxValleyRadius));
+      const maxX = Math.min(chunkSize, Math.ceil(maxPointX + maxValleyRadius));
+      const minY = Math.max(0, Math.floor(minPointY - maxValleyRadius));
+      const maxY = Math.min(chunkSize, Math.ceil(maxPointY + maxValleyRadius));
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const sample = this.closestRiverSample(x, y, points);
+          if (!sample) continue;
+
+          const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+          const valleyRadius = Math.max(getRiverValleyWidth(sample) * 0.5, channelRadius);
+          if (sample.distance > valleyRadius) continue;
+
+          const index = y * vertexSize + x;
+          const valleyT = 1 - Math.min(sample.distance / valleyRadius, 1);
+          const valleyFalloff = valleyT * valleyT * (3 - 2 * valleyT);
+          const valleyTarget = Math.max(0, sample.surfaceLevel - getRiverValleyDepth(sample));
+          let target = heightmap[index] * (1 - valleyFalloff) + valleyTarget * valleyFalloff;
+
+          if (channelRadius > 0 && sample.distance < channelRadius) {
+            const channelT = 1 - Math.min(sample.distance / channelRadius, 1);
+            const channelFalloff = channelT * channelT * (3 - 2 * channelT);
+            const channelTarget = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample));
+            target = target * (1 - channelFalloff) + channelTarget * channelFalloff;
+          } else if (channelRadius === 0 && sample.distance === 0) {
+            target = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample));
+          }
+
+          heightmap[index] = Math.min(heightmap[index], target);
+        }
+      }
+    }
+  }
+
+  private closestRiverSample(
+    x: number,
+    y: number,
+    points: RiverPoint[]
+  ): (RiverPoint & { distance: number }) | null {
+    if (points.length < 2) return null;
+
+    let best: (RiverPoint & { distance: number }) | null = null;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const vx = b.x - a.x;
+      const vy = b.y - a.y;
+      const lenSq = vx * vx + vy * vy || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
+      const px = a.x + vx * t;
+      const py = a.y + vy * t;
+      const distance = Math.hypot(x - px, y - py);
+      const sample = {
+        ...a,
+        x: px,
+        y: py,
+        height: a.height + (b.height - a.height) * t,
+        surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * t,
+        depth: a.depth + (b.depth - a.depth) * t,
+        width: a.width + (b.width - a.width) * t,
+        flow: this.interpolateOptional(a.flow, b.flow, t),
+        channelWidth: this.interpolateOptional(a.channelWidth, b.channelWidth, t),
+        valleyWidth: this.interpolateOptional(a.valleyWidth, b.valleyWidth, t),
+        channelDepth: this.interpolateOptional(a.channelDepth, b.channelDepth, t),
+        valleyDepth: this.interpolateOptional(a.valleyDepth, b.valleyDepth, t),
+        flowX: a.flowX + (b.flowX - a.flowX) * t,
+        flowY: a.flowY + (b.flowY - a.flowY) * t,
+        distance,
+      };
+
+      if (!best || sample.distance < best.distance) {
+        best = sample;
+      }
+    }
+
+    return best;
+  }
+
+  private interpolateOptional(a: number | undefined, b: number | undefined, t: number): number | undefined {
+    if (!Number.isFinite(a) && !Number.isFinite(b)) return undefined;
+    const start = Number.isFinite(a) ? (a as number) : (b as number);
+    const end = Number.isFinite(b) ? (b as number) : start;
+    return start + (end - start) * t;
   }
 
   /**

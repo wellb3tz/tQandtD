@@ -1,6 +1,7 @@
 // Chunk data structures and coordinate utilities
 
 import type { LakeData } from '../gen/lakes';
+import type { RiverData } from '../gen/rivers';
 
 /**
  * Biome types for world generation
@@ -106,6 +107,8 @@ export interface ChunkData {
   microBiomeMap?: Uint8Array;
   /** Lake bodies detected inside this chunk (may be empty) */
   lakes?: LakeData[];
+  /** River paths intersecting this chunk (may be empty) */
+  rivers?: RiverData[];
   /** Resources placed in this chunk */
   resources: Resource[];
   /** Structures placed in this chunk */

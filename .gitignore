@@ -7,6 +7,7 @@ playwright-report/
 *.log
 .DS_Store
 .env
+.worktrees/
 
 # Compiled TypeScript files in demo folder
 demo/**/*.js

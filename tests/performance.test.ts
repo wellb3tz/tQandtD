@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { makeMinimalConfig } from './helpers';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
+import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
 
 const shouldRunBenchmarks =
   process.env.RUN_BENCHMARKS === '1' ||
@@ -80,6 +81,19 @@ describeBenchmarks('Performance Benchmarks', () => {
 
     // Performance target: < 200ms average (multi-chunk lakes can be slower)
     expect(avg).toBeLessThan(200);
+  });
+
+  it('benchmarks 32x32 chunk generation (with rivers)', async () => {
+    const config = makeMinimalConfig(123);
+    config.riverConfig = DEFAULT_RIVER_CONFIG;
+    const manager = new ChunkManager(config);
+
+    const start = performance.now();
+    await manager.getChunk(0, 0);
+    const elapsed = performance.now() - start;
+
+    console.log(`\n32x32 chunk (with rivers): ${elapsed.toFixed(2)}ms`);
+    expect(elapsed).toBeLessThan(300);
   });
 
   it('benchmarks 64x64 chunk generation', async () => {

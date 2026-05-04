@@ -22,6 +22,7 @@ export enum LogLevel {
 export enum LogCategory {
   CHUNK = 'Chunk',
   LAKE = 'Lake',
+  RIVER = 'River',
   WORKER = 'Worker',
   CACHE = 'Cache',
   PERFORMANCE = 'Performance',

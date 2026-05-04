@@ -11,6 +11,7 @@ import type { ChunkData } from '@engine/world/chunk';
 import type { WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
+import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
 import { createOceanMaterial } from './WaterMaterialFactory';
 
 /**
@@ -83,6 +84,7 @@ export class WaterLayerManager {
     const waterLayer: WaterLayerData = {
       ocean: [],
       lake: [],
+      river: [],
       group: new THREE.Group(),
     };
 
@@ -155,6 +157,37 @@ export class WaterLayerManager {
       }
     }
 
+    // Generate river meshes
+    if (config.river.enabled && chunkData.rivers && chunkData.rivers.length > 0) {
+      const riverGeometry = buildRiverGeometry(chunkData.rivers, chunkData.x, chunkData.y, chunkData.size);
+      if (riverGeometry) {
+        const riverMaterial = createRiverMaterial(config.river);
+        const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);
+        riverMesh.renderOrder = 2;
+        riverMesh.visible = true;
+
+        const boundingBox = new THREE.Box3();
+        if (riverGeometry.boundingBox) {
+          boundingBox.copy(riverGeometry.boundingBox);
+        } else {
+          riverGeometry.computeBoundingBox();
+          if (riverGeometry.boundingBox) {
+            boundingBox.copy(riverGeometry.boundingBox);
+          }
+        }
+
+        const riverMeshData: WaterMesh = {
+          type: 'river',
+          mesh: riverMesh,
+          material: riverMaterial,
+          boundingBox,
+        };
+
+        waterLayer.river.push(riverMeshData);
+        waterLayer.group.add(riverMesh);
+      }
+    }
+
     // Position group at origin
     // Ocean geometries use world coordinates, so group is positioned at origin
     waterLayer.group.position.set(0, 0, 0);
@@ -196,9 +229,15 @@ export class WaterLayerManager {
       this.disposeMesh(waterMesh);
     }
 
+    // Dispose river meshes
+    for (const waterMesh of waterLayer.river) {
+      this.disposeMesh(waterMesh);
+    }
+
     // Clear arrays
     waterLayer.ocean.length = 0;
     waterLayer.lake.length = 0;
+    waterLayer.river.length = 0;
 
     // Remove from map
     this.waterLayers.delete(chunkKey);
@@ -437,10 +476,14 @@ export class WaterLayerManager {
       for (const waterMesh of waterLayer.lake) {
         this.disposeMesh(waterMesh);
       }
+      for (const waterMesh of waterLayer.river) {
+        this.disposeMesh(waterMesh);
+      }
 
       // Clear arrays
       waterLayer.ocean.length = 0;
       waterLayer.lake.length = 0;
+      waterLayer.river.length = 0;
     }
 
     // Clear map
@@ -513,6 +556,15 @@ export class WaterLayerManager {
       // Check lake meshes if ocean didn't already make it visible
       if (!isVisible) {
         for (const waterMesh of waterLayer.lake) {
+          if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
+            isVisible = true;
+            break;
+          }
+        }
+      }
+
+      if (!isVisible) {
+        for (const waterMesh of waterLayer.river) {
           if (this.frustum.intersectsBox(waterMesh.boundingBox)) {
             isVisible = true;
             break;

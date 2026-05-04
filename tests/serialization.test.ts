@@ -6,10 +6,11 @@
  * (the bug we just fixed — Set<number> was silently lost before).
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
-import { WorldSerializer, SerializationFormat } from '../src/world/serialization';
+import { WorldSerializer, SerializationFormat, type SerializedRiverPoint } from '../src/world/serialization';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
+import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
 import { makeMinimalConfig } from './helpers';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -18,6 +19,7 @@ import { makeMinimalConfig } from './helpers';
 async function buildManager(seed: number) {
   const config = makeMinimalConfig(seed);
   config.lakeConfig = DEFAULT_LAKE_CONFIG;
+  config.riverConfig = DEFAULT_RIVER_CONFIG;
   config.maxCacheSize = 100; // Increase cache size to prevent eviction
   const manager = new ChunkManager(config);
   await Promise.all([
@@ -25,6 +27,17 @@ async function buildManager(seed: number) {
     manager.getChunk(1, 0),
     manager.getChunk(0, 1),
   ]);
+  const chunk = await manager.getChunk(0, 0);
+  chunk.rivers = [{
+    riverId: 'river_test',
+    pathId: 'river_test:main',
+    isTributary: false,
+    points: [
+      { x: 1, y: 1, height: 0.6, surfaceLevel: 0.61, width: 1.5, depth: 0.03, flow: 0.25, channelWidth: 1.2, valleyWidth: 3.8, channelDepth: 0.04, valleyDepth: 0.02, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1.5, depth: 0.03, flow: 0.75, channelWidth: 1.9, valleyWidth: 4.6, channelDepth: 0.07, valleyDepth: 0.04, flowX: 1, flowY: 0 },
+    ],
+    bounds: { minX: 1, maxX: 4, minY: 1, maxY: 1 },
+  }];
   return manager;
 }
 
@@ -32,6 +45,7 @@ async function buildManager(seed: number) {
 function restore(serialized: ReturnType<WorldSerializer['serialize']>, seed: number) {
   const config = makeMinimalConfig(seed);
   config.lakeConfig = DEFAULT_LAKE_CONFIG;
+  config.riverConfig = DEFAULT_RIVER_CONFIG;
   const fresh = new ChunkManager(config);
   const ser = new WorldSerializer();
   ser.deserialize(serialized, fresh);
@@ -41,6 +55,16 @@ function restore(serialized: ReturnType<WorldSerializer['serialize']>, seed: num
 // ─── tests ───────────────────────────────────────────────────────────────────
 
 describe('Serialization round-trip', () => {
+  it('types serialized river points with optional corridor fields', () => {
+    expectTypeOf<SerializedRiverPoint>().toMatchTypeOf<{
+      flow?: number;
+      channelWidth?: number;
+      valleyWidth?: number;
+      channelDepth?: number;
+      valleyDepth?: number;
+    }>();
+  });
+
   for (const [label, format, compress] of [
     ['JSON uncompressed',   SerializationFormat.JSON,   false],
     ['JSON compressed',     SerializationFormat.JSON,   true],
@@ -98,6 +122,49 @@ describe('Serialization round-trip', () => {
         const freshLakes = (fresh.lakes ?? []).map(l => ({ waterLevel: l.waterLevel, tiles: Array.from(l.tiles).sort((a,b)=>a-b), maxDepth: l.maxDepth }));
 
         expect(freshLakes).toEqual(origLakes);
+      });
+
+      it('restores rivers with path points', async () => {
+        const manager = await buildManager(42);
+        const ser = new WorldSerializer();
+        const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });
+        const loaded = restore(saved, 42);
+
+        const orig = await manager.getChunk(0, 0);
+        const fresh = await loaded.getChunk(0, 0);
+
+        const normalize = (chunk: typeof orig) =>
+          (chunk.rivers ?? []).map(r => ({
+            riverId: r.riverId,
+            pathId: r.pathId,
+            isTributary: r.isTributary,
+            points: r.points.map(p => [p.x, p.y, Number(p.surfaceLevel.toFixed(4))]),
+          }));
+
+        expect(normalize(fresh)).toEqual(normalize(orig));
+      });
+
+      it('restores river corridor fields on path points', async () => {
+        const manager = await buildManager(42);
+        const ser = new WorldSerializer();
+        const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });
+        const loaded = restore(saved, 42);
+
+        const orig = await manager.getChunk(0, 0);
+        const fresh = await loaded.getChunk(0, 0);
+
+        const normalize = (chunk: typeof orig) =>
+          (chunk.rivers ?? []).flatMap(river =>
+            river.points.map(point => ({
+              flow: point.flow,
+              channelWidth: point.channelWidth,
+              valleyWidth: point.valleyWidth,
+              channelDepth: point.channelDepth,
+              valleyDepth: point.valleyDepth,
+            }))
+          );
+
+        expect(normalize(fresh)).toEqual(normalize(orig));
       });
 
       it('checksum validates correctly', async () => {

@@ -4,7 +4,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { validateWaterConfig, DEFAULT_WATER_CONFIG, DEFAULT_LAKE_RENDER_CONFIG } from './config';
+import {
+  validateWaterConfig,
+  DEFAULT_WATER_CONFIG,
+  DEFAULT_LAKE_RENDER_CONFIG,
+  DEFAULT_RIVER_RENDER_CONFIG,
+  DEFAULT_OCEAN_CONFIG,
+} from './config';
 import type { WaterConfig, WaterType, WaterLayerData } from './types';
 
 describe('Water Configuration', () => {
@@ -26,28 +32,36 @@ describe('Water Configuration', () => {
       const validType: WaterType = 'lake';
       expect(validType).toBe('lake');
     });
+
+    it('should accept "river" as valid WaterType', () => {
+      const validType: WaterType = 'river';
+      expect(validType).toBe('river');
+    });
   });
 
   describe('WaterLayerData', () => {
-    it('should have ocean and lake fields', () => {
+    it('should have ocean, lake, and river fields', () => {
       const waterLayerData: WaterLayerData = {
         ocean: [],
         lake: [],
+        river: [],
         group: {} as any, // Mock THREE.Group
       };
 
       expect(waterLayerData).toHaveProperty('ocean');
       expect(waterLayerData).toHaveProperty('lake');
+      expect(waterLayerData).toHaveProperty('river');
       expect(waterLayerData).toHaveProperty('group');
     });
   });
 
   describe('WaterConfig', () => {
-    it('should have ocean and lake fields', () => {
+    it('should have ocean, lake, and river fields', () => {
       const config: WaterConfig = DEFAULT_WATER_CONFIG;
 
       expect(config).toHaveProperty('ocean');
       expect(config).toHaveProperty('lake');
+      expect(config).toHaveProperty('river');
       expect(config).toHaveProperty('seaLevel');
       expect(config).toHaveProperty('rendering');
       expect(config).toHaveProperty('performance');
@@ -55,7 +69,7 @@ describe('Water Configuration', () => {
   });
 
   describe('validateWaterConfig', () => {
-    it('should return configuration with ocean and lake', () => {
+    it('should return configuration with ocean, lake, and river', () => {
       const config = validateWaterConfig({});
 
       expect(config.ocean).toBeDefined();
@@ -69,6 +83,12 @@ describe('Water Configuration', () => {
       expect(config.lake).toHaveProperty('color');
       expect(config.lake).toHaveProperty('opacity');
       expect(config.lake).toHaveProperty('shininess');
+
+      expect(config.river).toBeDefined();
+      expect(config.river).toHaveProperty('enabled');
+      expect(config.river).toHaveProperty('color');
+      expect(config.river).toHaveProperty('opacity');
+      expect(config.river).toHaveProperty('shininess');
     });
 
     it('should apply custom lake configuration', () => {
@@ -198,6 +218,17 @@ describe('Water Configuration', () => {
       expect(configHigh.lake.shininess).toBe(100);
     });
 
+    it('should apply custom river configuration', () => {
+      const config = validateWaterConfig({
+        river: { enabled: false, color: 0x123456, opacity: 0.5, shininess: 50 },
+      });
+
+      expect(config.river.enabled).toBe(false);
+      expect(config.river.color).toBe(0x123456);
+      expect(config.river.opacity).toBe(0.5);
+      expect(config.river.shininess).toBe(50);
+    });
+
     it('should validate seaLevel correctly', () => {
       const validConfig = validateWaterConfig({
         seaLevel: 0.5
@@ -283,6 +314,14 @@ describe('Water Configuration', () => {
       expect(DEFAULT_LAKE_RENDER_CONFIG.opacity).toBeLessThanOrEqual(1);
       expect(DEFAULT_LAKE_RENDER_CONFIG.shininess).toBeGreaterThanOrEqual(0);
       expect(DEFAULT_LAKE_RENDER_CONFIG.shininess).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('DEFAULT_RIVER_RENDER_CONFIG', () => {
+    it('uses the same render values as ocean water', () => {
+      expect(DEFAULT_RIVER_RENDER_CONFIG.color).toBe(DEFAULT_OCEAN_CONFIG.color);
+      expect(DEFAULT_RIVER_RENDER_CONFIG.opacity).toBe(DEFAULT_OCEAN_CONFIG.opacity);
+      expect(DEFAULT_RIVER_RENDER_CONFIG.shininess).toBe(DEFAULT_OCEAN_CONFIG.shininess);
     });
   });
 });

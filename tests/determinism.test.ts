@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
+import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
 import { makeMinimalConfig } from './helpers';
 
 describe('Determinism', () => {
@@ -75,6 +76,31 @@ describe('Determinism', () => {
     }));
 
     expect(lakesA).toEqual(lakesB);
+  });
+
+  it('same seed produces identical rivers', async () => {
+    const config = makeMinimalConfig(123);
+    config.riverConfig = {
+      ...DEFAULT_RIVER_CONFIG,
+      sourceThreshold: 0,
+      maxRiversPerRegion: 1,
+      minRiverLength: 4,
+      maxLength: 96,
+    };
+
+    const a = new ChunkManager(config);
+    const b = new ChunkManager({ ...config });
+    const chunkA = await a.getChunk(0, 0);
+    const chunkB = await b.getChunk(0, 0);
+
+    const normalize = (chunk: typeof chunkA) =>
+      (chunk.rivers ?? []).map(r => ({
+        riverId: r.riverId,
+        pathId: r.pathId,
+        points: r.points.map(p => [p.x, p.y, Number(p.surfaceLevel.toFixed(4))]),
+      }));
+
+    expect(normalize(chunkA)).toEqual(normalize(chunkB));
   });
 
   it('negative chunk coordinates are deterministic', async () => {
