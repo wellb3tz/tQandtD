@@ -108,7 +108,7 @@ describe('RiverMeshGenerator', () => {
     const geometry = buildRiverGeometry([river(points)], 0, 0, 16)!;
     const positions = geometry.getAttribute('position').array;
 
-    expect(positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE + 0.04, 5);
+    expect(positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 1.0, 5);
   });
 
   it('uses the same shallow ocean vertex color for river water', () => {
@@ -122,5 +122,39 @@ describe('RiverMeshGenerator', () => {
     for (let i = 0; i < expected.length; i++) {
       expect(colors[i]).toBeCloseTo(expected[i], 5);
     }
+  });
+
+  it('does not render river strips that are fully below ocean level', () => {
+    const geometry = buildRiverGeometry([river([
+      { x: 0, y: 1, height: 0.25, surfaceLevel: 0.26, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.24, surfaceLevel: 0.25, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ])], 0, 0, 16, 0.3);
+
+    expect(geometry).toBeNull();
+  });
+
+  it('clips a river strip where it descends below ocean level', () => {
+    const seaLevel = 0.3;
+    const geometry = buildRiverGeometry([river([
+      { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.34, surfaceLevel: 0.35, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 8, y: 1, height: 0.24, surfaceLevel: 0.25, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ])], 0, 0, 16, seaLevel)!;
+
+    expect(geometry).not.toBeNull();
+    const positions = geometry.getAttribute('position');
+    const maxX = Array.from(positions.array).reduce((max, value, index) =>
+      index % 3 === 0 ? Math.max(max, value) : max,
+      -Infinity,
+    );
+    const minY = Array.from(positions.array).reduce((min, value, index) =>
+      index % 3 === 1 ? Math.min(min, value) : min,
+      Infinity,
+    );
+
+    expect(positions.count).toBe(6);
+    expect(maxX).toBeLessThan(8);
+    expect(maxX).toBeGreaterThan(4);
+    expect(minY).toBeGreaterThanOrEqual(seaLevel * HEIGHT_SCALE);
   });
 });

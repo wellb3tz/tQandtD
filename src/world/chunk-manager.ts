@@ -37,6 +37,11 @@ import {
 } from '../utils/errors';
 import { logger, LogCategory } from '../utils/logger';
 
+const SEA_LEVEL = 0.3;
+const RIVER_MOUTH_TAPER_HEIGHT = 0.1;
+const RIVER_MOUTH_MAX_BELOW_SEA_DEPTH = 0.025;
+const RIVER_TERMINAL_CARVE_EXTENSION = 1;
+
 /**
  * Configuration for 3D noise generation
  */
@@ -1373,13 +1378,42 @@ export class ChunkManager implements ChunkManagerSnapshot {
     };
 
     for (const river of worldRivers) {
-      convertPath(river.id, `${river.id}:main`, false, river.mainPath);
+      convertPath(river.id, `${river.id}:main`, false, this.extendRiverPathToMouth(river.mainPath, river.mouth));
       for (const tributary of river.tributaries) {
         convertPath(river.id, tributary.id, true, tributary.points);
       }
     }
 
     return result;
+  }
+
+  private extendRiverPathToMouth(
+    points: RiverPoint[],
+    mouth: { x: number; y: number }
+  ): RiverPoint[] {
+    if (points.length === 0) return points;
+
+    const last = points[points.length - 1];
+    const toMouthX = mouth.x - last.x;
+    const toMouthY = mouth.y - last.y;
+    const toMouthLength = Math.hypot(toMouthX, toMouthY);
+
+    if (toMouthLength < 0.001) {
+      return points;
+    }
+
+    return [
+      ...points,
+      {
+        ...last,
+        x: mouth.x,
+        y: mouth.y,
+        height: Math.min(last.height, SEA_LEVEL),
+        surfaceLevel: SEA_LEVEL,
+        flowX: toMouthX,
+        flowY: toMouthY,
+      },
+    ];
   }
 
   private carveTerrainForRivers(
@@ -1406,7 +1440,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-          const sample = this.closestRiverSample(x, y, points);
+          const sample = this.closestRiverSample(x, y, points, RIVER_TERMINAL_CARVE_EXTENSION);
           if (!sample) continue;
 
           const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
@@ -1414,18 +1448,30 @@ export class ChunkManager implements ChunkManagerSnapshot {
           if (sample.distance > valleyRadius) continue;
 
           const index = y * vertexSize + x;
-          const valleyT = 1 - Math.min(sample.distance / valleyRadius, 1);
-          const valleyFalloff = valleyT * valleyT * (3 - 2 * valleyT);
-          const valleyTarget = Math.max(0, sample.surfaceLevel - getRiverValleyDepth(sample));
-          let target = heightmap[index] * (1 - valleyFalloff) + valleyTarget * valleyFalloff;
+          if (heightmap[index] < SEA_LEVEL) continue;
 
-          if (channelRadius > 0 && sample.distance < channelRadius) {
-            const channelT = 1 - Math.min(sample.distance / channelRadius, 1);
-            const channelFalloff = channelT * channelT * (3 - 2 * channelT);
-            const channelTarget = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample));
-            target = target * (1 - channelFalloff) + channelTarget * channelFalloff;
+          let target: number;
+          const mouthT = Math.min(Math.max((sample.surfaceLevel - SEA_LEVEL) / RIVER_MOUTH_TAPER_HEIGHT, 0), 1);
+          const mouthDepthScale = mouthT * mouthT * (3 - 2 * mouthT);
+
+          if (channelRadius > 0) {
+            const trenchFalloff = 1 - Math.min(sample.distance / valleyRadius, 1);
+            const channelTarget = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample) * mouthDepthScale);
+            target = heightmap[index] * (1 - trenchFalloff) + channelTarget * trenchFalloff;
           } else if (channelRadius === 0 && sample.distance === 0) {
-            target = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample));
+            target = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample) * mouthDepthScale);
+          } else {
+            const valleyT = 1 - Math.min(sample.distance / valleyRadius, 1);
+            const valleyFalloff = valleyT * valleyT * (3 - 2 * valleyT);
+            const valleyTarget = Math.max(0, sample.surfaceLevel - getRiverValleyDepth(sample) * mouthDepthScale);
+            target = heightmap[index] * (1 - valleyFalloff) + valleyTarget * valleyFalloff;
+          }
+
+          if (heightmap[index] < SEA_LEVEL + RIVER_MOUTH_TAPER_HEIGHT) {
+            const coastalT = Math.min(Math.max((heightmap[index] - SEA_LEVEL) / RIVER_MOUTH_TAPER_HEIGHT, 0), 1);
+            const coastalDepthScale = coastalT * coastalT * (3 - 2 * coastalT);
+            const coastalFloor = SEA_LEVEL - RIVER_MOUTH_MAX_BELOW_SEA_DEPTH * coastalDepthScale;
+            target = Math.max(target, coastalFloor);
           }
 
           heightmap[index] = Math.min(heightmap[index], target);
@@ -1437,7 +1483,8 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private closestRiverSample(
     x: number,
     y: number,
-    points: RiverPoint[]
+    points: RiverPoint[],
+    terminalExtension = 0
   ): (RiverPoint & { distance: number }) | null {
     if (points.length < 2) return null;
 
@@ -1449,7 +1496,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
       const vx = b.x - a.x;
       const vy = b.y - a.y;
       const lenSq = vx * vx + vy * vy || 1;
-      const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
+      const length = Math.sqrt(lenSq);
+      const maxT = i === points.length - 2 ? 1 + terminalExtension / length : 1;
+      const t = Math.max(0, Math.min(maxT, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
+      const attributeT = Math.min(t, 1);
       const px = a.x + vx * t;
       const py = a.y + vy * t;
       const distance = Math.hypot(x - px, y - py);
@@ -1457,17 +1507,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
         ...a,
         x: px,
         y: py,
-        height: a.height + (b.height - a.height) * t,
-        surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * t,
-        depth: a.depth + (b.depth - a.depth) * t,
-        width: a.width + (b.width - a.width) * t,
-        flow: this.interpolateOptional(a.flow, b.flow, t),
-        channelWidth: this.interpolateOptional(a.channelWidth, b.channelWidth, t),
-        valleyWidth: this.interpolateOptional(a.valleyWidth, b.valleyWidth, t),
-        channelDepth: this.interpolateOptional(a.channelDepth, b.channelDepth, t),
-        valleyDepth: this.interpolateOptional(a.valleyDepth, b.valleyDepth, t),
-        flowX: a.flowX + (b.flowX - a.flowX) * t,
-        flowY: a.flowY + (b.flowY - a.flowY) * t,
+        height: a.height + (b.height - a.height) * attributeT,
+        surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * attributeT,
+        depth: a.depth + (b.depth - a.depth) * attributeT,
+        width: a.width + (b.width - a.width) * attributeT,
+        flow: this.interpolateOptional(a.flow, b.flow, attributeT),
+        channelWidth: this.interpolateOptional(a.channelWidth, b.channelWidth, attributeT),
+        valleyWidth: this.interpolateOptional(a.valleyWidth, b.valleyWidth, attributeT),
+        channelDepth: this.interpolateOptional(a.channelDepth, b.channelDepth, attributeT),
+        valleyDepth: this.interpolateOptional(a.valleyDepth, b.valleyDepth, attributeT),
+        flowX: a.flowX + (b.flowX - a.flowX) * attributeT,
+        flowY: a.flowY + (b.flowY - a.flowY) * attributeT,
         distance,
       };
 

@@ -159,7 +159,7 @@ export class WaterLayerManager {
 
     // Generate river meshes
     if (config.river.enabled && chunkData.rivers && chunkData.rivers.length > 0) {
-      const riverGeometry = buildRiverGeometry(chunkData.rivers, chunkData.x, chunkData.y, chunkData.size);
+      const riverGeometry = buildRiverGeometry(chunkData.rivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
       if (riverGeometry) {
         const riverMaterial = createRiverMaterial(config.river);
         const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);

@@ -336,6 +336,307 @@ describe('ChunkManager rivers', () => {
     expect(outerValley).toBeLessThan(untouched);
   });
 
+  it('keeps the carved river trench cross-section free of one-cell spikes', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const untouchedHeight = 0.72;
+    const worldRiver: WorldRiverData = {
+      id: 'river_smooth_trench',
+      mainPath: [
+        {
+          x: 2,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 2,
+          depth: 0.02,
+          flow: 0.8,
+          channelWidth: 4,
+          valleyWidth: 10,
+          channelDepth: 0.12,
+          valleyDepth: 0.06,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 14,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 2,
+          depth: 0.02,
+          flow: 0.8,
+          channelWidth: 4,
+          valleyWidth: 10,
+          channelDepth: 0.12,
+          valleyDepth: 0.06,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 2, y: 8 },
+      mouth: { x: 14, y: 8 },
+      bounds: { minX: 2, maxX: 14, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(untouchedHeight),
+      getHeightAt: () => untouchedHeight,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+    const heights = [8, 9, 10, 11, 12, 13].map(y => chunk.heightmap[y * vertexSize + 8]);
+    const largestStep = heights.slice(1).reduce(
+      (max, height, index) => Math.max(max, Math.abs(height - heights[index])),
+      0,
+    );
+
+    expect(largestStep).toBeLessThanOrEqual(0.05);
+  });
+
+  it('does not carve river trenches into terrain already below sea level', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const seaLevel = 0.3;
+    const worldRiver: WorldRiverData = {
+      id: 'river_ocean_mouth',
+      mainPath: [
+        {
+          x: 4,
+          y: 8,
+          height: 0.5,
+          surfaceLevel: 0.51,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 12,
+          y: 8,
+          height: 0.24,
+          surfaceLevel: 0.3,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 4, y: 8 },
+      mouth: { x: 12, y: 8 },
+      bounds: { minX: 4, maxX: 12, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => {
+        const vertexSize = config.chunkSize + 1;
+        const heightmap = new Float32Array(vertexSize * vertexSize);
+        for (let y = 0; y < vertexSize; y++) {
+          for (let x = 0; x < vertexSize; x++) {
+            heightmap[y * vertexSize + x] = x >= 10 ? 0.24 : x === 9 ? seaLevel + 0.01 : 0.5;
+          }
+        }
+        return heightmap;
+      },
+      getHeightAt: (x: number) => x >= 10 ? 0.24 : x === 9 ? seaLevel + 0.01 : 0.5,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+    const shorelineIndex = 8 * vertexSize + 9;
+    const oceanIndex = 8 * vertexSize + 12;
+
+    expect(chunk.heightmap[shorelineIndex]).toBeLessThanOrEqual(seaLevel + 0.011);
+    expect(chunk.heightmap[shorelineIndex]).toBeGreaterThan(seaLevel - 0.005);
+    expect(chunk.heightmap[oceanIndex]).toBeCloseTo(0.24, 5);
+  });
+
+  it('tapers river trench depth near the ocean mouth', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const seaLevel = 0.3;
+    const worldRiver: WorldRiverData = {
+      id: 'river_tapered_mouth',
+      mainPath: [
+        {
+          x: 4,
+          y: 8,
+          height: 0.5,
+          surfaceLevel: 0.51,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 8,
+          y: 8,
+          height: seaLevel + 0.01,
+          surfaceLevel: seaLevel + 0.01,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 12,
+          y: 8,
+          height: 0.24,
+          surfaceLevel: seaLevel,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 4, y: 8 },
+      mouth: { x: 12, y: 8 },
+      bounds: { minX: 4, maxX: 12, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => {
+        const vertexSize = config.chunkSize + 1;
+        const heightmap = new Float32Array(vertexSize * vertexSize).fill(0.5);
+        heightmap[8 * vertexSize + 8] = seaLevel + 0.01;
+        heightmap[8 * vertexSize + 12] = 0.24;
+        return heightmap;
+      },
+      getHeightAt: (x: number) => x >= 12 ? 0.24 : x === 8 ? seaLevel + 0.01 : 0.5,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+
+    expect(chunk.heightmap[8 * vertexSize + 8]).toBeGreaterThan(seaLevel - 0.0075);
+  });
+
+  it('keeps coastal river mouth carving only slightly below ocean level', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const seaLevel = 0.3;
+    const worldRiver: WorldRiverData = {
+      id: 'river_mouth_level',
+      mainPath: [
+        {
+          x: 4,
+          y: 8,
+          height: 0.5,
+          surfaceLevel: 0.51,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.12,
+          valleyDepth: 0.06,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 8,
+          y: 8,
+          height: 0.34,
+          surfaceLevel: 0.34,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.12,
+          valleyDepth: 0.06,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 12,
+          y: 8,
+          height: 0.24,
+          surfaceLevel: seaLevel,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.12,
+          valleyDepth: 0.06,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 4, y: 8 },
+      mouth: { x: 12, y: 8 },
+      bounds: { minX: 4, maxX: 12, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => {
+        const vertexSize = config.chunkSize + 1;
+        const heightmap = new Float32Array(vertexSize * vertexSize).fill(0.5);
+        heightmap[8 * vertexSize + 8] = 0.34;
+        heightmap[8 * vertexSize + 12] = 0.24;
+        return heightmap;
+      },
+      getHeightAt: (x: number) => x >= 12 ? 0.24 : x === 8 ? 0.34 : 0.5,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+
+    expect(chunk.heightmap[8 * vertexSize + 8]).toBeGreaterThanOrEqual(seaLevel - 0.012);
+    expect(chunk.heightmap[8 * vertexSize + 8]).toBeLessThan(seaLevel);
+  });
+
   it('includes rivers in chunks that only intersect broad valley influence', () => {
     const config = makeMinimalConfig(42);
     config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
@@ -422,6 +723,126 @@ describe('ChunkManager rivers', () => {
 
     expect(leftBoundaryPoint?.y).toBe(10);
     expect(rightBoundaryPoint?.y).toBe(10);
+  });
+
+  it('extends main river carving to the ocean mouth point', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const worldRiver: WorldRiverData = {
+      id: 'river_extended_mouth',
+      mainPath: [
+        {
+          x: 4,
+          y: 8,
+          height: 0.5,
+          surfaceLevel: 0.51,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 8,
+          y: 8,
+          height: 0.34,
+          surfaceLevel: 0.34,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 3,
+          valleyWidth: 8,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 4, y: 8 },
+      mouth: { x: 11, y: 8 },
+      bounds: { minX: 4, maxX: 11, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(0.5),
+      getHeightAt: (x: number) => x >= 11 ? 0.24 : x === 8 ? 0.34 : 0.5,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+
+    expect(chunk.rivers?.[0].points.at(-1)).toMatchObject({ x: 11, y: 8 });
+    expect(chunk.heightmap[8 * vertexSize + 10]).toBeLessThan(0.5);
+  });
+
+  it('extends only terrain carving slightly beyond the final mouth point', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const worldRiver: WorldRiverData = {
+      id: 'river_carve_extension_only',
+      mainPath: [
+        {
+          x: 4,
+          y: 8,
+          height: 0.5,
+          surfaceLevel: 0.51,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 2,
+          valleyWidth: 2,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 8,
+          y: 8,
+          height: 0.34,
+          surfaceLevel: 0.34,
+          width: 2,
+          depth: 0.02,
+          channelWidth: 2,
+          valleyWidth: 2,
+          channelDepth: 0.08,
+          valleyDepth: 0.04,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 4, y: 8 },
+      mouth: { x: 9, y: 8 },
+      bounds: { minX: 4, maxX: 9, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(0.5),
+      getHeightAt: () => 0.5,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+
+    expect(chunk.rivers?.[0].points.at(-1)).toMatchObject({ x: 9, y: 8 });
+    expect(chunk.heightmap[8 * vertexSize + 10]).toBeLessThan(0.5);
   });
 
   it('splits disjoint selected river spans instead of reconnecting them through the chunk', () => {
