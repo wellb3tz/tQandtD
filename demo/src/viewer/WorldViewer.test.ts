@@ -363,7 +363,71 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('uses one instanced low-poly tree prototype with trunk and layered crown colors', () => {
+  it('adds low shoreline shrubs near riverbanks while keeping water channels clear', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(1, 0, {
+      size: 8,
+      heightmap: new Float32Array(81).fill(0.5),
+      biomeMap: new Uint8Array(64).fill(BiomeType.FOREST),
+      rivers: [{
+        riverId: 'river_bank_1',
+        pathId: 'river_bank_1:main',
+        isTributary: false,
+        points: [
+          { x: 0.5, y: 0, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 1.6, flowX: 0, flowY: 1 },
+          { x: 0.5, y: 8, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 1.6, flowX: 0, flowY: 1 },
+        ],
+        bounds: { minX: 0.5, maxX: 0.5, minY: 0, maxY: 8 },
+      }],
+      resources: [],
+      structures: [],
+    } as any);
+
+    const foliage = (viewer as any).chunkMeshes.get('1,0').foliage as THREE.Group;
+    const shrubs = foliage.children[1] as THREE.InstancedMesh;
+    const shrubPositions = shrubs.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    let minShrubGeometryY = Infinity;
+    let hasShrubInWater = false;
+
+    for (let i = 0; i < shrubPositions.count; i++) {
+      minShrubGeometryY = Math.min(minShrubGeometryY, shrubPositions.getY(i));
+    }
+
+    for (let i = 0; i < shrubs.count; i++) {
+      shrubs.getMatrixAt(i, matrix);
+      matrix.decompose(position, quaternion, scale);
+      const shrubBottomY = position.y + minShrubGeometryY * scale.y;
+      expect(shrubBottomY).toBeCloseTo(25, 5);
+      if (Math.abs(position.x - 8.5) <= 0.8) {
+        hasShrubInWater = true;
+        break;
+      }
+    }
+
+    expect(foliage.userData.treeCount).toBeGreaterThan(0);
+    expect(foliage.userData.shrubCount).toBeGreaterThan(0);
+    expect(shrubs).toBeInstanceOf(THREE.InstancedMesh);
+    expect(hasShrubInWater).toBe(false);
+
+    viewer.dispose();
+  });
+
+  it('uses multiple instanced low-poly tree silhouettes with trunk and crown colors', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -385,7 +449,8 @@ describe('WorldViewer lifecycle', () => {
     } as any);
 
     const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
-    const tree = foliage.children[0] as THREE.InstancedMesh;
+    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
+    const tree = treeMeshes[0];
     const material = tree.material as THREE.MeshLambertMaterial;
     const geometry = tree.geometry as THREE.BufferGeometry;
     const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
@@ -407,7 +472,8 @@ describe('WorldViewer lifecycle', () => {
       hasCrownColor ||= g > r * 1.25 && g > b * 1.25;
     }
 
-    expect(foliage.children).toHaveLength(1);
+    expect(treeMeshes.length).toBeGreaterThanOrEqual(2);
+    expect(foliage.userData.treeVariantCount).toBeGreaterThanOrEqual(2);
     expect(material.vertexColors).toBe(true);
     expect(colors).toBeDefined();
     expect(positions.count).toBeGreaterThan(36);
@@ -441,16 +507,18 @@ describe('WorldViewer lifecycle', () => {
     } as any);
 
     const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
-    const canopy = foliage.children[0] as THREE.InstancedMesh;
+    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const fractions: number[] = [];
 
-    for (let i = 0; i < canopy.count; i++) {
-      canopy.getMatrixAt(i, matrix);
-      position.setFromMatrixPosition(matrix);
-      fractions.push(position.x - Math.floor(position.x));
-      fractions.push(position.z - Math.floor(position.z));
+    for (const canopy of treeMeshes) {
+      for (let i = 0; i < canopy.count; i++) {
+        canopy.getMatrixAt(i, matrix);
+        position.setFromMatrixPosition(matrix);
+        fractions.push(position.x - Math.floor(position.x));
+        fractions.push(position.z - Math.floor(position.z));
+      }
     }
 
     expect(fractions.some(value => value < 0.18)).toBe(true);
@@ -519,22 +587,74 @@ describe('WorldViewer lifecycle', () => {
     } as any);
 
     const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
-    const canopy = foliage.children[0] as THREE.InstancedMesh;
+    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     let hasTrailingRowFoliage = false;
+    let treeCount = 0;
 
-    for (let i = 0; i < canopy.count; i++) {
-      canopy.getMatrixAt(i, matrix);
-      position.setFromMatrixPosition(matrix);
-      if (position.z >= 31) {
-        hasTrailingRowFoliage = true;
-        break;
+    for (const canopy of treeMeshes) {
+      treeCount += canopy.count;
+      for (let i = 0; i < canopy.count; i++) {
+        canopy.getMatrixAt(i, matrix);
+        position.setFromMatrixPosition(matrix);
+        if (position.z >= 31) {
+          hasTrailingRowFoliage = true;
+          break;
+        }
       }
     }
 
-    expect(canopy.count).toBeLessThanOrEqual(512);
+    expect(treeCount).toBeLessThanOrEqual(512);
     expect(hasTrailingRowFoliage).toBe(true);
+
+    viewer.dispose();
+  });
+
+  it('cuts meadow-sized clearings out of dense forest chunks', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 32,
+      heightmap: new Float32Array(33 * 33).fill(0.5),
+      biomeMap: new Uint8Array(32 * 32).fill(BiomeType.FOREST),
+      resources: [],
+      structures: [],
+    } as any);
+
+    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
+    const clearing = foliage.userData.clearingSample as { x: number; z: number; radius: number } | undefined;
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    let hasTreeInsideClearing = false;
+
+    expect(foliage.userData.clearingCount).toBeGreaterThan(0);
+    expect(foliage.userData.clearingCount).toBeLessThanOrEqual(80);
+    expect(clearing).toBeDefined();
+
+    for (const treeMesh of treeMeshes) {
+      for (let i = 0; i < treeMesh.count; i++) {
+        treeMesh.getMatrixAt(i, matrix);
+        position.setFromMatrixPosition(matrix);
+        if (clearing && Math.hypot(position.x - clearing.x, position.z - clearing.z) < clearing.radius) {
+          hasTreeInsideClearing = true;
+          break;
+        }
+      }
+    }
+
+    expect(hasTreeInsideClearing).toBe(false);
 
     viewer.dispose();
   });

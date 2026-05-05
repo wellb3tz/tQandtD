@@ -191,8 +191,9 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).not.toContain('blendedTerrainRoughness');
     expect(shader.fragmentShader).toContain('wetShorelineTint');
     expect(shader.fragmentShader).toContain('riverbedTint');
-    expect(shader.fragmentShader).toContain('forestCanopyWeight');
-    expect(shader.fragmentShader).toContain('forestCanopyTexture');
+    expect(shader.fragmentShader).toContain('forestFloorTint');
+    expect(shader.fragmentShader).not.toContain('forestCanopyTexture');
+    expect(shader.fragmentShader).not.toContain('smoothstep(0.46, 0.08');
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend.w');
     expect(shader.fragmentShader).toContain('roughnessFactor = mix');
     expect(shader.fragmentShader).toContain('vSurfaceBlendB');

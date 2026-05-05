@@ -42,6 +42,10 @@ const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
 
 const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
 const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
+const MAX_SHRUB_INSTANCES_PER_CHUNK = 192;
+const FOLIAGE_BANK_WIDTH = 2.4;
+const SHRUB_PROTOTYPE_MIN_Y = -0.30;
+const CLEARING_CELL_SIZE = 25;
 
 type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
 type FoliageProfile = {
@@ -50,6 +54,30 @@ type FoliageProfile = {
   radius: number;
   color: THREE.ColorRepresentation;
   maxSlope: number;
+};
+type FoliagePlacement = {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  height: number;
+  rotation: number;
+  color: THREE.ColorRepresentation;
+  rank: number;
+};
+type TreeVariant = 'spire' | 'compact' | 'broad';
+type TreePlacement = FoliagePlacement & {
+  variant: TreeVariant;
+};
+type FoliageWaterInfluence = {
+  inWater: boolean;
+  bank: number;
+};
+type FoliageClearingInfluence = {
+  strength: number;
+  centerX: number;
+  centerZ: number;
+  coreRadius: number;
 };
 
 /**
@@ -1314,25 +1342,38 @@ export class WorldViewer {
     };
   }
 
-  private isFoliageWaterTile(
+  private getFoliageWaterInfluence(
     data: ChunkData,
     tileIndex: number,
     worldTileX: number,
     worldTileZ: number,
     worldXBase: number,
     worldZBase: number
-  ): boolean {
+  ): FoliageWaterInfluence {
     if (data.lakes?.some(lake => lake.tiles.has(tileIndex))) {
-      return true;
+      return { inWater: true, bank: 1 };
     }
 
-    return this.isRiverChannelAt(data, worldTileX - worldXBase, worldTileZ - worldZBase);
+    const localX = worldTileX - worldXBase;
+    const localZ = worldTileZ - worldZBase;
+    const riverEdgeDistance = this.getRiverChannelEdgeDistance(data, localX, localZ);
+    if (riverEdgeDistance !== undefined && riverEdgeDistance <= 0) {
+      return { inWater: true, bank: 1 };
+    }
+
+    let bank = riverEdgeDistance !== undefined
+      ? Math.max(0, 1 - riverEdgeDistance / FOLIAGE_BANK_WIDTH)
+      : 0;
+    bank = Math.max(bank, this.getLakeBankInfluence(data, localX, localZ));
+
+    return { inWater: false, bank };
   }
 
-  private isRiverChannelAt(data: ChunkData, localX: number, localZ: number): boolean {
+  private getRiverChannelEdgeDistance(data: ChunkData, localX: number, localZ: number): number | undefined {
     const rivers = data.rivers ?? [];
-    if (rivers.length === 0) return false;
+    if (rivers.length === 0) return undefined;
 
+    let closest: number | undefined;
     for (const river of rivers) {
       const points = river.points;
       if (points.length < 2) continue;
@@ -1340,13 +1381,31 @@ export class WorldViewer {
       for (let i = 0; i < points.length - 1; i++) {
         const sample = this.closestRiverRenderSample(localX, localZ, points[i], points[i + 1]);
         const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
-        if (channelRadius > 0 && sample.distance <= channelRadius) {
-          return true;
-        }
+        if (channelRadius <= 0) continue;
+        const edgeDistance = sample.distance - channelRadius;
+        closest = closest === undefined ? edgeDistance : Math.min(closest, edgeDistance);
       }
     }
 
-    return false;
+    return closest;
+  }
+
+  private getLakeBankInfluence(data: ChunkData, localX: number, localZ: number): number {
+    const lakes = data.lakes ?? [];
+    if (lakes.length === 0) return 0;
+
+    let bank = 0;
+    for (const lake of lakes) {
+      for (const lakeTileIndex of lake.tiles) {
+        const lakeTileX = lakeTileIndex % data.size;
+        const lakeTileZ = Math.floor(lakeTileIndex / data.size);
+        const edgeDistance = Math.hypot(localX - (lakeTileX + 0.5), localZ - (lakeTileZ + 0.5)) - 0.72;
+        if (edgeDistance <= 0) continue;
+        bank = Math.max(bank, 1 - edgeDistance / FOLIAGE_BANK_WIDTH);
+      }
+    }
+
+    return Math.max(0, Math.min(1, bank));
   }
 
   private calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
@@ -1412,16 +1471,10 @@ export class WorldViewer {
     const worldXBase = chunkX * chunkSize;
     const worldZBase = chunkY * chunkSize;
     const heightScale = 50;
-    const placements: Array<{
-      x: number;
-      y: number;
-      z: number;
-      radius: number;
-      height: number;
-      rotation: number;
-      color: THREE.ColorRepresentation;
-      rank: number;
-    }> = [];
+    const treePlacements: TreePlacement[] = [];
+    const shrubPlacements: FoliagePlacement[] = [];
+    let clearingCount = 0;
+    let clearingSample: { x: number; z: number; radius: number } | undefined;
 
     for (let tileY = 0; tileY < chunkSize; tileY++) {
       for (let tileX = 0; tileX < chunkSize; tileX++) {
@@ -1440,46 +1493,125 @@ export class WorldViewer {
 
         const worldTileX = worldXBase + tileX;
         const worldTileZ = worldZBase + tileY;
-
-        const chance = this.deterministic01(worldTileX, worldTileZ, 17);
-        if (chance > profile.density) continue;
-
         const jitterX = 0.08 + this.deterministic01(worldTileX, worldTileZ, 23) * 0.84;
         const jitterZ = 0.08 + this.deterministic01(worldTileX, worldTileZ, 31) * 0.84;
         const scaleJitter = 0.82 + this.deterministic01(worldTileX, worldTileZ, 43) * 0.46;
         const placementX = worldTileX + jitterX;
         const placementZ = worldTileZ + jitterZ;
-        if (this.isFoliageWaterTile(data, tileIndex, placementX, placementZ, worldXBase, worldZBase)) continue;
+        const waterInfluence = this.getFoliageWaterInfluence(data, tileIndex, placementX, placementZ, worldXBase, worldZBase);
+        if (waterInfluence.inWater) continue;
 
-        placements.push({
-          x: placementX,
-          y: elevation * heightScale + profile.height * scaleJitter * 0.5,
-          z: placementZ,
-          radius: profile.radius * scaleJitter,
-          height: profile.height * scaleJitter,
-          rotation: this.deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
-          color: profile.color,
-          rank: this.deterministic01(worldTileX, worldTileZ, 101),
-        });
+        const clearingInfluence = this.getClearingInfluence(placementX, placementZ);
+        if (clearingInfluence.strength > 0.82) {
+          clearingCount++;
+          clearingSample ??= {
+            x: clearingInfluence.centerX,
+            z: clearingInfluence.centerZ,
+            radius: clearingInfluence.coreRadius,
+          };
+        }
+
+        const chance = this.deterministic01(worldTileX, worldTileZ, 17);
+        const clusterDensity = this.getForestClusterDensity(worldTileX, worldTileZ);
+        const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
+        const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
+        const bankTreeScale = 1 - waterInfluence.bank * 0.82;
+        const clearingTreeScale = 1 - clearingInfluence.strength;
+        const treeDensity = profile.density * clusterDensity * slopeDensityScale * bankTreeScale * clearingTreeScale;
+        if (chance <= treeDensity) {
+          const treeHeightScale = (1 - waterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - clearingInfluence.strength * 0.18);
+          treePlacements.push({
+            x: placementX,
+            y: elevation * heightScale + profile.height * scaleJitter * treeHeightScale * 0.5,
+            z: placementZ,
+            radius: profile.radius * scaleJitter * Math.max(0.72, treeHeightScale),
+            height: profile.height * scaleJitter * Math.max(0.68, treeHeightScale),
+            rotation: this.deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
+            color: profile.color,
+            rank: this.deterministic01(worldTileX, worldTileZ, 101),
+            variant: this.selectTreeVariant(profile, worldTileX, worldTileZ),
+          });
+        }
+
+        if (waterInfluence.bank > 0.18 && clearingInfluence.strength < 0.72) {
+          const shrubChance = this.deterministic01(worldTileX, worldTileZ, 131);
+          const shrubDensity = Math.min(0.92, 0.18 + waterInfluence.bank * 0.74);
+          if (shrubChance <= shrubDensity) {
+            const shrubScale = 0.70 + this.deterministic01(worldTileX, worldTileZ, 137) * 0.48;
+            const shrubHeight = (0.34 + waterInfluence.bank * 0.22) * shrubScale;
+            shrubPlacements.push({
+              x: placementX,
+              y: elevation * heightScale - SHRUB_PROTOTYPE_MIN_Y * shrubHeight,
+              z: placementZ,
+              radius: (0.30 + waterInfluence.bank * 0.16) * shrubScale,
+              height: shrubHeight,
+              rotation: this.deterministic01(worldTileX, worldTileZ, 149) * Math.PI * 2,
+              color: waterInfluence.bank > 0.6 ? 0x527a35 : 0x3d7130,
+              rank: this.deterministic01(worldTileX, worldTileZ, 151),
+            });
+          }
+        }
       }
     }
 
-    if (placements.length === 0) return undefined;
+    if (treePlacements.length === 0 && shrubPlacements.length === 0) return undefined;
 
-    if (placements.length > MAX_FOLIAGE_INSTANCES_PER_CHUNK) {
-      placements.sort((a, b) => a.rank - b.rank);
-      placements.length = MAX_FOLIAGE_INSTANCES_PER_CHUNK;
-    }
+    this.capPlacements(treePlacements, MAX_FOLIAGE_INSTANCES_PER_CHUNK);
+    this.capPlacements(shrubPlacements, MAX_SHRUB_INSTANCES_PER_CHUNK);
 
     const group = new THREE.Group();
     group.name = `foliage-${chunkX},${chunkY}`;
-    group.userData.foliageCount = placements.length;
+    group.userData.treeCount = treePlacements.length;
+    group.userData.shrubCount = shrubPlacements.length;
+    group.userData.foliageCount = treePlacements.length + shrubPlacements.length;
+    group.userData.clearingCount = clearingCount;
+    if (clearingSample) group.userData.clearingSample = clearingSample;
 
-    const geometry = this.createFoliagePrototypeGeometry();
+    if (treePlacements.length > 0) {
+      const treeVariants: Array<{ variant: TreeVariant; geometry: THREE.BufferGeometry }> = [
+        { variant: 'spire', geometry: this.createFoliagePrototypeGeometry() },
+        { variant: 'compact', geometry: this.createCompactTreePrototypeGeometry() },
+        { variant: 'broad', geometry: this.createBroadTreePrototypeGeometry() },
+      ];
+
+      let treeVariantCount = 0;
+      for (const { variant, geometry } of treeVariants) {
+        const variantPlacements = treePlacements.filter(placement => placement.variant === variant);
+        if (variantPlacements.length === 0) {
+          geometry.dispose();
+          continue;
+        }
+
+        const treeMesh = this.createFoliageInstancedMesh(geometry, variantPlacements);
+        treeMesh.name = `foliage-trees-${variant}`;
+        treeMesh.castShadow = true;
+        treeMesh.receiveShadow = true;
+        group.add(treeMesh);
+        treeVariantCount++;
+      }
+      group.userData.treeVariantCount = treeVariantCount;
+    }
+
+    if (shrubPlacements.length > 0) {
+      const shrubMesh = this.createFoliageInstancedMesh(this.createShrubPrototypeGeometry(), shrubPlacements);
+      shrubMesh.name = 'foliage-shrubs';
+      shrubMesh.castShadow = false;
+      shrubMesh.receiveShadow = true;
+      group.add(shrubMesh);
+    }
+
+    return group;
+  }
+
+  private capPlacements(placements: FoliagePlacement[], cap: number): void {
+    if (placements.length <= cap) return;
+    placements.sort((a, b) => a.rank - b.rank);
+    placements.length = cap;
+  }
+
+  private createFoliageInstancedMesh(geometry: THREE.BufferGeometry, placements: FoliagePlacement[]): THREE.InstancedMesh {
     const material = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
     const canopy = new THREE.InstancedMesh(geometry, material, placements.length);
-    canopy.castShadow = true;
-    canopy.receiveShadow = true;
 
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -1497,8 +1629,7 @@ export class WorldViewer {
     });
 
     canopy.instanceMatrix.needsUpdate = true;
-    group.add(canopy);
-    return group;
+    return canopy;
   }
 
   private createFoliagePrototypeGeometry(): THREE.BufferGeometry {
@@ -1510,6 +1641,59 @@ export class WorldViewer {
     this.addConeLayer(vertices, colors, indices, 0.58, -0.30, 0.28, 8, new THREE.Color(0.10, 0.34, 0.12));
     this.addConeLayer(vertices, colors, indices, 0.45, 0.02, 0.58, 8, new THREE.Color(0.08, 0.40, 0.14));
     this.addConeLayer(vertices, colors, indices, 0.30, 0.32, 0.90, 8, new THREE.Color(0.12, 0.48, 0.18));
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private createCompactTreePrototypeGeometry(): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    this.addPrism(vertices, colors, indices, 0.14, -0.50, -0.02, 6, new THREE.Color(0.40, 0.22, 0.10));
+    this.addConeLayer(vertices, colors, indices, 0.64, -0.22, 0.26, 8, new THREE.Color(0.11, 0.36, 0.13));
+    this.addConeLayer(vertices, colors, indices, 0.48, 0.02, 0.50, 8, new THREE.Color(0.10, 0.43, 0.16));
+    this.addConeLayer(vertices, colors, indices, 0.30, 0.22, 0.72, 8, new THREE.Color(0.15, 0.50, 0.20));
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private createBroadTreePrototypeGeometry(): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    this.addPrism(vertices, colors, indices, 0.16, -0.50, 0.10, 7, new THREE.Color(0.43, 0.25, 0.12));
+    this.addConeLayer(vertices, colors, indices, 0.76, -0.04, 0.38, 9, new THREE.Color(0.13, 0.38, 0.13));
+    this.addConeLayer(vertices, colors, indices, 0.62, 0.12, 0.58, 9, new THREE.Color(0.14, 0.48, 0.17));
+    this.addConeLayer(vertices, colors, indices, 0.42, 0.28, 0.78, 9, new THREE.Color(0.20, 0.56, 0.22));
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private createShrubPrototypeGeometry(): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    this.addConeLayer(vertices, colors, indices, 0.54, -0.30, 0.18, 7, new THREE.Color(0.20, 0.43, 0.16));
+    this.addConeLayer(vertices, colors, indices, 0.42, -0.12, 0.34, 7, new THREE.Color(0.26, 0.52, 0.20));
+    this.addConeLayer(vertices, colors, indices, 0.24, 0.08, 0.46, 7, new THREE.Color(0.34, 0.58, 0.24));
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -1610,6 +1794,60 @@ export class WorldViewer {
 
     const biome = data.biomeMap?.[tileIndex] as BiomeType | undefined;
     return biome !== undefined ? this.getFoliageProfile(biome) : undefined;
+  }
+
+  private getForestClusterDensity(worldX: number, worldZ: number): number {
+    const broadX = Math.floor(worldX / 7);
+    const broadZ = Math.floor(worldZ / 7);
+    const midX = Math.floor(worldX / 3);
+    const midZ = Math.floor(worldZ / 3);
+    const broad = this.deterministic01(broadX, broadZ, 211);
+    const mid = this.deterministic01(midX, midZ, 223);
+    return Math.max(0.28, Math.min(1.18, 0.30 + broad * 0.66 + mid * 0.22));
+  }
+
+  private selectTreeVariant(profile: FoliageProfile, worldX: number, worldZ: number): TreeVariant {
+    const roll = this.deterministic01(worldX, worldZ, 167);
+    if (profile.height >= 1.65) {
+      return roll < 0.72 ? 'spire' : 'compact';
+    }
+    if (profile.radius >= 0.54) {
+      if (roll < 0.58) return 'broad';
+      return roll < 0.82 ? 'compact' : 'spire';
+    }
+    if (roll < 0.44) return 'spire';
+    return roll < 0.76 ? 'compact' : 'broad';
+  }
+
+  private getClearingInfluence(worldX: number, worldZ: number): FoliageClearingInfluence {
+    const cellX = Math.floor(worldX / CLEARING_CELL_SIZE);
+    const cellZ = Math.floor(worldZ / CLEARING_CELL_SIZE);
+    let strongest: FoliageClearingInfluence = {
+      strength: 0,
+      centerX: 0,
+      centerZ: 0,
+      coreRadius: 0,
+    };
+
+    for (let z = cellZ - 1; z <= cellZ + 1; z++) {
+      for (let x = cellX - 1; x <= cellX + 1; x++) {
+        const centerX = (x + 0.5) * CLEARING_CELL_SIZE + (this.deterministic01(x, z, 307) - 0.5) * 7.0;
+        const centerZ = (z + 0.5) * CLEARING_CELL_SIZE + (this.deterministic01(x, z, 311) - 0.5) * 7.0;
+        const radius = 4.8 + this.deterministic01(x, z, 313) * 3.4;
+        const coreRadius = radius * 0.48;
+        const distance = Math.hypot(worldX - centerX, worldZ - centerZ);
+        if (distance >= radius) continue;
+
+        const strength = distance <= coreRadius
+          ? 1
+          : 1 - (distance - coreRadius) / (radius - coreRadius);
+        if (strength > strongest.strength) {
+          strongest = { strength, centerX, centerZ, coreRadius };
+        }
+      }
+    }
+
+    return strongest;
   }
 
   private deterministic01(x: number, y: number, salt: number): number {

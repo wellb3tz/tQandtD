@@ -430,14 +430,6 @@ vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
   return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
 }
 
-float forestCanopyTexture(vec2 uv) {
-  vec2 cell = floor(uv * 22.0);
-  vec2 local = fract(uv * 22.0) - vec2(0.5);
-  float hash = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-  float crown = smoothstep(0.46, 0.08, length(local + vec2(hash - 0.5, fract(hash * 7.13) - 0.5) * 0.28));
-  return clamp(crown * (0.55 + hash * 0.45), 0.0, 1.0);
-}
-
 void considerTerrainAtlasTile(
   float weight,
   float tileIndex,
@@ -482,10 +474,9 @@ vec4 blendedTerrainMap = (
 vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.72)) * 1.85 + vec3(0.90), vec3(0.52), vec3(1.35));
 diffuseColor.rgb *= terrainDetailContrast;
 diffuseColor.a *= blendedTerrainMap.a;
-float forestCanopyWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
-float forestCanopyNoise = forestCanopyTexture(vMapUv);
-vec3 forestCanopyTint = mix(vec3(0.74, 0.92, 0.58), vec3(0.34, 0.52, 0.19), forestCanopyNoise);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestCanopyTint, forestCanopyWeight * 0.34);
+float forestFloorWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
+vec3 forestFloorTint = vec3(0.86, 0.96, 0.76);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestFloorTint, forestFloorWeight * 0.16);
 vec3 cliffTint = vec3(0.76, 0.74, 0.70);
 vec3 snowPeakTint = vec3(1.10, 1.13, 1.16);
 vec3 wetShorelineTint = vec3(0.48, 0.60, 0.64);
