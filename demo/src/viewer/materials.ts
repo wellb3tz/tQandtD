@@ -8,6 +8,54 @@
 import { BiomeType } from '@engine/world/chunk';
 import * as THREE from 'three';
 
+export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
+export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
+export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
+
+export type TerrainSurfaceKey = 'plains' | 'desert' | 'beach' | 'mountainRock' | 'snow';
+
+export interface TerrainTextureSet {
+  albedo: THREE.Texture;
+  normal: THREE.Texture;
+  roughness: THREE.Texture;
+}
+
+export type TerrainSurfaceTextureLibrary = Record<TerrainSurfaceKey, TerrainTextureSet>;
+
+export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainTextureSetUrls> = {
+  plains: {
+    albedo: TERRAIN_ALBEDO_TEXTURE_URL,
+    normal: TERRAIN_NORMAL_TEXTURE_URL,
+    roughness: TERRAIN_ROUGHNESS_TEXTURE_URL,
+  },
+  desert: {
+    albedo: '/textures/terrain-desert-albedo-v1.png',
+    normal: '/textures/terrain-desert-normal-v1.png',
+    roughness: '/textures/terrain-desert-roughness-v1.png',
+  },
+  beach: {
+    albedo: '/textures/terrain-beach-albedo-v1.png',
+    normal: '/textures/terrain-beach-normal-v1.png',
+    roughness: '/textures/terrain-beach-roughness-v1.png',
+  },
+  mountainRock: {
+    albedo: '/textures/terrain-mountain-rock-albedo-v1.png',
+    normal: '/textures/terrain-mountain-rock-normal-v1.png',
+    roughness: '/textures/terrain-mountain-rock-roughness-v1.png',
+  },
+  snow: {
+    albedo: '/textures/terrain-snow-albedo-v1.png',
+    normal: '/textures/terrain-snow-normal-v1.png',
+    roughness: '/textures/terrain-snow-roughness-v1.png',
+  },
+};
+
+interface TerrainTextureSetUrls {
+  albedo: string;
+  normal: string;
+  roughness: string;
+}
+
 /**
  * RGB color representation
  */
@@ -133,6 +181,207 @@ export function createTerrainMaterial(wireframe: boolean = false): THREE.MeshLam
     vertexColors: true,
     wireframe,
   });
+}
+
+function configureTerrainTexture(
+  texture: THREE.Texture,
+  colorSpace: THREE.ColorSpace,
+): THREE.Texture {
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 4);
+  texture.colorSpace = colorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+export function createTerrainTextureSet(
+  loader: THREE.TextureLoader = new THREE.TextureLoader(),
+): TerrainTextureSet {
+  return createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.plains, loader);
+}
+
+function createTerrainTextureSetFromUrls(
+  urls: TerrainTextureSetUrls,
+  loader: THREE.TextureLoader,
+): TerrainTextureSet {
+  return {
+    albedo: configureTerrainTexture(loader.load(urls.albedo), THREE.SRGBColorSpace),
+    normal: configureTerrainTexture(loader.load(urls.normal), THREE.NoColorSpace),
+    roughness: configureTerrainTexture(loader.load(urls.roughness), THREE.NoColorSpace),
+  };
+}
+
+export function createTerrainSurfaceTextureLibrary(
+  loader: THREE.TextureLoader = new THREE.TextureLoader(),
+): TerrainSurfaceTextureLibrary {
+  return {
+    plains: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.plains, loader),
+    desert: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.desert, loader),
+    beach: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.beach, loader),
+    mountainRock: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.mountainRock, loader),
+    snow: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.snow, loader),
+  };
+}
+
+export function selectTerrainSurfaceKey(
+  biome: BiomeType,
+  elevation: number,
+  slope: number,
+): TerrainSurfaceKey {
+  if ((biome === BiomeType.MOUNTAIN || biome === BiomeType.GLACIER) && elevation >= 0.78 && slope < 0.55) {
+    return 'snow';
+  }
+
+  if (slope >= 0.6 || biome === BiomeType.MOUNTAIN || biome === BiomeType.VOLCANIC) {
+    return 'mountainRock';
+  }
+
+  if (biome === BiomeType.DESERT || biome === BiomeType.SAVANNA) {
+    return 'desert';
+  }
+
+  if (biome === BiomeType.BEACH) {
+    return 'beach';
+  }
+
+  if (biome === BiomeType.GLACIER || biome === BiomeType.TUNDRA) {
+    return 'snow';
+  }
+
+  return 'plains';
+}
+
+export function createTexturedTerrainMaterial(
+  textures: TerrainTextureSet,
+  wireframe: boolean = false,
+): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    map: textures.albedo,
+    normalMap: textures.normal,
+    roughnessMap: textures.roughness,
+    color: new THREE.Color(2.25, 2.25, 2.25),
+    normalScale: new THREE.Vector2(0.35, 0.35),
+    vertexColors: true,
+    wireframe,
+    roughness: 0.85,
+    metalness: 0.0,
+  });
+
+  material.userData.terrainTexturesEnabled = true;
+  return material;
+}
+
+export function createBiomeColorTerrainMaterial(wireframe: boolean = false): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    wireframe,
+    roughness: 0.85,
+    metalness: 0.0,
+  });
+
+  material.userData.terrainTexturesEnabled = false;
+  return material;
+}
+
+export function createTerrainBlendMaterial(
+  textures: TerrainSurfaceTextureLibrary,
+  wireframe: boolean = false,
+): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    map: textures.plains.albedo,
+    normalMap: textures.plains.normal,
+    roughnessMap: textures.plains.roughness,
+    color: new THREE.Color(2.25, 2.25, 2.25),
+    normalScale: new THREE.Vector2(0.35, 0.35),
+    vertexColors: true,
+    wireframe,
+    roughness: 0.85,
+    metalness: 0.0,
+  });
+
+  material.userData.terrainTexturesEnabled = true;
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.terrainAlbedoPlains = { value: textures.plains.albedo };
+    shader.uniforms.terrainAlbedoDesert = { value: textures.desert.albedo };
+    shader.uniforms.terrainAlbedoBeach = { value: textures.beach.albedo };
+    shader.uniforms.terrainAlbedoMountainRock = { value: textures.mountainRock.albedo };
+    shader.uniforms.terrainAlbedoSnow = { value: textures.snow.albedo };
+    shader.uniforms.terrainRoughnessPlains = { value: textures.plains.roughness };
+    shader.uniforms.terrainRoughnessDesert = { value: textures.desert.roughness };
+    shader.uniforms.terrainRoughnessBeach = { value: textures.beach.roughness };
+    shader.uniforms.terrainRoughnessMountainRock = { value: textures.mountainRock.roughness };
+    shader.uniforms.terrainRoughnessSnow = { value: textures.snow.roughness };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+attribute vec4 surfaceBlendA;
+attribute float surfaceBlendB;
+varying vec4 vSurfaceBlendA;
+varying float vSurfaceBlendB;`,
+      )
+      .replace(
+        '#include <uv_vertex>',
+        `#include <uv_vertex>
+vSurfaceBlendA = surfaceBlendA;
+vSurfaceBlendB = surfaceBlendB;`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform sampler2D terrainAlbedoPlains;
+uniform sampler2D terrainAlbedoDesert;
+uniform sampler2D terrainAlbedoBeach;
+uniform sampler2D terrainAlbedoMountainRock;
+uniform sampler2D terrainAlbedoSnow;
+uniform sampler2D terrainRoughnessPlains;
+uniform sampler2D terrainRoughnessDesert;
+uniform sampler2D terrainRoughnessBeach;
+uniform sampler2D terrainRoughnessMountainRock;
+uniform sampler2D terrainRoughnessSnow;
+varying vec4 vSurfaceBlendA;
+varying float vSurfaceBlendB;`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `vec4 terrainPlains = texture2D(terrainAlbedoPlains, vMapUv);
+vec4 terrainDesert = texture2D(terrainAlbedoDesert, vMapUv);
+vec4 terrainBeach = texture2D(terrainAlbedoBeach, vMapUv);
+vec4 terrainMountainRock = texture2D(terrainAlbedoMountainRock, vMapUv);
+vec4 terrainSnow = texture2D(terrainAlbedoSnow, vMapUv);
+vec4 blendedTerrainMap =
+  terrainPlains * vSurfaceBlendA.x +
+  terrainDesert * vSurfaceBlendA.y +
+  terrainBeach * vSurfaceBlendA.z +
+  terrainMountainRock * vSurfaceBlendA.w +
+  terrainSnow * vSurfaceBlendB;
+diffuseColor *= blendedTerrainMap;`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `float roughnessFactor = roughness;
+vec4 terrainRoughnessPlainsTexel = texture2D(terrainRoughnessPlains, vMapUv);
+vec4 terrainRoughnessDesertTexel = texture2D(terrainRoughnessDesert, vMapUv);
+vec4 terrainRoughnessBeachTexel = texture2D(terrainRoughnessBeach, vMapUv);
+vec4 terrainRoughnessMountainRockTexel = texture2D(terrainRoughnessMountainRock, vMapUv);
+vec4 terrainRoughnessSnowTexel = texture2D(terrainRoughnessSnow, vMapUv);
+vec4 blendedTerrainRoughness =
+  terrainRoughnessPlainsTexel * vSurfaceBlendA.x +
+  terrainRoughnessDesertTexel * vSurfaceBlendA.y +
+  terrainRoughnessBeachTexel * vSurfaceBlendA.z +
+  terrainRoughnessMountainRockTexel * vSurfaceBlendA.w +
+  terrainRoughnessSnowTexel * vSurfaceBlendB;
+roughnessFactor *= blendedTerrainRoughness.g;`,
+      );
+  };
+
+  return material;
 }
 
 /**

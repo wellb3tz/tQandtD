@@ -16,6 +16,7 @@ test('demo loads and can generate a world', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.locator('#viewer')).toBeVisible();
+  await page.locator('#control-panel .section-header.clickable').first().click();
   await expect(page.locator('#generate-btn')).toBeVisible();
   await expect(page.locator('canvas').first()).toBeVisible({ timeout: 15_000 });
 
@@ -31,4 +32,27 @@ test('demo loads and can generate a world', async ({ page }) => {
     .toBeGreaterThan(0);
 
   expect(runtimeErrors).toEqual([]);
+});
+
+test('secondary UI panels start hidden and can be toggled', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await page.goto('/');
+
+  await expect(page.locator('#control-panel .panel-section').first()).toHaveClass(/collapsed/);
+  await expect(page.locator('#generate-btn')).toBeHidden();
+  await expect(page.locator('#performance-monitor')).toHaveClass(/hidden/);
+  await expect(page.locator('#world-statistics')).toHaveClass(/hidden/);
+
+  await page.locator('#control-panel .section-header.clickable').first().click();
+  await expect(page.locator('#generate-btn')).toBeVisible();
+
+  await page.locator('#toggle-monitor-btn').click();
+  await expect(page.locator('#performance-monitor')).not.toHaveClass(/hidden/);
+
+  await page.locator('#toggle-statistics-btn').click();
+  await expect(page.locator('#world-statistics')).not.toHaveClass(/hidden/);
+
+  await page.locator('#hide-statistics-btn').click();
+  await expect(page.locator('#world-statistics')).toHaveClass(/hidden/);
 });

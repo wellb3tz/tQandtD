@@ -954,6 +954,7 @@ export class ControlPanel {
       { id: 'showStructures', label: 'Show Structures', defaultValue: false },
       { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
       { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
+      { id: 'terrainTexturesEnabled', label: 'Terrain Textures', defaultValue: true, tooltip: 'Toggle biome surface texture maps while keeping terrain colors' },
       { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: false },
       { id: 'skyBackground', label: 'Sky Background (Blue)', defaultValue: true, tooltip: 'Switch between deep ocean (dark) and sky blue background' },
     ];

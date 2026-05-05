@@ -8,12 +8,18 @@
 
 import * as THREE from 'three';
 import { ChunkData } from '../../../src/index';
+import { getRiverChannelWidth, type RiverPoint } from '../../../src/gen/rivers';
 import {
   getBiomeColor,
   calculateBlendedColor,
-  createTerrainMaterial,
+  createTerrainSurfaceTextureLibrary,
+  createTerrainBlendMaterial,
+  createBiomeColorTerrainMaterial,
+  selectTerrainSurfaceKey,
   toGrayscale,
-  BiomeColor
+  BiomeColor,
+  TerrainSurfaceKey,
+  TerrainSurfaceTextureLibrary
 } from './materials';
 import { raycastTerrain } from '../utils/coordinates';
 import { WaterLayerManager } from './water/WaterLayerManager';
@@ -21,6 +27,7 @@ import { adjustUnderwaterColors } from './water/UnderwaterTerrainProcessor';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 import type { WaterConfig } from './water/types';
 import { MicroBiomeType } from '../../../src/world/enhanced-biome';
+import { createWaterNormalTexture } from './water/WaterMaterialFactory';
 
 /**
  * Colour offsets per MicroBiomeType (applied additively, clamped to [0,1])
@@ -32,6 +39,10 @@ const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
   [MicroBiomeType.POND]: { r: 0.0, g: 0.0, b: 0.30 },      // Bluer
   [MicroBiomeType.GROVE]: { r: 0.20, g: 0.20, b: 0.0 },    // Warmer (corrected to 0.20)
 };
+
+const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
+
+type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
 
 /**
  * 3D vector for camera position and target
@@ -119,6 +130,8 @@ export class WorldViewer {
   
   // Wireframe mode
   private wireframeMode: boolean;
+  private terrainTexturesEnabled: boolean;
+  private terrainTextures: TerrainSurfaceTextureLibrary;
   
   // Container element
   private container: HTMLElement | null;
@@ -134,6 +147,8 @@ export class WorldViewer {
   private keyboardMoveSpeed: number;
   private mouseSensitivity: number;
   private isPointerLocked: boolean;
+  private isMouseDragRotating: boolean;
+  private lastMouseDragPosition: { x: number; y: number } | null;
   
   // Camera modes
   private followTerrainMode: boolean;
@@ -161,7 +176,14 @@ export class WorldViewer {
 
   private readonly handleContainerClick = (): void => {
     if (this.useFreeCamera && !this.isPointerLocked) {
-      this.container?.requestPointerLock();
+      try {
+        const pointerLockRequest = this.container?.requestPointerLock?.();
+        if (pointerLockRequest && typeof (pointerLockRequest as Promise<void>).catch === 'function') {
+          (pointerLockRequest as Promise<void>).catch(() => undefined);
+        }
+      } catch {
+        // Embedded browsers can deny pointer lock; drag rotation remains available.
+      }
     }
   };
 
@@ -175,6 +197,33 @@ export class WorldViewer {
       this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
       this.updateCameraRotation();
     }
+  };
+
+  private readonly handleCameraDragStart = (e: MouseEvent): void => {
+    if (!this.useFreeCamera || this.isPointerLocked || e.button !== 0) return;
+
+    this.isMouseDragRotating = true;
+    this.lastMouseDragPosition = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+  };
+
+  private readonly handleCameraDragMove = (e: MouseEvent): void => {
+    if (!this.isMouseDragRotating || this.isPointerLocked || !this.lastMouseDragPosition) return;
+
+    const deltaX = e.clientX - this.lastMouseDragPosition.x;
+    const deltaY = e.clientY - this.lastMouseDragPosition.y;
+
+    this.cameraRotation.yaw -= deltaX * this.mouseSensitivity;
+    this.cameraRotation.pitch -= deltaY * this.mouseSensitivity;
+    this.updateCameraRotation();
+
+    this.lastMouseDragPosition = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+  };
+
+  private readonly handleCameraDragEnd = (): void => {
+    this.isMouseDragRotating = false;
+    this.lastMouseDragPosition = null;
   };
 
   private readonly handlePointerLockEscape = (e: KeyboardEvent): void => {
@@ -208,6 +257,8 @@ export class WorldViewer {
     this.fogOfWarMeshes = new Map();
     this.layerVisibility = new Map();
     this.wireframeMode = false;
+    this.terrainTexturesEnabled = true;
+    this.terrainTextures = createTerrainSurfaceTextureLibrary();
     this.container = null;
     this.animationFrameId = null;
     
@@ -219,6 +270,8 @@ export class WorldViewer {
     this.keyboardMoveSpeed = 0.5; // Units per frame
     this.mouseSensitivity = 0.002;
     this.isPointerLocked = false;
+    this.isMouseDragRotating = false;
+    this.lastMouseDragPosition = null;
     
     // Initialize camera modes
     this.followTerrainMode = false;
@@ -238,7 +291,13 @@ export class WorldViewer {
     this.microBiomeCount = 0;
     // Initialize water system
     this.waterLayerManager = new WaterLayerManager();
-    this.waterConfig = DEFAULT_WATER_CONFIG;
+    this.waterConfig = {
+      ...DEFAULT_WATER_CONFIG,
+      ocean: {
+        ...DEFAULT_WATER_CONFIG.ocean,
+        normalMap: createWaterNormalTexture(),
+      },
+    };
     
     // Initialize layer visibility (all visible by default)
     Object.values(RenderLayer).forEach(layer => {
@@ -373,12 +432,16 @@ export class WorldViewer {
     
     // Click to lock pointer
     this.container.addEventListener('click', this.handleContainerClick);
+    this.container.addEventListener('mousedown', this.handleCameraDragStart);
+    this.container.addEventListener('mouseleave', this.handleCameraDragEnd);
     
     // Handle pointer lock change
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     
     // Handle mouse movement when pointer is locked
     document.addEventListener('mousemove', this.handlePointerLockedMouseMove);
+    document.addEventListener('mousemove', this.handleCameraDragMove);
+    document.addEventListener('mouseup', this.handleCameraDragEnd);
     
     // Exit pointer lock on Escape
     document.addEventListener('keydown', this.handlePointerLockEscape);
@@ -608,12 +671,14 @@ export class WorldViewer {
     this.stitchLakeBoundaryPositions(chunkX, chunkY);
     this.stitchBoundaryNormals(chunkX, chunkY);
     this.stitchBoundaryColors(chunkX, chunkY);
+    this.stitchBoundarySurfaceBlends(chunkX, chunkY);
     for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
       const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
       if (this.chunkMeshes.has(nKey)) {
         this.stitchLakeBoundaryPositions(chunkX + dx, chunkY + dz);
         this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
         this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
+        this.stitchBoundarySurfaceBlends(chunkX + dx, chunkY + dz);
         this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey, data.size);
       }
     }
@@ -852,6 +917,9 @@ export class WorldViewer {
     // Pre-allocate typed arrays for better performance
     const vertices = new Float32Array(vertexCount * 3);
     const colors = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const surfaceBlendA = new Float32Array(vertexCount * 4);
+    const surfaceBlendB = new Float32Array(vertexCount);
     const indices = new Uint32Array(indexCount);
     
     // Determine if we have biome weights for smooth blending
@@ -903,6 +971,8 @@ export class WorldViewer {
       for (let x = 0; x <= chunkSize; x++) {
         const index = rowOffset + x;
         const vertexIndex = index * 3;
+        const uvIndex = index * 2;
+        const surfaceBlendAIndex = index * 4;
         
         // The heightmap is (chunkSize + 1) x (chunkSize + 1) for seamless boundaries
         // Access it directly with the current x, y coordinates
@@ -913,6 +983,8 @@ export class WorldViewer {
         vertices[vertexIndex] = worldX;
         vertices[vertexIndex + 1] = height * heightScale;
         vertices[vertexIndex + 2] = worldZ;
+        uvs[uvIndex] = x / chunkSize;
+        uvs[uvIndex + 1] = y / chunkSize;
         
         // Calculate color with smooth blending if weights available
         // For biome map, clamp to chunkSize x chunkSize since biomes don't have overlap
@@ -947,11 +1019,25 @@ export class WorldViewer {
             };
           }
         }
+
+        const riverTrenchDarken = this.getRiverTrenchDarkening(data, x, y);
+        color = {
+          r: color.r * riverTrenchDarken,
+          g: color.g * riverTrenchDarken,
+          b: color.b * riverTrenchDarken,
+        };
         
         // Apply tints
         colors[vertexIndex] = color.r * partialTint.r;
         colors[vertexIndex + 1] = color.g * partialTint.g;
         colors[vertexIndex + 2] = color.b * partialTint.b;
+
+        const surfaceWeights = this.calculateVertexSurfaceWeights(data, x, y);
+        surfaceBlendA[surfaceBlendAIndex] = surfaceWeights.plains;
+        surfaceBlendA[surfaceBlendAIndex + 1] = surfaceWeights.desert;
+        surfaceBlendA[surfaceBlendAIndex + 2] = surfaceWeights.beach;
+        surfaceBlendA[surfaceBlendAIndex + 3] = surfaceWeights.mountainRock;
+        surfaceBlendB[index] = surfaceWeights.snow;
       }
     }
     
@@ -982,6 +1068,9 @@ export class WorldViewer {
     // Set geometry attributes
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geometry.setAttribute('surfaceBlendA', new THREE.BufferAttribute(surfaceBlendA, 4));
+    geometry.setAttribute('surfaceBlendB', new THREE.BufferAttribute(surfaceBlendB, 1));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
 
@@ -1088,12 +1177,7 @@ export class WorldViewer {
     // --- end slope/altitude modulation ---
     
     // Create material using materials module
-    const material = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      wireframe: this.wireframeMode,
-      roughness: 0.85,
-      metalness: 0.0,
-    });
+    const material = this.createTerrainMaterial();
     
     // Apply opacity for partial chunks
     if (partial && partialOpacity < 1.0) {
@@ -1114,6 +1198,119 @@ export class WorldViewer {
     mesh.userData.chunkData = data; // Store chunk data for re-rendering
     
     return mesh;
+  }
+
+  private createTerrainMaterial(): THREE.MeshStandardMaterial {
+    return this.terrainTexturesEnabled
+      ? createTerrainBlendMaterial(this.terrainTextures, this.wireframeMode)
+      : createBiomeColorTerrainMaterial(this.wireframeMode);
+  }
+
+  private getRiverTrenchDarkening(data: ChunkData, x: number, y: number): number {
+    const rivers = data.rivers ?? [];
+    if (rivers.length === 0) return 1;
+
+    let strongest = 0;
+    for (const river of rivers) {
+      const points = river.points;
+      if (points.length < 2) continue;
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const sample = this.closestRiverRenderSample(x, y, points[i], points[i + 1]);
+        const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+        if (channelRadius <= 0 || sample.distance > channelRadius) continue;
+
+        const centerWeight = 1 - sample.distance / channelRadius;
+        strongest = Math.max(strongest, centerWeight * centerWeight);
+      }
+    }
+
+    return 1 - strongest * RIVER_TRENCH_DARKEN_STRENGTH;
+  }
+
+  private closestRiverRenderSample(
+    x: number,
+    y: number,
+    a: RiverPoint,
+    b: RiverPoint
+  ): RiverPoint & { distance: number } {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const lenSq = vx * vx + vy * vy || 1;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
+    const px = a.x + vx * t;
+    const py = a.y + vy * t;
+    const optional = (start: number | undefined, end: number | undefined): number | undefined => {
+      if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined;
+      const from = Number.isFinite(start) ? (start as number) : (end as number);
+      const to = Number.isFinite(end) ? (end as number) : from;
+      return from + (to - from) * t;
+    };
+
+    return {
+      ...a,
+      x: px,
+      y: py,
+      height: a.height + (b.height - a.height) * t,
+      surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * t,
+      width: a.width + (b.width - a.width) * t,
+      depth: a.depth + (b.depth - a.depth) * t,
+      flow: optional(a.flow, b.flow),
+      channelWidth: optional(a.channelWidth, b.channelWidth),
+      valleyWidth: optional(a.valleyWidth, b.valleyWidth),
+      channelDepth: optional(a.channelDepth, b.channelDepth),
+      valleyDepth: optional(a.valleyDepth, b.valleyDepth),
+      flowX: a.flowX + (b.flowX - a.flowX) * t,
+      flowY: a.flowY + (b.flowY - a.flowY) * t,
+      distance: Math.hypot(x - px, y - py),
+    };
+  }
+
+  private calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
+    const chunkSize = data.size;
+    const verticesPerSide = chunkSize + 1;
+    const weights: TerrainSurfaceWeights = {
+      plains: 0,
+      desert: 0,
+      beach: 0,
+      mountainRock: 0,
+      snow: 0,
+    };
+
+    const samples: Array<{ x: number; y: number }> = [
+      { x: vertexX - 1, y: vertexY - 1 },
+      { x: vertexX, y: vertexY - 1 },
+      { x: vertexX - 1, y: vertexY },
+      { x: vertexX, y: vertexY },
+    ];
+
+    let sampleCount = 0;
+    for (const sample of samples) {
+      if (sample.x < 0 || sample.y < 0 || sample.x >= chunkSize || sample.y >= chunkSize) {
+        continue;
+      }
+
+      const tileIndex = sample.y * chunkSize + sample.x;
+      const biome = data.biomeMap ? data.biomeMap[tileIndex] : 3;
+      const heightIndex = sample.y * verticesPerSide + sample.x;
+      const elevation = data.heightmap ? data.heightmap[heightIndex] : 0;
+      const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
+      const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
+      const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
+      const surfaceKey = selectTerrainSurfaceKey(biome, elevation, slope);
+      weights[surfaceKey] += 1;
+      sampleCount++;
+    }
+
+    if (sampleCount === 0) {
+      weights.plains = 1;
+      return weights;
+    }
+
+    for (const key of Object.keys(weights) as TerrainSurfaceKey[]) {
+      weights[key] /= sampleCount;
+    }
+    return weights;
   }
 
   /**
@@ -1384,9 +1581,35 @@ export class WorldViewer {
     
     // Update all terrain meshes
     for (const chunkMesh of this.chunkMeshes.values()) {
-      const material = chunkMesh.terrain.material as THREE.MeshLambertMaterial;
+      const material = chunkMesh.terrain.material as THREE.MeshStandardMaterial;
       material.wireframe = enabled;
     }
+  }
+
+  /**
+   * Enable or disable biome terrain texture maps while keeping vertex biome colors.
+   */
+  setTerrainTexturesEnabled(enabled: boolean): void {
+    if (this.terrainTexturesEnabled === enabled) return;
+
+    this.terrainTexturesEnabled = enabled;
+
+    for (const chunkMesh of this.chunkMeshes.values()) {
+      const previousMaterial = chunkMesh.terrain.material;
+      const nextMaterial = this.createTerrainMaterial();
+
+      if (!Array.isArray(previousMaterial)) {
+        nextMaterial.transparent = previousMaterial.transparent;
+        nextMaterial.opacity = previousMaterial.opacity;
+        previousMaterial.dispose();
+      }
+
+      chunkMesh.terrain.material = nextMaterial;
+    }
+  }
+
+  areTerrainTexturesEnabled(): boolean {
+    return this.terrainTexturesEnabled;
   }
 
   /**
@@ -1924,6 +2147,107 @@ export class WorldViewer {
   }
 
   /**
+   * Stitch texture surface weights between loaded chunks.
+   *
+   * Color and normal data already agree on shared edges, but textured terrain
+   * also depends on surfaceBlendA/B. If those attributes differ across coincident
+   * vertices the shader can switch texture sets abruptly at chunk borders.
+   */
+  private stitchBoundarySurfaceBlends(chunkX: number, chunkY: number): void {
+    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
+    if (!mesh) return;
+
+    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
+    const blendAA = geom.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
+    const blendBA = geom.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
+    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
+
+    if (!blendAA || !blendBA) return;
+
+    const verticesPerSide = Math.round(Math.sqrt(posA.count));
+    const chunkSize = verticesPerSide - 1;
+
+    const neighbours: Array<{ dx: number; dz: number }> = [
+      { dx: 1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 1, dz: 1 },
+    ];
+
+    for (const { dx, dz } of neighbours) {
+      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
+      if (!neighbourMesh) continue;
+
+      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
+      const blendAB = geomB.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
+      const blendBB = geomB.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
+
+      if (!blendAB || !blendBB) continue;
+
+      if (dx === 1 && dz === 0) {
+        for (let row = 0; row <= chunkSize; row++) {
+          this._averageSurfaceBlend(
+            blendAA,
+            blendBA,
+            row * verticesPerSide + chunkSize,
+            blendAB,
+            blendBB,
+            row * verticesPerSide,
+          );
+        }
+      } else if (dx === 0 && dz === 1) {
+        for (let col = 0; col <= chunkSize; col++) {
+          this._averageSurfaceBlend(
+            blendAA,
+            blendBA,
+            chunkSize * verticesPerSide + col,
+            blendAB,
+            blendBB,
+            col,
+          );
+        }
+      } else {
+        this._averageSurfaceBlend(
+          blendAA,
+          blendBA,
+          chunkSize * verticesPerSide + chunkSize,
+          blendAB,
+          blendBB,
+          0,
+        );
+      }
+
+      blendAB.needsUpdate = true;
+      blendBB.needsUpdate = true;
+    }
+
+    blendAA.needsUpdate = true;
+    blendBA.needsUpdate = true;
+  }
+
+  private _averageSurfaceBlend(
+    blendAA: THREE.BufferAttribute,
+    blendBA: THREE.BufferAttribute,
+    idxA: number,
+    blendAB: THREE.BufferAttribute,
+    blendBB: THREE.BufferAttribute,
+    idxB: number,
+  ): void {
+    const weights = [
+      (blendAA.getX(idxA) + blendAB.getX(idxB)) * 0.5,
+      (blendAA.getY(idxA) + blendAB.getY(idxB)) * 0.5,
+      (blendAA.getZ(idxA) + blendAB.getZ(idxB)) * 0.5,
+      (blendAA.getW(idxA) + blendAB.getW(idxB)) * 0.5,
+      (blendBA.getX(idxA) + blendBB.getX(idxB)) * 0.5,
+    ];
+    const sum = weights.reduce((total, weight) => total + weight, 0) || 1;
+
+    blendAA.setXYZW(idxA, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
+    blendBA.setX(idxA, weights[4] / sum);
+    blendAB.setXYZW(idxB, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
+    blendBB.setX(idxB, weights[4] / sum);
+  }
+
+  /**
    * Raycast from screen coordinates to terrain
    * Returns hit information including world position and chunk coordinates
    */
@@ -2181,9 +2505,13 @@ export class WorldViewer {
     // Remove input listeners registered during initialize()
     if (this.container) {
       this.container.removeEventListener('click', this.handleContainerClick);
+      this.container.removeEventListener('mousedown', this.handleCameraDragStart);
+      this.container.removeEventListener('mouseleave', this.handleCameraDragEnd);
     }
     document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
     document.removeEventListener('mousemove', this.handlePointerLockedMouseMove);
+    document.removeEventListener('mousemove', this.handleCameraDragMove);
+    document.removeEventListener('mouseup', this.handleCameraDragEnd);
     document.removeEventListener('keydown', this.handlePointerLockEscape);
     window.removeEventListener('keydown', this.handleKeyboardDown);
     window.removeEventListener('keyup', this.handleKeyboardUp);

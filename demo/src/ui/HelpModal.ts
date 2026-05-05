@@ -121,15 +121,11 @@ export class HelpModal {
           </tr>
           <tr>
             <td><kbd>Mouse Drag</kbd></td>
-            <td>Rotate camera (orbit)</td>
+            <td>Rotate camera</td>
           </tr>
           <tr>
-            <td><kbd>Mouse Wheel</kbd></td>
-            <td>Zoom in/out</td>
-          </tr>
-          <tr>
-            <td><kbd>Right Click + Drag</kbd></td>
-            <td>Pan camera</td>
+            <td><kbd>Click Viewer</kbd></td>
+            <td>Lock pointer for FPS camera controls when supported</td>
           </tr>
           <tr>
             <td><kbd>?</kbd></td>

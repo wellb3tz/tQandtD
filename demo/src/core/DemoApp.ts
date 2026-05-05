@@ -53,6 +53,7 @@ export interface AppState {
   showStructures: boolean;
   showChunkBoundaries: boolean;
   showWireframe: boolean;
+  terrainTexturesEnabled: boolean;
   fogOfWarEnabled: boolean; // Show explored chunks as gray planes
   skyBackground: boolean;   // true = sky blue, false = deep ocean
   
@@ -229,6 +230,7 @@ export class DemoApp {
       showStructures: false,
       showChunkBoundaries: false,
       showWireframe: false,
+      terrainTexturesEnabled: true,
       fogOfWarEnabled: false,
       skyBackground: true,
       
@@ -311,7 +313,7 @@ export class DemoApp {
     const visibilityKeys = [
       'showTerrain', 'showBiomes', 'showWater', 'showResources',
       'showStructures', 'showChunkBoundaries', 'showWireframe', 'fogOfWarEnabled',
-      'skyBackground'
+      'terrainTexturesEnabled', 'skyBackground'
     ];
     
     const visibilityChanged = visibilityKeys.some(key => key in partial);
@@ -336,6 +338,7 @@ export class DemoApp {
         showStructures: this.state.showStructures,
         showChunkBoundaries: this.state.showChunkBoundaries,
         showWireframe: this.state.showWireframe,
+        terrainTexturesEnabled: this.state.terrainTexturesEnabled,
         fogOfWarEnabled: this.state.fogOfWarEnabled,
         skyBackground: this.state.skyBackground,
       });

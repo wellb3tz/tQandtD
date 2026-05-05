@@ -75,6 +75,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const seedInput = document.getElementById('seed-input') as HTMLInputElement;
   const toggleControlsBtn = document.getElementById('toggle-controls-btn');
   const toggleMonitorBtn = document.getElementById('toggle-monitor-btn');
+  const toggleStatisticsBtn = document.getElementById('toggle-statistics-btn');
+  const hideMonitorBtn = document.getElementById('hide-monitor-btn');
+  const hideStatisticsBtn = document.getElementById('hide-statistics-btn');
   const helpBtn = document.getElementById('help-btn');
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
@@ -128,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       worldViewer.setVisibility(RenderLayer.STRUCTURES, initialState.showStructures);
       worldViewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, initialState.showChunkBoundaries);
       worldViewer.setWireframeMode(initialState.showWireframe);
+      worldViewer.setTerrainTexturesEnabled(initialState.terrainTexturesEnabled);
       
       // Initialize TerrainEditor
       terrainEditor = new TerrainEditor();
@@ -541,6 +545,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ('showWireframe' in visibilityState) {
           worldViewer.setWireframeMode(visibilityState.showWireframe);
         }
+        if ('terrainTexturesEnabled' in visibilityState) {
+          worldViewer.setTerrainTexturesEnabled(visibilityState.terrainTexturesEnabled);
+        }
         if ('fogOfWarEnabled' in visibilityState) {
           worldViewer.setFogOfWarVisibility(visibilityState.fogOfWarEnabled);
         }
@@ -635,6 +642,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   toggleMonitorBtn?.addEventListener('click', () => {
     performanceMonitorElement?.classList.toggle('hidden');
   });
+
+  hideMonitorBtn?.addEventListener('click', () => {
+    performanceMonitorElement?.classList.add('hidden');
+  });
+
+  toggleStatisticsBtn?.addEventListener('click', () => {
+    worldStatisticsElement?.classList.toggle('hidden');
+  });
+
+  hideStatisticsBtn?.addEventListener('click', () => {
+    worldStatisticsElement?.classList.add('hidden');
+  });
   
   // Help button
   helpBtn?.addEventListener('click', () => {
@@ -673,10 +692,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Auto-collapse on narrow screens
       controlPanel?.classList.add('collapsed');
       performanceMonitorElement?.classList.add('hidden');
+      worldStatisticsElement?.classList.add('hidden');
     } else if (width >= 1200) {
-      // Auto-expand on wide screens
+      // Auto-expand the primary control rail on wide screens.
       controlPanel?.classList.remove('collapsed');
-      performanceMonitorElement?.classList.remove('hidden');
     }
     // For medium screens (768-1200), maintain current state
   };

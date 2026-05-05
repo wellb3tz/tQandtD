@@ -9,6 +9,21 @@
 import * as THREE from 'three';
 import type { OceanConfig } from './types';
 
+export const WATER_NORMAL_TEXTURE_URL = '/textures/water-normal-v1.png';
+
+export function createWaterNormalTexture(
+  loader: THREE.TextureLoader = new THREE.TextureLoader(),
+): THREE.Texture {
+  const texture = loader.load(WATER_NORMAL_TEXTURE_URL);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(6, 6);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 /**
  * Create ocean water material with depth-based vertex colors.
  *
