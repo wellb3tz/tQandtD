@@ -430,6 +430,25 @@ vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
   return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
 }
 
+float terrainValueHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float terrainValueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = terrainValueHash(i);
+  float b = terrainValueHash(i + vec2(1.0, 0.0));
+  float c = terrainValueHash(i + vec2(0.0, 1.0));
+  float d = terrainValueHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float macroGroundNoise(vec2 uv) {
+  return terrainValueNoise(uv * 0.085) * 0.62 + terrainValueNoise(uv * 0.032 + vec2(19.0, 47.0)) * 0.38;
+}
+
 void considerTerrainAtlasTile(
   float weight,
   float tileIndex,
@@ -477,6 +496,20 @@ diffuseColor.a *= blendedTerrainMap.a;
 float forestFloorWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
 vec3 forestFloorTint = vec3(0.86, 0.96, 0.76);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestFloorTint, forestFloorWeight * 0.16);
+float vegetatedGroundWeight = clamp(vSurfaceBlendA.x * 0.70 + vSurfaceBlendB.y + vSurfaceBlendB.z * 0.85 + vSurfaceBlendB.w * 0.55, 0.0, 1.0);
+float macroGroundNoiseValue = macroGroundNoise(vMapUv);
+float dryGrassPatch = smoothstep(0.58, 0.86, macroGroundNoiseValue) * clamp(vSurfaceBlendA.x * 0.45 + vSurfaceBlendB.z * 0.95 + forestFloorWeight * 0.24, 0.0, 1.0);
+float freshGrassPatch = smoothstep(0.34, 0.70, 1.0 - abs(macroGroundNoiseValue - 0.42) * 2.35) * vegetatedGroundWeight;
+float wornGroundPatch = smoothstep(0.52, 0.82, 1.0 - abs(macroGroundNoiseValue - 0.52) * 2.05) * forestFloorWeight;
+float wetLowlandPatch = smoothstep(0.45, 0.86, macroGroundNoiseValue) * clamp(vTerrainDetailBlend.z + vSurfaceBlendB.w * 0.78 + vSurfaceBlendC.z * 0.45, 0.0, 1.0);
+vec3 freshGrassPatchTint = vec3(0.90, 1.08, 0.82);
+vec3 dryGrassPatchTint = vec3(1.12, 1.00, 0.70);
+vec3 wornGroundTint = vec3(0.74, 0.67, 0.50);
+vec3 wetLowlandTint = vec3(0.58, 0.72, 0.64);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * freshGrassPatchTint, freshGrassPatch * 0.10);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * dryGrassPatchTint, dryGrassPatch * 0.18);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wornGroundTint, wornGroundPatch * 0.12);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetLowlandTint, wetLowlandPatch * 0.24);
 vec3 cliffTint = vec3(0.76, 0.74, 0.70);
 vec3 snowPeakTint = vec3(1.10, 1.13, 1.16);
 vec3 wetShorelineTint = vec3(0.48, 0.60, 0.64);

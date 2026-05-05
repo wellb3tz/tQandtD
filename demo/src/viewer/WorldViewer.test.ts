@@ -659,6 +659,44 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('adds sparse instanced stumps without bloating draw calls', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 32,
+      heightmap: new Float32Array(33 * 33).fill(0.5),
+      biomeMap: new Uint8Array(32 * 32).fill(BiomeType.FOREST),
+      resources: [],
+      structures: [],
+    } as any);
+
+    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const propMeshes = foliage.children.filter(child => child.name.startsWith('foliage-props')) as THREE.InstancedMesh[];
+
+    expect(propMeshes).toHaveLength(1);
+    expect(foliage.userData.terrainPropCount).toBeGreaterThan(0);
+    expect(foliage.userData.terrainPropCount).toBeLessThanOrEqual(96);
+    expect(propMeshes[0].name).toBe('foliage-props-stumps');
+    expect(foliage.userData.terrainPropKindCount).toBe(1);
+
+    for (const mesh of propMeshes) {
+      expect(mesh.count).toBeGreaterThan(0);
+      expect(mesh).toBeInstanceOf(THREE.InstancedMesh);
+    }
+
+    viewer.dispose();
+  });
+
   it('skips foliage on non-vegetated and underwater terrain', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });

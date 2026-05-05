@@ -43,6 +43,7 @@ const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
 const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
 const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
 const MAX_SHRUB_INSTANCES_PER_CHUNK = 192;
+const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
 const FOLIAGE_BANK_WIDTH = 2.4;
 const SHRUB_PROTOTYPE_MIN_Y = -0.30;
 const CLEARING_CELL_SIZE = 25;
@@ -68,6 +69,9 @@ type FoliagePlacement = {
 type TreeVariant = 'spire' | 'compact' | 'broad';
 type TreePlacement = FoliagePlacement & {
   variant: TreeVariant;
+};
+type TerrainPropPlacement = FoliagePlacement & {
+  kind: 'stumps';
 };
 type FoliageWaterInfluence = {
   inWater: boolean;
@@ -1473,6 +1477,7 @@ export class WorldViewer {
     const heightScale = 50;
     const treePlacements: TreePlacement[] = [];
     const shrubPlacements: FoliagePlacement[] = [];
+    const terrainPropPlacements: TerrainPropPlacement[] = [];
     let clearingCount = 0;
     let clearingSample: { x: number; z: number; radius: number } | undefined;
 
@@ -1514,6 +1519,25 @@ export class WorldViewer {
         const chance = this.deterministic01(worldTileX, worldTileZ, 17);
         const clusterDensity = this.getForestClusterDensity(worldTileX, worldTileZ);
         const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
+        const propChance = this.deterministic01(worldTileX, worldTileZ, 181);
+        const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
+        if (propChance <= propDensity) {
+          const propScale = 0.72 + this.deterministic01(worldTileX, worldTileZ, 193) * 0.56;
+          const stumpHeight = 0.30;
+          const stumpRadius = 0.25;
+          terrainPropPlacements.push({
+            x: placementX,
+            y: elevation * heightScale + stumpHeight * propScale * 0.5,
+            z: placementZ,
+            radius: stumpRadius * propScale,
+            height: stumpHeight * propScale,
+            rotation: this.deterministic01(worldTileX, worldTileZ, 197) * Math.PI * 2,
+            color: 0x6a4325,
+            rank: this.deterministic01(worldTileX, worldTileZ, 199),
+            kind: 'stumps',
+          });
+        }
+
         const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
         const bankTreeScale = 1 - waterInfluence.bank * 0.82;
         const clearingTreeScale = 1 - clearingInfluence.strength;
@@ -1554,16 +1578,18 @@ export class WorldViewer {
       }
     }
 
-    if (treePlacements.length === 0 && shrubPlacements.length === 0) return undefined;
+    if (treePlacements.length === 0 && shrubPlacements.length === 0 && terrainPropPlacements.length === 0) return undefined;
 
     this.capPlacements(treePlacements, MAX_FOLIAGE_INSTANCES_PER_CHUNK);
     this.capPlacements(shrubPlacements, MAX_SHRUB_INSTANCES_PER_CHUNK);
+    this.capPlacements(terrainPropPlacements, MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK);
 
     const group = new THREE.Group();
     group.name = `foliage-${chunkX},${chunkY}`;
     group.userData.treeCount = treePlacements.length;
     group.userData.shrubCount = shrubPlacements.length;
-    group.userData.foliageCount = treePlacements.length + shrubPlacements.length;
+    group.userData.terrainPropCount = terrainPropPlacements.length;
+    group.userData.foliageCount = treePlacements.length + shrubPlacements.length + terrainPropPlacements.length;
     group.userData.clearingCount = clearingCount;
     if (clearingSample) group.userData.clearingSample = clearingSample;
 
@@ -1598,6 +1624,15 @@ export class WorldViewer {
       shrubMesh.castShadow = false;
       shrubMesh.receiveShadow = true;
       group.add(shrubMesh);
+    }
+
+    if (terrainPropPlacements.length > 0) {
+      const propMesh = this.createFoliageInstancedMesh(this.createStumpPrototypeGeometry(), terrainPropPlacements);
+      propMesh.name = 'foliage-props-stumps';
+      propMesh.castShadow = true;
+      propMesh.receiveShadow = true;
+      group.add(propMesh);
+      group.userData.terrainPropKindCount = 1;
     }
 
     return group;
@@ -1694,6 +1729,22 @@ export class WorldViewer {
     this.addConeLayer(vertices, colors, indices, 0.54, -0.30, 0.18, 7, new THREE.Color(0.20, 0.43, 0.16));
     this.addConeLayer(vertices, colors, indices, 0.42, -0.12, 0.34, 7, new THREE.Color(0.26, 0.52, 0.20));
     this.addConeLayer(vertices, colors, indices, 0.24, 0.08, 0.46, 7, new THREE.Color(0.34, 0.58, 0.24));
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private createStumpPrototypeGeometry(): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    this.addPrism(vertices, colors, indices, 0.34, -0.50, 0.36, 7, new THREE.Color(0.40, 0.24, 0.12));
+    this.addConeLayer(vertices, colors, indices, 0.28, 0.28, 0.42, 7, new THREE.Color(0.55, 0.34, 0.17));
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
