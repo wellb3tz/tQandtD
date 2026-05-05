@@ -7,6 +7,47 @@ import * as THREE from 'three';
 import { BiomeType, createSparseBiomeWeights } from '../../../src';
 import { WorldViewer } from './WorldViewer';
 
+function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {
+  const data = texture.image.data as Uint8Array;
+  const offset = y * texture.image.width * 4;
+  return (data[offset] << 16) | (data[offset + 1] << 8) | data[offset + 2];
+}
+
+function getTexturePixelHexAt(texture: THREE.DataTexture, x: number, y: number): number {
+  const data = texture.image.data as Uint8Array;
+  const offset = (y * texture.image.width + x) * 4;
+  return (data[offset] << 16) | (data[offset + 1] << 8) | data[offset + 2];
+}
+
+function getTexturePixelRgbAt(texture: THREE.DataTexture, x: number, y: number): [number, number, number] {
+  const data = texture.image.data as Uint8Array;
+  const offset = (y * texture.image.width + x) * 4;
+  return [data[offset], data[offset + 1], data[offset + 2]];
+}
+
+function getMaxAdjacentRowLumaDelta(texture: THREE.DataTexture): number {
+  const data = texture.image.data as Uint8Array;
+  const width = texture.image.width;
+  const height = texture.image.height;
+  let previousAverage = 0;
+  let maxDelta = 0;
+
+  for (let y = 0; y < height; y++) {
+    let rowTotal = 0;
+    for (let x = 0; x < width; x++) {
+      const offset = (y * width + x) * 4;
+      rowTotal += (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+    }
+    const rowAverage = rowTotal / width;
+    if (y > 0) {
+      maxDelta = Math.max(maxDelta, Math.abs(rowAverage - previousAverage));
+    }
+    previousAverage = rowAverage;
+  }
+
+  return maxDelta;
+}
+
 vi.mock('three', async () => {
   const actual = await vi.importActual<typeof import('three')>('three');
 
@@ -129,6 +170,102 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('uses a softened cinematic lighting profile for readable forest shadows', () => {
+    const viewer = new WorldViewer();
+    const renderer = (viewer as any).renderer as THREE.WebGLRenderer;
+    const ambientLight = (viewer as any).ambientLight as THREE.AmbientLight;
+    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
+
+    expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
+    expect(renderer.toneMappingExposure).toBeGreaterThanOrEqual(0.80);
+    expect(renderer.toneMappingExposure).toBeLessThanOrEqual(0.82);
+    expect(ambientLight.intensity).toBeGreaterThanOrEqual(0.36);
+    expect(ambientLight.intensity).toBeLessThanOrEqual(0.37);
+    expect(ambientLight.color.getHex()).toBe(0x9fb6c8);
+    expect(directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
+    expect(directionalLight.intensity).toBeLessThanOrEqual(1.16);
+    expect(directionalLight.color.getHex()).toBe(0xffe2b8);
+    expect(directionalLight.position.x).toBeGreaterThan(0);
+    expect(directionalLight.position.y).toBeGreaterThanOrEqual(132);
+    expect(directionalLight.position.z).toBeGreaterThan(0);
+
+    viewer.dispose();
+  });
+
+  it('places a visible sun marker on the same vector used by directional shadows', () => {
+    const viewer = new WorldViewer();
+    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
+    const sunSprite = (viewer as any).sunSprite as THREE.Sprite;
+    const sunDirection = sunSprite.position.clone().sub(directionalLight.target.position).normalize();
+    const lightDirection = directionalLight.position.clone().sub(directionalLight.target.position).normalize();
+
+    expect(sunSprite).toBeInstanceOf(THREE.Sprite);
+    expect(sunSprite.castShadow).toBe(false);
+    expect(sunSprite.receiveShadow).toBe(false);
+    expect((sunSprite.material as THREE.SpriteMaterial).depthWrite).toBe(false);
+    expect((sunSprite.material as THREE.SpriteMaterial).opacity).toBeLessThanOrEqual(0.82);
+    expect(sunSprite.scale.x).toBeGreaterThanOrEqual(72);
+    expect(sunSprite.scale.x).toBeLessThanOrEqual(96);
+    expect(sunDirection.distanceTo(lightDirection)).toBeLessThan(0.0001);
+
+    viewer.dispose();
+  });
+
+  it('keeps the directional shadow frustum centered near the active camera away from spawn', () => {
+    const viewer = new WorldViewer();
+    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
+
+    viewer.setCameraPosition({ x: 680, y: 120, z: -540 });
+    (viewer as any).updateSunAndShadowFocus();
+
+    expect(directionalLight.target.position.x).toBeCloseTo(680);
+    expect(directionalLight.target.position.z).toBeCloseTo(-540);
+    expect(directionalLight.position.x - directionalLight.target.position.x).toBeCloseTo(90);
+    expect(directionalLight.position.y - directionalLight.target.position.y).toBeCloseTo(138);
+    expect(directionalLight.position.z - directionalLight.target.position.z).toBeCloseTo(56);
+
+    viewer.dispose();
+  });
+
+  it('starts with the old blue sky and switches to a UI-matched atmospheric background when enabled', () => {
+    const viewer = new WorldViewer();
+
+    const defaultBackground = (viewer as any).scene.background as THREE.Color;
+    const defaultFog = (viewer as any).scene.fog as THREE.FogExp2;
+    const bgOceanMesh = (viewer as any).bgOceanMesh as THREE.Mesh;
+    const bgOceanMaterial = bgOceanMesh.material as THREE.MeshPhongMaterial;
+
+    expect(defaultBackground).toBeInstanceOf(THREE.Color);
+    expect(defaultBackground.getHex()).toBe(0x87ceeb);
+    expect(defaultFog).toBeInstanceOf(THREE.FogExp2);
+    expect(defaultFog.color.getHex()).toBe(0x87ceeb);
+    expect(defaultFog.density).toBeCloseTo(0.0012);
+    expect(bgOceanMesh.visible).toBe(false);
+    expect(bgOceanMaterial.color.getHex()).toBe(0x87ceeb);
+
+    viewer.setBackgroundMode(true);
+
+    const skyBackground = (viewer as any).scene.background as THREE.DataTexture;
+    expect(skyBackground).toBeInstanceOf(THREE.DataTexture);
+    expect(skyBackground.userData.backgroundMode).toBe('sky');
+    expect(skyBackground.image.width).toBeGreaterThan(1);
+    expect(skyBackground.image.height).toBeGreaterThan(32);
+    const centerOceanTone = getTexturePixelRgbAt(skyBackground, 48, 32);
+    expect(centerOceanTone[0]).toBeGreaterThanOrEqual(20);
+    expect(centerOceanTone[0]).toBeLessThanOrEqual(40);
+    expect(centerOceanTone[1]).toBeGreaterThanOrEqual(42);
+    expect(centerOceanTone[1]).toBeLessThanOrEqual(62);
+    expect(centerOceanTone[2]).toBeGreaterThanOrEqual(42);
+    expect(centerOceanTone[2]).toBeLessThanOrEqual(62);
+    expect(getTexturePixelHexAt(skyBackground, 23, 17)).not.toBe(getTexturePixelHexAt(skyBackground, 44, 17));
+    expect(getTexturePixelHexAt(skyBackground, 12, 9)).not.toBe(getTexturePixelHexAt(skyBackground, 12, 39));
+    expect(getMaxAdjacentRowLumaDelta(skyBackground)).toBeLessThan(1.0);
+    expect(((viewer as any).scene.fog as THREE.FogExp2).color.getHex()).toBe(0x1d3433);
+    expect(((viewer as any).scene.fog as THREE.FogExp2).density).toBeCloseTo(0.00105);
+
+    viewer.dispose();
+  });
+
   it('adds terrain UVs and surface blend attributes so textures can blend inside a chunk', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
@@ -246,6 +383,66 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('keeps a wider shoreline mask above sea level for visible sandy coast transitions', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 1,
+      heightmap: new Float32Array([0.30, 0.36, 0.43, 0.46]),
+      biomeMap: new Uint8Array([BiomeType.BEACH]),
+      resources: [],
+      structures: [],
+    } as any);
+
+    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
+
+    expect(detailBlend.getZ(2)).toBeGreaterThan(0.15);
+    expect(detailBlend.getZ(3)).toBeGreaterThan(0.05);
+
+    viewer.dispose();
+  });
+
+  it('adds stronger cliff and snow detail masks to mountain terrain without extra geometry', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 1,
+      heightmap: new Float32Array([0.36, 0.92, 0.38, 0.84]),
+      biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
+      resources: [],
+      structures: [],
+    } as any);
+
+    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
+
+    expect(detailBlend.getX(0)).toBeGreaterThan(0.22);
+    expect(detailBlend.getY(3)).toBeGreaterThan(0.40);
+
+    viewer.dispose();
+  });
+
   it('adds lightweight instanced foliage on forest biomes', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
@@ -275,6 +472,8 @@ describe('WorldViewer lifecycle', () => {
     expect(canopy).toBeInstanceOf(THREE.InstancedMesh);
     expect(canopy.count).toBeGreaterThan(0);
     expect(canopy.count).toBeLessThanOrEqual(16);
+    expect(canopy.castShadow).toBe(true);
+    expect(canopy.receiveShadow).toBe(true);
     expect(foliage.visible).toBe(true);
 
     viewer.dispose();

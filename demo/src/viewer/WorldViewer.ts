@@ -47,6 +47,26 @@ const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
 const FOLIAGE_BANK_WIDTH = 2.4;
 const SHRUB_PROTOTYPE_MIN_Y = -0.30;
 const CLEARING_CELL_SIZE = 25;
+const ATMOSPHERIC_BACKGROUND_STOPS = {
+  sky: {
+    top: 0x1d3433,
+    bottom: 0x1d3433,
+    fog: 0x1d3433,
+    fogDensity: 0.00105,
+  },
+  ocean: {
+    top: 0x050810,
+    bottom: 0x101b1a,
+    fog: 0x101b1a,
+    fogDensity: 0.0016,
+  },
+} as const;
+const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
+const ATMOSPHERIC_OCEAN_PLANE_SPECULAR = 0x2e4a48;
+const LEGACY_SKY_BACKGROUND_COLOR = 0x87ceeb;
+const SUN_LIGHT_OFFSET = { x: 90, y: 138, z: 56 } as const;
+const SUN_VISUAL_DISTANCE = 620;
+const SUN_VISUAL_SIZE = 88;
 
 type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
 type FoliageProfile = {
@@ -159,6 +179,8 @@ export class WorldViewer {
   // Lighting
   private ambientLight: THREE.AmbientLight;
   private directionalLight: THREE.DirectionalLight;
+  private sunSprite: THREE.Sprite | null = null;
+  private sunTexture: THREE.Texture | null = null;
   
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
@@ -209,8 +231,9 @@ export class WorldViewer {
   private waterLayerManager: WaterLayerManager;
   private waterConfig: WaterConfig;
 
-  // Background ocean plane (hidden when sky background mode is active)
+  // Background ocean plane (kept hidden while the atmospheric UI-matched backdrop is active)
   private bgOceanMesh: THREE.Mesh | null = null;
+  private backgroundTexture: THREE.Texture | null = null;
 
   // Micro-biome tracking
   private microBiomeCount: number;
@@ -357,15 +380,6 @@ export class WorldViewer {
    * Set up the Three.js scene
    */
   private setupScene(): void {
-    // Background starts in sky mode (matches default skyBackground: true in AppState).
-    // setBackgroundMode(false) switches to dark ocean mode.
-    this.scene.background = new THREE.Color(0x87ceeb);
-    // No fog by default — enabled only in dark ocean mode via setBackgroundMode()
-
-    // Atmospheric exponential fog — adds depth and distance haze
-    // (disabled — produces blue haze rather than realistic fog)
-    // this.scene.fog = new THREE.FogExp2(0x9ab8d4, 0.0035);
-
     // Position camera for free camera mode
     this.camera.position.set(50, 100, 50);
     this.cameraRotation.yaw = 0;
@@ -376,7 +390,7 @@ export class WorldViewer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.85; // Slightly underexposed = richer, less washed out
+    this.renderer.toneMappingExposure = 0.81; // Softened grade keeps forest shadows readable without returning to the washed-out look.
 
     // Large background ocean plane — covers the infinite horizon beyond loaded chunks.
     // Positioned at sea level (seaLevel * heightScale = 0.3 * 50 = 15).
@@ -384,10 +398,10 @@ export class WorldViewer {
     const bgOceanGeo = new THREE.PlaneGeometry(20000, 20000);
     bgOceanGeo.rotateX(-Math.PI / 2);
     const bgOceanMat = new THREE.MeshPhongMaterial({
-      color: 0x0a1a3a,
+      color: ATMOSPHERIC_OCEAN_PLANE_COLOR,
       transparent: false,   // opaque — no blending conflicts with chunk water meshes
       shininess: 40,
-      specular: new THREE.Color(0x112233),
+      specular: new THREE.Color(ATMOSPHERIC_OCEAN_PLANE_SPECULAR),
     });
     const bgOceanMesh = new THREE.Mesh(bgOceanGeo, bgOceanMat);
     // Place well below the lowest possible ocean floor (near Y=0) so the
@@ -395,17 +409,18 @@ export class WorldViewer {
     bgOceanMesh.position.set(0, -200, 0);
     bgOceanMesh.renderOrder = 0;
     bgOceanMesh.renderOrder = 0;
-    bgOceanMesh.visible = false; // hidden by default (sky mode is default)
+    bgOceanMesh.visible = false; // hidden by default (legacy blue sky is default)
     this.scene.add(bgOceanMesh);
     this.bgOceanMesh = bgOceanMesh;
+    this.setBackgroundMode(false);
 
     // Soft ambient — cool overcast sky, low intensity so shadows read clearly
-    this.ambientLight = new THREE.AmbientLight(0xc8ddf0, 0.45);
+    this.ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
     this.scene.add(this.ambientLight);
 
-    // Main sun — warm but not harsh, lower angle for longer shadows
-    this.directionalLight = new THREE.DirectionalLight(0xfff0d0, 1.0);
-    this.directionalLight.position.set(80, 120, 60);
+    // Main sun — warm but softened, raised enough to keep tree shadows compact.
+    this.directionalLight = new THREE.DirectionalLight(0xffe2b8, 1.12);
+    this.directionalLight.position.set(SUN_LIGHT_OFFSET.x, SUN_LIGHT_OFFSET.y, SUN_LIGHT_OFFSET.z);
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.camera.left   = -200;
     this.directionalLight.shadow.camera.right  =  200;
@@ -415,6 +430,9 @@ export class WorldViewer {
     this.directionalLight.shadow.mapSize.height = 2048;
     this.directionalLight.shadow.bias = -0.0005;
     this.scene.add(this.directionalLight);
+    this.scene.add(this.directionalLight.target);
+    this.addSunVisual();
+    this.updateSunAndShadowFocus();
 
     // Subtle fill light — very dim, just lifts the darkest shadows slightly
     const fillLight = new THREE.DirectionalLight(0xb0c8e8, 0.15);
@@ -532,10 +550,85 @@ export class WorldViewer {
       
       // Render scene
       const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
+      this.updateSunAndShadowFocus();
       this.renderer.render(this.scene, activeCamera);
     };
     
     animate();
+  }
+
+  private addSunVisual(): void {
+    this.sunTexture = this.createSunSpriteTexture();
+    const material = new THREE.SpriteMaterial({
+      map: this.sunTexture,
+      color: 0xffe8b0,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const sunSprite = new THREE.Sprite(material);
+    sunSprite.name = 'directional-light-sun';
+    sunSprite.castShadow = false;
+    sunSprite.receiveShadow = false;
+    sunSprite.renderOrder = 5;
+    sunSprite.scale.set(SUN_VISUAL_SIZE, SUN_VISUAL_SIZE, 1);
+    this.sunSprite = sunSprite;
+    this.syncSunVisualToDirectionalLight();
+    this.scene.add(sunSprite);
+  }
+
+  private syncSunVisualToDirectionalLight(): void {
+    if (!this.sunSprite) {
+      return;
+    }
+    const direction = this.directionalLight.position.clone().sub(this.directionalLight.target.position).normalize();
+    this.sunSprite.position.copy(this.directionalLight.target.position).add(direction.multiplyScalar(SUN_VISUAL_DISTANCE));
+  }
+
+  private updateSunAndShadowFocus(): void {
+    const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
+    this.directionalLight.target.position.set(activeCamera.position.x, 0, activeCamera.position.z);
+    this.directionalLight.position.set(
+      activeCamera.position.x + SUN_LIGHT_OFFSET.x,
+      SUN_LIGHT_OFFSET.y,
+      activeCamera.position.z + SUN_LIGHT_OFFSET.z
+    );
+    this.directionalLight.target.updateMatrixWorld();
+    this.directionalLight.updateMatrixWorld();
+    this.syncSunVisualToDirectionalLight();
+  }
+
+  private createSunSpriteTexture(): THREE.DataTexture {
+    const size = 32;
+    const data = new Uint8Array(size * size * 4);
+    const center = (size - 1) / 2;
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = (x - center) / center;
+        const dy = (y - center) / center;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const core = Math.max(0, 1 - distance * 1.25);
+        const halo = Math.max(0, 1 - distance);
+        const alpha = Math.min(1, core * 0.78 + Math.pow(halo, 2.2) * 0.32);
+        const offset = (y * size + x) * 4;
+        data[offset] = 255;
+        data[offset + 1] = Math.round(222 + core * 28);
+        data[offset + 2] = Math.round(150 + core * 55);
+        data[offset + 3] = Math.round(alpha * 255);
+      }
+    }
+
+    const texture = new THREE.DataTexture(data, size, size);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    return texture;
   }
   
   /**
@@ -1183,11 +1276,15 @@ export class WorldViewer {
       const isBeach    = vertexBiome === 1;  // BiomeType.BEACH    = 1
       const isOcean    = vertexBiome === 0;  // BiomeType.OCEAN    = 0
       const seaLevel = this.waterConfig.seaLevel;
-      const wetBand = rawHeight >= seaLevel - 0.04 && rawHeight <= seaLevel + 0.12
-        ? 1.0 - Math.min(1, Math.abs(rawHeight - seaLevel) / 0.12)
+      const belowWaterBand = 0.05;
+      const aboveWaterBand = 0.20;
+      const wetBand = rawHeight >= seaLevel - belowWaterBand && rawHeight <= seaLevel + aboveWaterBand
+        ? rawHeight <= seaLevel
+          ? 1.0 - Math.min(1, (seaLevel - rawHeight) / belowWaterBand)
+          : 1.0 - Math.min(1, (rawHeight - seaLevel) / aboveWaterBand)
         : 0;
       const snowDetail = (isMountain || isGlacier)
-        ? Math.min(1, Math.max(0, (rawHeight - 0.76) / 0.12) * (1.0 - steepness * 0.55))
+        ? Math.min(1, Math.max(0, (rawHeight - 0.73) / 0.14) * (1.0 - steepness * 0.35))
         : 0;
       const riverbedDetail = Math.min(1, Math.max(0, (1 - this.getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH));
 
@@ -1629,7 +1726,7 @@ export class WorldViewer {
     if (terrainPropPlacements.length > 0) {
       const propMesh = this.createFoliageInstancedMesh(this.createStumpPrototypeGeometry(), terrainPropPlacements);
       propMesh.name = 'foliage-props-stumps';
-      propMesh.castShadow = true;
+      propMesh.castShadow = false;
       propMesh.receiveShadow = true;
       group.add(propMesh);
       group.userData.terrainPropKindCount = 1;
@@ -2099,17 +2196,107 @@ export class WorldViewer {
   }
 
   /**
-   * Switch between sky (light blue) and ocean (dark navy) background modes.
-   * @param skyMode - true = bright sky #87ceeb, false = deep ocean #0a1a3a
+   * Switch between the UI-matched atmospheric backdrop and the legacy blue sky.
+   * @param skyMode - true = UI-matched haze, false = legacy blue sky
    */
   setBackgroundMode(skyMode: boolean): void {
-    const bgColor = skyMode ? 0x87ceeb : 0x0a1a3a;
-    this.scene.background = new THREE.Color(bgColor);
-    // Fog colour always matches background for seamless horizon
-    this.scene.fog = new THREE.FogExp2(bgColor, skyMode ? 0.0012 : 0.0018);
-    if (this.bgOceanMesh) {
-      this.bgOceanMesh.visible = !skyMode;
+    if (skyMode) {
+      const background = ATMOSPHERIC_BACKGROUND_STOPS.sky;
+      this.setAtmosphericBackground('sky');
+      this.scene.fog = new THREE.FogExp2(background.fog, background.fogDensity);
+    } else {
+      this.setLegacyBlueBackground();
     }
+
+    if (this.bgOceanMesh) {
+      this.bgOceanMesh.visible = false;
+      const material = this.bgOceanMesh.material as THREE.MeshPhongMaterial;
+      material.color.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_COLOR : LEGACY_SKY_BACKGROUND_COLOR);
+      material.specular.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_SPECULAR : LEGACY_SKY_BACKGROUND_COLOR);
+      material.shininess = skyMode ? 18 : 22;
+    }
+  }
+
+  private setLegacyBlueBackground(): void {
+    if (this.backgroundTexture) {
+      this.backgroundTexture.dispose();
+      this.backgroundTexture = null;
+    }
+    this.scene.background = new THREE.Color(LEGACY_SKY_BACKGROUND_COLOR);
+    this.scene.fog = new THREE.FogExp2(LEGACY_SKY_BACKGROUND_COLOR, 0.0012);
+  }
+
+  private setAtmosphericBackground(mode: keyof typeof ATMOSPHERIC_BACKGROUND_STOPS): void {
+    if (this.backgroundTexture) {
+      this.backgroundTexture.dispose();
+    }
+    this.backgroundTexture = this.createAtmosphericBackgroundTexture(mode);
+    this.scene.background = this.backgroundTexture;
+  }
+
+  private createAtmosphericBackgroundTexture(mode: keyof typeof ATMOSPHERIC_BACKGROUND_STOPS): THREE.DataTexture {
+    const stops = ATMOSPHERIC_BACKGROUND_STOPS[mode];
+    const top = {
+      r: (stops.top >> 16) & 0xff,
+      g: (stops.top >> 8) & 0xff,
+      b: stops.top & 0xff,
+    };
+    const bottom = {
+      r: (stops.bottom >> 16) & 0xff,
+      g: (stops.bottom >> 8) & 0xff,
+      b: stops.bottom & 0xff,
+    };
+    const width = 96;
+    const height = 64;
+    const data = new Uint8Array(width * height * 4);
+
+    for (let y = 0; y < height; y++) {
+      const t = y / (height - 1);
+      for (let x = 0; x < width; x++) {
+        const u = x / (width - 1);
+        const n1 = this.smoothValueNoise(u * 3.2, t * 2.1, 31);
+        const n2 = this.smoothValueNoise(u * 8.0 + 2.7, t * 5.5 + 1.8, 73);
+        const n3 = this.smoothValueNoise(u * 18.0 + 9.1, t * 10.0 + 3.4, 137);
+        const cloud = (n1 - 0.5) * 14 + (n2 - 0.5) * 7 + (n3 - 0.5) * 3;
+        const band = Math.sin((t * 4.2 + u * 0.7) * Math.PI) * 1.4;
+        const vignette = -Math.max(0, Math.abs(u - 0.5) - 0.28) * 18 - Math.max(0, t - 0.82) * 9;
+        const offset = (y * width + x) * 4;
+        data[offset] = Math.max(0, Math.min(255, Math.round(bottom.r + (top.r - bottom.r) * t + cloud + band + vignette)));
+        data[offset + 1] = Math.max(0, Math.min(255, Math.round(bottom.g + (top.g - bottom.g) * t + cloud * 0.92 + band + vignette)));
+        data[offset + 2] = Math.max(0, Math.min(255, Math.round(bottom.b + (top.b - bottom.b) * t + cloud * 0.86 + band * 0.85 + vignette)));
+        data[offset + 3] = 255;
+      }
+    }
+
+    const texture = new THREE.DataTexture(data, width, height);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    texture.userData.backgroundMode = mode;
+    return texture;
+  }
+
+  private smoothValueNoise(x: number, y: number, seed: number): number {
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const xf = x - x0;
+    const yf = y - y0;
+    const sx = xf * xf * (3 - 2 * xf);
+    const sy = yf * yf * (3 - 2 * yf);
+    const a = this.hashUnit(x0, y0, seed);
+    const b = this.hashUnit(x0 + 1, y0, seed);
+    const c = this.hashUnit(x0, y0 + 1, seed);
+    const d = this.hashUnit(x0 + 1, y0 + 1, seed);
+    const topMix = a + (b - a) * sx;
+    const bottomMix = c + (d - c) * sx;
+    return topMix + (bottomMix - topMix) * sy;
+  }
+
+  private hashUnit(x: number, y: number, seed: number): number {
+    const value = Math.sin(x * 127.1 + y * 311.7 + seed * 19.19) * 43758.5453;
+    return value - Math.floor(value);
   }
 
   /**
@@ -3193,6 +3380,21 @@ export class WorldViewer {
     
     // Dispose water layer manager
     this.waterLayerManager.dispose();
+
+    if (this.backgroundTexture) {
+      this.backgroundTexture.dispose();
+      this.backgroundTexture = null;
+    }
+
+    if (this.sunSprite) {
+      this.scene.remove(this.sunSprite);
+      (this.sunSprite.material as THREE.SpriteMaterial).dispose();
+      this.sunSprite = null;
+    }
+    if (this.sunTexture) {
+      this.sunTexture.dispose();
+      this.sunTexture = null;
+    }
     
     // Dispose renderer
     this.renderer.dispose();

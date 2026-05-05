@@ -79,4 +79,17 @@ describe('LakeMeshGenerator contour mesh', () => {
 
     expect(position.count).toBeGreaterThan(4);
   });
+
+  it('darkens deeper lake vertices while keeping the gradient in vertex colors', () => {
+    const chunk = createChunk(1);
+    lowerTileCorners(chunk, 0, 0);
+
+    const lake = createLake([0]);
+    const geometry = buildGeometry(lake, chunk);
+    const colors = geometry.getAttribute('color');
+
+    expect(colors.getX(0)).toBeLessThanOrEqual(0.08);
+    expect(colors.getY(0)).toBeLessThanOrEqual(0.30);
+    expect(colors.getZ(0)).toBeLessThanOrEqual(0.38);
+  });
 });

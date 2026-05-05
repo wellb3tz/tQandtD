@@ -55,7 +55,7 @@ export interface AppState {
   showWireframe: boolean;
   terrainTexturesEnabled: boolean;
   fogOfWarEnabled: boolean; // Show explored chunks as gray planes
-  skyBackground: boolean;   // true = sky blue, false = deep ocean
+  skyBackground: boolean;   // true = UI-matched haze, false = legacy blue sky
   
   // Chunk tracking
   exploredChunks: Set<string>; // Chunks that have been visited
@@ -232,7 +232,7 @@ export class DemoApp {
       showWireframe: false,
       terrainTexturesEnabled: true,
       fogOfWarEnabled: false,
-      skyBackground: true,
+      skyBackground: false,
       
       exploredChunks: new Set(),
       

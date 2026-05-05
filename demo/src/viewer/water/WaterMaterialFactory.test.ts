@@ -45,4 +45,22 @@ describe('WaterMaterialFactory', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);
   });
+
+  it('uses a darker glossier water profile while preserving cheap vertex-color depth gradients', () => {
+    const material = createOceanMaterial({
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      enableWaves: false,
+      waveHeight: 0,
+      waveSpeed: 0,
+    });
+
+    expect(material.vertexColors).toBe(true);
+    expect(material.color.getHex()).toBe(0xffffff);
+    expect(material.opacity).toBeLessThanOrEqual(0.68);
+    expect(material.shininess).toBeGreaterThanOrEqual(95);
+    expect(material.specular.getHex()).toBe(0xa8e6ff);
+  });
 });

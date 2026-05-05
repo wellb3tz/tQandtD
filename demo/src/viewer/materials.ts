@@ -510,17 +510,17 @@ diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * freshGrassPatchTint,
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * dryGrassPatchTint, dryGrassPatch * 0.18);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wornGroundTint, wornGroundPatch * 0.12);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetLowlandTint, wetLowlandPatch * 0.24);
-vec3 cliffTint = vec3(0.76, 0.74, 0.70);
-vec3 snowPeakTint = vec3(1.10, 1.13, 1.16);
-vec3 wetShorelineTint = vec3(0.48, 0.60, 0.64);
+vec3 cliffTint = vec3(0.64, 0.63, 0.60);
+vec3 snowPeakTint = vec3(1.18, 1.19, 1.20);
+vec3 wetShorelineTint = vec3(0.42, 0.54, 0.56);
 vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
 float cliffAccent = smoothstep(0.08, 1.0, vTerrainDetailBlend.x);
 float snowAccent = smoothstep(0.04, 1.0, vTerrainDetailBlend.y);
 float shorelineAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.z);
 float riverbedAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.w);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.42);
-diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.48);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.55);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.56);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.62);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.68);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.50);`,
       )
       .replace(

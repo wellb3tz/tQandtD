@@ -75,9 +75,9 @@ function lakeDepthColor(depth: number, maxDepth: number): [number, number, numbe
   const t = maxDepth > 0 ? Math.min(depth / maxDepth, 1.0) : 0;
   const s = t * t;
 
-  const r = 0.31 - s * 0.21;
-  const g = 0.76 - s * 0.40;
-  const b = 0.83 - s * 0.40;
+  const r = 0.31 - s * 0.24;
+  const g = 0.76 - s * 0.48;
+  const b = 0.83 - s * 0.48;
 
   return [r, g, b];
 }

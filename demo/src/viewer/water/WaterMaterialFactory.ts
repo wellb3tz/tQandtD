@@ -43,7 +43,7 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     shininess: config.shininess,
     side: THREE.DoubleSide,
     // Slight specular highlight — gives water a wet look
-    specular: new THREE.Color(0x88ccff),
+    specular: new THREE.Color(0xa8e6ff),
   });
 
   if (config.normalMap) {
