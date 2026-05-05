@@ -12,7 +12,18 @@ export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
 
-export type TerrainSurfaceKey = 'plains' | 'desert' | 'beach' | 'mountainRock' | 'snow';
+export type TerrainSurfaceKey =
+  | 'plains'
+  | 'desert'
+  | 'beach'
+  | 'mountainRock'
+  | 'snow'
+  | 'forestFloor'
+  | 'dryGrass'
+  | 'swampMud'
+  | 'volcanicRock'
+  | 'ice'
+  | 'riverbed';
 
 export interface TerrainTextureSet {
   albedo: THREE.Texture;
@@ -47,6 +58,36 @@ export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainText
     albedo: '/textures/terrain-snow-albedo-v1.png',
     normal: '/textures/terrain-snow-normal-v1.png',
     roughness: '/textures/terrain-snow-roughness-v1.png',
+  },
+  forestFloor: {
+    albedo: '/textures/terrain-forest-floor-albedo-v1.png',
+    normal: '/textures/terrain-forest-floor-normal-v1.png',
+    roughness: '/textures/terrain-forest-floor-roughness-v1.png',
+  },
+  dryGrass: {
+    albedo: '/textures/terrain-dry-grass-albedo-v1.png',
+    normal: '/textures/terrain-dry-grass-normal-v1.png',
+    roughness: '/textures/terrain-dry-grass-roughness-v1.png',
+  },
+  swampMud: {
+    albedo: '/textures/terrain-swamp-mud-albedo-v1.png',
+    normal: '/textures/terrain-swamp-mud-normal-v1.png',
+    roughness: '/textures/terrain-swamp-mud-roughness-v1.png',
+  },
+  volcanicRock: {
+    albedo: '/textures/terrain-volcanic-rock-albedo-v1.png',
+    normal: '/textures/terrain-volcanic-rock-normal-v1.png',
+    roughness: '/textures/terrain-volcanic-rock-roughness-v1.png',
+  },
+  ice: {
+    albedo: '/textures/terrain-ice-albedo-v1.png',
+    normal: '/textures/terrain-ice-normal-v1.png',
+    roughness: '/textures/terrain-ice-roughness-v1.png',
+  },
+  riverbed: {
+    albedo: '/textures/terrain-riverbed-albedo-v1.png',
+    normal: '/textures/terrain-riverbed-normal-v1.png',
+    roughness: '/textures/terrain-riverbed-roughness-v1.png',
   },
 };
 
@@ -187,8 +228,8 @@ function configureTerrainTexture(
   texture: THREE.Texture,
   colorSpace: THREE.ColorSpace,
 ): THREE.Texture {
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
+  texture.wrapS = THREE.MirroredRepeatWrapping;
+  texture.wrapT = THREE.MirroredRepeatWrapping;
   texture.repeat.set(4, 4);
   texture.colorSpace = colorSpace;
   texture.anisotropy = 4;
@@ -222,6 +263,12 @@ export function createTerrainSurfaceTextureLibrary(
     beach: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.beach, loader),
     mountainRock: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.mountainRock, loader),
     snow: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.snow, loader),
+    forestFloor: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.forestFloor, loader),
+    dryGrass: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.dryGrass, loader),
+    swampMud: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.swampMud, loader),
+    volcanicRock: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.volcanicRock, loader),
+    ice: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.ice, loader),
+    riverbed: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.riverbed, loader),
   };
 }
 
@@ -234,20 +281,40 @@ export function selectTerrainSurfaceKey(
     return 'snow';
   }
 
-  if (slope >= 0.6 || biome === BiomeType.MOUNTAIN || biome === BiomeType.VOLCANIC) {
+  if (biome === BiomeType.VOLCANIC) {
+    return 'volcanicRock';
+  }
+
+  if (slope >= 0.6 || biome === BiomeType.MOUNTAIN) {
     return 'mountainRock';
   }
 
-  if (biome === BiomeType.DESERT || biome === BiomeType.SAVANNA) {
+  if (biome === BiomeType.DESERT) {
     return 'desert';
+  }
+
+  if (biome === BiomeType.SAVANNA) {
+    return 'dryGrass';
   }
 
   if (biome === BiomeType.BEACH) {
     return 'beach';
   }
 
-  if (biome === BiomeType.GLACIER || biome === BiomeType.TUNDRA) {
+  if (biome === BiomeType.GLACIER) {
+    return 'ice';
+  }
+
+  if (biome === BiomeType.TUNDRA) {
     return 'snow';
+  }
+
+  if (biome === BiomeType.FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST) {
+    return 'forestFloor';
+  }
+
+  if (biome === BiomeType.SWAMP) {
+    return 'swampMud';
   }
 
   return 'plains';
@@ -292,7 +359,6 @@ export function createTerrainBlendMaterial(
   const material = new THREE.MeshStandardMaterial({
     map: textures.plains.albedo,
     normalMap: textures.plains.normal,
-    roughnessMap: textures.plains.roughness,
     color: new THREE.Color(2.25, 2.25, 2.25),
     normalScale: new THREE.Vector2(0.35, 0.35),
     vertexColors: true,
@@ -309,26 +375,32 @@ export function createTerrainBlendMaterial(
     shader.uniforms.terrainAlbedoBeach = { value: textures.beach.albedo };
     shader.uniforms.terrainAlbedoMountainRock = { value: textures.mountainRock.albedo };
     shader.uniforms.terrainAlbedoSnow = { value: textures.snow.albedo };
-    shader.uniforms.terrainRoughnessPlains = { value: textures.plains.roughness };
-    shader.uniforms.terrainRoughnessDesert = { value: textures.desert.roughness };
-    shader.uniforms.terrainRoughnessBeach = { value: textures.beach.roughness };
-    shader.uniforms.terrainRoughnessMountainRock = { value: textures.mountainRock.roughness };
-    shader.uniforms.terrainRoughnessSnow = { value: textures.snow.roughness };
-
+    shader.uniforms.terrainAlbedoForestFloor = { value: textures.forestFloor.albedo };
+    shader.uniforms.terrainAlbedoDryGrass = { value: textures.dryGrass.albedo };
+    shader.uniforms.terrainAlbedoSwampMud = { value: textures.swampMud.albedo };
+    shader.uniforms.terrainAlbedoVolcanicRock = { value: textures.volcanicRock.albedo };
+    shader.uniforms.terrainAlbedoIce = { value: textures.ice.albedo };
+    shader.uniforms.terrainAlbedoRiverbed = { value: textures.riverbed.albedo };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
         `#include <common>
 attribute vec4 surfaceBlendA;
-attribute float surfaceBlendB;
+attribute vec4 surfaceBlendB;
+attribute vec4 surfaceBlendC;
+attribute vec3 terrainDetailBlend;
 varying vec4 vSurfaceBlendA;
-varying float vSurfaceBlendB;`,
+varying vec4 vSurfaceBlendB;
+varying vec4 vSurfaceBlendC;
+varying vec3 vTerrainDetailBlend;`,
       )
       .replace(
         '#include <uv_vertex>',
         `#include <uv_vertex>
 vSurfaceBlendA = surfaceBlendA;
-vSurfaceBlendB = surfaceBlendB;`,
+vSurfaceBlendB = surfaceBlendB;
+vSurfaceBlendC = surfaceBlendC;
+vTerrainDetailBlend = terrainDetailBlend;`,
       );
 
     shader.fragmentShader = shader.fragmentShader
@@ -340,13 +412,16 @@ uniform sampler2D terrainAlbedoDesert;
 uniform sampler2D terrainAlbedoBeach;
 uniform sampler2D terrainAlbedoMountainRock;
 uniform sampler2D terrainAlbedoSnow;
-uniform sampler2D terrainRoughnessPlains;
-uniform sampler2D terrainRoughnessDesert;
-uniform sampler2D terrainRoughnessBeach;
-uniform sampler2D terrainRoughnessMountainRock;
-uniform sampler2D terrainRoughnessSnow;
+uniform sampler2D terrainAlbedoForestFloor;
+uniform sampler2D terrainAlbedoDryGrass;
+uniform sampler2D terrainAlbedoSwampMud;
+uniform sampler2D terrainAlbedoVolcanicRock;
+uniform sampler2D terrainAlbedoIce;
+uniform sampler2D terrainAlbedoRiverbed;
 varying vec4 vSurfaceBlendA;
-varying float vSurfaceBlendB;`,
+varying vec4 vSurfaceBlendB;
+varying vec4 vSurfaceBlendC;
+varying vec3 vTerrainDetailBlend;`,
       )
       .replace(
         '#include <map_fragment>',
@@ -355,29 +430,53 @@ vec4 terrainDesert = texture2D(terrainAlbedoDesert, vMapUv);
 vec4 terrainBeach = texture2D(terrainAlbedoBeach, vMapUv);
 vec4 terrainMountainRock = texture2D(terrainAlbedoMountainRock, vMapUv);
 vec4 terrainSnow = texture2D(terrainAlbedoSnow, vMapUv);
+vec4 terrainForestFloor = texture2D(terrainAlbedoForestFloor, vMapUv);
+vec4 terrainDryGrass = texture2D(terrainAlbedoDryGrass, vMapUv);
+vec4 terrainSwampMud = texture2D(terrainAlbedoSwampMud, vMapUv);
+vec4 terrainVolcanicRock = texture2D(terrainAlbedoVolcanicRock, vMapUv);
+vec4 terrainIce = texture2D(terrainAlbedoIce, vMapUv);
+vec4 terrainRiverbed = texture2D(terrainAlbedoRiverbed, vMapUv);
 vec4 blendedTerrainMap =
   terrainPlains * vSurfaceBlendA.x +
   terrainDesert * vSurfaceBlendA.y +
   terrainBeach * vSurfaceBlendA.z +
   terrainMountainRock * vSurfaceBlendA.w +
-  terrainSnow * vSurfaceBlendB;
-diffuseColor *= blendedTerrainMap;`,
+  terrainSnow * vSurfaceBlendB.x +
+  terrainForestFloor * vSurfaceBlendB.y +
+  terrainDryGrass * vSurfaceBlendB.z +
+  terrainSwampMud * vSurfaceBlendB.w +
+  terrainVolcanicRock * vSurfaceBlendC.x +
+  terrainIce * vSurfaceBlendC.y +
+  terrainRiverbed * vSurfaceBlendC.z;
+vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.72)) * 1.85 + vec3(0.90), vec3(0.52), vec3(1.35));
+diffuseColor.rgb *= terrainDetailContrast;
+diffuseColor.a *= blendedTerrainMap.a;
+vec3 cliffTint = vec3(0.76, 0.74, 0.70);
+vec3 snowPeakTint = vec3(1.10, 1.13, 1.16);
+vec3 wetShorelineTint = vec3(0.48, 0.60, 0.64);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, vTerrainDetailBlend.x * 0.28);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), vTerrainDetailBlend.y * 0.35);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, vTerrainDetailBlend.z * 0.45);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
         `float roughnessFactor = roughness;
-vec4 terrainRoughnessPlainsTexel = texture2D(terrainRoughnessPlains, vMapUv);
-vec4 terrainRoughnessDesertTexel = texture2D(terrainRoughnessDesert, vMapUv);
-vec4 terrainRoughnessBeachTexel = texture2D(terrainRoughnessBeach, vMapUv);
-vec4 terrainRoughnessMountainRockTexel = texture2D(terrainRoughnessMountainRock, vMapUv);
-vec4 terrainRoughnessSnowTexel = texture2D(terrainRoughnessSnow, vMapUv);
-vec4 blendedTerrainRoughness =
-  terrainRoughnessPlainsTexel * vSurfaceBlendA.x +
-  terrainRoughnessDesertTexel * vSurfaceBlendA.y +
-  terrainRoughnessBeachTexel * vSurfaceBlendA.z +
-  terrainRoughnessMountainRockTexel * vSurfaceBlendA.w +
-  terrainRoughnessSnowTexel * vSurfaceBlendB;
-roughnessFactor *= blendedTerrainRoughness.g;`,
+float surfaceRoughnessBlend =
+  0.84 * vSurfaceBlendA.x +
+  0.88 * vSurfaceBlendA.y +
+  0.72 * vSurfaceBlendA.z +
+  0.92 * vSurfaceBlendA.w +
+  0.78 * vSurfaceBlendB.x +
+  0.90 * vSurfaceBlendB.y +
+  0.86 * vSurfaceBlendB.z +
+  0.62 * vSurfaceBlendB.w +
+  0.95 * vSurfaceBlendC.x +
+  0.34 * vSurfaceBlendC.y +
+  0.50 * vSurfaceBlendC.z;
+roughnessFactor *= max(0.28, surfaceRoughnessBlend);
+roughnessFactor = mix(roughnessFactor, min(1.0, roughnessFactor + 0.12), vTerrainDetailBlend.x * 0.35);
+roughnessFactor = mix(roughnessFactor, 0.72, vTerrainDetailBlend.y * 0.25);
+roughnessFactor = mix(roughnessFactor, 0.38, vTerrainDetailBlend.z * 0.65);`,
       );
   };
 

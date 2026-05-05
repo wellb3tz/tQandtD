@@ -161,6 +161,8 @@ describe('WorldViewer lifecycle', () => {
     const uvs = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
     const surfaceBlendA = geometry.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
     const surfaceBlendB = geometry.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
+    const surfaceBlendC = geometry.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined;
+    const terrainDetailBlend = geometry.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined;
 
     expect(uvs).toBeDefined();
     expect(uvs?.count).toBe(positions.count);
@@ -170,18 +172,100 @@ describe('WorldViewer lifecycle', () => {
     expect(uvs?.getY(positions.count - 1)).toBe(1);
     expect(surfaceBlendA).toBeDefined();
     expect(surfaceBlendB).toBeDefined();
+    expect(surfaceBlendC).toBeDefined();
     expect(surfaceBlendA?.itemSize).toBe(4);
-    expect(surfaceBlendB?.itemSize).toBe(1);
+    expect(surfaceBlendB?.itemSize).toBe(4);
+    expect(surfaceBlendC?.itemSize).toBe(4);
+    expect(terrainDetailBlend).toBeDefined();
+    expect(terrainDetailBlend?.itemSize).toBe(3);
     expect(surfaceBlendA?.count).toBe(positions.count);
     expect(surfaceBlendB?.count).toBe(positions.count);
+    expect(surfaceBlendC?.count).toBe(positions.count);
+    expect(terrainDetailBlend?.count).toBe(positions.count);
 
     const firstWeightSum =
       surfaceBlendA!.getX(0) +
       surfaceBlendA!.getY(0) +
       surfaceBlendA!.getZ(0) +
       surfaceBlendA!.getW(0) +
-      surfaceBlendB!.getX(0);
+      surfaceBlendB!.getX(0) +
+      surfaceBlendB!.getY(0) +
+      surfaceBlendB!.getZ(0) +
+      surfaceBlendB!.getW(0) +
+      surfaceBlendC!.getX(0) +
+      surfaceBlendC!.getY(0) +
+      surfaceBlendC!.getZ(0);
     expect(firstWeightSum).toBeCloseTo(1);
+
+    viewer.dispose();
+  });
+
+  it('marks wet shoreline and snowy peak detail masks on terrain vertices', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 1,
+      heightmap: new Float32Array([0.31, 0.31, 0.84, 0.84]),
+      biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
+      resources: [],
+      structures: [],
+    } as any);
+
+    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
+
+    expect(detailBlend.getZ(0)).toBeGreaterThan(0);
+    expect(detailBlend.getY(2)).toBeGreaterThan(0);
+    expect(detailBlend.getX(0)).toBeGreaterThanOrEqual(0);
+    expect(detailBlend.getX(0)).toBeLessThanOrEqual(1);
+    expect(detailBlend.getY(2)).toBeLessThanOrEqual(1);
+    expect(detailBlend.getZ(0)).toBeLessThanOrEqual(1);
+
+    viewer.dispose();
+  });
+
+  it('keeps terrain UVs continuous across adjacent chunks', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    const chunk = {
+      size: 1,
+      heightmap: new Float32Array(4),
+      biomeMap: new Uint8Array([BiomeType.PLAINS]),
+      resources: [],
+      structures: [],
+    } as any;
+
+    viewer.addChunk(0, 0, chunk);
+    viewer.addChunk(1, 0, chunk);
+
+    const leftTerrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const rightTerrain = (viewer as any).chunkMeshes.get('1,0').terrain as THREE.Mesh;
+    const leftUvs = (leftTerrain.geometry as THREE.BufferGeometry).getAttribute('uv') as THREE.BufferAttribute;
+    const rightUvs = (rightTerrain.geometry as THREE.BufferGeometry).getAttribute('uv') as THREE.BufferAttribute;
+
+    expect(leftUvs.getX(1)).toBeCloseTo(rightUvs.getX(0));
+    expect(leftUvs.getY(1)).toBeCloseTo(rightUvs.getY(0));
+    expect(rightUvs.getX(1)).toBeGreaterThan(rightUvs.getX(0));
 
     viewer.dispose();
   });
@@ -317,8 +401,10 @@ describe('WorldViewer lifecycle', () => {
     const rightGeometry = rightTerrain.geometry as THREE.BufferGeometry;
     const leftBlendA = leftGeometry.getAttribute('surfaceBlendA') as THREE.BufferAttribute;
     const leftBlendB = leftGeometry.getAttribute('surfaceBlendB') as THREE.BufferAttribute;
+    const leftBlendC = leftGeometry.getAttribute('surfaceBlendC') as THREE.BufferAttribute;
     const rightBlendA = rightGeometry.getAttribute('surfaceBlendA') as THREE.BufferAttribute;
     const rightBlendB = rightGeometry.getAttribute('surfaceBlendB') as THREE.BufferAttribute;
+    const rightBlendC = rightGeometry.getAttribute('surfaceBlendC') as THREE.BufferAttribute;
 
     const leftSharedEdgeIndex = 1;
     const rightSharedEdgeIndex = 0;
@@ -328,6 +414,12 @@ describe('WorldViewer lifecycle', () => {
     expect(leftBlendA.getZ(leftSharedEdgeIndex)).toBeCloseTo(rightBlendA.getZ(rightSharedEdgeIndex));
     expect(leftBlendA.getW(leftSharedEdgeIndex)).toBeCloseTo(rightBlendA.getW(rightSharedEdgeIndex));
     expect(leftBlendB.getX(leftSharedEdgeIndex)).toBeCloseTo(rightBlendB.getX(rightSharedEdgeIndex));
+    expect(leftBlendB.getY(leftSharedEdgeIndex)).toBeCloseTo(rightBlendB.getY(rightSharedEdgeIndex));
+    expect(leftBlendB.getZ(leftSharedEdgeIndex)).toBeCloseTo(rightBlendB.getZ(rightSharedEdgeIndex));
+    expect(leftBlendB.getW(leftSharedEdgeIndex)).toBeCloseTo(rightBlendB.getW(rightSharedEdgeIndex));
+    expect(leftBlendC.getX(leftSharedEdgeIndex)).toBeCloseTo(rightBlendC.getX(rightSharedEdgeIndex));
+    expect(leftBlendC.getY(leftSharedEdgeIndex)).toBeCloseTo(rightBlendC.getY(rightSharedEdgeIndex));
+    expect(leftBlendC.getZ(leftSharedEdgeIndex)).toBeCloseTo(rightBlendC.getZ(rightSharedEdgeIndex));
     expect(leftBlendA.getX(leftSharedEdgeIndex) + leftBlendA.getY(leftSharedEdgeIndex)).toBeCloseTo(1);
 
     viewer.dispose();

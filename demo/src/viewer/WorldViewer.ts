@@ -919,7 +919,9 @@ export class WorldViewer {
     const colors = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     const surfaceBlendA = new Float32Array(vertexCount * 4);
-    const surfaceBlendB = new Float32Array(vertexCount);
+    const surfaceBlendB = new Float32Array(vertexCount * 4);
+    const surfaceBlendC = new Float32Array(vertexCount * 4);
+    const terrainDetailBlend = new Float32Array(vertexCount * 3);
     const indices = new Uint32Array(indexCount);
     
     // Determine if we have biome weights for smooth blending
@@ -973,6 +975,8 @@ export class WorldViewer {
         const vertexIndex = index * 3;
         const uvIndex = index * 2;
         const surfaceBlendAIndex = index * 4;
+        const surfaceBlendBIndex = index * 4;
+        const surfaceBlendCIndex = index * 4;
         
         // The heightmap is (chunkSize + 1) x (chunkSize + 1) for seamless boundaries
         // Access it directly with the current x, y coordinates
@@ -983,8 +987,8 @@ export class WorldViewer {
         vertices[vertexIndex] = worldX;
         vertices[vertexIndex + 1] = height * heightScale;
         vertices[vertexIndex + 2] = worldZ;
-        uvs[uvIndex] = x / chunkSize;
-        uvs[uvIndex + 1] = y / chunkSize;
+        uvs[uvIndex] = worldX / chunkSize;
+        uvs[uvIndex + 1] = worldZ / chunkSize;
         
         // Calculate color with smooth blending if weights available
         // For biome map, clamp to chunkSize x chunkSize since biomes don't have overlap
@@ -1037,7 +1041,13 @@ export class WorldViewer {
         surfaceBlendA[surfaceBlendAIndex + 1] = surfaceWeights.desert;
         surfaceBlendA[surfaceBlendAIndex + 2] = surfaceWeights.beach;
         surfaceBlendA[surfaceBlendAIndex + 3] = surfaceWeights.mountainRock;
-        surfaceBlendB[index] = surfaceWeights.snow;
+        surfaceBlendB[surfaceBlendBIndex] = surfaceWeights.snow;
+        surfaceBlendB[surfaceBlendBIndex + 1] = surfaceWeights.forestFloor;
+        surfaceBlendB[surfaceBlendBIndex + 2] = surfaceWeights.dryGrass;
+        surfaceBlendB[surfaceBlendBIndex + 3] = surfaceWeights.swampMud;
+        surfaceBlendC[surfaceBlendCIndex] = surfaceWeights.volcanicRock;
+        surfaceBlendC[surfaceBlendCIndex + 1] = surfaceWeights.ice;
+        surfaceBlendC[surfaceBlendCIndex + 2] = surfaceWeights.riverbed;
       }
     }
     
@@ -1070,7 +1080,8 @@ export class WorldViewer {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geometry.setAttribute('surfaceBlendA', new THREE.BufferAttribute(surfaceBlendA, 4));
-    geometry.setAttribute('surfaceBlendB', new THREE.BufferAttribute(surfaceBlendB, 1));
+    geometry.setAttribute('surfaceBlendB', new THREE.BufferAttribute(surfaceBlendB, 4));
+    geometry.setAttribute('surfaceBlendC', new THREE.BufferAttribute(surfaceBlendC, 4));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
 
@@ -1101,6 +1112,7 @@ export class WorldViewer {
       // Slope factor: 0 = flat, 1 = vertical cliff
       const slopeFactor = Math.max(0, 1.0 - ny * ny);
       const steepness = Math.pow(slopeFactor, 1.5);
+      const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.18) / 0.62));
 
       // Subtle altitude brightness: valleys very slightly darker, peaks slightly brighter
       // Reduced range to avoid washing out high terrain
@@ -1115,6 +1127,13 @@ export class WorldViewer {
       const isGlacier  = vertexBiome === 12; // BiomeType.GLACIER  = 12
       const isBeach    = vertexBiome === 1;  // BiomeType.BEACH    = 1
       const isOcean    = vertexBiome === 0;  // BiomeType.OCEAN    = 0
+      const seaLevel = this.waterConfig.seaLevel;
+      const wetBand = rawHeight >= seaLevel - 0.04 && rawHeight <= seaLevel + 0.12
+        ? 1.0 - Math.min(1, Math.abs(rawHeight - seaLevel) / 0.12)
+        : 0;
+      const snowDetail = (isMountain || isGlacier)
+        ? Math.min(1, Math.max(0, (rawHeight - 0.76) / 0.12) * (1.0 - steepness * 0.55))
+        : 0;
 
       if (isOcean) {
         // Ocean floor: no slope-shading, just altitude brightness
@@ -1172,8 +1191,12 @@ export class WorldViewer {
       b = Math.min(1.0, b * altitudeBrightness);
 
       colorAttr.setXYZ(i, r, g, b);
+      terrainDetailBlend[i * 3] = cliffDetail;
+      terrainDetailBlend[i * 3 + 1] = snowDetail;
+      terrainDetailBlend[i * 3 + 2] = wetBand;
     }
     colorAttr.needsUpdate = true;
+    geometry.setAttribute('terrainDetailBlend', new THREE.BufferAttribute(terrainDetailBlend, 3));
     // --- end slope/altitude modulation ---
     
     // Create material using materials module
@@ -1275,6 +1298,12 @@ export class WorldViewer {
       beach: 0,
       mountainRock: 0,
       snow: 0,
+      forestFloor: 0,
+      dryGrass: 0,
+      swampMud: 0,
+      volcanicRock: 0,
+      ice: 0,
+      riverbed: 0,
     };
 
     const samples: Array<{ x: number; y: number }> = [
@@ -1297,7 +1326,9 @@ export class WorldViewer {
       const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
       const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
       const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
-      const surfaceKey = selectTerrainSurfaceKey(biome, elevation, slope);
+      const surfaceKey = this.getRiverTrenchDarkening(data, sample.x, sample.y) < 0.82
+        ? 'riverbed'
+        : selectTerrainSurfaceKey(biome, elevation, slope);
       weights[surfaceKey] += 1;
       sampleCount++;
     }
@@ -2150,7 +2181,7 @@ export class WorldViewer {
    * Stitch texture surface weights between loaded chunks.
    *
    * Color and normal data already agree on shared edges, but textured terrain
-   * also depends on surfaceBlendA/B. If those attributes differ across coincident
+   * also depends on surfaceBlendA/B/C. If those attributes differ across coincident
    * vertices the shader can switch texture sets abruptly at chunk borders.
    */
   private stitchBoundarySurfaceBlends(chunkX: number, chunkY: number): void {
@@ -2160,9 +2191,10 @@ export class WorldViewer {
     const geom = mesh.terrain.geometry as THREE.BufferGeometry;
     const blendAA = geom.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
     const blendBA = geom.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
+    const blendCA = geom.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined;
     const posA = geom.getAttribute('position') as THREE.BufferAttribute;
 
-    if (!blendAA || !blendBA) return;
+    if (!blendAA || !blendBA || !blendCA) return;
 
     const verticesPerSide = Math.round(Math.sqrt(posA.count));
     const chunkSize = verticesPerSide - 1;
@@ -2180,17 +2212,20 @@ export class WorldViewer {
       const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
       const blendAB = geomB.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
       const blendBB = geomB.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
+      const blendCB = geomB.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined;
 
-      if (!blendAB || !blendBB) continue;
+      if (!blendAB || !blendBB || !blendCB) continue;
 
       if (dx === 1 && dz === 0) {
         for (let row = 0; row <= chunkSize; row++) {
           this._averageSurfaceBlend(
             blendAA,
             blendBA,
+            blendCA,
             row * verticesPerSide + chunkSize,
             blendAB,
             blendBB,
+            blendCB,
             row * verticesPerSide,
           );
         }
@@ -2199,9 +2234,11 @@ export class WorldViewer {
           this._averageSurfaceBlend(
             blendAA,
             blendBA,
+            blendCA,
             chunkSize * verticesPerSide + col,
             blendAB,
             blendBB,
+            blendCB,
             col,
           );
         }
@@ -2209,27 +2246,33 @@ export class WorldViewer {
         this._averageSurfaceBlend(
           blendAA,
           blendBA,
+          blendCA,
           chunkSize * verticesPerSide + chunkSize,
           blendAB,
           blendBB,
+          blendCB,
           0,
         );
       }
 
       blendAB.needsUpdate = true;
       blendBB.needsUpdate = true;
+      blendCB.needsUpdate = true;
     }
 
     blendAA.needsUpdate = true;
     blendBA.needsUpdate = true;
+    blendCA.needsUpdate = true;
   }
 
   private _averageSurfaceBlend(
     blendAA: THREE.BufferAttribute,
     blendBA: THREE.BufferAttribute,
+    blendCA: THREE.BufferAttribute,
     idxA: number,
     blendAB: THREE.BufferAttribute,
     blendBB: THREE.BufferAttribute,
+    blendCB: THREE.BufferAttribute,
     idxB: number,
   ): void {
     const weights = [
@@ -2238,13 +2281,21 @@ export class WorldViewer {
       (blendAA.getZ(idxA) + blendAB.getZ(idxB)) * 0.5,
       (blendAA.getW(idxA) + blendAB.getW(idxB)) * 0.5,
       (blendBA.getX(idxA) + blendBB.getX(idxB)) * 0.5,
+      (blendBA.getY(idxA) + blendBB.getY(idxB)) * 0.5,
+      (blendBA.getZ(idxA) + blendBB.getZ(idxB)) * 0.5,
+      (blendBA.getW(idxA) + blendBB.getW(idxB)) * 0.5,
+      (blendCA.getX(idxA) + blendCB.getX(idxB)) * 0.5,
+      (blendCA.getY(idxA) + blendCB.getY(idxB)) * 0.5,
+      (blendCA.getZ(idxA) + blendCB.getZ(idxB)) * 0.5,
     ];
     const sum = weights.reduce((total, weight) => total + weight, 0) || 1;
 
     blendAA.setXYZW(idxA, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
-    blendBA.setX(idxA, weights[4] / sum);
+    blendBA.setXYZW(idxA, weights[4] / sum, weights[5] / sum, weights[6] / sum, weights[7] / sum);
+    blendCA.setXYZW(idxA, weights[8] / sum, weights[9] / sum, weights[10] / sum, 0);
     blendAB.setXYZW(idxB, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
-    blendBB.setX(idxB, weights[4] / sum);
+    blendBB.setXYZW(idxB, weights[4] / sum, weights[5] / sum, weights[6] / sum, weights[7] / sum);
+    blendCB.setXYZW(idxB, weights[8] / sum, weights[9] / sum, weights[10] / sum, 0);
   }
 
   /**
