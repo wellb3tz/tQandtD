@@ -11,6 +11,7 @@ import * as THREE from 'three';
 export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
+export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v2.png';
 
 export type TerrainSurfaceKey =
   | 'plains'
@@ -31,7 +32,9 @@ export interface TerrainTextureSet {
   roughness: THREE.Texture;
 }
 
-export type TerrainSurfaceTextureLibrary = Record<TerrainSurfaceKey, TerrainTextureSet>;
+export type TerrainSurfaceTextureLibrary = Record<TerrainSurfaceKey, TerrainTextureSet> & {
+  albedoAtlas: THREE.Texture;
+};
 
 export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainTextureSetUrls> = {
   plains: {
@@ -233,7 +236,17 @@ function configureTerrainTexture(
   texture.repeat.set(4, 4);
   texture.colorSpace = colorSpace;
   texture.anisotropy = 4;
-  texture.needsUpdate = true;
+  return texture;
+}
+
+function configureTerrainAtlasTexture(texture: THREE.Texture): THREE.Texture {
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
   return texture;
 }
 
@@ -269,6 +282,7 @@ export function createTerrainSurfaceTextureLibrary(
     volcanicRock: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.volcanicRock, loader),
     ice: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.ice, loader),
     riverbed: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.riverbed, loader),
+    albedoAtlas: configureTerrainAtlasTexture(loader.load(TERRAIN_ALBEDO_ATLAS_TEXTURE_URL)),
   };
 }
 
@@ -357,7 +371,7 @@ export function createTerrainBlendMaterial(
   wireframe: boolean = false,
 ): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
-    map: textures.plains.albedo,
+    map: textures.albedoAtlas,
     normalMap: textures.plains.normal,
     color: new THREE.Color(2.25, 2.25, 2.25),
     normalScale: new THREE.Vector2(0.35, 0.35),
@@ -370,17 +384,7 @@ export function createTerrainBlendMaterial(
   material.userData.terrainTexturesEnabled = true;
 
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.terrainAlbedoPlains = { value: textures.plains.albedo };
-    shader.uniforms.terrainAlbedoDesert = { value: textures.desert.albedo };
-    shader.uniforms.terrainAlbedoBeach = { value: textures.beach.albedo };
-    shader.uniforms.terrainAlbedoMountainRock = { value: textures.mountainRock.albedo };
-    shader.uniforms.terrainAlbedoSnow = { value: textures.snow.albedo };
-    shader.uniforms.terrainAlbedoForestFloor = { value: textures.forestFloor.albedo };
-    shader.uniforms.terrainAlbedoDryGrass = { value: textures.dryGrass.albedo };
-    shader.uniforms.terrainAlbedoSwampMud = { value: textures.swampMud.albedo };
-    shader.uniforms.terrainAlbedoVolcanicRock = { value: textures.volcanicRock.albedo };
-    shader.uniforms.terrainAlbedoIce = { value: textures.ice.albedo };
-    shader.uniforms.terrainAlbedoRiverbed = { value: textures.riverbed.albedo };
+    shader.uniforms.terrainAlbedoAtlas = { value: textures.albedoAtlas };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -388,11 +392,11 @@ export function createTerrainBlendMaterial(
 attribute vec4 surfaceBlendA;
 attribute vec4 surfaceBlendB;
 attribute vec4 surfaceBlendC;
-attribute vec3 terrainDetailBlend;
+attribute vec4 terrainDetailBlend;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
-varying vec3 vTerrainDetailBlend;`,
+varying vec4 vTerrainDetailBlend;`,
       )
       .replace(
         '#include <uv_vertex>',
@@ -407,56 +411,93 @@ vTerrainDetailBlend = terrainDetailBlend;`,
       .replace(
         '#include <common>',
         `#include <common>
-uniform sampler2D terrainAlbedoPlains;
-uniform sampler2D terrainAlbedoDesert;
-uniform sampler2D terrainAlbedoBeach;
-uniform sampler2D terrainAlbedoMountainRock;
-uniform sampler2D terrainAlbedoSnow;
-uniform sampler2D terrainAlbedoForestFloor;
-uniform sampler2D terrainAlbedoDryGrass;
-uniform sampler2D terrainAlbedoSwampMud;
-uniform sampler2D terrainAlbedoVolcanicRock;
-uniform sampler2D terrainAlbedoIce;
-uniform sampler2D terrainAlbedoRiverbed;
+uniform sampler2D terrainAlbedoAtlas;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
-varying vec3 vTerrainDetailBlend;`,
+varying vec4 vTerrainDetailBlend;
+
+vec2 mirrorTerrainAtlasUv(vec2 uv) {
+  vec2 wrappedUv = mod(uv, vec2(2.0));
+  return mix(wrappedUv, vec2(2.0) - wrappedUv, step(vec2(1.0), wrappedUv));
+}
+
+vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
+  const vec2 atlasGrid = vec2(4.0, 3.0);
+  const vec2 atlasTilePixels = vec2(256.0, 256.0);
+  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), floor(tileIndex / atlasGrid.x));
+  vec2 paddedUv = (mirrorTerrainAtlasUv(uv) * (atlasTilePixels - vec2(2.0)) + vec2(1.0)) / atlasTilePixels;
+  return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
+}
+
+float forestCanopyTexture(vec2 uv) {
+  vec2 cell = floor(uv * 22.0);
+  vec2 local = fract(uv * 22.0) - vec2(0.5);
+  float hash = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+  float crown = smoothstep(0.46, 0.08, length(local + vec2(hash - 0.5, fract(hash * 7.13) - 0.5) * 0.28));
+  return clamp(crown * (0.55 + hash * 0.45), 0.0, 1.0);
+}
+
+void considerTerrainAtlasTile(
+  float weight,
+  float tileIndex,
+  inout float primaryWeight,
+  inout float primaryTile,
+  inout float secondaryWeight,
+  inout float secondaryTile
+) {
+  if (weight > primaryWeight) {
+    secondaryWeight = primaryWeight;
+    secondaryTile = primaryTile;
+    primaryWeight = weight;
+    primaryTile = tileIndex;
+  } else if (weight > secondaryWeight) {
+    secondaryWeight = weight;
+    secondaryTile = tileIndex;
+  }
+}`,
       )
       .replace(
         '#include <map_fragment>',
-        `vec4 terrainPlains = texture2D(terrainAlbedoPlains, vMapUv);
-vec4 terrainDesert = texture2D(terrainAlbedoDesert, vMapUv);
-vec4 terrainBeach = texture2D(terrainAlbedoBeach, vMapUv);
-vec4 terrainMountainRock = texture2D(terrainAlbedoMountainRock, vMapUv);
-vec4 terrainSnow = texture2D(terrainAlbedoSnow, vMapUv);
-vec4 terrainForestFloor = texture2D(terrainAlbedoForestFloor, vMapUv);
-vec4 terrainDryGrass = texture2D(terrainAlbedoDryGrass, vMapUv);
-vec4 terrainSwampMud = texture2D(terrainAlbedoSwampMud, vMapUv);
-vec4 terrainVolcanicRock = texture2D(terrainAlbedoVolcanicRock, vMapUv);
-vec4 terrainIce = texture2D(terrainAlbedoIce, vMapUv);
-vec4 terrainRiverbed = texture2D(terrainAlbedoRiverbed, vMapUv);
-vec4 blendedTerrainMap =
-  terrainPlains * vSurfaceBlendA.x +
-  terrainDesert * vSurfaceBlendA.y +
-  terrainBeach * vSurfaceBlendA.z +
-  terrainMountainRock * vSurfaceBlendA.w +
-  terrainSnow * vSurfaceBlendB.x +
-  terrainForestFloor * vSurfaceBlendB.y +
-  terrainDryGrass * vSurfaceBlendB.z +
-  terrainSwampMud * vSurfaceBlendB.w +
-  terrainVolcanicRock * vSurfaceBlendC.x +
-  terrainIce * vSurfaceBlendC.y +
-  terrainRiverbed * vSurfaceBlendC.z;
+        `float primarySurfaceWeight = -1.0;
+float primarySurfaceTile = 0.0;
+float secondarySurfaceWeight = -1.0;
+float secondarySurfaceTile = 0.0;
+considerTerrainAtlasTile(vSurfaceBlendA.x, 0.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.y, 1.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.z, 2.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.w, 3.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.x, 4.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.y, 5.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.z, 6.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.w, 7.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.x, 8.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.y, 9.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.z, 10.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
+float terrainSurfaceWeightSum = max(0.0001, primarySurfaceWeight + max(0.0, secondarySurfaceWeight));
+vec4 blendedTerrainMap = (
+  sampleTerrainAtlasTile(primarySurfaceTile, vMapUv) * primarySurfaceWeight +
+  sampleTerrainAtlasTile(secondarySurfaceTile, vMapUv) * max(0.0, secondarySurfaceWeight)
+) / terrainSurfaceWeightSum;
 vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.72)) * 1.85 + vec3(0.90), vec3(0.52), vec3(1.35));
 diffuseColor.rgb *= terrainDetailContrast;
 diffuseColor.a *= blendedTerrainMap.a;
+float forestCanopyWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
+float forestCanopyNoise = forestCanopyTexture(vMapUv);
+vec3 forestCanopyTint = mix(vec3(0.74, 0.92, 0.58), vec3(0.34, 0.52, 0.19), forestCanopyNoise);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestCanopyTint, forestCanopyWeight * 0.34);
 vec3 cliffTint = vec3(0.76, 0.74, 0.70);
 vec3 snowPeakTint = vec3(1.10, 1.13, 1.16);
 vec3 wetShorelineTint = vec3(0.48, 0.60, 0.64);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, vTerrainDetailBlend.x * 0.28);
-diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), vTerrainDetailBlend.y * 0.35);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, vTerrainDetailBlend.z * 0.45);`,
+vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
+float cliffAccent = smoothstep(0.08, 1.0, vTerrainDetailBlend.x);
+float snowAccent = smoothstep(0.04, 1.0, vTerrainDetailBlend.y);
+float shorelineAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.z);
+float riverbedAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.w);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.42);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.48);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.55);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.50);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -476,7 +517,8 @@ float surfaceRoughnessBlend =
 roughnessFactor *= max(0.28, surfaceRoughnessBlend);
 roughnessFactor = mix(roughnessFactor, min(1.0, roughnessFactor + 0.12), vTerrainDetailBlend.x * 0.35);
 roughnessFactor = mix(roughnessFactor, 0.72, vTerrainDetailBlend.y * 0.25);
-roughnessFactor = mix(roughnessFactor, 0.38, vTerrainDetailBlend.z * 0.65);`,
+roughnessFactor = mix(roughnessFactor, 0.38, vTerrainDetailBlend.z * 0.65);
+roughnessFactor = mix(roughnessFactor, 0.48, vTerrainDetailBlend.w * 0.55);`,
       );
   };
 

@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { ChunkData } from '../../../src/index';
+import { BiomeType, ChunkData, getBiomeWeightForTile } from '../../../src/index';
 import { getRiverChannelWidth, type RiverPoint } from '../../../src/gen/rivers';
 import {
   getBiomeColor,
@@ -41,8 +41,16 @@ const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
 };
 
 const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
+const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
 
 type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
+type FoliageProfile = {
+  density: number;
+  height: number;
+  radius: number;
+  color: THREE.ColorRepresentation;
+  maxSlope: number;
+};
 
 /**
  * 3D vector for camera position and target
@@ -90,6 +98,7 @@ export interface ChunkCoord {
 interface ChunkMesh {
   terrain: THREE.Mesh;
   water?: import('./water/types').WaterLayerData; // New: separate water layer
+  foliage?: THREE.Group;
   resources?: THREE.Group;
   structures?: THREE.Group;
   boundaries?: THREE.LineSegments;
@@ -635,6 +644,13 @@ export class WorldViewer {
         waterLayer.group.renderOrder = 1;
       }
     }
+
+    const foliage = this.createFoliageLayer(chunkX, chunkY, data);
+    if (foliage) {
+      foliage.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
+      chunkMesh.foliage = foliage;
+      this.scene.add(foliage);
+    }
     
     // Only add complete layers if not partial or if stage is complete
     // Resources: always render when available
@@ -672,6 +688,7 @@ export class WorldViewer {
     this.stitchBoundaryNormals(chunkX, chunkY);
     this.stitchBoundaryColors(chunkX, chunkY);
     this.stitchBoundarySurfaceBlends(chunkX, chunkY);
+    this.stitchBoundaryDetailBlends(chunkX, chunkY);
     for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
       const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
       if (this.chunkMeshes.has(nKey)) {
@@ -679,6 +696,7 @@ export class WorldViewer {
         this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
         this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
         this.stitchBoundarySurfaceBlends(chunkX + dx, chunkY + dz);
+        this.stitchBoundaryDetailBlends(chunkX + dx, chunkY + dz);
         this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey, data.size);
       }
     }
@@ -715,6 +733,11 @@ export class WorldViewer {
     if (chunkMesh.resources) {
       this.scene.remove(chunkMesh.resources);
       this.disposeGroup(chunkMesh.resources);
+    }
+
+    if (chunkMesh.foliage) {
+      this.scene.remove(chunkMesh.foliage);
+      this.disposeGroup(chunkMesh.foliage);
     }
     
     if (chunkMesh.structures) {
@@ -921,7 +944,7 @@ export class WorldViewer {
     const surfaceBlendA = new Float32Array(vertexCount * 4);
     const surfaceBlendB = new Float32Array(vertexCount * 4);
     const surfaceBlendC = new Float32Array(vertexCount * 4);
-    const terrainDetailBlend = new Float32Array(vertexCount * 3);
+    const terrainDetailBlend = new Float32Array(vertexCount * 4);
     const indices = new Uint32Array(indexCount);
     
     // Determine if we have biome weights for smooth blending
@@ -1112,7 +1135,7 @@ export class WorldViewer {
       // Slope factor: 0 = flat, 1 = vertical cliff
       const slopeFactor = Math.max(0, 1.0 - ny * ny);
       const steepness = Math.pow(slopeFactor, 1.5);
-      const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.18) / 0.62));
+      const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.14) / 0.54));
 
       // Subtle altitude brightness: valleys very slightly darker, peaks slightly brighter
       // Reduced range to avoid washing out high terrain
@@ -1134,6 +1157,7 @@ export class WorldViewer {
       const snowDetail = (isMountain || isGlacier)
         ? Math.min(1, Math.max(0, (rawHeight - 0.76) / 0.12) * (1.0 - steepness * 0.55))
         : 0;
+      const riverbedDetail = Math.min(1, Math.max(0, (1 - this.getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH));
 
       if (isOcean) {
         // Ocean floor: no slope-shading, just altitude brightness
@@ -1191,12 +1215,13 @@ export class WorldViewer {
       b = Math.min(1.0, b * altitudeBrightness);
 
       colorAttr.setXYZ(i, r, g, b);
-      terrainDetailBlend[i * 3] = cliffDetail;
-      terrainDetailBlend[i * 3 + 1] = snowDetail;
-      terrainDetailBlend[i * 3 + 2] = wetBand;
+      terrainDetailBlend[i * 4] = cliffDetail;
+      terrainDetailBlend[i * 4 + 1] = snowDetail;
+      terrainDetailBlend[i * 4 + 2] = wetBand;
+      terrainDetailBlend[i * 4 + 3] = riverbedDetail;
     }
     colorAttr.needsUpdate = true;
-    geometry.setAttribute('terrainDetailBlend', new THREE.BufferAttribute(terrainDetailBlend, 3));
+    geometry.setAttribute('terrainDetailBlend', new THREE.BufferAttribute(terrainDetailBlend, 4));
     // --- end slope/altitude modulation ---
     
     // Create material using materials module
@@ -1342,6 +1367,217 @@ export class WorldViewer {
       weights[key] /= sampleCount;
     }
     return weights;
+  }
+
+  private createFoliageLayer(chunkX: number, chunkY: number, data: ChunkData): THREE.Group | undefined {
+    if (!data.biomeMap || !data.heightmap) return undefined;
+
+    const chunkSize = data.size;
+    const verticesPerSide = chunkSize + 1;
+    const worldXBase = chunkX * chunkSize;
+    const worldZBase = chunkY * chunkSize;
+    const heightScale = 50;
+    const placements: Array<{
+      x: number;
+      y: number;
+      z: number;
+      radius: number;
+      height: number;
+      rotation: number;
+      color: THREE.ColorRepresentation;
+      rank: number;
+    }> = [];
+
+    for (let tileY = 0; tileY < chunkSize; tileY++) {
+      for (let tileX = 0; tileX < chunkSize; tileX++) {
+        const tileIndex = tileY * chunkSize + tileX;
+        const profile = this.getFoliageProfileForTile(data, tileIndex);
+        if (!profile) continue;
+
+        const heightIndex = tileY * verticesPerSide + tileX;
+        const elevation = data.heightmap[heightIndex];
+        if (elevation <= this.waterConfig.seaLevel + 0.035) continue;
+
+        const right = data.heightmap[heightIndex + 1] ?? elevation;
+        const down = data.heightmap[heightIndex + verticesPerSide] ?? elevation;
+        const slope = Math.abs(right - elevation) + Math.abs(down - elevation);
+        if (slope > profile.maxSlope) continue;
+        if (this.getRiverTrenchDarkening(data, tileX, tileY) < 0.93) continue;
+
+        const worldTileX = worldXBase + tileX;
+        const worldTileZ = worldZBase + tileY;
+        const chance = this.deterministic01(worldTileX, worldTileZ, 17);
+        if (chance > profile.density) continue;
+
+        const jitterX = 0.08 + this.deterministic01(worldTileX, worldTileZ, 23) * 0.84;
+        const jitterZ = 0.08 + this.deterministic01(worldTileX, worldTileZ, 31) * 0.84;
+        const scaleJitter = 0.82 + this.deterministic01(worldTileX, worldTileZ, 43) * 0.46;
+        placements.push({
+          x: worldTileX + jitterX,
+          y: elevation * heightScale + profile.height * scaleJitter * 0.5,
+          z: worldTileZ + jitterZ,
+          radius: profile.radius * scaleJitter,
+          height: profile.height * scaleJitter,
+          rotation: this.deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
+          color: profile.color,
+          rank: this.deterministic01(worldTileX, worldTileZ, 101),
+        });
+      }
+    }
+
+    if (placements.length === 0) return undefined;
+
+    if (placements.length > MAX_FOLIAGE_INSTANCES_PER_CHUNK) {
+      placements.sort((a, b) => a.rank - b.rank);
+      placements.length = MAX_FOLIAGE_INSTANCES_PER_CHUNK;
+    }
+
+    const group = new THREE.Group();
+    group.name = `foliage-${chunkX},${chunkY}`;
+    group.userData.foliageCount = placements.length;
+
+    const geometry = this.createFoliagePrototypeGeometry();
+    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+    const canopy = new THREE.InstancedMesh(geometry, material, placements.length);
+    canopy.castShadow = true;
+    canopy.receiveShadow = true;
+
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const rotation = new THREE.Euler();
+
+    placements.forEach((placement, index) => {
+      position.set(placement.x, placement.y, placement.z);
+      rotation.set(0, placement.rotation, 0);
+      quaternion.setFromEuler(rotation);
+      scale.set(placement.radius, placement.height, placement.radius);
+      matrix.compose(position, quaternion, scale);
+      canopy.setMatrixAt(index, matrix);
+    });
+
+    canopy.instanceMatrix.needsUpdate = true;
+    group.add(canopy);
+    return group;
+  }
+
+  private createFoliagePrototypeGeometry(): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    this.addPrism(vertices, colors, indices, 0.12, -0.50, -0.10, 6, new THREE.Color(0.42, 0.24, 0.10));
+    this.addConeLayer(vertices, colors, indices, 0.58, -0.30, 0.28, 8, new THREE.Color(0.10, 0.34, 0.12));
+    this.addConeLayer(vertices, colors, indices, 0.45, 0.02, 0.58, 8, new THREE.Color(0.08, 0.40, 0.14));
+    this.addConeLayer(vertices, colors, indices, 0.30, 0.32, 0.90, 8, new THREE.Color(0.12, 0.48, 0.18));
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private addPrism(
+    vertices: number[],
+    colors: number[],
+    indices: number[],
+    radius: number,
+    yBottom: number,
+    yTop: number,
+    sides: number,
+    color: THREE.Color,
+  ): void {
+    for (let side = 0; side < sides; side++) {
+      const a0 = (side / sides) * Math.PI * 2;
+      const a1 = ((side + 1) / sides) * Math.PI * 2;
+      const baseIndex = vertices.length / 3;
+      vertices.push(
+        Math.cos(a0) * radius, yBottom, Math.sin(a0) * radius,
+        Math.cos(a1) * radius, yBottom, Math.sin(a1) * radius,
+        Math.cos(a1) * radius * 0.82, yTop, Math.sin(a1) * radius * 0.82,
+        Math.cos(a0) * radius * 0.82, yTop, Math.sin(a0) * radius * 0.82,
+      );
+      for (let i = 0; i < 4; i++) {
+        colors.push(color.r, color.g, color.b);
+      }
+      indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
+    }
+  }
+
+  private addConeLayer(
+    vertices: number[],
+    colors: number[],
+    indices: number[],
+    radius: number,
+    yBase: number,
+    yTip: number,
+    sides: number,
+    color: THREE.Color,
+  ): void {
+    for (let side = 0; side < sides; side++) {
+      const a0 = (side / sides) * Math.PI * 2;
+      const a1 = ((side + 1) / sides) * Math.PI * 2;
+      const baseIndex = vertices.length / 3;
+      vertices.push(
+        Math.cos(a0) * radius, yBase, Math.sin(a0) * radius,
+        Math.cos(a1) * radius, yBase, Math.sin(a1) * radius,
+        0, yTip, 0,
+      );
+      for (let i = 0; i < 3; i++) {
+        colors.push(color.r, color.g, color.b);
+      }
+      indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+    }
+  }
+
+  private getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
+    switch (biome) {
+      case BiomeType.FOREST:
+        return { density: 0.72, height: 1.35, radius: 0.48, color: 0x2f6f28, maxSlope: 0.16 };
+      case BiomeType.RAINFOREST:
+        return { density: 0.88, height: 1.55, radius: 0.56, color: 0x1d5f25, maxSlope: 0.18 };
+      case BiomeType.TAIGA:
+        return { density: 0.58, height: 1.75, radius: 0.44, color: 0x2a5a43, maxSlope: 0.14 };
+      case BiomeType.SWAMP:
+        return { density: 0.42, height: 1.10, radius: 0.50, color: 0x3f6230, maxSlope: 0.10 };
+      default:
+        return undefined;
+    }
+  }
+
+  private getFoliageProfileForTile(data: ChunkData, tileIndex: number): FoliageProfile | undefined {
+    if (data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0 && data.sparseBiomeOffsets) {
+      const weightedProfiles: Array<{ biome: BiomeType; weight: number }> = [
+        { biome: BiomeType.FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.FOREST) },
+        { biome: BiomeType.RAINFOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.RAINFOREST) },
+        { biome: BiomeType.TAIGA, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.TAIGA) },
+        { biome: BiomeType.SWAMP, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.SWAMP) },
+      ];
+      let best = weightedProfiles[0];
+      for (const candidate of weightedProfiles) {
+        if (candidate.weight > best.weight) best = candidate;
+      }
+
+      if (best.weight >= 0.28) {
+        const profile = this.getFoliageProfile(best.biome);
+        return profile
+          ? { ...profile, density: profile.density * Math.min(1, best.weight * 1.25) }
+          : undefined;
+      }
+    }
+
+    const biome = data.biomeMap?.[tileIndex] as BiomeType | undefined;
+    return biome !== undefined ? this.getFoliageProfile(biome) : undefined;
+  }
+
+  private deterministic01(x: number, y: number, salt: number): number {
+    let h = Math.imul(Math.trunc(x), 374761393) ^ Math.imul(Math.trunc(y), 668265263) ^ Math.imul(salt, 224682251);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967296;
   }
 
   /**
@@ -1508,6 +1744,7 @@ export class WorldViewer {
       switch (layer) {
         case RenderLayer.TERRAIN:
           chunkMesh.terrain.visible = visible;
+          if (chunkMesh.foliage) chunkMesh.foliage.visible = visible;
           break;
         case RenderLayer.BIOMES:
           // Toggle between biome colors and grayscale
@@ -2299,6 +2536,73 @@ export class WorldViewer {
   }
 
   /**
+   * Stitch terrain detail masks between loaded chunks.
+   *
+   * These masks drive cliff, snow peak, wet shoreline, and riverbed accents in
+   * the shader. If coincident boundary vertices disagree, the detail tint can
+   * show up as a faint line exactly on chunk edges.
+   */
+  private stitchBoundaryDetailBlends(chunkX: number, chunkY: number): void {
+    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
+    if (!mesh) return;
+
+    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
+    const detailA = geom.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined;
+    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
+
+    if (!detailA) return;
+
+    const verticesPerSide = Math.round(Math.sqrt(posA.count));
+    const chunkSize = verticesPerSide - 1;
+
+    const neighbours: Array<{ dx: number; dz: number }> = [
+      { dx: 1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 1, dz: 1 },
+    ];
+
+    for (const { dx, dz } of neighbours) {
+      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
+      if (!neighbourMesh) continue;
+
+      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
+      const detailB = geomB.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined;
+
+      if (!detailB) continue;
+
+      if (dx === 1 && dz === 0) {
+        for (let row = 0; row <= chunkSize; row++) {
+          this._averageDetailBlend(detailA, row * verticesPerSide + chunkSize, detailB, row * verticesPerSide);
+        }
+      } else if (dx === 0 && dz === 1) {
+        for (let col = 0; col <= chunkSize; col++) {
+          this._averageDetailBlend(detailA, chunkSize * verticesPerSide + col, detailB, col);
+        }
+      } else {
+        this._averageDetailBlend(detailA, chunkSize * verticesPerSide + chunkSize, detailB, 0);
+      }
+
+      detailB.needsUpdate = true;
+    }
+
+    detailA.needsUpdate = true;
+  }
+
+  private _averageDetailBlend(
+    detailA: THREE.BufferAttribute,
+    idxA: number,
+    detailB: THREE.BufferAttribute,
+    idxB: number,
+  ): void {
+    const x = (detailA.getX(idxA) + detailB.getX(idxB)) * 0.5;
+    const y = (detailA.getY(idxA) + detailB.getY(idxB)) * 0.5;
+    const z = (detailA.getZ(idxA) + detailB.getZ(idxB)) * 0.5;
+    const w = (detailA.getW(idxA) + detailB.getW(idxB)) * 0.5;
+    detailA.setXYZW(idxA, x, y, z, w);
+    detailB.setXYZW(idxB, x, y, z, w);
+  }
+
+  /**
    * Raycast from screen coordinates to terrain
    * Returns hit information including world position and chunk coordinates
    */
@@ -2386,6 +2690,10 @@ export class WorldViewer {
         
         // Update visibility for all mesh components
         chunkMesh.terrain.visible = isVisible && this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
+
+        if (chunkMesh.foliage) {
+          chunkMesh.foliage.visible = isVisible && this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
+        }
         
         if (chunkMesh.resources) {
           chunkMesh.resources.visible = isVisible && this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
@@ -2413,6 +2721,10 @@ export class WorldViewer {
       for (const chunkMesh of this.chunkMeshes.values()) {
         chunkMesh.visible = true;
         chunkMesh.terrain.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
+
+        if (chunkMesh.foliage) {
+          chunkMesh.foliage.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
+        }
         
         if (chunkMesh.resources) {
           chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
@@ -2484,6 +2796,10 @@ export class WorldViewer {
         
         // Each terrain mesh is a draw call
         drawCalls++;
+      }
+
+      if (chunkMesh.foliage && chunkMesh.foliage.visible) {
+        drawCalls += chunkMesh.foliage.children.length;
       }
       
       // Count resources

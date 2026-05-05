@@ -20,7 +20,6 @@ export function createWaterNormalTexture(
   texture.repeat.set(6, 6);
   texture.colorSpace = THREE.NoColorSpace;
   texture.anisotropy = 4;
-  texture.needsUpdate = true;
   return texture;
 }
 

@@ -24,6 +24,7 @@ describe('WaterMaterialFactory', () => {
     expect(texture.repeat.x).toBe(6);
     expect(texture.repeat.y).toBe(6);
     expect(texture.colorSpace).toBe(THREE.NoColorSpace);
+    expect(texture.version).toBe(0);
   });
 
   it('applies water normal maps without tinting depth vertex colors', () => {
