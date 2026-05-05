@@ -280,6 +280,89 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('does not place foliage on lake tiles', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(0, 0, {
+      size: 4,
+      heightmap: new Float32Array(25).fill(0.5),
+      biomeMap: new Uint8Array(16).fill(BiomeType.FOREST),
+      lakes: [{
+        waterLevel: 0.55,
+        tiles: new Set(Array.from({ length: 16 }, (_, index) => index)),
+        maxDepth: 0.08,
+        minTerrainHeight: 0.5,
+      }],
+      resources: [],
+      structures: [],
+    } as any);
+
+    expect((viewer as any).chunkMeshes.get('0,0').foliage).toBeUndefined();
+
+    viewer.dispose();
+  });
+
+  it('does not place foliage in river channels when river points are local to a nonzero chunk', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    (viewer as any).waterConfig = {
+      ...(viewer as any).waterConfig,
+      enabled: false,
+    };
+
+    viewer.addChunk(1, 0, {
+      size: 8,
+      heightmap: new Float32Array(81).fill(0.5),
+      biomeMap: new Uint8Array(64).fill(BiomeType.RAINFOREST),
+      rivers: [{
+        riverId: 'river_local_1',
+        pathId: 'river_local_1:main',
+        isTributary: false,
+        points: [
+          { x: 0.5, y: 0, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 1.6, flowX: 0, flowY: 1 },
+          { x: 0.5, y: 8, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 1.6, flowX: 0, flowY: 1 },
+        ],
+        bounds: { minX: 0.5, maxX: 0.5, minY: 0, maxY: 8 },
+      }],
+      resources: [],
+      structures: [],
+    } as any);
+
+    const foliage = (viewer as any).chunkMeshes.get('1,0').foliage as THREE.Group;
+    const canopy = foliage.children[0] as THREE.InstancedMesh;
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    let hasRiverChannelFoliage = false;
+
+    for (let i = 0; i < canopy.count; i++) {
+      canopy.getMatrixAt(i, matrix);
+      position.setFromMatrixPosition(matrix);
+      if (Math.abs(position.x - 8.5) <= 0.8) {
+        hasRiverChannelFoliage = true;
+        break;
+      }
+    }
+
+    expect(hasRiverChannelFoliage).toBe(false);
+
+    viewer.dispose();
+  });
+
   it('uses one instanced low-poly tree prototype with trunk and layered crown colors', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });

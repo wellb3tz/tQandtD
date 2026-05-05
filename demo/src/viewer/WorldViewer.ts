@@ -1314,6 +1314,41 @@ export class WorldViewer {
     };
   }
 
+  private isFoliageWaterTile(
+    data: ChunkData,
+    tileIndex: number,
+    worldTileX: number,
+    worldTileZ: number,
+    worldXBase: number,
+    worldZBase: number
+  ): boolean {
+    if (data.lakes?.some(lake => lake.tiles.has(tileIndex))) {
+      return true;
+    }
+
+    return this.isRiverChannelAt(data, worldTileX - worldXBase, worldTileZ - worldZBase);
+  }
+
+  private isRiverChannelAt(data: ChunkData, localX: number, localZ: number): boolean {
+    const rivers = data.rivers ?? [];
+    if (rivers.length === 0) return false;
+
+    for (const river of rivers) {
+      const points = river.points;
+      if (points.length < 2) continue;
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const sample = this.closestRiverRenderSample(localX, localZ, points[i], points[i + 1]);
+        const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+        if (channelRadius > 0 && sample.distance <= channelRadius) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   private calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
     const chunkSize = data.size;
     const verticesPerSide = chunkSize + 1;
@@ -1402,20 +1437,24 @@ export class WorldViewer {
         const down = data.heightmap[heightIndex + verticesPerSide] ?? elevation;
         const slope = Math.abs(right - elevation) + Math.abs(down - elevation);
         if (slope > profile.maxSlope) continue;
-        if (this.getRiverTrenchDarkening(data, tileX, tileY) < 0.93) continue;
 
         const worldTileX = worldXBase + tileX;
         const worldTileZ = worldZBase + tileY;
+
         const chance = this.deterministic01(worldTileX, worldTileZ, 17);
         if (chance > profile.density) continue;
 
         const jitterX = 0.08 + this.deterministic01(worldTileX, worldTileZ, 23) * 0.84;
         const jitterZ = 0.08 + this.deterministic01(worldTileX, worldTileZ, 31) * 0.84;
         const scaleJitter = 0.82 + this.deterministic01(worldTileX, worldTileZ, 43) * 0.46;
+        const placementX = worldTileX + jitterX;
+        const placementZ = worldTileZ + jitterZ;
+        if (this.isFoliageWaterTile(data, tileIndex, placementX, placementZ, worldXBase, worldZBase)) continue;
+
         placements.push({
-          x: worldTileX + jitterX,
+          x: placementX,
           y: elevation * heightScale + profile.height * scaleJitter * 0.5,
-          z: worldTileZ + jitterZ,
+          z: placementZ,
           radius: profile.radius * scaleJitter,
           height: profile.height * scaleJitter,
           rotation: this.deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
