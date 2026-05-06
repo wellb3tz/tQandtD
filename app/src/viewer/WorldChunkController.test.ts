@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import type { ChunkData } from '../../../src';
+import type { ChunkData } from '@engine/index';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 import { WorldChunkController, type WorldChunkViewSettings } from './WorldChunkController';
 import type { ChunkMesh } from './ChunkMesh';

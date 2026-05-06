@@ -610,6 +610,16 @@ export class ChunkManager implements ChunkManagerSnapshot {
   }
 
   /**
+   * Releases background generation resources and clears transient world state.
+   */
+  dispose(): void {
+    this.workerPool?.shutdown();
+    this.workerPool = null;
+    this.clearCache();
+    this.modifications.clear();
+  }
+
+  /**
    * Gets the current cache size.
    * @returns Number of chunks currently cached
    */
@@ -630,6 +640,23 @@ export class ChunkManager implements ChunkManagerSnapshot {
       maxSize: this.maxCacheSize,
       hitRate
     };
+  }
+
+  hasWorkerPool(): boolean {
+    return this.workerPool !== null;
+  }
+
+  getWorkerPoolInitializationError(): Error | null {
+    return this.workerPool?.getInitializationError() ?? null;
+  }
+
+  getWorkerPoolStats(): {
+    totalWorkers: number;
+    activeWorkers: number;
+    queuedTasks: number;
+    completedTasks: number;
+  } | null {
+    return this.workerPool?.getStats() ?? null;
   }
 
   /**

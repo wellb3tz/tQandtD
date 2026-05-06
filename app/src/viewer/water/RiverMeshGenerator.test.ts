@@ -4,7 +4,7 @@ import {
   getRiverValleyWidth,
   getRiverWaterLevel,
   type RiverData,
-} from '../../../../src/gen/rivers';
+} from '@engine/index';
 import { HEIGHT_SCALE } from './config';
 import { buildRiverGeometry } from './RiverMeshGenerator';
 

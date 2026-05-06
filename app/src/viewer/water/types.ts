@@ -8,6 +8,7 @@
  */
 
 import * as THREE from 'three';
+import type { WaterSurfaceTile } from '@engine/index';
 
 /**
  * Ocean water configuration
@@ -128,7 +129,7 @@ export interface WaterLayerData {
 /**
  * Ocean tile data
  */
-export interface OceanTile {
+export interface OceanTile extends WaterSurfaceTile {
   /** Flat index in chunk */
   index: number;
   /** Height from heightmap */
@@ -142,7 +143,7 @@ export interface OceanTile {
 /**
  * Lake tile data — same shape as OceanTile but waterElevation > seaLevel.
  */
-export interface LakeTile {
+export interface LakeTile extends WaterSurfaceTile {
   /** Flat tile index (row-major, size × size) */
   index: number;
   /** Average terrain height of the tile's four corners */

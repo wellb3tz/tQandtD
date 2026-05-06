@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChunkData } from '@engine/world/chunk';
-import { BiomeType } from '@engine/world/chunk';
-import type { LakeData } from '../../../../src/gen/lakes';
+import { BiomeType, type ChunkData, type LakeData } from '@engine/index';
 import type { LakeTile } from './types';
 import { buildLakeGeometry } from './LakeMeshGenerator';
 

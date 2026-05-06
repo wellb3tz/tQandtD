@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { type ChunkData } from '../../../src/index';
+import type { ChunkData } from '@engine/index';
 import {
   stitchBoundaryColors,
   stitchBoundaryDetailBlends,

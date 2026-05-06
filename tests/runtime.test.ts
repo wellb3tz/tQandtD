@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CAMERA_COMPONENT,
   CHUNK_STREAMING_TARGET_COMPONENT,
+  ChunkManager,
   ChunkStreamingSystem,
   EngineRuntime,
   EngineRuntimeState,
@@ -15,15 +16,18 @@ import {
   RenderSyncSystem,
   TRANSFORM_COMPONENT,
   WorldScene,
+  WorldSession,
   createCameraComponent,
   createChunkStreamingTargetComponent,
   createMovementComponent,
   createTransformComponent,
+  SerializationFormat,
   type RuntimeSystem,
   type RendererAdapter,
 } from '../src';
 import type { ChunkData } from '../src/world/chunk';
 import type { ChunkManager } from '../src/world/chunk-manager';
+import { makeMinimalConfig } from './helpers';
 
 function makeChunk(x: number, y: number): ChunkData {
   return {
@@ -549,5 +553,441 @@ describe('EngineRuntime', () => {
 
   it('requires world or worldConfig', () => {
     expect(() => new WorldScene({})).toThrow('WorldScene requires either world or worldConfig');
+  });
+});
+
+describe('WorldSession', () => {
+  it('creates a world scene from world config', () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(101),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    expect(session.getConfig().seed).toBe(101);
+    expect(session.scene.world).toBe(session.getWorld());
+    expect(session.scene.runtime.world).toBe(session.getWorld());
+  });
+
+  it('forwards ticks through the owned scene runtime', () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(102),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    session.tick(0.25);
+
+    expect(session.scene.runtime.getFrame()).toBe(1);
+    expect(session.scene.runtime.getElapsedTime()).toBe(0.25);
+  });
+
+  it('regenerates the world and clears scene render state', () => {
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(103),
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+    const previousWorld = session.getWorld();
+    const disposeEvents: string[] = [];
+    previousWorld.dispose = () => disposeEvents.push('disposed');
+
+    session.scene.renderSystem?.onChunkLoaded(makeChunk(0, 0), { x: 0, y: 0 });
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(true);
+
+    const nextWorld = session.regenerate({ seed: 104 });
+
+    expect(nextWorld).not.toBe(previousWorld);
+    expect(session.getWorld()).toBe(nextWorld);
+    expect(session.scene.world).toBe(nextWorld);
+    expect(session.scene.runtime.world).toBe(nextWorld);
+    expect(session.getConfig().seed).toBe(104);
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(false);
+    expect(renderer.events).toContain('remove-chunk:0,0');
+    expect(disposeEvents).toEqual(['disposed']);
+  });
+
+  it('updates world config through the session and emits config events', () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(112),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const events: string[] = [];
+
+    session.on('config_changed', ({ previousConfig, config, previousWorld, world, workerPoolEnabled, usedWorkerPoolFallback }) => {
+      events.push([
+        `config:${previousConfig.seed}->${config.seed}`,
+        `world:${previousWorld === world ? 'same' : 'replaced'}`,
+        `worker:${workerPoolEnabled}`,
+        `fallback:${usedWorkerPoolFallback}`,
+      ].join('|'));
+    });
+
+    const result = session.updateConfig({ seed: 113, maxCacheSize: 50 });
+
+    expect(result.previousWorld).not.toBe(result.world);
+    expect(result.previousConfig.seed).toBe(112);
+    expect(result.config.seed).toBe(113);
+    expect(result.config.maxCacheSize).toBe(50);
+    expect(result.workerPoolEnabled).toBe(false);
+    expect(result.workerPoolInitializationError).toBeNull();
+    expect(result.usedWorkerPoolFallback).toBe(false);
+    expect(session.getWorld()).toBe(result.world);
+    expect(session.getConfig().seed).toBe(113);
+    expect(events).toEqual(['config:112->113|world:replaced|worker:false|fallback:false']);
+  });
+
+  it('can attach an externally created world', () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(108),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const externalWorld = new ChunkManager(makeMinimalConfig(109));
+
+    session.setWorld(externalWorld);
+
+    expect(session.getWorld()).toBe(externalWorld);
+    expect(session.scene.world).toBe(externalWorld);
+    expect(session.scene.runtime.world).toBe(externalWorld);
+  });
+
+  it('loads chunk ranges and tracks explored chunks', async () => {
+    const world = makeFakeWorld(16);
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      world,
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+
+    const firstLoad = await session.loadChunksAround(0, 0, 1);
+    const secondLoad = await session.loadChunksAround(0, 0, 1);
+
+    expect(firstLoad.loaded).toHaveLength(9);
+    expect(secondLoad.loaded).toHaveLength(0);
+    expect(secondLoad.skipped).toHaveLength(9);
+    expect(session.getLoadedChunkCount()).toBe(9);
+    expect(session.getLoadedChunks().has('0,0')).toBe(true);
+    expect(session.getLoadedChunksSnapshot().has('0,0')).toBe(true);
+    expect(session.getExploredChunks().has('0,0')).toBe(true);
+    expect(session.getWorldStats().biomeDistribution.get(0)).toBe(9);
+    expect(world.requests).toHaveLength(9);
+    expect(renderer.events).toContain('chunk:0,0');
+  });
+
+  it('emits chunk lifecycle events and supports unsubscribe', async () => {
+    const world = makeFakeWorld(16);
+    const session = new WorldSession({
+      world,
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const events: string[] = [];
+
+    const unsubscribeLoaded = session.on('chunk_loaded', ({ coordinate }) => {
+      events.push(`loaded:${coordinate.x},${coordinate.y}`);
+    });
+    session.on('chunk_unloaded', ({ coordinate }) => {
+      events.push(`unloaded:${coordinate.x},${coordinate.y}`);
+    });
+    session.on('chunk_updated', ({ coordinate }) => {
+      events.push(`updated:${coordinate.x},${coordinate.y}`);
+    });
+
+    await session.loadChunksAround(0, 0, 0);
+    await session.refreshChunk({ x: 0, y: 0 });
+    session.unloadDistantChunks(1, 0, 0);
+    unsubscribeLoaded();
+    await session.loadChunksAround(2, 0, 0);
+
+    expect(events).toEqual([
+      'loaded:0,0',
+      'updated:0,0',
+      'unloaded:0,0',
+    ]);
+  });
+
+  it('emits world and cache lifecycle events', async () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(110),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const events: string[] = [];
+
+    session.on('world_changed', ({ previousWorld, world }) => {
+      events.push(`world:${previousWorld.config.seed}->${world.config.seed}`);
+    });
+    session.on('config_changed', ({ previousConfig, config }) => {
+      events.push(`config:${previousConfig.seed}->${config.seed}`);
+    });
+    session.on('cache_cleared', ({ unloaded }) => {
+      events.push(`cache:${unloaded.length}`);
+    });
+
+    await session.loadChunksAround(0, 0, 0);
+    session.clearCache();
+    session.regenerate({ seed: 111 });
+
+    expect(events).toEqual(['cache:1', 'world:110->111', 'config:110->111']);
+  });
+
+  it('unloads distant chunks and keeps renderer state in sync', async () => {
+    const world = makeFakeWorld(16);
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      world,
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+
+    await session.loadChunksAround(0, 0, 1);
+    const result = session.unloadDistantChunks(0, 0, 0);
+
+    expect(result.unloaded).toHaveLength(8);
+    expect(session.getLoadedChunkCount()).toBe(1);
+    expect(session.getLoadedChunks().has('0,0')).toBe(true);
+    expect(renderer.events).toContain('remove-chunk:-1,-1');
+  });
+
+  it('can forget renderer state when unloading without renderer sync', async () => {
+    const world = makeFakeWorld(16);
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      world,
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+
+    await session.loadChunksAround(0, 0, 0);
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(true);
+
+    const result = session.unloadDistantChunks(1, 0, 0, { syncRenderer: false });
+
+    expect(result.unloaded).toHaveLength(1);
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(false);
+    expect(renderer.events.filter(event => event === 'remove-chunk:0,0')).toHaveLength(0);
+  });
+
+  it('refreshes loaded chunks only', async () => {
+    const world = makeFakeWorld(16);
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      world,
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+
+    expect(await session.refreshChunk({ x: 0, y: 0 })).toBeNull();
+
+    await session.loadChunksAround(0, 0, 0);
+    const refreshed = await session.refreshChunk({ x: 0, y: 0 });
+
+    expect(refreshed).not.toBeNull();
+    expect(world.requests).toEqual([[0, 0], [0, 0]]);
+    expect(renderer.events.filter(event => event === 'chunk:0,0')).toHaveLength(2);
+    expect(renderer.events).toContain('remove-chunk:0,0');
+  });
+
+  it('records terrain edits and publishes chunk updates through the session', async () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(115),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const events: string[] = [];
+
+    session.on('chunk_updated', ({ coordinate, chunk }) => {
+      events.push(`updated:${coordinate.x},${coordinate.y}:${chunk.heightmap[0].toFixed(2)}`);
+    });
+
+    await session.loadChunksAround(0, 0, 0);
+    const chunk = await session.getChunk({ x: 0, y: 0 });
+    chunk.heightmap[0] = 0.42;
+    session.recordTerrainEdit({ x: 0, y: 0 }, 0, 0.42);
+
+    const updated = await session.notifyChunkUpdated({ x: 0, y: 0 }, { syncRenderer: false });
+    const saved = session.saveWorld({
+      format: SerializationFormat.JSON,
+      compress: false,
+      modifiedOnly: true,
+    });
+
+    expect(updated.heightmap[0]).toBeCloseTo(0.42);
+    expect(session.getLoadedChunks().get('0,0')?.heightmap[0]).toBeCloseTo(0.42);
+    expect(saved.modifications).toHaveLength(1);
+    expect(saved.modifications[0].heightChanges.get(0)).toBeCloseTo(0.42);
+    expect(events).toEqual(['updated:0,0:0.42']);
+  });
+
+  it('saves and loads worlds through the current chunk manager', async () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(105),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    await session.getWorld().getChunk(0, 0);
+    const saved = session.saveWorld({
+      format: SerializationFormat.JSON,
+      compress: false,
+      modifiedOnly: false,
+    });
+    const loadedWorld = session.loadWorld(saved);
+
+    expect(loadedWorld).toBe(session.getWorld());
+    expect(session.getConfig().seed).toBe(105);
+    expect(loadedWorld.getCacheSize()).toBe(1);
+  });
+
+  it('exports file data and emits a world loaded lifecycle event', async () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(114),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    await session.getWorld().getChunk(0, 0);
+    const exported = session.exportWorld({
+      format: SerializationFormat.JSON,
+      compress: false,
+      modifiedOnly: false,
+    });
+    const events: string[] = [];
+
+    session.on('world_loaded', ({ previousWorld, world, serializedWorld, config }) => {
+      events.push([
+        `world:${previousWorld === world ? 'same' : 'replaced'}`,
+        `seed:${serializedWorld.seed}`,
+        `config:${config.seed}`,
+      ].join('|'));
+    });
+
+    const loadedWorld = session.loadWorld(exported.serializedWorld);
+
+    expect(typeof exported.data).toBe('string');
+    expect(exported.checksum).toBe(exported.serializedWorld.checksum);
+    expect(loadedWorld).toBe(session.getWorld());
+    expect(events).toEqual(['world:replaced|seed:114|config:114']);
+  });
+
+  it('clears world cache and scene caches together', async () => {
+    const renderer = new FakeRenderer();
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(106),
+      scene: {
+        renderer,
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+      },
+    });
+
+    await session.getWorld().getChunk(0, 0);
+    session.scene.renderSystem?.onChunkLoaded(makeChunk(0, 0), { x: 0, y: 0 });
+
+    session.clearCache();
+
+    expect(session.getWorld().getCacheSize()).toBe(0);
+    expect(session.getLoadedChunkCount()).toBe(0);
+    expect(session.getExploredChunks().size).toBe(0);
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(false);
+    expect(renderer.events).toContain('remove-chunk:0,0');
+  });
+
+  it('guards operations after dispose', () => {
+    const session = new WorldSession({
+      worldConfig: makeMinimalConfig(107),
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    session.dispose();
+
+    expect(() => session.tick(0.016)).toThrow('WorldSession has been disposed');
+    expect(() => session.regenerate()).toThrow('WorldSession has been disposed');
+  });
+
+  it('requires world or worldConfig', () => {
+    expect(() => new WorldSession({})).toThrow('WorldSession requires either world or worldConfig');
   });
 });

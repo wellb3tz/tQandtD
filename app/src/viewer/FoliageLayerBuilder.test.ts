@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '../../../src';
+import { BiomeType, type ChunkData } from '@engine/index';
 import { createFoliageLayer } from './FoliageLayerBuilder';
 
 describe('FoliageLayerBuilder', () => {

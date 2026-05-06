@@ -219,11 +219,6 @@ export class TerrainEditor {
       return;
     }
     
-    const state = this.app.getState();
-    if (!state.chunkManager) {
-      return;
-    }
-    
     // Save state for undo before modification
     await this.saveStateForUndo(worldX, worldY);
     
@@ -295,11 +290,6 @@ export class TerrainEditor {
   async smoothTerrain(worldX: number, worldY: number, radius: number): Promise<void> {
     if (!this.app) return;
     
-    const state = this.app.getState();
-    if (!state.chunkManager) return;
-    
-    const chunkSize = state.config.chunkSize || 32;
-    
     // Collect all heights in the radius first
     const heightMap = new Map<string, number>();
     
@@ -353,14 +343,12 @@ export class TerrainEditor {
     if (!this.app) return;
     
     const state = this.app.getState();
-    if (!state.chunkManager) return;
-    
     const chunkSize = state.config.chunkSize || 32;
     const affectedChunks = new Set<string>();
     
     // Iterate over all tiles in radius
     await this.iterateTerrainInRadius(worldX, worldY, radius, async (wx, wy, chunkX, chunkY, localX, localY, distance) => {
-      const chunk = await state.chunkManager!.getChunk(chunkX, chunkY);
+      const chunk = await this.app!.getWorldChunk(chunkX, chunkY);
       const index = localY * chunkSize + localX;
       
       const currentHeight = chunk.heightmap[index];
@@ -369,19 +357,16 @@ export class TerrainEditor {
       // Update heightmap directly
       chunk.heightmap[index] = newHeight;
       
-      // Record modification through ChunkManager for persistence
-      state.chunkManager!.recordTerrainEdit(chunkX, chunkY, index, newHeight);
+      // Record modification through the app/session boundary for persistence.
+      this.app!.recordTerrainEdit(chunkX, chunkY, index, newHeight);
       
       affectedChunks.add(`${chunkX},${chunkY}`);
     });
     
-    // Update viewer for all affected chunks
-    if (this.viewer) {
-      for (const key of affectedChunks) {
-        const [chunkX, chunkY] = key.split(',').map(Number);
-        const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
-        this.viewer.updateChunk(chunkX, chunkY, chunk);
-      }
+    // Publish updates for all affected chunks. The app event bridge updates the viewer.
+    for (const key of affectedChunks) {
+      const [chunkX, chunkY] = key.split(',').map(Number);
+      await this.app.publishChunkUpdate(chunkX, chunkY);
     }
   }
 
@@ -435,8 +420,6 @@ export class TerrainEditor {
     if (!this.app) return null;
     
     const state = this.app.getState();
-    if (!state.chunkManager) return null;
-    
     const chunkSize = state.config.chunkSize || 32;
     const chunkX = Math.floor(worldX / chunkSize);
     const chunkY = Math.floor(worldY / chunkSize);
@@ -444,7 +427,7 @@ export class TerrainEditor {
     const localY = ((worldY % chunkSize) + chunkSize) % chunkSize;
     
     try {
-      const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
+      const chunk = await this.app.getWorldChunk(chunkX, chunkY);
       const index = localY * chunkSize + localX;
       return chunk.heightmap[index];
     } catch {
@@ -458,10 +441,6 @@ export class TerrainEditor {
   private async saveStateForUndo(worldX: number, worldY: number): Promise<void> {
     if (!this.app) return;
     
-    const state = this.app.getState();
-    if (!state.chunkManager) return;
-    
-    const chunkSize = state.config.chunkSize || 32;
     const affectedChunks = new Set<string>();
     
     // Determine which chunks are affected
@@ -472,7 +451,7 @@ export class TerrainEditor {
     // Save snapshot of each affected chunk
     for (const key of affectedChunks) {
       const [chunkX, chunkY] = key.split(',').map(Number);
-      const chunk = await state.chunkManager.getChunk(chunkX, chunkY);
+      const chunk = await this.app.getWorldChunk(chunkX, chunkY);
       
       const entry: HistoryEntry = {
         chunkX,
@@ -498,14 +477,11 @@ export class TerrainEditor {
   async undo(): Promise<void> {
     if (!this.canUndo() || !this.app) return;
     
-    const state = this.app.getState();
-    if (!state.chunkManager) return;
-    
     const entry = this.undoStack.pop();
     if (!entry) return;
     
     // Save current state to redo stack
-    const chunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+    const chunk = await this.app.getWorldChunk(entry.chunkX, entry.chunkY);
     this.redoStack.push({
       chunkX: entry.chunkX,
       chunkY: entry.chunkY,
@@ -515,14 +491,10 @@ export class TerrainEditor {
     // Restore heightmap
     for (let i = 0; i < entry.heightmapSnapshot.length; i++) {
       chunk.heightmap[i] = entry.heightmapSnapshot[i];
-      state.chunkManager.recordTerrainEdit(entry.chunkX, entry.chunkY, i, entry.heightmapSnapshot[i]);
+      this.app.recordTerrainEdit(entry.chunkX, entry.chunkY, i, entry.heightmapSnapshot[i]);
     }
     
-    // Update viewer
-    if (this.viewer) {
-      const updatedChunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
-      this.viewer.updateChunk(entry.chunkX, entry.chunkY, updatedChunk);
-    }
+    await this.app.publishChunkUpdate(entry.chunkX, entry.chunkY);
   }
 
   /**
@@ -531,14 +503,11 @@ export class TerrainEditor {
   async redo(): Promise<void> {
     if (!this.canRedo() || !this.app) return;
     
-    const state = this.app.getState();
-    if (!state.chunkManager) return;
-    
     const entry = this.redoStack.pop();
     if (!entry) return;
     
     // Save current state to undo stack
-    const chunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
+    const chunk = await this.app.getWorldChunk(entry.chunkX, entry.chunkY);
     this.undoStack.push({
       chunkX: entry.chunkX,
       chunkY: entry.chunkY,
@@ -548,14 +517,10 @@ export class TerrainEditor {
     // Restore heightmap
     for (let i = 0; i < entry.heightmapSnapshot.length; i++) {
       chunk.heightmap[i] = entry.heightmapSnapshot[i];
-      state.chunkManager.recordTerrainEdit(entry.chunkX, entry.chunkY, i, entry.heightmapSnapshot[i]);
+      this.app.recordTerrainEdit(entry.chunkX, entry.chunkY, i, entry.heightmapSnapshot[i]);
     }
     
-    // Update viewer
-    if (this.viewer) {
-      const updatedChunk = await state.chunkManager.getChunk(entry.chunkX, entry.chunkY);
-      this.viewer.updateChunk(entry.chunkX, entry.chunkY, updatedChunk);
-    }
+    await this.app.publishChunkUpdate(entry.chunkX, entry.chunkY);
   }
 
   /**

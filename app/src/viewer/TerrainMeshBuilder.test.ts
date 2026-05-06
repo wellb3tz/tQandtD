@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '../../../src/index';
+import { BiomeType, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import { createTerrainMesh } from './TerrainMeshBuilder';
 import { DEFAULT_WATER_CONFIG } from './water/config';

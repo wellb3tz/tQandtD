@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package build
+        run: npm run build && npm run build:verify && npm run verify:package
+
+      - name: Typecheck
+        run: npm run typecheck && npm run typecheck:app
+
+      - name: Test
+        run: npm test
+
+      - name: Build app
+        run: npm run build:app

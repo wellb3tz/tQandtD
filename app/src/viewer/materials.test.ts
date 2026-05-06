@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType } from '../../../src';
+import { BiomeType } from '@engine/index';
 import {
   TERRAIN_ALBEDO_TEXTURE_URL,
   TERRAIN_ALBEDO_ATLAS_TEXTURE_URL,

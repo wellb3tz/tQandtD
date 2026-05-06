@@ -103,6 +103,13 @@ export class RenderSyncSystem implements RuntimeSystem {
     this.adapter.removeChunk?.(renderedCoordinate);
   }
 
+  forgetChunk(coordinate: ChunkCoordinate): boolean {
+    const key = this.getChunkKey(coordinate);
+    const removed = this.renderedChunkKeys.delete(key);
+    this.renderedChunkCoordinates.delete(key);
+    return removed;
+  }
+
   clearChunks(): void {
     for (const coordinate of this.renderedChunkCoordinates.values()) {
       this.adapter.removeChunk?.(coordinate);

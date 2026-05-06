@@ -4,7 +4,7 @@
  */
 
 import { WorldApp, AppState } from '../core/WorldApp';
-import { BiomeType, ResourceType, StructureType } from '../../../src/index';
+import { BiomeType, ResourceType, StructureType } from '@engine/index';
 
 export class StatisticsDisplay {
   private container: HTMLElement | null = null;

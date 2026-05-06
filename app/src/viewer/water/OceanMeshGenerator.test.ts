@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChunkData } from '@engine/world/chunk';
-import { BiomeType } from '@engine/world/chunk';
+import { BiomeType, type ChunkData } from '@engine/index';
 import { DEFAULT_WATER_CONFIG } from './config';
 import { buildOceanGeometry, identifyOceanTiles } from './OceanMeshGenerator';
 

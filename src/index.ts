@@ -68,6 +68,14 @@ export { hash, chunkSeed } from './core/hash';
 
 // World management
 export { ChunkManager, type WorldConfig, type ChunkPerformanceMetrics, type ProgressCallback, type Noise3DConfig } from './world/chunk-manager';
+export {
+  cloneWorldConfig,
+  createDefaultWorldConfig,
+  deriveNoise3DConfig,
+  mergeWorldConfig,
+  prepareWorldConfig,
+  type WorldConfigOverrides,
+} from './config/default-world-config';
 export { BiomeSystem, type BiomeConfig } from './world/biome';
 export {
   EnhancedBiomeSystem,
@@ -115,6 +123,76 @@ export {
 export { LakeManager, type WorldLakeData } from './world/lake-manager';
 export { RiverManager } from './world/river-manager';
 
+// Rendering data helpers
+export {
+  createIndexedGeometryData,
+  getIndexedGeometryVertexCount,
+  type IndexedGeometryData,
+} from './rendering/geometry';
+export {
+  buildLakeGeometryData,
+  buildOceanGeometryData,
+  buildRiverGeometryData,
+  identifyLakeSurfaceTiles,
+  identifyOceanSurfaceTiles,
+  type WaterGeometryOptions,
+  type WaterSurfaceTile,
+} from './rendering/water-geometry';
+export {
+  buildTerrainGridGeometryData,
+  type TerrainGridGeometryData,
+  type TerrainGridGeometryOptions,
+} from './rendering/terrain-geometry';
+export {
+  RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateRiverTrenchInfluence,
+  getRiverTrenchDarkening,
+} from './rendering/terrain-detail';
+export {
+  SHRUB_PROTOTYPE_MIN_Y,
+  planFoliagePlacements,
+  type FoliagePlacement,
+  type FoliagePlacementPlan,
+  type FoliageProfile,
+  type TerrainPropPlacement,
+  type TreePlacement,
+  type TreeVariant,
+} from './rendering/foliage-placement';
+export {
+  buildChunkBoundaryLineData,
+  buildResourceMarkerPlacements,
+  buildStructureMarkerPlacements,
+  getResourceMarkerColor,
+  getStructureMarkerColor,
+  type ChunkBoundaryLineData,
+  type ChunkOverlayOptions,
+  type MarkerPlacementData,
+  type StructureMarkerGeometryKind,
+  type StructureMarkerPlacementData,
+} from './rendering/chunk-overlays';
+export {
+  RenderLayer,
+  applyChunkVisibility,
+  applyRenderLayerVisibility,
+  isRenderLayerVisible,
+  type RenderLayerChunk,
+  type RenderLayerVisibilityState,
+  type VisibleObject,
+} from './rendering/render-layers';
+export {
+  RenderStatsCache,
+  calculateMicroBiomeCount,
+  calculateRenderStats,
+  type RenderStats,
+  type RenderStatsChunk,
+  type RenderStatsGeometry,
+  type RenderStatsGeometryAttribute,
+  type RenderStatsGroup,
+  type RenderStatsMesh,
+  type RenderStatsNowProvider,
+  type RenderStatsObject,
+} from './rendering/render-stats';
+
 // Runtime engine shell
 export {
   Entity,
@@ -140,6 +218,7 @@ export {
   RenderSyncSystem,
   TRANSFORM_COMPONENT,
   WorldScene,
+  WorldSession,
   createCameraComponent,
   createChunkStreamingTargetComponent,
   createMovementComponent,
@@ -169,6 +248,30 @@ export {
   type Vector3,
   type WorldSceneOptions,
   type WorldScenePlayerOptions,
+  type WorldSessionCacheClearedEvent,
+  type WorldSessionCacheStats,
+  type WorldSessionChunkEntry,
+  type WorldSessionConfigChangedEvent,
+  type WorldSessionEvent,
+  type WorldSessionEventCallback,
+  type WorldSessionEventMap,
+  type WorldSessionExportResult,
+  type WorldSessionLoadChunksOptions,
+  type WorldSessionLoadChunksResult,
+  type WorldSessionLoadOptions,
+  type WorldSessionNotifyChunkUpdatedOptions,
+  type WorldSessionOptions,
+  type WorldSessionRegenerateOptions,
+  type WorldSessionSceneOptions,
+  type WorldSessionUnloadChunksOptions,
+  type WorldSessionUnloadChunksResult,
+  type WorldSessionUnsubscribe,
+  type WorldSessionUpdateConfigOptions,
+  type WorldSessionUpdateConfigResult,
+  type WorldSessionWorldChangedEvent,
+  type WorldSessionWorldLoadedEvent,
+  type WorldSessionWorldStats,
+  type WorldSessionWorkerPoolStats,
 } from './runtime';
 
 // Generators

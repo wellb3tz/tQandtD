@@ -5,7 +5,7 @@
 
 import { WorldApp } from '../core/WorldApp';
 import { BIOME_COLORS } from '../viewer/materials';
-import { BiomeType } from '../../../src/index';
+import { BiomeType } from '@engine/index';
 
 const BIOME_NAMES: Record<number, string> = {
   0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',

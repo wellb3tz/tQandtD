@@ -5,7 +5,7 @@
  * smooth color blending between biomes based on blend weights.
  */
 
-import { BiomeType } from '@engine/world/chunk';
+import { BiomeType } from '@engine/index';
 import * as THREE from 'three';
 
 export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';

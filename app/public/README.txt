@@ -1,7 +1,7 @@
-tQandtD project - Comprehensive Demo
+tQandtD project - World App
 ============================================
 
-This is the production build of the tQandtD project demo application.
+This is the production build of the tQandtD world application.
 
 Build Information:
 - Bundle Size: ~157 KB gzipped

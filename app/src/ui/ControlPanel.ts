@@ -6,8 +6,7 @@
  */
 
 import { WorldApp, AppState, TerrainTool } from '../core/WorldApp';
-import type { WorldConfig } from '../../../src/world/chunk-manager';
-import { DEFAULT_RIVER_CONFIG } from '../../../src/gen/rivers';
+import { DEFAULT_RIVER_CONFIG, type WorldConfig } from '@engine/index';
 import { TerrainEditor } from '../editor/TerrainEditor';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 

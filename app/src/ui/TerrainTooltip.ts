@@ -4,7 +4,7 @@
  */
 
 import { WorldApp } from '../core/WorldApp';
-import { ChunkData } from '../../../src/index';
+import type { ChunkData } from '@engine/index';
 
 const BIOME_NAMES: Record<number, string> = {
   0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',

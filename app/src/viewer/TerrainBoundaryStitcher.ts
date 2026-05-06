@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ChunkData } from '../../../src/index';
+import type { ChunkData } from '@engine/index';
 
 export interface StitchableChunkMesh {
   terrain: THREE.Mesh;

@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType, createSparseBiomeWeights, type ChunkData } from '../../../src';
+import { BiomeType, createSparseBiomeWeights, type ChunkData } from '@engine/index';
 import { WorldViewer } from './WorldViewer';
 
 function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {

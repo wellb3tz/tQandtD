@@ -6,7 +6,25 @@
  * updates, chunk loading coordination, and event system for component communication.
  */
 
-import { ChunkManager, WorldConfig, ChunkData, BiomeType, ResourceType, StructureType, configureLogger, LogLevel, DEFAULT_RIVER_CONFIG } from '@engine/index';
+import {
+  ChunkManager,
+  WorldSession,
+  WorldConfig,
+  ChunkData,
+  BiomeType,
+  ResourceType,
+  StructureType,
+  configureLogger,
+  LogLevel,
+  SerializationOptions,
+  SerializedWorld,
+  WorldSessionCacheStats,
+  WorldSessionWorldStats,
+  cloneWorldConfig,
+  createDefaultWorldConfig,
+  prepareWorldConfig,
+  WorldConfigOverrides,
+} from '@engine/index';
 
 /**
  * 3D vector for camera position and target
@@ -94,6 +112,19 @@ export type StateChangeCallback = (state: AppState) => void;
  */
 export type Unsubscribe = () => void;
 
+export interface AppWorldExportResult {
+  data: Blob | string;
+  serializedWorld: SerializedWorld;
+  checksum: string;
+}
+
+export interface AppWorkerPoolStats {
+  activeWorkers: number;
+  queuedTasks: number;
+  completedTasks: number;
+  avgWorkerTime: number;
+}
+
 /**
  * Event types for component communication
  */
@@ -102,6 +133,7 @@ export enum AppEvent {
   CHUNK_UPDATED = 'chunk_updated',
   CHUNK_UNLOADED = 'chunk_unloaded',
   WORLD_GENERATED = 'world_generated',
+  WORLD_LOADED = 'world_loaded',
   CONFIG_CHANGED = 'config_changed',
   STATE_CHANGED = 'state_changed',
   VISIBILITY_CHANGED = 'visibility_changed',
@@ -112,81 +144,6 @@ export enum AppEvent {
  * Event callback type
  */
 export type EventCallback = (data?: any) => void;
-
-/**
- * Default world configuration
- */
-const DEFAULT_CONFIG: WorldConfig = {
-  seed: 12345,
-  chunkSize: 32,
-  terrainConfig: {
-    baseScale: 0.01,
-    octaves: 4,
-    persistence: 0.5,
-    lacunarity: 2.0,
-    warpStrength: 1,
-    heightMultiplier: 2.0,
-    enable3D: false,
-    zScale: 0.5,
-    enableContinentalness: true,
-    continentalScale: 0.002,
-    continentalStrength: 0.45,
-  },
-  biomeConfig: {
-    temperatureScale: 0.001,
-    moistureScale: 0.001,
-    blendRadius: 0.5
-  },
-  enhancedBiomeConfig: {
-    temperatureScale: 0.001,
-    moistureScale: 0.001,
-    blendRadius: 0.5,
-    enableTransitions: false,
-    transitionWidth: 4,
-    enableElevationBands: true,
-    snowLineElevation: 0.8,
-    treeLineElevation: 0.75,
-    enableMicroBiomes: true,
-    microBiomeFrequency: 0.10,
-    microBiomeMaxSize: 20,
-    depressionDepthThreshold: 0.05,
-    clearingGradientThreshold: 0.03
-  },
-  resourceConfig: {
-    types: [
-      { type: 0, rarity: 0.5, biomes: [6, 7, 8], minAmount: 1, maxAmount: 5 }, // Iron - Mountains, Tundra, Taiga
-      { type: 1, rarity: 0.5, biomes: [6, 7], minAmount: 1, maxAmount: 3 }, // Gold - Mountains, Tundra
-      { type: 2, rarity: 0.5, biomes: [3, 4, 5, 6], minAmount: 2, maxAmount: 6 }, // Coal - Plains, Forest, Taiga, Mountains
-      { type: 3, rarity: 0.5, biomes: [6, 7, 8], minAmount: 3, maxAmount: 8 }, // Stone - Mountains, Tundra, Desert
-      { type: 4, rarity: 0.5, biomes: [4, 5, 9], minAmount: 1, maxAmount: 4 }  // Wood - Forest, Taiga, Swamp
-    ],
-    clusterScale: 20,
-    densityThreshold: 0.6
-  },
-  structureConfig: {
-    types: [
-      { type: 0, rarity: 1.0, rules: [] }, // Village
-      { type: 1, rarity: 1.0, rules: [] }, // Ruins
-      { type: 2, rarity: 1.0, rules: [] }  // Tower
-    ],
-    minDistance: 30,
-    maxAttempts: 30
-  },
-  lakeConfig: {
-    enabled: true,
-    useMultiChunk: true,  // Changed to true by default
-    noiseScale: 0.01,
-    noiseThreshold: 0.62,
-    minElevation: 0.32,
-    maxElevation: 0.72,
-    allowedBiomes: [3, 4, 5, 6, 7, 8, 9], // PLAINS, FOREST, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA
-    maxLakeTiles: 80,
-    maxFillDepth: 0.06,
-  },
-  riverConfig: DEFAULT_RIVER_CONFIG,
-  maxCacheSize: 1000,
-  enablePerformanceMetrics: true
-};
 
 /**
  * WorldApp - Central coordinator for the world application
@@ -202,6 +159,8 @@ export class WorldApp {
   private initialized: boolean;
   private isUpdatingConfig: boolean; // Prevent recursive config updates
   private invalidatingChunks: Set<string>;
+  private worldSession: WorldSession | null;
+  private worldSessionUnsubscribers: Array<() => void>;
 
   constructor() {
     this.initialized = false;
@@ -209,12 +168,14 @@ export class WorldApp {
     this.eventListeners = new Map();
     this.isUpdatingConfig = false;
     this.invalidatingChunks = new Set();
+    this.worldSession = null;
+    this.worldSessionUnsubscribers = [];
     
     // Initialize state with defaults
     this.state = {
       chunkManager: null,
       loadedChunks: new Map(),
-      config: { ...DEFAULT_CONFIG },
+      config: createDefaultWorldConfig(),
       
       cameraPosition: { x: 50, y: 100, z: 50 },
       cameraTarget: { x: 0, y: 0, z: 0 },
@@ -278,11 +239,9 @@ export class WorldApp {
       });
       
       // Create ChunkManager with default configuration
-      const initConfig = {
-        ...this.state.config,
-        noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
+      const initConfig = prepareWorldConfig(this.state.config, {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
-      };
+      });
       this.state.chunkManager = new ChunkManager(initConfig);
       this.state.config = initConfig;
       
@@ -303,6 +262,107 @@ export class WorldApp {
    */
   getState(): Readonly<AppState> {
     return this.state;
+  }
+
+  getConfigSnapshot(): WorldConfig {
+    return cloneWorldConfig(this.state.config);
+  }
+
+  getWorld(): ChunkManager | null {
+    return this.state.chunkManager;
+  }
+
+  getLoadedChunkCount(): number {
+    const session = this.getActiveWorldSession();
+    return session?.getLoadedChunkCount() ?? this.state.loadedChunks.size;
+  }
+
+  getLoadedChunksSnapshot(): Map<string, ChunkData> {
+    const session = this.getActiveWorldSession();
+    return session?.getLoadedChunksSnapshot() ?? new Map(this.state.loadedChunks);
+  }
+
+  getCacheStats(): WorldSessionCacheStats {
+    const session = this.getActiveWorldSession();
+    if (session) {
+      return session.getCacheStats();
+    }
+
+    return this.state.chunkManager?.getCacheStats() ?? {
+      size: 0,
+      maxSize: this.state.config.maxCacheSize ?? 0,
+      hitRate: 0,
+    };
+  }
+
+  getWorldStats(): WorldSessionWorldStats {
+    const session = this.getActiveWorldSession();
+    return session?.getWorldStats() ?? calculateWorldStats(this.state.loadedChunks);
+  }
+
+  getApproximateMemoryUsage(): number {
+    const bytesPerChunk = 6580;
+    return this.getLoadedChunkCount() * bytesPerChunk;
+  }
+
+  getDominantBiomeName(): string | null {
+    const stats = this.getWorldStats();
+    if (stats.biomeDistribution.size === 0) {
+      return null;
+    }
+
+    const biomeNames: Record<number, string> = {
+      0: 'Ocean',
+      1: 'Beach',
+      2: 'Desert',
+      3: 'Plains',
+      4: 'Forest',
+      5: 'Taiga',
+      6: 'Tundra',
+      7: 'Mountain',
+      8: 'Savanna',
+      9: 'Swamp',
+      10: 'Rainforest',
+      11: 'Volcanic',
+      12: 'Glacier',
+    };
+
+    let maxCount = 0;
+    let dominantBiome: string | null = null;
+    stats.biomeDistribution.forEach((count, biome) => {
+      if (count > maxCount) {
+        maxCount = count;
+        dominantBiome = biomeNames[biome] ?? null;
+      }
+    });
+
+    return dominantBiome;
+  }
+
+  getViewDistance(): number {
+    return this.state.viewDistance;
+  }
+
+  getSeed(): number {
+    return this.state.config.seed;
+  }
+
+  getSelectedTool(): TerrainTool {
+    return this.state.selectedTool;
+  }
+
+  isWorkerPoolEnabled(): boolean {
+    return this.state.workerPoolEnabled;
+  }
+
+  syncWorldSession(session: WorldSession | null): void {
+    const world = this.state.chunkManager;
+    if (!world || !session || session.getWorld() === world) {
+      return;
+    }
+
+    session.setWorld(world);
+    this.attachWorldSession(session);
   }
 
   /**
@@ -361,6 +421,54 @@ export class WorldApp {
     };
   }
 
+  attachWorldSession(session: WorldSession | null): void {
+    this.detachWorldSessionEvents();
+    this.worldSession = session;
+    if (session) {
+      this.worldSessionUnsubscribers = [
+        session.on('chunk_loaded', ({ coordinate, chunk }) => {
+          this.emit(AppEvent.CHUNK_LOADED, {
+            chunkX: coordinate.x,
+            chunkY: coordinate.y,
+            chunk,
+          });
+        }),
+        session.on('chunk_unloaded', ({ coordinate }) => {
+          this.emit(AppEvent.CHUNK_UNLOADED, {
+            chunkX: coordinate.x,
+            chunkY: coordinate.y,
+            keepFogOfWar: this.state.fogOfWarEnabled,
+          });
+        }),
+        session.on('chunk_updated', ({ coordinate, chunk }) => {
+          this.syncLoadedChunksFromSession();
+          this.updateState({
+            loadedChunks: new Map(this.state.loadedChunks),
+          });
+          this.emit(AppEvent.CHUNK_UPDATED, {
+            chunkX: coordinate.x,
+            chunkY: coordinate.y,
+            chunk,
+          });
+        }),
+        session.on('world_changed', () => {
+          this.syncLoadedChunksFromSession();
+        }),
+        session.on('world_loaded', ({ config, world }) => {
+          this.state.chunkManager = world;
+          this.state.config = config;
+          this.syncLoadedChunksFromSession();
+        }),
+        session.on('config_changed', ({ config, world }) => {
+          this.state.chunkManager = world;
+          this.state.config = config;
+          this.syncLoadedChunksFromSession();
+        }),
+      ];
+    }
+    this.syncLoadedChunksFromSession();
+  }
+
   /**
    * Generate a new world with the given seed
    */
@@ -371,15 +479,19 @@ export class WorldApp {
 
     try {
       // Update configuration with new seed
-      const newConfig = {
-        ...this.state.config,
+      const newConfig = prepareWorldConfig(this.state.config, {
         seed,
-        noise3DConfig: this.buildNoise3DConfig(this.state.config.terrainConfig),
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
-      };
+      });
       
-      // Create new ChunkManager with updated config
-      const newManager = new ChunkManager(newConfig);
+      const session = this.getActiveWorldSession();
+      const newManager = session
+        ? session.regenerate({ config: newConfig, seed })
+        : new ChunkManager(newConfig);
+
+      if (!session) {
+        this.state.chunkManager.dispose();
+      }
       
       // Clear existing chunks and explored chunks
       this.state.loadedChunks.clear();
@@ -388,7 +500,7 @@ export class WorldApp {
       // Update state
       this.updateState({
         chunkManager: newManager,
-        config: newConfig,
+        config: newManager.config,
         loadedChunks: new Map(),
         exploredChunks: new Set()
       });
@@ -410,6 +522,125 @@ export class WorldApp {
     }
   }
 
+  exportWorld(options: SerializationOptions): AppWorldExportResult {
+    const chunkManager = this.state.chunkManager;
+    if (!chunkManager) {
+      throw new Error('No chunk manager available');
+    }
+
+    const session = this.getActiveWorldSession();
+    if (session) {
+      return session.exportWorld(options);
+    }
+
+    const serializedWorld = chunkManager.saveWorld(options);
+    return {
+      data: chunkManager.exportWorld(options),
+      serializedWorld,
+      checksum: serializedWorld.checksum,
+    };
+  }
+
+  loadSerializedWorld(serializedWorld: SerializedWorld): ChunkManager {
+    const previousManager = this.state.chunkManager;
+    const session = this.getActiveWorldSession();
+    let nextManager: ChunkManager;
+
+    if (session) {
+      nextManager = session.loadWorld(serializedWorld);
+    } else {
+      nextManager = new ChunkManager(serializedWorld.config);
+      try {
+        nextManager.loadWorld(serializedWorld);
+      } catch (error) {
+        nextManager.dispose();
+        throw error;
+      }
+      previousManager?.dispose();
+    }
+
+    this.invalidatingChunks.clear();
+    this.updateState({
+      chunkManager: nextManager,
+      config: nextManager.config,
+      loadedChunks: new Map(),
+      exploredChunks: new Set(),
+      loadedChunkCount: 0,
+    });
+    this.emit(AppEvent.WORLD_LOADED, {
+      seed: serializedWorld.seed,
+      chunkManager: nextManager,
+      serializedWorld,
+    });
+    return nextManager;
+  }
+
+  async getWorldChunk(chunkX: number, chunkY: number): Promise<ChunkData> {
+    const chunkManager = this.state.chunkManager;
+    if (!chunkManager) {
+      throw new Error('ChunkManager not initialized');
+    }
+
+    const session = this.getActiveWorldSession();
+    return session
+      ? session.getChunk({ x: chunkX, y: chunkY })
+      : chunkManager.getChunk(chunkX, chunkY);
+  }
+
+  recordTerrainEdit(chunkX: number, chunkY: number, tileIndex: number, newHeight: number): void {
+    const chunkManager = this.state.chunkManager;
+    if (!chunkManager) {
+      throw new Error('ChunkManager not initialized');
+    }
+
+    const session = this.getActiveWorldSession();
+    if (session) {
+      session.recordTerrainEdit({ x: chunkX, y: chunkY }, tileIndex, newHeight);
+    } else {
+      chunkManager.recordTerrainEdit(chunkX, chunkY, tileIndex, newHeight);
+    }
+  }
+
+  recordTerrainEdits(chunkX: number, chunkY: number, heightChanges: Map<number, number>): void {
+    const chunkManager = this.state.chunkManager;
+    if (!chunkManager) {
+      throw new Error('ChunkManager not initialized');
+    }
+
+    const session = this.getActiveWorldSession();
+    if (session) {
+      session.recordTerrainEdits({ x: chunkX, y: chunkY }, heightChanges);
+    } else {
+      chunkManager.recordTerrainEdits(chunkX, chunkY, heightChanges);
+    }
+  }
+
+  async publishChunkUpdate(chunkX: number, chunkY: number): Promise<ChunkData> {
+    const chunkManager = this.state.chunkManager;
+    if (!chunkManager) {
+      throw new Error('ChunkManager not initialized');
+    }
+
+    const session = this.getActiveWorldSession();
+    const chunk = session
+      ? await session.notifyChunkUpdated({ x: chunkX, y: chunkY }, { syncRenderer: false })
+      : await chunkManager.getChunk(chunkX, chunkY);
+
+    const key = this.getChunkKey(chunkX, chunkY);
+    if (this.state.loadedChunks.has(key)) {
+      this.state.loadedChunks.set(key, chunk);
+      this.updateState({
+        loadedChunks: new Map(this.state.loadedChunks),
+      });
+    }
+
+    if (!session) {
+      this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
+    }
+
+    return chunk;
+  }
+
   /**
    * Load chunks in a radius around a center point
    */
@@ -422,26 +653,34 @@ export class WorldApp {
     let chunksLoaded = 0;
 
     try {
-      // Load chunks in a square grid around center
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const chunkX = centerX + dx;
-          const chunkY = centerY + dy;
-          const key = this.getChunkKey(chunkX, chunkY);
-          
-          // Skip if already loaded
-          if (this.state.loadedChunks.has(key)) {
-            continue;
+      const session = this.getActiveWorldSession();
+
+      if (session) {
+        const result = await session.loadChunksAround(centerX, centerY, radius);
+        chunksLoaded = result.loaded.length;
+        this.syncLoadedChunksFromSession();
+      } else {
+        // Load chunks in a square grid around center
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const chunkX = centerX + dx;
+            const chunkY = centerY + dy;
+            const key = this.getChunkKey(chunkX, chunkY);
+            
+            // Skip if already loaded
+            if (this.state.loadedChunks.has(key)) {
+              continue;
+            }
+            
+            // Generate chunk directly
+            const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
+            
+            this.state.loadedChunks.set(key, chunk);
+            this.state.exploredChunks.add(key); // Mark as explored
+            chunksLoaded++;
+            
+            this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
           }
-          
-          // Generate chunk directly
-          const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
-          
-          this.state.loadedChunks.set(key, chunk);
-          this.state.exploredChunks.add(key); // Mark as explored
-          chunksLoaded++;
-          
-          this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
         }
       }
       
@@ -472,42 +711,55 @@ export class WorldApp {
    * Unload chunks that are too far from a center point
    */
   unloadDistantChunks(centerX: number, centerY: number, maxDistance: number): void {
-    const chunksToUnload: string[] = [];
-    
-    // Find chunks beyond max distance using Chebyshev distance (matches square grid loading)
-    for (const [key, chunk] of this.state.loadedChunks.entries()) {
-      const dx = Math.abs(chunk.x - centerX);
-      const dy = Math.abs(chunk.y - centerY);
-      const distance = Math.max(dx, dy); // Chebyshev distance for square grid
+    const session = this.getActiveWorldSession();
+    let chunksUnloaded = 0;
+
+    if (session) {
+      const result = session.unloadDistantChunks(centerX, centerY, maxDistance, {
+        syncRenderer: !this.state.fogOfWarEnabled,
+      });
+      chunksUnloaded = result.unloaded.length;
+      this.syncLoadedChunksFromSession();
+    } else {
+      const chunksToUnload: string[] = [];
       
-      if (distance > maxDistance) {
-        chunksToUnload.push(key);
-      }
-    }
-    
-    // Unload distant chunks
-    for (const key of chunksToUnload) {
-      const chunk = this.state.loadedChunks.get(key);
-      if (chunk) {
-        this.state.loadedChunks.delete(key);
+      // Find chunks beyond max distance using Chebyshev distance (matches square grid loading)
+      for (const [key, chunk] of this.state.loadedChunks.entries()) {
+        const dx = Math.abs(chunk.x - centerX);
+        const dy = Math.abs(chunk.y - centerY);
+        const distance = Math.max(dx, dy); // Chebyshev distance for square grid
         
-        // Emit unload event with fog of war flag
-        this.emit(AppEvent.CHUNK_UNLOADED, { 
-          chunkX: chunk.x, 
-          chunkY: chunk.y,
-          keepFogOfWar: this.state.fogOfWarEnabled 
-        });
+        if (distance > maxDistance) {
+          chunksToUnload.push(key);
+        }
       }
+      
+      // Unload distant chunks
+      for (const key of chunksToUnload) {
+        const chunk = this.state.loadedChunks.get(key);
+        if (chunk) {
+          this.state.loadedChunks.delete(key);
+          
+          // Emit unload event with fog of war flag
+          this.emit(AppEvent.CHUNK_UNLOADED, { 
+            chunkX: chunk.x, 
+            chunkY: chunk.y,
+            keepFogOfWar: this.state.fogOfWarEnabled 
+          });
+        }
+      }
+
+      chunksUnloaded = chunksToUnload.length;
     }
-    
-    if (chunksToUnload.length > 5) {
+
+    if (chunksUnloaded > 5) {
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
         loadedChunkCount: this.state.loadedChunks.size
       });
       
-      console.log(`Unloaded ${chunksToUnload.length} distant chunks`);
-    } else if (chunksToUnload.length > 0) {
+      console.log(`Unloaded ${chunksUnloaded} distant chunks`);
+    } else if (chunksUnloaded > 0) {
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
         loadedChunkCount: this.state.loadedChunks.size
@@ -538,17 +790,24 @@ export class WorldApp {
           return;
         }
 
-        const chunk = await manager.getChunk(chunkX, chunkY);
+        const session = this.getActiveWorldSession();
+        const chunk = session
+          ? await session.refreshChunk({ x: chunkX, y: chunkY }, { syncRenderer: false })
+          : await manager.getChunk(chunkX, chunkY);
 
-        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key)) {
+        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key) || !chunk) {
           return;
         }
 
-        this.state.loadedChunks.set(key, chunk);
-        this.updateState({
-          loadedChunks: new Map(this.state.loadedChunks),
-        });
-        this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
+        if (session) {
+          this.syncLoadedChunksFromSession();
+        } else {
+          this.state.loadedChunks.set(key, chunk);
+          this.updateState({
+            loadedChunks: new Map(this.state.loadedChunks),
+          });
+          this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
+        }
       } catch (error) {
         console.error(`Failed to refresh invalidated chunk (${chunkX}, ${chunkY}):`, error);
         this.emit(AppEvent.ERROR, { message: 'Chunk refresh failed', error });
@@ -559,26 +818,9 @@ export class WorldApp {
   }
 
   /**
-   * Builds noise3DConfig from terrainConfig fields (enable3D, zScale).
-   * ChunkManager expects a separate noise3DConfig object, but the UI stores
-   * these values inside terrainConfig for simplicity.
-   */
-  private buildNoise3DConfig(terrainConfig: WorldConfig['terrainConfig']): WorldConfig['noise3DConfig'] | undefined {
-    if (!terrainConfig.enable3D) return undefined;
-    return {
-      enable3D: true,
-      octaves: terrainConfig.octaves,
-      persistence: terrainConfig.persistence,
-      lacunarity: terrainConfig.lacunarity,
-      scale: terrainConfig.baseScale,
-      zScale: terrainConfig.zScale ?? 0.5,
-    };
-  }
-
-  /**
    * Update Worker Pool configuration
    */
-  updateEngineConfig(config: Partial<WorldConfig>): void {
+  updateEngineConfig(config: WorldConfigOverrides): void {
     // Prevent recursive calls
     if (this.isUpdatingConfig) {
       console.warn('[WorldApp] Ignoring recursive updateEngineConfig call');
@@ -593,14 +835,10 @@ export class WorldApp {
     this.isUpdatingConfig = true;
     
     try {
-      const newConfig = {
-        ...this.state.config,
-        ...config
-      };
-
-      // Always rebuild noise3DConfig from terrainConfig so enable3D / zScale are honoured
-      newConfig.noise3DConfig = this.buildNoise3DConfig(newConfig.terrainConfig);
-      newConfig.onChunkInvalidated = (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY);
+      const newConfig = prepareWorldConfig(this.state.config, {
+        ...config,
+        onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
+      });
 
       // Check if this requires recreating the ChunkManager
       const shouldRecreateManager =
@@ -624,36 +862,55 @@ export class WorldApp {
         return;
       }
       
-      // Shut down old worker pool to prevent memory leaks
-      const oldManager = this.state.chunkManager as any;
-      if (oldManager?.workerPool) {
-        console.log('[WorldApp] Shutting down old worker pool');
-        oldManager.workerPool.shutdown();
-      }
-      
       // Handle worker pool configuration
       let workerPoolEnabled = !!newConfig.workerPoolConfig;
+      const session = this.getActiveWorldSession();
       
-      if ('workerPoolConfig' in config) {
+      if (session) {
+        const result = session.updateConfig(newConfig, {
+          fallbackOnWorkerPoolError: 'workerPoolConfig' in config && !!config.workerPoolConfig,
+        });
+        this.state.chunkManager = result.world;
+        workerPoolEnabled = result.workerPoolEnabled;
+
+        if (result.usedWorkerPoolFallback && result.workerPoolInitializationError) {
+          newConfig.workerPoolConfig = undefined;
+          console.error(
+            'Failed to initialize Worker Pool, falling back to single-threaded:',
+            result.workerPoolInitializationError
+          );
+          this.emit(AppEvent.ERROR, { 
+            message: 'Worker Pool initialization failed. Using single-threaded generation.', 
+            error: result.workerPoolInitializationError,
+            category: 'worker_pool',
+            fallback: true
+          });
+        }
+
+        Object.assign(newConfig, result.config);
+      } else if ('workerPoolConfig' in config) {
+        const previousManager = this.state.chunkManager;
         if (config.workerPoolConfig) {
           // Enabling or updating worker pool
           try {
             const newManager = new ChunkManager(newConfig);
             
             // Check if worker pool was actually created and initialized
-            const workerPool = (newManager as any).workerPool;
-            const initializationError = workerPool?.getInitializationError?.();
+            const initializationError = newManager.getWorkerPoolInitializationError();
             if (initializationError) {
               throw initializationError;
             }
             
+            previousManager?.dispose();
             this.state.chunkManager = newManager;
             workerPoolEnabled = true;
             console.log('[WorldApp] Worker pool enabled successfully');
           } catch (error) {
             console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
             newConfig.workerPoolConfig = undefined;
-            this.state.chunkManager = new ChunkManager(newConfig);
+            const fallbackManager = new ChunkManager(newConfig);
+            previousManager?.dispose();
+            this.state.chunkManager = fallbackManager;
             workerPoolEnabled = false;
             
             this.emit(AppEvent.ERROR, { 
@@ -665,13 +922,18 @@ export class WorldApp {
           }
         } else {
           // Disabling worker pool
-          this.state.chunkManager = new ChunkManager(newConfig);
+          const newManager = new ChunkManager(newConfig);
+          previousManager?.dispose();
+          this.state.chunkManager = newManager;
           workerPoolEnabled = false;
           console.log('[WorldApp] Worker pool disabled');
         }
       } else {
         // Other config changes that require manager recreation
-        this.state.chunkManager = new ChunkManager(newConfig);
+        const previousManager = this.state.chunkManager;
+        const newManager = new ChunkManager(newConfig);
+        previousManager?.dispose();
+        this.state.chunkManager = newManager;
       }
       
       this.updateState({ 
@@ -684,15 +946,18 @@ export class WorldApp {
     }
   }
 
+  applyWorldConfig(config: WorldConfigOverrides): void {
+    this.updateEngineConfig(config);
+  }
+
   /**
    * Get worker pool statistics from ChunkManager
    */
-  getWorkerPoolStats(): { activeWorkers: number; queuedTasks: number; completedTasks: number; avgWorkerTime: number } {
-    // Access the worker pool through ChunkManager's private property
-    // In a real implementation, ChunkManager would expose a getWorkerPoolStats() method
-    const chunkManager = this.state.chunkManager as any;
-    
-    if (!chunkManager || !chunkManager.workerPool) {
+  getWorkerPoolStats(): AppWorkerPoolStats {
+    const session = this.getActiveWorldSession();
+    const chunkManager = this.state.chunkManager;
+
+    if (!chunkManager) {
       return {
         activeWorkers: 0,
         queuedTasks: 0,
@@ -700,8 +965,16 @@ export class WorldApp {
         avgWorkerTime: 0
       };
     }
-    
-    const stats = chunkManager.workerPool.getStats();
+
+    const stats = session?.getWorkerPoolStats() ?? chunkManager.getWorkerPoolStats();
+    if (!stats) {
+      return {
+        activeWorkers: 0,
+        queuedTasks: 0,
+        completedTasks: 0,
+        avgWorkerTime: 0
+      };
+    }
     
     // Calculate average worker time (simplified - in real implementation would track timing)
     const avgWorkerTime = stats.completedTasks > 0 
@@ -823,51 +1096,15 @@ export class WorldApp {
    * Update statistics from loaded chunks
    */
   private updateStatistics(): void {
-    const biomeDistribution = new Map<BiomeType, number>();
-    const resourceCounts = new Map<ResourceType, number>();
-    const structureCounts = new Map<StructureType, number>();
-    let totalHeight = 0;
-    let minHeight = Infinity;
-    let maxHeight = -Infinity;
-    let totalTiles = 0;
-    
-    // Aggregate statistics from all loaded chunks
-    for (const chunk of this.state.loadedChunks.values()) {
-      // Count biomes
-      for (let i = 0; i < chunk.biomeMap.length; i++) {
-        const biome = chunk.biomeMap[i];
-        biomeDistribution.set(biome, (biomeDistribution.get(biome) || 0) + 1);
-      }
-      
-      // Count resources
-      for (const resource of chunk.resources) {
-        resourceCounts.set(resource.type, (resourceCounts.get(resource.type) || 0) + 1);
-      }
-      
-      // Count structures
-      for (const structure of chunk.structures) {
-        structureCounts.set(structure.type, (structureCounts.get(structure.type) || 0) + 1);
-      }
-      
-      // Calculate height statistics
-      for (let i = 0; i < chunk.heightmap.length; i++) {
-        const height = chunk.heightmap[i];
-        totalHeight += height;
-        minHeight = Math.min(minHeight, height);
-        maxHeight = Math.max(maxHeight, height);
-        totalTiles++;
-      }
-    }
-    
-    const avgHeight = totalTiles > 0 ? totalHeight / totalTiles : 0;
+    const stats = this.getWorldStats();
     
     this.updateState({
-      biomeDistribution,
-      resourceCounts,
-      structureCounts,
-      avgHeight,
-      minHeight: minHeight === Infinity ? 0 : minHeight,
-      maxHeight: maxHeight === -Infinity ? 0 : maxHeight
+      biomeDistribution: stats.biomeDistribution,
+      resourceCounts: stats.resourceCounts,
+      structureCounts: stats.structureCounts,
+      avgHeight: stats.avgHeight,
+      minHeight: stats.minHeight,
+      maxHeight: stats.maxHeight,
     });
   }
 
@@ -902,6 +1139,33 @@ export class WorldApp {
     }
   }
 
+  private getActiveWorldSession(): WorldSession | null {
+    if (!this.worldSession || this.worldSession.getWorld() !== this.state.chunkManager) {
+      return null;
+    }
+
+    return this.worldSession;
+  }
+
+  private syncLoadedChunksFromSession(): void {
+    const session = this.getActiveWorldSession();
+    if (!session) {
+      return;
+    }
+
+    this.state.loadedChunks = new Map(session.getLoadedChunks());
+    this.state.exploredChunks = new Set(session.getExploredChunks());
+    this.state.loadedChunkCount = session.getLoadedChunkCount();
+  }
+
+  private detachWorldSessionEvents(): void {
+    for (const unsubscribe of this.worldSessionUnsubscribers) {
+      unsubscribe();
+    }
+
+    this.worldSessionUnsubscribers = [];
+  }
+
   /**
    * Notify all state subscribers
    */
@@ -929,9 +1193,53 @@ export class WorldApp {
     this.subscribers.clear();
     this.eventListeners.clear();
     this.state.loadedChunks.clear();
+    this.detachWorldSessionEvents();
+    this.worldSession = null;
     this.state.chunkManager = null;
     this.initialized = false;
     
     console.log('WorldApp destroyed');
   }
+}
+
+function calculateWorldStats(chunks: ReadonlyMap<string, ChunkData>): WorldSessionWorldStats {
+  const biomeDistribution = new Map<BiomeType, number>();
+  const resourceCounts = new Map<ResourceType, number>();
+  const structureCounts = new Map<StructureType, number>();
+  let totalHeight = 0;
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+  let totalTiles = 0;
+
+  for (const chunk of chunks.values()) {
+    for (let i = 0; i < chunk.biomeMap.length; i++) {
+      const biome = chunk.biomeMap[i] as BiomeType;
+      biomeDistribution.set(biome, (biomeDistribution.get(biome) || 0) + 1);
+    }
+
+    for (const resource of chunk.resources) {
+      resourceCounts.set(resource.type, (resourceCounts.get(resource.type) || 0) + 1);
+    }
+
+    for (const structure of chunk.structures) {
+      structureCounts.set(structure.type, (structureCounts.get(structure.type) || 0) + 1);
+    }
+
+    for (let i = 0; i < chunk.heightmap.length; i++) {
+      const height = chunk.heightmap[i];
+      totalHeight += height;
+      minHeight = Math.min(minHeight, height);
+      maxHeight = Math.max(maxHeight, height);
+      totalTiles++;
+    }
+  }
+
+  return {
+    biomeDistribution,
+    resourceCounts,
+    structureCounts,
+    avgHeight: totalTiles > 0 ? totalHeight / totalTiles : 0,
+    minHeight: minHeight === Infinity ? 0 : minHeight,
+    maxHeight: maxHeight === -Infinity ? 0 : maxHeight,
+  };
 }

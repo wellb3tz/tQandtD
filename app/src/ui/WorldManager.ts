@@ -7,7 +7,7 @@
  */
 
 import { WorldApp } from '@core/WorldApp';
-import { WorldSerializer, SerializationFormat, SerializationOptions } from '@engine/world/serialization';
+import { WorldSerializer, SerializationFormat, SerializationOptions } from '@engine/index';
 import { errorHandler } from '../utils/ErrorHandler';
 
 /**
@@ -448,18 +448,8 @@ export class WorldManager {
         modifiedOnly
       };
 
-      // Get chunk manager from app state
-      const state = this.app.getState();
-      if (!state.chunkManager) {
-        throw new Error('No chunk manager available');
-      }
-
-      // Serialize world
-      const exportData = this.serializer.export(state.chunkManager, options);
-
-      // Calculate and display checksum
-      const serializedWorld = this.serializer.serialize(state.chunkManager, options);
-      this.lastChecksum = serializedWorld.checksum;
+      const { data: exportData, checksum } = this.app.exportWorld(options);
+      this.lastChecksum = checksum;
 
       const checksumDisplay = document.getElementById('save-checksum-display');
       const checksumValue = document.getElementById('save-checksum-value');
@@ -568,20 +558,7 @@ export class WorldManager {
       // Import world data
       const serializedWorld = await this.serializer.import(file, format);
 
-      // Get chunk manager from app state
-      const state = this.app.getState();
-      if (!state.chunkManager) {
-        throw new Error('No chunk manager available');
-      }
-
-      // Deserialize and restore world
-      this.serializer.deserialize(serializedWorld, state.chunkManager);
-
-      // Update app state to trigger re-render
-      this.app.updateState({
-        loadedChunks: new Map(),
-        config: serializedWorld.config
-      });
+      this.app.loadSerializedWorld(serializedWorld);
 
       // Show success toast
       this.showToast('World loaded successfully!', 'success');
@@ -616,18 +593,18 @@ export class WorldManager {
       const filenameInput = document.getElementById('export-filename') as HTMLInputElement;
       const filename = filenameInput.value || 'world-map';
 
-      // Get loaded chunks from app state
-      const state = this.app.getState();
-      if (state.loadedChunks.size === 0) {
+      const loadedChunks = this.app.getLoadedChunksSnapshot();
+      if (loadedChunks.size === 0) {
         throw new Error('No chunks loaded to export');
       }
+      const chunkSize = this.app.getConfigSnapshot().chunkSize;
 
       // Export map based on type
       let blob: Blob;
       if (exportType === 'heightmap') {
-        blob = await this.exportHeightmap(state.loadedChunks, imageFormat);
+        blob = await this.exportHeightmap(loadedChunks, imageFormat, chunkSize);
       } else {
-        blob = await this.exportBiomeMap(state.loadedChunks, imageFormat);
+        blob = await this.exportBiomeMap(loadedChunks, imageFormat, chunkSize);
       }
 
       // Download file
@@ -649,10 +626,9 @@ export class WorldManager {
   /**
    * Export heightmap as image
    */
-  private async exportHeightmap(chunks: Map<string, any>, format: ImageFormat): Promise<Blob> {
+  private async exportHeightmap(chunks: Map<string, any>, format: ImageFormat, chunkSize: number): Promise<Blob> {
     // Find bounds of loaded chunks
     const bounds = this.calculateChunkBounds(chunks);
-    const chunkSize = 32; // Default chunk size
     
     const width = (bounds.maxX - bounds.minX + 1) * chunkSize;
     const height = (bounds.maxY - bounds.minY + 1) * chunkSize;
@@ -712,7 +688,7 @@ export class WorldManager {
   /**
    * Export biome map as image
    */
-  private async exportBiomeMap(chunks: Map<string, any>, format: ImageFormat): Promise<Blob> {
+  private async exportBiomeMap(chunks: Map<string, any>, format: ImageFormat, chunkSize: number): Promise<Blob> {
     // Biome colors (matching typical biome visualization)
     const biomeColors: Record<number, [number, number, number]> = {
       0: [34, 139, 34],    // FOREST - Forest Green
@@ -727,7 +703,6 @@ export class WorldManager {
 
     // Find bounds of loaded chunks
     const bounds = this.calculateChunkBounds(chunks);
-    const chunkSize = 32; // Default chunk size
     
     const width = (bounds.maxX - bounds.minX + 1) * chunkSize;
     const height = (bounds.maxY - bounds.minY + 1) * chunkSize;
@@ -846,8 +821,7 @@ export class WorldManager {
         return;
       }
 
-      const state = this.app.getState();
-      const config = { ...state.config };
+      const config = this.app.getConfigSnapshot();
 
       // Parse seed
       if (params.has('seed')) {
@@ -902,7 +876,7 @@ export class WorldManager {
       }
 
       // Apply the parsed configuration
-      this.app.updateState({ config });
+      this.app.applyWorldConfig(config);
 
       // Show notification that configuration was loaded from URL
       this.showToast('Configuration loaded from URL', 'info');
@@ -922,8 +896,7 @@ export class WorldManager {
     if (!this.app) return;
 
     try {
-      const state = this.app.getState();
-      const config = state.config;
+      const config = this.app.getConfigSnapshot();
 
       // Create a clean configuration object
       const exportConfig = {
@@ -973,8 +946,7 @@ export class WorldManager {
   generateShareableURL(): string {
     if (!this.app) return '';
 
-    const state = this.app.getState();
-    const config = state.config;
+    const config = this.app.getConfigSnapshot();
 
     // Encode configuration as URL parameters
     const params = new URLSearchParams();
@@ -1006,8 +978,7 @@ export class WorldManager {
   async copySeedToClipboard(): Promise<void> {
     if (!this.app) return;
 
-    const state = this.app.getState();
-    const seed = state.config.seed.toString();
+    const seed = this.app.getSeed().toString();
 
     try {
       await navigator.clipboard.writeText(seed);

@@ -14,6 +14,8 @@ A TypeScript library for generating infinite, deterministic procedural worlds in
 - **Web Worker support** — non-blocking parallel chunk generation
 - **World persistence** — JSON and binary serialization with zlib compression and CRC32 validation
 - **Modification tracking** — delta-based change recording for efficient saves
+- **World sessions** — high-level lifecycle facade for world, runtime, renderer, save/load, and regeneration
+- **Renderer adapters** — runtime renderer boundary with an optional Three.js adapter entrypoint
 - **Memory optimized** — sparse biome weights reduce memory by 56% per chunk
 - **Structured logging** — configurable log levels and categories for debugging
 
@@ -31,6 +33,8 @@ npm install procedural-world-engine
 📚 **[Complete Documentation](docs/README.md)**
 
 - [Getting Started Guide](docs/GETTING_STARTED.md) — Installation and basic usage
+- [Engine API](docs/ENGINE_API.md) — Public entrypoints and recommended imports
+- [Rendering Helpers](docs/RENDERING.md) — Renderer-neutral geometry and placement data
 - [API Reference](docs/API.md) — Complete API documentation
 - [Examples](docs/EXAMPLES.md) — Code examples for common tasks
 - [Configuration Guide](docs/CONFIGURATION.md) — Detailed configuration options
@@ -39,6 +43,17 @@ npm install procedural-world-engine
 - [Performance Guide](docs/PERFORMANCE.md) — Optimization tips and benchmarks
 - [Migration Guide](docs/MIGRATION_GUIDE.md) — Upgrading from older versions
 - [FAQ](docs/FAQ.md) — Frequently asked questions
+
+## Public Entrypoints
+
+```typescript
+import { ChunkManager, WorldSession } from 'procedural-world-engine';
+import { createDefaultWorldConfig } from 'procedural-world-engine/config';
+import { buildTerrainGridGeometryData } from 'procedural-world-engine/rendering';
+import { ThreeWorldRendererAdapter } from 'procedural-world-engine/adapters/three';
+```
+
+The app uses the same public API that package consumers use. Rendering helpers return plain data and do not require Three.js unless you choose the optional adapter.
 
 ## Quick Start
 
@@ -291,6 +306,39 @@ const chunk = await manager.getChunk(0, 0);
 
 If a worker fails, generation falls back to the main thread automatically.
 
+## World Session
+
+Use `WorldSession` when you want the engine to own the world manager and runtime scene as one lifecycle unit:
+
+```typescript
+import { SerializationFormat, WorldSession } from 'procedural-world-engine';
+
+const session = new WorldSession({
+  worldConfig,
+  scene: {
+    renderer,
+    player: {
+      position: { x: 0, y: 8, z: 0 },
+      streamingTarget: { radius: 2 },
+    },
+  },
+});
+
+session.start();
+const loaded = await session.loadChunksAround(0, 0, 2);
+const unsubscribe = session.on('chunk_loaded', ({ coordinate, chunk }) => {
+  console.log(`Loaded chunk ${coordinate.x},${coordinate.y}`, chunk);
+});
+session.unloadDistantChunks(0, 0, 4);
+session.regenerate({ seed: 98765 });
+const saved = session.saveWorld({ format: SerializationFormat.JSON, compress: true, modifiedOnly: false });
+session.loadWorld(saved);
+unsubscribe();
+session.dispose();
+```
+
+The session keeps `ChunkManager`, `WorldScene`, loaded/explored chunk tracking, renderer sync, cache clearing, regeneration, and save/load under a single API.
+
 ## World Persistence
 
 ```typescript
@@ -385,6 +433,20 @@ npm run preview     # Preview production build
 - Fog of War for explored chunks
 - Real-time statistics and performance monitor
 - World save / load UI
+
+### Three.js Adapter
+
+Use the optional adapter entrypoint when wiring the runtime to a Three.js-backed renderer:
+
+```typescript
+import { WorldScene } from 'procedural-world-engine';
+import { ThreeWorldRendererAdapter } from 'procedural-world-engine/adapters/three';
+
+const renderer = new ThreeWorldRendererAdapter({ target: worldRenderer });
+const scene = new WorldScene({ world: chunkManager, renderer });
+```
+
+The target implements chunk rendering and camera sync methods, so applications can keep their own Three.js scene setup while using the engine runtime lifecycle.
 
 ## Development
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BiomeType, createSparseBiomeWeights } from '../../../src';
+import { BiomeType, createSparseBiomeWeights } from '@engine/index';
 import { planFoliagePlacements } from './FoliagePlacementPlanner';
 
 describe('planFoliagePlacements', () => {

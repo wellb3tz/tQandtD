@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ResourceType, StructureType, type ChunkData } from '../../../src/index';
+import { ResourceType, StructureType, type ChunkData } from '@engine/index';
 import {
   createResourceMarkers,
   createStructureMarkers,

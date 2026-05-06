@@ -1,38 +1,17 @@
 import {
-  calculateRenderStats,
-  type RenderStats,
+  RenderStatsCache,
   type RenderStatsChunk,
-} from './RenderStatsCalculator';
+  type RenderStatsNowProvider,
+} from '@engine/index';
 
-export type NowProvider = () => number;
+export type NowProvider = RenderStatsNowProvider;
 
-export class ViewerRenderStatsCache {
-  private cachedRenderStats: RenderStats | null = null;
-  private lastRenderStatsUpdate = 0;
-
+export class ViewerRenderStatsCache extends RenderStatsCache<RenderStatsChunk> {
   constructor(
-    private readonly chunks: Iterable<RenderStatsChunk>,
-    private readonly cacheDurationMs = 1000,
-    private readonly now: NowProvider = () => performance.now()
-  ) {}
-
-  getRenderStats(): RenderStats {
-    const currentTime = this.now();
-
-    if (
-      this.cachedRenderStats &&
-      currentTime - this.lastRenderStatsUpdate < this.cacheDurationMs
-    ) {
-      return this.cachedRenderStats;
-    }
-
-    this.cachedRenderStats = calculateRenderStats(this.chunks);
-    this.lastRenderStatsUpdate = currentTime;
-
-    return this.cachedRenderStats;
-  }
-
-  invalidate(): void {
-    this.cachedRenderStats = null;
+    chunks: Iterable<RenderStatsChunk>,
+    cacheDurationMs = 1000,
+    now: NowProvider = () => performance.now()
+  ) {
+    super(chunks, cacheDurationMs, now);
   }
 }

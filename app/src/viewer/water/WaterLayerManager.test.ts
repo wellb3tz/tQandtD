@@ -9,8 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { WaterLayerManager } from './WaterLayerManager';
 import { DEFAULT_WATER_CONFIG } from './config';
-import type { ChunkData } from '@engine/world/chunk';
-import { BiomeType } from '@engine/world/chunk';
+import { BiomeType, type ChunkData } from '@engine/index';
 
 /**
  * Create a mock ChunkData with ocean tiles for testing

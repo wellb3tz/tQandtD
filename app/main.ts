@@ -8,11 +8,11 @@
 // Import styles
 import './styles.css';
 
-import { WorldScene } from '@engine/index';
+import { WorldSession } from '@engine/index';
+import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
 import { WorldApp, AppEvent, TerrainTool } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
-import { WorldViewerRendererAdapter } from './src/viewer/WorldViewerRendererAdapter';
 import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
@@ -28,8 +28,8 @@ console.log('tQandtD project - Initializing...');
 let app: WorldApp | null = null;
 let controlPanelInstance: ControlPanel | null = null;
 let worldViewer: WorldViewer | null = null;
-let worldRenderer: WorldViewerRendererAdapter | null = null;
-let worldScene: WorldScene | null = null;
+let worldRenderer: ThreeWorldRendererAdapter | null = null;
+let worldSession: WorldSession | null = null;
 let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
@@ -124,17 +124,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (viewerContainer) {
       worldViewer = new WorldViewer();
       worldViewer.initialize(viewerContainer);
-      worldRenderer = new WorldViewerRendererAdapter({ viewer: worldViewer });
-      const chunkManager = app.getState().chunkManager;
+      worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
+      const chunkManager = app.getWorld();
       if (chunkManager) {
-        worldScene = new WorldScene({
+        worldSession = new WorldSession({
           world: chunkManager,
-          renderer: worldRenderer,
-          input: false,
-          movement: false,
-          streaming: false,
-          player: false,
+          disposeWorldOnReplace: true,
+          scene: {
+            renderer: worldRenderer,
+            input: false,
+            movement: false,
+            streaming: false,
+            player: false,
+          },
         });
+        app.attachWorldSession(worldSession);
       }
       console.log('WorldViewer initialized successfully');
       
@@ -218,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             // Update status bar chunks
             if (statusChunks && app) {
-              statusChunks.textContent = app.getState().loadedChunkCount.toString();
+              statusChunks.textContent = app.getLoadedChunkCount().toString();
             }
             // Update compass — rotate needle opposite to camera yaw
             if (compassNeedle) {
@@ -241,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setTimeout(() => {
               const cameraPos = worldViewer!.getCameraPosition();
               const chunkSize = 32; // Default chunk size
-              const loadRadius = app!.getState().viewDistance;
+              const loadRadius = app!.getViewDistance();
               
               // Convert camera world position to chunk coordinates
               const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
@@ -272,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               const renderStats = worldViewer!.getRenderStats();
               
               // Calculate memory usage (approximate)
-              const memoryUsage = calculateMemoryUsage(app!.getState().loadedChunks.size);
+              const memoryUsage = app!.getApproximateMemoryUsage();
               
               // Update performance monitor
               if (performanceMonitor) {
@@ -288,20 +292,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               
               // Update status bar biome (только если нужно, не каждый раз)
               if (statusBiome && app) {
-                const state = app!.getState();
-                if (state.biomeDistribution.size > 0) {
-                  // Find dominant biome
-                  let maxCount = 0;
-                  let dominantBiome = '—';
-                  const biomeNames: Record<number, string> = {
-                    0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
-                    4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
-                    8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
-                    12: 'Glacier'
-                  };
-                  state.biomeDistribution.forEach((count, biome) => {
-                    if (count > maxCount) { maxCount = count; dominantBiome = biomeNames[biome] ?? '—'; }
-                  });
+                const dominantBiome = app!.getDominantBiomeName();
+                if (dominantBiome) {
                   statusBiome.textContent = dominantBiome;
                 }
               }
@@ -312,7 +304,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
               
               // Update worker pool statistics if enabled
-              if (app!.getState().workerPoolEnabled) {
+              if (app!.isWorkerPoolEnabled()) {
                 app!.updateWorkerPoolStats();
               }
             }, 0);
@@ -327,7 +319,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
         if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
         if (performanceTimer !== null) clearInterval(performanceTimer);
-        if (worldScene) worldScene.dispose();
+        if (worldSession) worldSession.dispose();
         if (worldViewer) worldViewer.dispose();
         if (app) app.destroy();
       });
@@ -423,7 +415,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Subscribe to state changes and update performance monitor
     app.subscribeToState((state) => {
-      if (performanceMonitor) {
+      if (performanceMonitor && app) {
         // Update generation time with breakdown
         const breakdown = {
           terrain: state.avgGenerationTime * 0.4, // Approximate breakdown
@@ -435,14 +427,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         performanceMonitor.updateGenerationTime(state.avgGenerationTime, breakdown);
         
         // Update cache statistics
-        const chunkManager = state.chunkManager;
-        if (chunkManager) {
-          const cacheStats = chunkManager.getCacheStats();
-          performanceMonitor.updateCacheStats(cacheStats.hitRate, cacheStats.size, cacheStats.maxSize);
-        }
+        const cacheStats = app.getCacheStats();
+        performanceMonitor.updateCacheStats(cacheStats.hitRate, cacheStats.size, cacheStats.maxSize);
         
         // Update loaded chunks count
-        performanceMonitor.updateLoadedChunks(state.loadedChunkCount);
+        performanceMonitor.updateLoadedChunks(app.getLoadedChunkCount());
         
         // Update worker pool statistics
         performanceMonitor.updateWorkerStats({
@@ -459,7 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let isMouseDown = false;
       
       viewerContainer.addEventListener('mousedown', (e) => {
-        if (e.button === 0 && app && app.getState().selectedTool !== TerrainTool.NONE) {
+        if (e.button === 0 && app && app.getSelectedTool() !== TerrainTool.NONE) {
           isMouseDown = true;
           // Get canvas-relative coordinates
           const canvas = worldViewer?.getCanvas();
@@ -484,7 +473,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           app.handleMouseMove(canvasX, canvasY, worldViewer, terrainEditor);
           
           // Apply brush if mouse is down
-          if (isMouseDown && app.getState().selectedTool !== TerrainTool.NONE) {
+          if (isMouseDown && app.getSelectedTool() !== TerrainTool.NONE) {
             app.handleTerrainClick(canvasX, canvasY, worldViewer, terrainEditor);
           }
         }
@@ -504,10 +493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
-      const chunkManager = app?.getState().chunkManager;
-      if (chunkManager && worldScene) {
-        worldScene.setWorld(chunkManager);
-      }
+      app?.syncWorldSession(worldSession);
       if (worldViewer) {
         worldViewer.clearChunks();
         worldViewer.clearFogOfWar();
@@ -520,8 +506,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     app.on(AppEvent.CHUNK_LOADED, (data) => {
-      if (!data.partial && data.stage === undefined && worldScene?.renderSystem) {
-        worldScene.renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
+      const renderSystem = worldSession?.scene.renderSystem;
+      if (!data.partial && data.stage === undefined && renderSystem) {
+        renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
       } else if (worldRenderer) {
         worldRenderer.addChunk(data.chunk, { x: data.chunkX, y: data.chunkY }, {
           partial: data.partial,
@@ -537,13 +524,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     app.on(AppEvent.CHUNK_UNLOADED, (data) => {
-      if (!data.keepFogOfWar && worldScene?.renderSystem) {
-        worldScene.renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
+      const renderSystem = worldSession?.scene.renderSystem;
+      if (!data.keepFogOfWar && renderSystem) {
+        renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
       } else if (worldRenderer) {
         worldRenderer.removeChunk({ x: data.chunkX, y: data.chunkY }, {
           keepFogOfWar: data.keepFogOfWar || false,
         });
       }
+    });
+
+    app.on(AppEvent.CONFIG_CHANGED, () => {
+      app?.syncWorldSession(worldSession);
     });
     
     app.on(AppEvent.VISIBILITY_CHANGED, (visibilityState) => {
@@ -621,9 +613,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         worldViewer.setWaterConfig(updatedConfig);
         
         // Update all visible chunks to apply new water configuration
-        const state = app?.getState();
-        if (state && worldViewer) {
-          state.loadedChunks.forEach((chunkData, key) => {
+        if (app && worldViewer) {
+          app.getLoadedChunksSnapshot().forEach((chunkData, key) => {
             const [chunkX, chunkY] = key.split(',').map(Number);
             worldViewer!.updateChunk(chunkX, chunkY, chunkData);
           });
@@ -835,7 +826,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         errorHandler.hideProgress(progressId);
       }, 1000);
       
-      console.log(`World generated successfully with ${app.getState().loadedChunkCount} chunks`);
+      console.log(`World generated successfully with ${app.getLoadedChunkCount()} chunks`);
     } catch (error) {
       console.error('Failed to generate world:', error);
       errorHandler.hideProgress(progressId);
@@ -878,17 +869,3 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('World application initialized successfully');
 });
 
-/**
- * Calculate approximate memory usage based on loaded chunks
- * Each chunk contains heightmap, biomeMap, resources, structures
- */
-function calculateMemoryUsage(chunkCount: number): number {
-  // Approximate memory per chunk:
-  // - heightmap: (33 * 33) * 4 bytes = 4,356 bytes
-  // - biomeMap: (32 * 32) * 1 byte = 1,024 bytes
-  // - resources: ~50 resources * 20 bytes = 1,000 bytes
-  // - structures: ~10 structures * 20 bytes = 200 bytes
-  // Total per chunk: ~6,580 bytes (~6.4 KB)
-  const bytesPerChunk = 6580;
-  return chunkCount * bytesPerChunk;
-}

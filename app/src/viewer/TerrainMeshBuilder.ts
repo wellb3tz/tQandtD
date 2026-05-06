@@ -1,6 +1,9 @@
 import * as THREE from 'three';
-import type { ChunkData } from '../../../src/index';
-import { MicroBiomeType } from '../../../src/world/enhanced-biome';
+import {
+  buildTerrainGridGeometryData,
+  MicroBiomeType,
+  type ChunkData,
+} from '@engine/index';
 import {
   getBiomeColor,
   type BiomeColor,
@@ -47,37 +50,26 @@ export function createTerrainMesh(options: TerrainMeshBuilderOptions): THREE.Mes
     wireframeMode,
   } = options;
   let { data } = options;
-  const chunkSize = data.size;
   const chunkMicroBiomeCount = countMicroBiomes(data);
-  const expectedHeightmapSize = (chunkSize + 1) * (chunkSize + 1);
+  const terrainGrid = buildTerrainGridGeometryData(data, chunkX, chunkY, {
+    heightScale: HEIGHT_SCALE,
+  });
 
-  if (data.heightmap.length !== expectedHeightmapSize) {
+  if (terrainGrid.heightmapSizeMismatch) {
     console.error(
-      `Heightmap size mismatch! Expected ${expectedHeightmapSize} (${chunkSize + 1}x${chunkSize + 1}), ` +
-      `got ${data.heightmap.length}. Chunk: (${chunkX}, ${chunkY})`
+      `Heightmap size mismatch! Expected ${terrainGrid.expectedHeightmapSize} (${terrainGrid.verticesPerSide}x${terrainGrid.verticesPerSide}), ` +
+      `got ${terrainGrid.originalHeightmapSize}. Chunk: (${chunkX}, ${chunkY})`
     );
-
-    const fallbackHeightmap = new Float32Array(expectedHeightmapSize);
-    const copySize = Math.min(data.heightmap.length, expectedHeightmapSize);
-    for (let i = 0; i < copySize; i++) {
-      fallbackHeightmap[i] = data.heightmap[i];
-    }
-    data = { ...data, heightmap: fallbackHeightmap };
   }
 
+  data = terrainGrid.chunkData;
   const geometry = new THREE.BufferGeometry();
-  const verticesPerSide = chunkSize + 1;
-  const vertexCount = verticesPerSide * verticesPerSide;
-  const triangleCount = chunkSize * chunkSize * 2;
-  const indexCount = triangleCount * 3;
-  const vertices = new Float32Array(vertexCount * 3);
+  const { chunkSize, verticesPerSide, vertexCount, positions: vertices, uvs, indices, worldXBase, worldZBase } = terrainGrid;
   const colors = new Float32Array(vertexCount * 3);
-  const uvs = new Float32Array(vertexCount * 2);
   const surfaceBlendA = new Float32Array(vertexCount * 4);
   const surfaceBlendB = new Float32Array(vertexCount * 4);
   const surfaceBlendC = new Float32Array(vertexCount * 4);
   const terrainDetailBlend = new Float32Array(vertexCount * 4);
-  const indices = new Uint32Array(indexCount);
   const hasBlendWeights = data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0;
   const underwaterColors = data.heightmap && hasBlendWeights
     ? adjustUnderwaterColors(data.heightmap, data, chunkSize, {
@@ -88,26 +80,14 @@ export function createTerrainMesh(options: TerrainMeshBuilderOptions): THREE.Mes
     })
     : null;
   const { partialTint, partialOpacity } = getPartialGenerationStyle(partial, stage);
-  const worldXBase = chunkX * chunkSize;
-  const worldZBase = chunkY * chunkSize;
 
   for (let y = 0; y <= chunkSize; y++) {
-    const worldZ = worldZBase + y;
     const rowOffset = y * verticesPerSide;
 
     for (let x = 0; x <= chunkSize; x++) {
       const index = rowOffset + x;
       const vertexIndex = index * 3;
-      const uvIndex = index * 2;
       const blendIndex = index * 4;
-      const height = data.heightmap ? data.heightmap[index] : 0;
-      const worldX = worldXBase + x;
-
-      vertices[vertexIndex] = worldX;
-      vertices[vertexIndex + 1] = height * HEIGHT_SCALE;
-      vertices[vertexIndex + 2] = worldZ;
-      uvs[uvIndex] = worldX / chunkSize;
-      uvs[uvIndex + 1] = worldZ / chunkSize;
 
       const bmX = Math.min(x, chunkSize - 1);
       const bmY = Math.min(y, chunkSize - 1);
@@ -130,25 +110,6 @@ export function createTerrainMesh(options: TerrainMeshBuilderOptions): THREE.Mes
       surfaceBlendC[blendIndex] = surfaceWeights.volcanicRock;
       surfaceBlendC[blendIndex + 1] = surfaceWeights.ice;
       surfaceBlendC[blendIndex + 2] = surfaceWeights.riverbed;
-    }
-  }
-
-  let indexOffset = 0;
-  for (let y = 0; y < chunkSize; y++) {
-    const rowStart = y * verticesPerSide;
-    const nextRowStart = (y + 1) * verticesPerSide;
-
-    for (let x = 0; x < chunkSize; x++) {
-      const topLeft = rowStart + x;
-      const topRight = topLeft + 1;
-      const bottomLeft = nextRowStart + x;
-      const bottomRight = bottomLeft + 1;
-      indices[indexOffset++] = topLeft;
-      indices[indexOffset++] = bottomLeft;
-      indices[indexOffset++] = topRight;
-      indices[indexOffset++] = topRight;
-      indices[indexOffset++] = bottomLeft;
-      indices[indexOffset++] = bottomRight;
     }
   }
 

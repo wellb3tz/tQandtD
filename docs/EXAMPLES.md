@@ -2,6 +2,13 @@
 
 Practical code examples for common use cases.
 
+Repository examples are available in `examples/`:
+
+- `examples/basic-world.ts` - generate one chunk and inspect biome weights
+- `examples/world-session.ts` - manage loading and regeneration through `WorldSession`
+- `examples/rendering-data.ts` - build renderer-neutral terrain, water, foliage, and overlay data
+- `examples/three-adapter.ts` - connect runtime renderer calls to a Three.js-facing target
+
 ## Table of Contents
 
 - [Basic World Generation](#basic-world-generation)

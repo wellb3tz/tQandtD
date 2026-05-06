@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import { ChunkData } from '../../../src/index';
+import type { ChunkData } from '@engine/index';
 import { createTerrainSurfaceTextureLibrary } from './materials';
 import type { RaycastHit, Vector3 } from '../utils/coordinates';
 import { WaterLayerManager } from './water/WaterLayerManager';

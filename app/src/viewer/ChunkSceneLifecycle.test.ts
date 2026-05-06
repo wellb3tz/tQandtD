@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BiomeType, ResourceType, StructureType, type ChunkData } from '../../../src';
+import { BiomeType, ResourceType, StructureType, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import { addChunkToScene, removeChunkFromScene } from './ChunkSceneLifecycle';
 import type { ChunkMesh } from './ChunkMesh';
