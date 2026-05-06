@@ -69,7 +69,16 @@ describe('WorldChunkController', () => {
       chunkY: 4,
       keepFogOfWar: false,
     }));
-    expect(onChunksChanged).toHaveBeenCalledTimes(3);
+    expect(onChunksChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invalidate stats when clearing an already empty scene', () => {
+    const onChunksChanged = vi.fn();
+    const context = createContext({ onChunksChanged });
+
+    context.controller.clearChunks();
+
+    expect(onChunksChanged).not.toHaveBeenCalled();
   });
 
   it('updates water meshes before replacing an existing chunk', () => {

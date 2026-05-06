@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType, createSparseBiomeWeights } from '../../../src';
+import { BiomeType, createSparseBiomeWeights, type ChunkData } from '../../../src';
 import { WorldViewer } from './WorldViewer';
 
 function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {
@@ -92,6 +92,26 @@ function getSceneSunLight(viewer: WorldViewer): THREE.DirectionalLight {
 
 function disableWater(viewer: WorldViewer): void {
   viewer.setWaterConfig({ enabled: false });
+}
+
+function createViewerChunkData(overrides: Partial<ChunkData> = {}): ChunkData {
+  const size = overrides.size ?? 1;
+  const tileCount = size * size;
+  const vertexCount = (size + 1) * (size + 1);
+
+  return {
+    x: 0,
+    y: 0,
+    size,
+    heightmap: new Float32Array(vertexCount),
+    biomeMap: new Uint8Array(tileCount).fill(BiomeType.PLAINS),
+    sparseBiomeTypes: new Uint8Array(0),
+    sparseBiomeWeights: new Float32Array(0),
+    sparseBiomeOffsets: new Uint16Array(tileCount + 1),
+    resources: [],
+    structures: [],
+    ...overrides,
+  };
 }
 
 function getTerrainMesh(viewer: WorldViewer, chunkKey = '0,0'): THREE.Mesh {
@@ -278,7 +298,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9),
       biomeMap: new Uint8Array([
@@ -289,7 +309,7 @@ describe('WorldViewer lifecycle', () => {
       ]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const geometry = terrain.geometry as THREE.BufferGeometry;
@@ -346,7 +366,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.31, 0.31, 0.84, 0.84]),
       biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
@@ -362,7 +382,7 @@ describe('WorldViewer lifecycle', () => {
       }],
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -389,13 +409,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.30, 0.36, 0.43, 0.46]),
       biomeMap: new Uint8Array([BiomeType.BEACH]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -416,13 +436,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.36, 0.92, 0.38, 0.84]),
       biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -443,13 +463,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 4,
       heightmap: new Float32Array(25).fill(0.5),
       biomeMap: new Uint8Array(16).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
@@ -475,7 +495,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 4,
       heightmap: new Float32Array(25).fill(0.5),
       biomeMap: new Uint8Array(16).fill(BiomeType.FOREST),
@@ -487,7 +507,7 @@ describe('WorldViewer lifecycle', () => {
       }],
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     expect(getFoliageGroup(viewer)).toBeUndefined();
 
@@ -504,7 +524,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(1, 0, {
+    viewer.addChunk(1, 0, createViewerChunkData({
       size: 8,
       heightmap: new Float32Array(81).fill(0.5),
       biomeMap: new Uint8Array(64).fill(BiomeType.RAINFOREST),
@@ -520,7 +540,7 @@ describe('WorldViewer lifecycle', () => {
       }],
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
@@ -552,7 +572,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(1, 0, {
+    viewer.addChunk(1, 0, createViewerChunkData({
       size: 8,
       heightmap: new Float32Array(81).fill(0.5),
       biomeMap: new Uint8Array(64).fill(BiomeType.FOREST),
@@ -568,7 +588,7 @@ describe('WorldViewer lifecycle', () => {
       }],
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const shrubs = foliage.children[1] as THREE.InstancedMesh;
@@ -613,13 +633,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 4,
       heightmap: new Float32Array(25).fill(0.5),
       biomeMap: new Uint8Array(16).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -668,13 +688,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 8,
       heightmap: new Float32Array(81).fill(0.5),
       biomeMap: new Uint8Array(64).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -713,7 +733,7 @@ describe('WorldViewer lifecycle', () => {
     ]));
     const sparse = createSparseBiomeWeights(tileWeights, 16);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 4,
       heightmap: new Float32Array(25).fill(0.5),
       biomeMap: new Uint8Array(16).fill(BiomeType.PLAINS),
@@ -722,7 +742,7 @@ describe('WorldViewer lifecycle', () => {
       sparseBiomeOffsets: sparse.offsets,
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer);
 
@@ -742,13 +762,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 32,
       heightmap: new Float32Array(33 * 33).fill(0.5),
       biomeMap: new Uint8Array(32 * 32).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -785,13 +805,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 32,
       heightmap: new Float32Array(33 * 33).fill(0.5),
       biomeMap: new Uint8Array(32 * 32).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -830,13 +850,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 32,
       heightmap: new Float32Array(33 * 33).fill(0.5),
       biomeMap: new Uint8Array(32 * 32).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const propMeshes = foliage.children.filter(child => child.name.startsWith('foliage-props')) as THREE.InstancedMesh[];
@@ -865,20 +885,20 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9).fill(0.5),
       biomeMap: new Uint8Array(4).fill(BiomeType.DESERT),
       resources: [],
       structures: [],
-    } as any);
-    viewer.addChunk(1, 0, {
+    }));
+    viewer.addChunk(1, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9).fill(0.25),
       biomeMap: new Uint8Array(4).fill(BiomeType.FOREST),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     expect(getFoliageGroup(viewer)).toBeUndefined();
     expect(getFoliageGroup(viewer, '1,0')).toBeUndefined();
@@ -896,13 +916,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    const chunk = {
+    const chunk = createViewerChunkData({
       size: 1,
       heightmap: new Float32Array(4),
       biomeMap: new Uint8Array([BiomeType.PLAINS]),
       resources: [],
       structures: [],
-    } as any;
+    });
 
     viewer.addChunk(0, 0, chunk);
     viewer.addChunk(1, 0, chunk);
@@ -929,7 +949,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9).fill(0.5),
       biomeMap: new Uint8Array([
@@ -950,7 +970,7 @@ describe('WorldViewer lifecycle', () => {
       }],
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const colors = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;
@@ -974,13 +994,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array(4),
       biomeMap: new Uint8Array([BiomeType.PLAINS]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const terrain = getTerrainMesh(viewer);
     const initialMaterial = terrain.material as THREE.MeshStandardMaterial;
@@ -1020,20 +1040,20 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0, 0, 0, 0]),
       biomeMap: new Uint8Array([BiomeType.DESERT]),
       resources: [],
       structures: [],
-    } as any);
-    viewer.addChunk(1, 0, {
+    }));
+    viewer.addChunk(1, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0, 0, 0, 0]),
       biomeMap: new Uint8Array([BiomeType.PLAINS]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const leftTerrain = getTerrainMesh(viewer, '0,0');
     const rightTerrain = getTerrainMesh(viewer, '1,0');
@@ -1075,20 +1095,20 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    viewer.addChunk(0, 0, {
+    viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.2, 0.84, 0.2, 0.84]),
       biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
       resources: [],
       structures: [],
-    } as any);
-    viewer.addChunk(1, 0, {
+    }));
+    viewer.addChunk(1, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.31, 0.31, 0.31, 0.31]),
       biomeMap: new Uint8Array([BiomeType.BEACH]),
       resources: [],
       structures: [],
-    } as any);
+    }));
 
     const leftTerrain = getTerrainMesh(viewer, '0,0');
     const rightTerrain = getTerrainMesh(viewer, '1,0');

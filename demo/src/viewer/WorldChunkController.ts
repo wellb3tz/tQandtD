@@ -94,12 +94,25 @@ export class WorldChunkController {
 
   clearChunks(): void {
     const keys = Array.from(this.chunkMeshes.keys());
+    let removedAny = false;
+
     for (const key of keys) {
       const [chunkX, chunkY] = key.split(',').map(Number);
-      this.removeChunk(chunkX, chunkY, false);
+      const removed = this.removeChunkFromSceneFn({
+        chunkX,
+        chunkY,
+        keepFogOfWar: false,
+        scene: this.scene,
+        chunkMeshes: this.chunkMeshes,
+        waterLayerManager: this.waterLayerManager,
+        fogOfWarManager: this.fogOfWarManager,
+      });
+      removedAny ||= removed;
     }
 
-    this.onChunksChanged();
+    if (removedAny) {
+      this.onChunksChanged();
+    }
   }
 
   updateChunk(chunkX: number, chunkY: number, data: ChunkData): void {
