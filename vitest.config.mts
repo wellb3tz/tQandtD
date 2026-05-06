@@ -22,7 +22,6 @@ export default defineConfig({
         'app/main.ts',
         'app/worker-loader.ts',
         'app/src/core/**',
-        'app/src/editor/**',
         'app/src/ui/**',
         'app/src/utils/**',
       ],

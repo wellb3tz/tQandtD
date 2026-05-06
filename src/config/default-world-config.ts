@@ -199,11 +199,6 @@ function createBaseWorldConfig(): WorldConfig {
       enableElevationBands: true,
       snowLineElevation: 0.8,
       treeLineElevation: 0.75,
-      enableMicroBiomes: true,
-      microBiomeFrequency: 0.10,
-      microBiomeMaxSize: 20,
-      depressionDepthThreshold: 0.05,
-      clearingGradientThreshold: 0.03,
     },
     resourceConfig: {
       types: [

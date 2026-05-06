@@ -255,25 +255,6 @@ for (const [biome, weight] of weights) {
 
 ---
 
-### What are micro-biomes?
-
-Small special zones within biomes:
-- **OASIS**: Desert depressions
-- **POND**: Plain depressions
-- **CLEARING**: Flat forest areas
-- **GROVE**: Flat tundra areas
-
-Enable with:
-```typescript
-enhancedBiomeConfig: {
-  enableMicroBiomes: true,
-  microBiomeFrequency: 0.1,
-  microBiomeMaxSize: 20,
-}
-```
-
----
-
 ### What are elevation bands?
 
 Mountain zones based on elevation:

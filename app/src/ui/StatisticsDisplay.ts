@@ -15,7 +15,6 @@ export class StatisticsDisplay {
   private avgHeightElement:     HTMLElement | null = null;
   private minHeightElement:     HTMLElement | null = null;
   private maxHeightElement:     HTMLElement | null = null;
-  private microBiomeCountElement: HTMLElement | null = null;
   private biomeChartContainer:  HTMLElement | null = null;
   private resourceChartContainer: HTMLElement | null = null;
   private lastLoadedChunkCount: number | null = null;
@@ -66,7 +65,6 @@ export class StatisticsDisplay {
     this.avgHeightElement       = document.getElementById('stat-height-avg');
     this.minHeightElement       = document.getElementById('stat-height-min');
     this.maxHeightElement       = document.getElementById('stat-height-max');
-    this.microBiomeCountElement = document.getElementById('micro-biome-count');
     this.biomeChartContainer    = document.getElementById('stat-biome-chart');
     this.resourceChartContainer = document.getElementById('stat-resource-chart');
 
@@ -81,10 +79,6 @@ export class StatisticsDisplay {
     if (this.avgHeightElement) this.avgHeightElement.textContent = avg.toFixed(2);
     if (this.minHeightElement) this.minHeightElement.textContent = min.toFixed(2);
     if (this.maxHeightElement) this.maxHeightElement.textContent = max.toFixed(2);
-  }
-
-  updateMicroBiomeCount(count: number): void {
-    if (this.microBiomeCountElement) this.microBiomeCountElement.textContent = count.toString();
   }
 
   updateBiomeDistribution(distribution: Map<BiomeType, number>): void {

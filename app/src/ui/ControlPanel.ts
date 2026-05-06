@@ -5,9 +5,8 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { WorldApp, AppState, TerrainTool } from '../core/WorldApp';
+import { WorldApp, AppState } from '../core/WorldApp';
 import { DEFAULT_RIVER_CONFIG, type WorldConfig } from '@engine/index';
-import { TerrainEditor } from '../editor/TerrainEditor';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 
 /**
@@ -66,12 +65,9 @@ const ELEMENT_IDS = {
   RESOURCE_CONTROLS: 'resource-controls',
   WATER_CONTROLS: 'water-controls',
   ADVANCED_CONTROLS: 'advanced-controls',
-  TERRAIN_EDITING_CONTROLS: 'terrain-editing-controls',
   VISIBILITY_CONTROLS: 'visibility-controls',
   PRESET_SELECT: 'preset-select',
   PRESET_DESCRIPTION: 'preset-description',
-  UNDO_BTN: 'undo-btn',
-  REDO_BTN: 'redo-btn',
 } as const;
 
 /**
@@ -79,7 +75,6 @@ const ELEMENT_IDS = {
  */
 export class ControlPanel {
   private app: WorldApp | null = null;
-  private terrainEditor: TerrainEditor | null = null;
   private container: HTMLElement | null = null;
   private parameterChangeCallbacks: Set<ParameterChangeCallback> = new Set();
   private presetSelectCallbacks: Set<PresetSelectCallback> = new Set();
@@ -89,10 +84,9 @@ export class ControlPanel {
   /**
    * Initialize the control panel
    */
-  initialize(container: HTMLElement, app: WorldApp, terrainEditor?: TerrainEditor): void {
+  initialize(container: HTMLElement, app: WorldApp): void {
     this.container = container;
     this.app = app;
-    this.terrainEditor = terrainEditor || null;
     this.currentConfig = app.getState().config;
 
     // Subscribe to state changes
@@ -106,7 +100,6 @@ export class ControlPanel {
     this.createResourceControls();
     this.createWaterControls();
     this.createAdvancedControls();
-    this.createTerrainEditingControls();
     this.createVisibilityToggles();
   }
 
@@ -356,63 +349,6 @@ export class ControlPanel {
     transitionWidthControl.id = 'transitionWidth-group';
     biomeContainer.appendChild(transitionWidthControl);
 
-    // Enable micro biomes
-    const microBiomesCheckbox = this.createCheckboxControl({
-      id: 'enableMicroBiomes',
-      label: 'Enable Micro Biomes',
-      defaultValue: true,
-      tooltip: 'Enable small-scale biome variations'
-    }, (checked) => {
-      this.updateBiomeConfig('enableMicroBiomes', checked);
-      const microFreqControl = document.getElementById('microBiomeFrequency-group');
-      if (microFreqControl) {
-        microFreqControl.style.display = checked ? 'block' : 'none';
-      }
-    });
-    biomeContainer.appendChild(microBiomesCheckbox);
-
-    // Micro biome frequency (conditional)
-    const microFreqControl = this.createSliderControl({
-      id: 'microBiomeFrequency',
-      label: 'Micro Biome Frequency',
-      min: 0.0,
-      max: 0.5,
-      step: 0.01,
-      defaultValue: 0.1,
-      tooltip: 'Frequency of micro biome variations'
-    }, (value) => {
-      this.updateBiomeConfig('microBiomeFrequency', value);
-    });
-    microFreqControl.style.display = 'block';
-    microFreqControl.id = 'microBiomeFrequency-group';
-    biomeContainer.appendChild(microFreqControl);
-
-    // Micro biome max size (conditional, shown with micro biomes)
-    const microMaxSizeControl = this.createSliderControl({
-      id: 'microBiomeMaxSize',
-      label: 'Micro Biome Max Size',
-      min: 5,
-      max: 50,
-      step: 5,
-      defaultValue: 20,
-      tooltip: 'Maximum size of micro biome patches in tiles'
-    }, (value) => {
-      this.updateBiomeConfig('microBiomeMaxSize', value);
-    });
-    microMaxSizeControl.style.display = 'none';
-    microMaxSizeControl.id = 'microBiomeMaxSize-group';
-    biomeContainer.appendChild(microMaxSizeControl);
-
-    // Update micro biomes checkbox to also toggle max size control
-    // (patch the existing checkbox handler by re-registering via DOM)
-    const existingMicroCheck = biomeContainer.querySelector('#enableMicroBiomes') as HTMLInputElement | null;
-    if (existingMicroCheck) {
-      existingMicroCheck.addEventListener('change', () => {
-        const maxSizeCtrl = document.getElementById('microBiomeMaxSize-group');
-        if (maxSizeCtrl) maxSizeCtrl.style.display = existingMicroCheck.checked ? 'block' : 'none';
-      });
-    }
-
     // Enable elevation bands
     const elevationBandsCheckbox = this.createCheckboxControl({
       id: 'enableElevationBands',
@@ -444,31 +380,6 @@ export class ControlPanel {
     snowLineControl.id = 'snowLineElevation-group';
     biomeContainer.appendChild(snowLineControl);
 
-    // Micro-biome terrain thresholds section
-    const microTerrainSection = document.createElement('div');
-    microTerrainSection.style.marginTop = '16px';
-    microTerrainSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Micro-Biome Terrain</h4>';
-    biomeContainer.appendChild(microTerrainSection);
-
-    biomeContainer.appendChild(this.createSliderControl({
-      id: 'depressionDepthThreshold',
-      label: 'Depression Depth',
-      min: 0.0,
-      max: 0.15,
-      step: 0.005,
-      defaultValue: 0.05,
-      tooltip: 'Min depth of terrain depression for Oasis/Pond placement (lower = more sensitive)'
-    }, (value) => { this.updateBiomeConfig('depressionDepthThreshold', value); }));
-
-    biomeContainer.appendChild(this.createSliderControl({
-      id: 'clearingGradientThreshold',
-      label: 'Clearing Flatness',
-      min: 0.01,
-      max: 0.1,
-      step: 0.005,
-      defaultValue: 0.03,
-      tooltip: 'Max terrain gradient for Clearing/Grove placement (higher = more permissive)'
-    }, (value) => { this.updateBiomeConfig('clearingGradientThreshold', value); }));
   }
 
   /**
@@ -478,13 +389,11 @@ export class ControlPanel {
     const resourceContainer = document.getElementById(ELEMENT_IDS.RESOURCE_CONTROLS);
     if (!resourceContainer) return;
 
-    // Resource types section
     const resourceTypesSection = document.createElement('div');
     resourceTypesSection.style.marginBottom = '16px';
     resourceTypesSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Resource Types</h4>';
     resourceContainer.appendChild(resourceTypesSection);
 
-    // Resource type checkboxes
     const resourceTypes = [
       { id: 'enableIron', label: 'Iron', defaultValue: true },
       { id: 'enableGold', label: 'Gold', defaultValue: true },
@@ -500,7 +409,6 @@ export class ControlPanel {
       resourceContainer.appendChild(control);
     });
 
-    // Resource density threshold
     const densityControl = this.createSliderControl({
       id: 'densityThreshold',
       label: 'Resource Density',
@@ -515,14 +423,12 @@ export class ControlPanel {
     densityControl.style.marginTop = '16px';
     resourceContainer.appendChild(densityControl);
 
-    // Structure types section
     const structureTypesSection = document.createElement('div');
     structureTypesSection.style.marginTop = '24px';
     structureTypesSection.style.marginBottom = '16px';
     structureTypesSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Structure Types</h4>';
     resourceContainer.appendChild(structureTypesSection);
 
-    // Structure type checkboxes
     const structureTypes = [
       { id: 'enableVillage', label: 'Village', defaultValue: true },
       { id: 'enableRuins', label: 'Ruins', defaultValue: true },
@@ -536,7 +442,6 @@ export class ControlPanel {
       resourceContainer.appendChild(control);
     });
 
-    // Structure min distance
     const minDistanceControl = this.createSliderControl({
       id: 'minDistance',
       label: 'Structure Min Distance',
@@ -559,17 +464,14 @@ export class ControlPanel {
     const waterContainer = document.getElementById(ELEMENT_IDS.WATER_CONTROLS);
     if (!waterContainer) return;
 
-    // Lakes section
     const lakesSection = document.createElement('div');
     lakesSection.style.marginBottom = '16px';
     lakesSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Lakes</h4>';
     waterContainer.appendChild(lakesSection);
 
-    // Get current lake config values
     const currentLakeConfig = this.currentConfig?.lakeConfig;
     const lakesEnabled = currentLakeConfig?.enabled ?? true;
 
-    // Enable Multi-Chunk Lakes checkbox (replaces both old checkboxes)
     const enableLakesCheckbox = this.createCheckboxControl({
       id: 'enableMultiChunkLakes',
       label: 'Enable Multi-Chunk Lakes',
@@ -581,7 +483,6 @@ export class ControlPanel {
     });
     waterContainer.appendChild(enableLakesCheckbox);
 
-    // Rivers section
     const riversSection = document.createElement('div');
     riversSection.style.marginBottom = '16px';
     riversSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Rivers</h4>';
@@ -600,14 +501,12 @@ export class ControlPanel {
     });
     riversSection.appendChild(enableRiversCheckbox);
 
-    // Ocean section
     const oceanSection = document.createElement('div');
     oceanSection.style.marginTop = '24px';
     oceanSection.style.marginBottom = '16px';
     oceanSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Ocean</h4>';
     waterContainer.appendChild(oceanSection);
 
-    // Water color picker
     const colorControl = this.createColorControl({
       id: 'waterColor',
       label: 'Water Color',
@@ -618,7 +517,6 @@ export class ControlPanel {
     });
     waterContainer.appendChild(colorControl);
 
-    // Water opacity slider
     const opacityControl = this.createSliderControl({
       id: 'waterOpacity',
       label: 'Water Opacity',
@@ -632,7 +530,6 @@ export class ControlPanel {
     });
     waterContainer.appendChild(opacityControl);
 
-    // Water shininess slider
     const shininessControl = this.createSliderControl({
       id: 'waterShininess',
       label: 'Water Shininess',
@@ -654,7 +551,6 @@ export class ControlPanel {
     const advancedContainer = document.getElementById(ELEMENT_IDS.ADVANCED_CONTROLS);
     if (!advancedContainer) return;
 
-    // View Distance slider
     const viewDistanceControl = this.createSliderControl({
       id: 'viewDistance',
       label: 'View Distance (chunks)',
@@ -664,13 +560,10 @@ export class ControlPanel {
       defaultValue: 3,
       tooltip: 'Number of chunks to load around camera (higher = more visible terrain, lower performance)'
     }, (value) => {
-      if (this.app) {
-        this.app.updateState({ viewDistance: value });
-      }
+      this.app?.updateState({ viewDistance: value });
     });
     advancedContainer.appendChild(viewDistanceControl);
 
-    // Cache Size slider
     const cacheSizeControl = this.createSliderControl({
       id: 'maxCacheSize',
       label: 'Cache Size (chunks)',
@@ -687,7 +580,6 @@ export class ControlPanel {
     });
     advancedContainer.appendChild(cacheSizeControl);
 
-    // Worker pool (FIXED - memory leak resolved)
     const workerCheckbox = this.createCheckboxControl({
       id: 'enableWorkerPool',
       label: 'Enable Worker Pool (Multi-threaded)',
@@ -707,24 +599,18 @@ export class ControlPanel {
 
     if (key === 'enabled') {
       if (value === true) {
-        // Enable Worker Pool with fixed 4 workers for optimal balance
-        const defaultMaxWorkers = 4;
-        
-        // Use the worker loader to get the correct URL for dev/prod
         const workerUrl = getWorkerUrl();
-        
         const newConfig: Partial<WorldConfig> = {
           workerPoolConfig: {
-            maxWorkers: defaultMaxWorkers,
+            maxWorkers: 4,
             workerScriptUrl: workerUrl,
             createWorker: () => createWorker(),
-            taskTimeout: 5000 // 5 second timeout for faster fallback
+            taskTimeout: 5000,
           }
         };
         this.app.updateEngineConfig(newConfig);
         this.notifyParameterChange(newConfig);
       } else {
-        // Disable Worker Pool
         const newConfig: Partial<WorldConfig> = {
           workerPoolConfig: undefined
         };
@@ -732,7 +618,6 @@ export class ControlPanel {
         this.notifyParameterChange(newConfig);
       }
     } else if (key === 'maxWorkers') {
-      // Update max workers
       const currentWorkerPoolConfig = this.currentConfig.workerPoolConfig;
       if (currentWorkerPoolConfig) {
         const newConfig: Partial<WorldConfig> = {
@@ -744,197 +629,6 @@ export class ControlPanel {
         this.app.updateEngineConfig(newConfig);
         this.notifyParameterChange(newConfig);
       }
-    }
-  }
-
-  /**
-   * Create terrain editing controls
-   */
-  private createTerrainEditingControls(): void {
-    const editingContainer = document.getElementById(ELEMENT_IDS.TERRAIN_EDITING_CONTROLS);
-    if (!editingContainer) return;
-
-    // Tool selection buttons
-    const toolsSection = document.createElement('div');
-    toolsSection.style.marginBottom = '16px';
-    toolsSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Tools</h4>';
-    editingContainer.appendChild(toolsSection);
-
-    const toolButtons = [
-      { id: 'tool-none', label: 'None', tool: TerrainTool.NONE },
-      { id: 'tool-raise', label: 'Raise', tool: TerrainTool.RAISE },
-      { id: 'tool-lower', label: 'Lower', tool: TerrainTool.LOWER },
-      { id: 'tool-flatten', label: 'Flatten', tool: TerrainTool.FLATTEN },
-      { id: 'tool-smooth', label: 'Smooth', tool: TerrainTool.SMOOTH }
-    ];
-
-    const toolButtonGroup = document.createElement('div');
-    toolButtonGroup.style.display = 'grid';
-    toolButtonGroup.style.gridTemplateColumns = 'repeat(2, 1fr)';
-    toolButtonGroup.style.gap = '8px';
-    toolButtonGroup.style.marginBottom = '16px';
-
-    toolButtons.forEach(({ id, label, tool }) => {
-      const button = document.createElement('button');
-      button.id = id;
-      button.textContent = label;
-      button.style.padding = '8px';
-      button.style.borderRadius = '4px';
-      button.style.border = '1px solid var(--border-color, #ccc)';
-      button.style.backgroundColor = 'var(--bg-primary, #f0f0f0)';
-      button.style.color = 'var(--text-primary, #000)';
-      button.style.cursor = 'pointer';
-      button.style.fontSize = '0.875rem';
-
-      if (tool === TerrainTool.NONE) {
-        button.style.backgroundColor = 'var(--bg-active, #007bff)';
-        button.style.color = '#fff';
-      }
-
-      button.addEventListener('click', () => {
-        if (this.terrainEditor) {
-          this.terrainEditor.setTool(tool);
-          
-          // Update button states
-          toolButtons.forEach(({ id: btnId }) => {
-            const btn = document.getElementById(btnId);
-            if (btn) {
-              if (btnId === id) {
-                btn.style.backgroundColor = 'var(--bg-active, #007bff)';
-                btn.style.color = '#fff';
-              } else {
-                btn.style.backgroundColor = 'var(--bg-primary, #f0f0f0)';
-                btn.style.color = 'var(--text-primary, #000)';
-              }
-            }
-          });
-        }
-      });
-
-      toolButtonGroup.appendChild(button);
-    });
-
-    editingContainer.appendChild(toolButtonGroup);
-
-    // Brush size slider
-    const brushSizeControl = this.createSliderControl({
-      id: 'brushSize',
-      label: 'Brush Size',
-      min: 1,
-      max: 10,
-      step: 1,
-      defaultValue: 5,
-      tooltip: 'Size of the terrain editing brush'
-    }, (value) => {
-      if (this.terrainEditor) {
-        this.terrainEditor.setBrushSize(value);
-      }
-    });
-    editingContainer.appendChild(brushSizeControl);
-
-    // Brush strength slider
-    const brushStrengthControl = this.createSliderControl({
-      id: 'brushStrength',
-      label: 'Brush Strength',
-      min: 0.1,
-      max: 2.0,
-      step: 0.1,
-      defaultValue: 1.0,
-      tooltip: 'Strength of the terrain editing brush'
-    }, (value) => {
-      if (this.terrainEditor) {
-        this.terrainEditor.setBrushStrength(value);
-      }
-    });
-    editingContainer.appendChild(brushStrengthControl);
-
-    // Undo/Redo section
-    const undoRedoSection = document.createElement('div');
-    undoRedoSection.style.marginTop = '16px';
-    undoRedoSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">History</h4>';
-    editingContainer.appendChild(undoRedoSection);
-
-    // Undo/Redo button group
-    const undoRedoGroup = document.createElement('div');
-    undoRedoGroup.style.display = 'grid';
-    undoRedoGroup.style.gridTemplateColumns = '1fr 1fr';
-    undoRedoGroup.style.gap = '8px';
-
-    // Undo button
-    const undoButton = document.createElement('button');
-    undoButton.id = ELEMENT_IDS.UNDO_BTN;
-    undoButton.textContent = '↶ Undo';
-    undoButton.style.padding = '8px';
-    undoButton.style.borderRadius = '4px';
-    undoButton.style.border = '1px solid var(--border-color, #ccc)';
-    undoButton.style.backgroundColor = 'var(--bg-primary, #f0f0f0)';
-    undoButton.style.color = 'var(--text-primary, #000)';
-    undoButton.style.cursor = 'pointer';
-    undoButton.style.fontSize = '0.875rem';
-    undoButton.disabled = true;
-    undoButton.style.opacity = '0.5';
-
-    undoButton.addEventListener('click', () => {
-      if (this.terrainEditor && this.terrainEditor.canUndo()) {
-        this.terrainEditor.undo();
-        this.updateUndoRedoButtons();
-      }
-    });
-
-    // Redo button
-    const redoButton = document.createElement('button');
-    redoButton.id = ELEMENT_IDS.REDO_BTN;
-    redoButton.textContent = '↷ Redo';
-    redoButton.style.padding = '8px';
-    redoButton.style.borderRadius = '4px';
-    redoButton.style.border = '1px solid var(--border-color, #ccc)';
-    redoButton.style.backgroundColor = 'var(--bg-primary, #f0f0f0)';
-    redoButton.style.color = 'var(--text-primary, #000)';
-    redoButton.style.cursor = 'pointer';
-    redoButton.style.fontSize = '0.875rem';
-    redoButton.disabled = true;
-    redoButton.style.opacity = '0.5';
-
-    redoButton.addEventListener('click', () => {
-      if (this.terrainEditor && this.terrainEditor.canRedo()) {
-        this.terrainEditor.redo();
-        this.updateUndoRedoButtons();
-      }
-    });
-
-    undoRedoGroup.appendChild(undoButton);
-    undoRedoGroup.appendChild(redoButton);
-    editingContainer.appendChild(undoRedoGroup);
-
-    // Register modification callback to update undo/redo buttons
-    if (this.terrainEditor) {
-      this.terrainEditor.onModification(() => {
-        this.updateUndoRedoButtons();
-      });
-    }
-  }
-
-  /**
-   * Update undo/redo button states
-   */
-  private updateUndoRedoButtons(): void {
-    if (!this.terrainEditor) return;
-
-    const undoButton = document.getElementById(ELEMENT_IDS.UNDO_BTN) as HTMLButtonElement;
-    const redoButton = document.getElementById(ELEMENT_IDS.REDO_BTN) as HTMLButtonElement;
-
-    if (undoButton) {
-      const canUndo = this.terrainEditor.canUndo();
-      undoButton.disabled = !canUndo;
-      undoButton.style.opacity = canUndo ? '1' : '0.5';
-      undoButton.style.cursor = canUndo ? 'pointer' : 'not-allowed';
-    }
-
-    if (redoButton) {
-      const canRedo = this.terrainEditor.canRedo();
-      redoButton.disabled = !canRedo;
-      redoButton.style.opacity = canRedo ? '1' : '0.5';
-      redoButton.style.cursor = canRedo ? 'pointer' : 'not-allowed';
     }
   }
 
@@ -1117,7 +811,6 @@ export class ControlPanel {
     // Check if this is an enhanced biome feature
     const enhancedFeatures = [
       'enableTransitions', 'transitionWidth',
-      'enableMicroBiomes', 'microBiomeFrequency', 'microBiomeMaxSize',
       'enableElevationBands', 'snowLineElevation', 'treeLineElevation'
     ];
     
@@ -1127,9 +820,6 @@ export class ControlPanel {
         ...this.currentConfig.biomeConfig,
         enableTransitions: true,
         transitionWidth: 10,
-        enableMicroBiomes: true,
-        microBiomeFrequency: 0.1,
-        microBiomeMaxSize: 20,
         enableElevationBands: false,
         snowLineElevation: 0.8,
         treeLineElevation: 0.75
@@ -1514,26 +1204,11 @@ export class ControlPanel {
       if (ebc.transitionWidth !== undefined) {
         this.updateSliderValue('transitionWidth', ebc.transitionWidth);
       }
-      if (ebc.enableMicroBiomes !== undefined) {
-        this.updateCheckboxValue('enableMicroBiomes', ebc.enableMicroBiomes);
-      }
-      if (ebc.microBiomeFrequency !== undefined) {
-        this.updateSliderValue('microBiomeFrequency', ebc.microBiomeFrequency);
-      }
       if (ebc.enableElevationBands !== undefined) {
         this.updateCheckboxValue('enableElevationBands', ebc.enableElevationBands);
       }
       if (ebc.snowLineElevation !== undefined) {
         this.updateSliderValue('snowLineElevation', ebc.snowLineElevation);
-      }
-      if (ebc.microBiomeMaxSize !== undefined) {
-        this.updateSliderValue('microBiomeMaxSize', ebc.microBiomeMaxSize);
-      }
-      if (ebc.depressionDepthThreshold !== undefined) {
-        this.updateSliderValue('depressionDepthThreshold', ebc.depressionDepthThreshold);
-      }
-      if (ebc.clearingGradientThreshold !== undefined) {
-        this.updateSliderValue('clearingGradientThreshold', ebc.clearingGradientThreshold);
       }
     }
 
@@ -1586,11 +1261,6 @@ export class ControlPanel {
       case 'enableTransitions': {
         const ctrl = document.getElementById('transitionWidth-group');
         if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
-        break;
-      }
-      case 'enableMicroBiomes': {
-        const freqCtrl = document.getElementById('microBiomeFrequency-group');
-        if (freqCtrl) freqCtrl.style.display = checked ? 'block' : 'none';
         break;
       }
       case 'enableElevationBands': {

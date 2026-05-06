@@ -145,21 +145,18 @@ describeBenchmarks('Performance Benchmarks', () => {
     const sparseBiomeWeightsSize = chunk.sparseBiomeWeights.byteLength;
     const sparseBiomeOffsetsSize = chunk.sparseBiomeOffsets.byteLength;
     const biomeWeightsSize = sparseBiomeTypesSize + sparseBiomeWeightsSize + sparseBiomeOffsetsSize;
-    const microBiomeMapSize = chunk.microBiomeMap?.byteLength || 0;
-    
     // Estimate resources and structures (rough approximation)
     const resourcesSize = chunk.resources.length * 32; // ~32 bytes per resource
     const structuresSize = chunk.structures.length * 32; // ~32 bytes per structure
     const lakesSize = chunk.lakes.reduce((sum, lake) => sum + lake.tiles.size * 4 + 32, 0);
 
-    const totalSize = heightmapSize + biomeMapSize + biomeWeightsSize + microBiomeMapSize +
+    const totalSize = heightmapSize + biomeMapSize + biomeWeightsSize +
                       resourcesSize + structuresSize + lakesSize;
 
     console.log(`\nMemory usage per 32x32 chunk:`);
     console.log(`  Heightmap: ${(heightmapSize / 1024).toFixed(2)} KB`);
     console.log(`  Biome map: ${(biomeMapSize / 1024).toFixed(2)} KB`);
     console.log(`  Biome weights: ${(biomeWeightsSize / 1024).toFixed(2)} KB`);
-    console.log(`  Micro-biomes: ${(microBiomeMapSize / 1024).toFixed(2)} KB`);
     console.log(`  Resources: ${(resourcesSize / 1024).toFixed(2)} KB`);
     console.log(`  Structures: ${(structuresSize / 1024).toFixed(2)} KB`);
     console.log(`  Lakes: ${(lakesSize / 1024).toFixed(2)} KB`);

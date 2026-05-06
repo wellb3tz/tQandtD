@@ -36,17 +36,6 @@ export interface Vector3 {
 }
 
 /**
- * Terrain editing tools
- */
-export enum TerrainTool {
-  RAISE = 'raise',
-  LOWER = 'lower',
-  FLATTEN = 'flatten',
-  SMOOTH = 'smooth',
-  NONE = 'none'
-}
-
-/**
  * Application state interface
  */
 export interface AppState {
@@ -58,9 +47,6 @@ export interface AppState {
   // UI state
   cameraPosition: Vector3;
   cameraTarget: Vector3;
-  selectedTool: TerrainTool;
-  brushSize: number;
-  brushStrength: number;
   viewDistance: number; // Chunk load radius
   
   // Visibility toggles
@@ -179,9 +165,6 @@ export class WorldApp {
       
       cameraPosition: { x: 50, y: 100, z: 50 },
       cameraTarget: { x: 0, y: 0, z: 0 },
-      selectedTool: TerrainTool.NONE,
-      brushSize: 5,
-      brushStrength: 1.0,
       viewDistance: 3, // Default chunk load radius
       
       showTerrain: true,
@@ -345,10 +328,6 @@ export class WorldApp {
 
   getSeed(): number {
     return this.state.config.seed;
-  }
-
-  getSelectedTool(): TerrainTool {
-    return this.state.selectedTool;
   }
 
   isWorkerPoolEnabled(): boolean {
@@ -573,72 +552,6 @@ export class WorldApp {
       serializedWorld,
     });
     return nextManager;
-  }
-
-  async getWorldChunk(chunkX: number, chunkY: number): Promise<ChunkData> {
-    const chunkManager = this.state.chunkManager;
-    if (!chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
-    const session = this.getActiveWorldSession();
-    return session
-      ? session.getChunk({ x: chunkX, y: chunkY })
-      : chunkManager.getChunk(chunkX, chunkY);
-  }
-
-  recordTerrainEdit(chunkX: number, chunkY: number, tileIndex: number, newHeight: number): void {
-    const chunkManager = this.state.chunkManager;
-    if (!chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
-    const session = this.getActiveWorldSession();
-    if (session) {
-      session.recordTerrainEdit({ x: chunkX, y: chunkY }, tileIndex, newHeight);
-    } else {
-      chunkManager.recordTerrainEdit(chunkX, chunkY, tileIndex, newHeight);
-    }
-  }
-
-  recordTerrainEdits(chunkX: number, chunkY: number, heightChanges: Map<number, number>): void {
-    const chunkManager = this.state.chunkManager;
-    if (!chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
-    const session = this.getActiveWorldSession();
-    if (session) {
-      session.recordTerrainEdits({ x: chunkX, y: chunkY }, heightChanges);
-    } else {
-      chunkManager.recordTerrainEdits(chunkX, chunkY, heightChanges);
-    }
-  }
-
-  async publishChunkUpdate(chunkX: number, chunkY: number): Promise<ChunkData> {
-    const chunkManager = this.state.chunkManager;
-    if (!chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
-    const session = this.getActiveWorldSession();
-    const chunk = session
-      ? await session.notifyChunkUpdated({ x: chunkX, y: chunkY }, { syncRenderer: false })
-      : await chunkManager.getChunk(chunkX, chunkY);
-
-    const key = this.getChunkKey(chunkX, chunkY);
-    if (this.state.loadedChunks.has(key)) {
-      this.state.loadedChunks.set(key, chunk);
-      this.updateState({
-        loadedChunks: new Map(this.state.loadedChunks),
-      });
-    }
-
-    if (!session) {
-      this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
-    }
-
-    return chunk;
   }
 
   /**
@@ -1021,75 +934,6 @@ export class WorldApp {
     }
 
     this.updateState({ cameraPosition: position });
-  }
-
-  /**
-   * Handle mouse click for terrain editing
-   * Performs raycasting and applies terrain modification if a tool is selected
-   * 
-   * @param screenX - Screen X coordinate in pixels
-   * @param screenY - Screen Y coordinate in pixels
-   * @param viewer - WorldViewer instance for raycasting
-   * @param editor - TerrainEditor instance for applying modifications
-   */
-  handleTerrainClick(screenX: number, screenY: number, viewer: any, editor: any): void {
-    // Check if a tool is selected
-    if (this.state.selectedTool === TerrainTool.NONE) {
-      return;
-    }
-
-    // Perform raycasting to find terrain hit
-    const hit = viewer.raycastTerrain(screenX, screenY);
-    
-    if (!hit) {
-      return;
-    }
-
-    // Apply brush at hit position
-    const worldX = Math.floor(hit.point.x);
-    const worldY = Math.floor(hit.point.z);
-    
-    const startTime = performance.now();
-    editor.applyBrush(worldX, worldY);
-    const endTime = performance.now();
-    
-    // Log performance (should be < 100ms per requirement 12.8)
-    const updateTime = endTime - startTime;
-    console.log(`Terrain modification completed in ${updateTime.toFixed(2)}ms`);
-    
-    if (updateTime > 100) {
-      console.warn(`Terrain update exceeded 100ms threshold: ${updateTime.toFixed(2)}ms`);
-    }
-  }
-
-  /**
-   * Handle mouse move for brush preview
-   * Updates brush preview position based on terrain raycasting
-   * 
-   * @param screenX - Screen X coordinate in pixels
-   * @param screenY - Screen Y coordinate in pixels
-   * @param viewer - WorldViewer instance for raycasting
-   * @param editor - TerrainEditor instance for preview updates
-   */
-  handleMouseMove(screenX: number, screenY: number, viewer: any, editor: any): void {
-    // Only show preview if a tool is selected
-    if (this.state.selectedTool === TerrainTool.NONE) {
-      editor.hideBrushPreview();
-      return;
-    }
-
-    // Perform raycasting to find terrain hit
-    const hit = viewer.raycastTerrain(screenX, screenY);
-    
-    if (!hit) {
-      editor.hideBrushPreview();
-      return;
-    }
-
-    // Update brush preview position
-    const worldX = hit.point.x;
-    const worldY = hit.point.z;
-    editor.showBrushPreview(worldX, worldY);
   }
 
   /**

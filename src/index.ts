@@ -81,7 +81,6 @@ export {
   EnhancedBiomeSystem,
   type EnhancedBiomeConfig,
   type EnhancedBiomeData,
-  MicroBiomeType,
   ElevationBand,
 } from './world/enhanced-biome';
 export {
@@ -181,7 +180,6 @@ export {
 } from './rendering/render-layers';
 export {
   RenderStatsCache,
-  calculateMicroBiomeCount,
   calculateRenderStats,
   type RenderStats,
   type RenderStatsChunk,

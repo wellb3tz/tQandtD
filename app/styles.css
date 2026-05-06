@@ -347,30 +347,6 @@ button { cursor: pointer; border: none; border-radius: var(--r); font-family: in
 .metric-unit { font-size: 11px; color: var(--text-3); font-weight: 500; }
 
 /* ══════════════════════════════════════════
-   BOTTOM TOOLBAR
-══════════════════════════════════════════ */
-.bottom-toolbar {
-  position: absolute;
-  bottom: calc(var(--status-h) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-}
-
-.tool-btn {
-  width: 42px; height: 42px;
-  background: var(--glass-bg);
-  color: var(--text-2);
-  border: 1px solid var(--glass-border);
-  display: flex; align-items: center; justify-content: center;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  transition: all var(--t);
-}
-.tool-btn:hover { background: rgba(74,222,128,0.12); color: var(--text-1); transform: translateY(-2px); }
-.tool-btn.active { background: rgba(74,222,128,0.18); color: var(--accent); border-color: rgba(74,222,128,0.5); box-shadow: 0 0 14px rgba(74,222,128,0.3); }
-
-/* ══════════════════════════════════════════
    PERFORMANCE GRAPH
 ══════════════════════════════════════════ */
 .performance-graph {
@@ -472,7 +448,6 @@ body.fullscreen-mode .world-statistics,
 body.fullscreen-mode .top-toolbar,
 body.fullscreen-mode .compass-container,
 body.fullscreen-mode .camera-position-display,
-body.fullscreen-mode .bottom-toolbar,
 body.fullscreen-mode .performance-graph,
 body.fullscreen-mode .status-bar { display: none !important; }
 

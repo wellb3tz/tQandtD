@@ -208,10 +208,6 @@ const manager = new ChunkManager({
     enableTransitions: true,
     transitionWidth: 10,
     
-    // Micro-biomes
-    enableMicroBiomes: true,
-    microBiomeFrequency: 0.1,
-    microBiomeMaxSize: 20,
     
     // Elevation bands
     enableElevationBands: true,

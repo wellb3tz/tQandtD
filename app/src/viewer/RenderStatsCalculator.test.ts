@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { calculateMicroBiomeCount, calculateRenderStats, type RenderStatsChunk } from './RenderStatsCalculator';
+import { calculateRenderStats, type RenderStatsChunk } from './RenderStatsCalculator';
 
 describe('RenderStatsCalculator', () => {
   it('counts visible terrain vertices and layer draw calls', () => {
@@ -30,14 +30,6 @@ describe('RenderStatsCalculator', () => {
     expect(calculateRenderStats([chunk])).toEqual({ vertexCount: 0, drawCalls: 0 });
   });
 
-  it('sums micro-biome counts stored on terrain user data', () => {
-    const first = createChunk();
-    const second = createChunk();
-    first.terrain.userData.microBiomeCount = 2;
-    second.terrain.userData.microBiomeCount = 3;
-
-    expect(calculateMicroBiomeCount([first, second])).toBe(5);
-  });
 });
 
 function createChunk(): RenderStatsChunk {

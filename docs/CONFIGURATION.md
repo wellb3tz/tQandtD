@@ -421,22 +421,17 @@ blendRadius: 5
 
 ## EnhancedBiomeConfig
 
-Advanced biome system with transitions, micro-biomes, and elevation bands.
+Advanced biome system with transitions and elevation bands.
 
 ```typescript
 interface EnhancedBiomeConfig extends BiomeConfig {
   enableTransitions: boolean;
   transitionWidth: number;
-  enableMicroBiomes: boolean;
-  microBiomeFrequency: number;
-  microBiomeMaxSize: number;
   enableElevationBands: boolean;
   snowLineElevation: number;
   treeLineElevation: number;
   enableClimateSystem?: boolean;
   enableCompatibilityMatrix?: boolean;
-  depressionDepthThreshold?: number;
-  clearingGradientThreshold?: number;
 }
 ```
 
@@ -466,57 +461,6 @@ Transition zone width in world units.
 **Example:**
 ```typescript
 transitionWidth: 10
-```
-
----
-
-### Micro-Biome Fields
-
-#### `enableMicroBiomes: boolean`
-
-Enable small special zones within biomes.
-
-**Default:** false
-
-**Micro-biome types:**
-- OASIS (desert depressions)
-- POND (plain depressions)
-- CLEARING (flat forest)
-- GROVE (flat tundra)
-
-**Example:**
-```typescript
-enableMicroBiomes: true
-```
-
----
-
-#### `microBiomeFrequency: number`
-
-Micro-biome occurrence frequency.
-
-**Valid range:** 0 to 0.5
-
-**Default:** 0.1
-
-**Example:**
-```typescript
-microBiomeFrequency: 0.1
-```
-
----
-
-#### `microBiomeMaxSize: number`
-
-Maximum micro-biome size in tiles.
-
-**Valid range:** 5 to 100
-
-**Default:** 20
-
-**Example:**
-```typescript
-microBiomeMaxSize: 20
 ```
 
 ---

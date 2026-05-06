@@ -60,7 +60,6 @@ app/
 └── src/
     ├── core/            # App core (WorldApp)
     ├── viewer/          # Three.js 3D rendering
-    ├── editor/          # Terrain editing tools
     ├── ui/              # UI components (controls, stats, modals)
     └── utils/           # App-specific utilities
 ```
@@ -68,7 +67,6 @@ app/
 ### App Components
 - **WorldApp**: Main application orchestrator
 - **WorldViewer**: Three.js scene management and rendering
-- **TerrainEditor**: Interactive terrain modification
 - **ControlPanel**: User controls for generation parameters
 - **WorldManager**: World state and serialization UI
 

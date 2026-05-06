@@ -97,16 +97,3 @@ export function calculateRenderStats(chunks: Iterable<RenderStatsChunk>): Render
 
   return { vertexCount, drawCalls };
 }
-
-export function calculateMicroBiomeCount(chunks: Iterable<RenderStatsChunk>): number {
-  let totalCount = 0;
-
-  for (const chunk of chunks) {
-    const count = chunk.terrain.userData?.microBiomeCount;
-    if (typeof count === 'number') {
-      totalCount += count;
-    }
-  }
-
-  return totalCount;
-}

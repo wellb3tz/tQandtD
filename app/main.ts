@@ -10,10 +10,9 @@ import './styles.css';
 
 import { WorldSession } from '@engine/index';
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
-import { WorldApp, AppEvent, TerrainTool } from './src/core/WorldApp';
+import { WorldApp, AppEvent } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
-import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
@@ -30,7 +29,6 @@ let controlPanelInstance: ControlPanel | null = null;
 let worldViewer: WorldViewer | null = null;
 let worldRenderer: ThreeWorldRendererAdapter | null = null;
 let worldSession: WorldSession | null = null;
-let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
 let statisticsDisplay: StatisticsDisplay | null = null;
@@ -152,11 +150,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       worldViewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, initialState.showChunkBoundaries);
       worldViewer.setWireframeMode(initialState.showWireframe);
       worldViewer.setTerrainTexturesEnabled(initialState.terrainTexturesEnabled);
-      
-      // Initialize TerrainEditor
-      terrainEditor = new TerrainEditor();
-      terrainEditor.initialize(app, worldViewer);
-      console.log('TerrainEditor initialized successfully');
       
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
@@ -283,13 +276,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 performanceMonitor.updateMemoryUsage(memoryUsage);
                 performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
               }
-              
-              // Update micro-biome count in statistics display
-              if (statisticsDisplay) {
-                const microBiomeCount = worldViewer!.getMicroBiomeCount();
-                statisticsDisplay.updateMicroBiomeCount(microBiomeCount);
-              }
-              
               // Update status bar biome (только если нужно, не каждый раз)
               if (statusBiome && app) {
                 const dominantBiome = app!.getDominantBiomeName();
@@ -336,7 +322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const controlPanelContainer = document.getElementById('control-panel');
     if (controlPanelContainer) {
       controlPanelInstance = new ControlPanel();
-      controlPanelInstance.initialize(controlPanelContainer, app, terrainEditor || undefined);
+      controlPanelInstance.initialize(controlPanelContainer, app);
       console.log('ControlPanel initialized successfully');
 
       // Settings-changed disclaimer
@@ -442,54 +428,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
     });
-    
-    // Set up terrain editing mouse events
-    if (viewerContainer && worldViewer && terrainEditor) {
-      let isMouseDown = false;
-      
-      viewerContainer.addEventListener('mousedown', (e) => {
-        if (e.button === 0 && app && app.getSelectedTool() !== TerrainTool.NONE) {
-          isMouseDown = true;
-          // Get canvas-relative coordinates
-          const canvas = worldViewer?.getCanvas();
-          if (canvas) {
-            const rect = canvas.getBoundingClientRect();
-            const canvasX = e.clientX - rect.left;
-            const canvasY = e.clientY - rect.top;
-            app.handleTerrainClick(canvasX, canvasY, worldViewer, terrainEditor);
-          }
-        }
-      });
-      
-      viewerContainer.addEventListener('mousemove', (e) => {
-        if (app && worldViewer && terrainEditor) {
-          // Get canvas-relative coordinates
-          const canvas = worldViewer.getCanvas();
-          const rect = canvas.getBoundingClientRect();
-          const canvasX = e.clientX - rect.left;
-          const canvasY = e.clientY - rect.top;
-          
-          // Update brush preview
-          app.handleMouseMove(canvasX, canvasY, worldViewer, terrainEditor);
-          
-          // Apply brush if mouse is down
-          if (isMouseDown && app.getSelectedTool() !== TerrainTool.NONE) {
-            app.handleTerrainClick(canvasX, canvasY, worldViewer, terrainEditor);
-          }
-        }
-      });
-      
-      viewerContainer.addEventListener('mouseup', () => {
-        isMouseDown = false;
-      });
-      
-      viewerContainer.addEventListener('mouseleave', () => {
-        isMouseDown = false;
-        if (terrainEditor) {
-          terrainEditor.hideBrushPreview();
-        }
-      });
-    }
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {

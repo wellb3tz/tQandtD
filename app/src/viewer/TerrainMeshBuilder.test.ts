@@ -7,9 +7,7 @@ import { DEFAULT_WATER_CONFIG } from './water/config';
 
 describe('TerrainMeshBuilder', () => {
   it('creates indexed terrain geometry with surface and detail attributes', () => {
-    const data = createChunkData({
-      microBiomeMap: new Uint8Array([255, 1, 255, 2]),
-    });
+    const data = createChunkData();
 
     const mesh = createTerrainMesh({
       chunkX: 2,
@@ -37,7 +35,6 @@ describe('TerrainMeshBuilder', () => {
     expect(geometry.getIndex()?.count).toBe(24);
     expect(mesh.name).toBe('terrain-2,3');
     expect(mesh.userData.chunkData).toBe(data);
-    expect(mesh.userData.microBiomeCount).toBe(2);
   });
 
   it('marks early partial chunks as transparent preview meshes', () => {

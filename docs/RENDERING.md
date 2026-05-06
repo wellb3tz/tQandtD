@@ -43,7 +43,6 @@ Visibility and stats helpers work with structural objects:
 - `applyChunkVisibility`
 - `applyRenderLayerVisibility`
 - `calculateRenderStats`
-- `calculateMicroBiomeCount`
 - `RenderStatsCache`
 
 These helpers are intentionally small and generic so renderer adapters can share behavior without inheriting the app's scene classes.

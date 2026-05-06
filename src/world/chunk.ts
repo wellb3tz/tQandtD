@@ -103,8 +103,6 @@ export interface ChunkData {
   sparseBiomeTypes: Uint8Array;
   sparseBiomeWeights: Float32Array;
   sparseBiomeOffsets: Uint16Array;
-  /** Micro-biome type for each point (size * size elements), 255 = no micro-biome */
-  microBiomeMap?: Uint8Array;
   /** Lake bodies detected inside this chunk (may be empty) */
   lakes?: LakeData[];
   /** River paths intersecting this chunk (may be empty) */

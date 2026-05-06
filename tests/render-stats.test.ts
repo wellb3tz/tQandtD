@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   RenderStatsCache,
-  calculateMicroBiomeCount,
   calculateRenderStats,
   type RenderStatsChunk,
   type RenderStatsGeometryAttribute,
@@ -24,15 +23,6 @@ describe('render stats helpers', () => {
     chunk.resources = { visible: false, children: [{}] };
 
     expect(calculateRenderStats([chunk])).toEqual({ vertexCount: 0, drawCalls: 0 });
-  });
-
-  it('sums micro-biome counts stored on terrain user data', () => {
-    const first = createChunk(4);
-    const second = createChunk(4);
-    first.terrain.userData = { microBiomeCount: 2 };
-    second.terrain.userData = { microBiomeCount: 3 };
-
-    expect(calculateMicroBiomeCount([first, second])).toBe(5);
   });
 
   it('caches render stats until invalidated or expired', () => {

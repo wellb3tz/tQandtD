@@ -55,7 +55,6 @@ export {
 } from './render-layers';
 export {
   RenderStatsCache,
-  calculateMicroBiomeCount,
   calculateRenderStats,
   type RenderStats,
   type RenderStatsChunk,

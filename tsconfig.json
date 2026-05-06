@@ -24,7 +24,6 @@
       "@core/*": ["app/src/core/*"],
       "@viewer/*": ["app/src/viewer/*"],
       "@ui/*": ["app/src/ui/*"],
-      "@editor/*": ["app/src/editor/*"],
       "@utils/*": ["app/src/utils/*"]
     }
   },

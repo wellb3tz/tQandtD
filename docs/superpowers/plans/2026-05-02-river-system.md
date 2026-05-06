@@ -221,7 +221,6 @@ const chunk: ChunkData = {
   sparseBiomeTypes,
   sparseBiomeWeights,
   sparseBiomeOffsets,
-  microBiomeMap,
   lakes: [],
   rivers: [],
   resources: [],

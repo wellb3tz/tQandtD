@@ -18,7 +18,6 @@ export default defineConfig({
       '@core': resolve(__dirname, './app/src/core'),
       '@viewer': resolve(__dirname, './app/src/viewer'),
       '@ui': resolve(__dirname, './app/src/ui'),
-      '@editor': resolve(__dirname, './app/src/editor'),
       '@utils': resolve(__dirname, './app/src/utils')
     }
   },

@@ -16,7 +16,7 @@ import type { WaterConfig } from './water/types';
 import { createWaterNormalTexture } from './water/WaterMaterialFactory';
 import { AtmosphereController } from './AtmosphereController';
 import { RenderLayer } from './RenderLayerVisibility';
-import { calculateMicroBiomeCount, type RenderStats } from './RenderStatsCalculator';
+import { type RenderStats } from './RenderStatsCalculator';
 import { FogOfWarManager } from './FogOfWarManager';
 import { CameraInputController } from './CameraInputController';
 import type { ChunkMesh } from './ChunkMesh';
@@ -348,7 +348,7 @@ export class WorldViewer {
   }
 
   /**
-   * Get the scene (for adding custom objects like brush preview)
+   * Get the scene for custom rendering integrations.
    */
   getScene(): THREE.Scene {
     return this.scene;
@@ -377,13 +377,6 @@ export class WorldViewer {
 
   private invalidateRenderStatsCache(): void {
     this.renderStatsCache.invalidate();
-  }
-
-  /**
-   * Get the total count of micro-biomes currently visible across all chunks
-   */
-  getMicroBiomeCount(): number {
-    return calculateMicroBiomeCount(this.chunkMeshes.values());
   }
 
   /**

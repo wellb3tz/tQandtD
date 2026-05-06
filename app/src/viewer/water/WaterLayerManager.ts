@@ -247,7 +247,7 @@ export class WaterLayerManager {
    * Update ocean water meshes for a chunk
    * 
    * Removes existing ocean water meshes and regenerates them with updated
-   * chunk data. Useful when chunk data changes (e.g., terrain editing).
+   * chunk data. Useful when generation settings or loaded world data change.
    * 
    * **Validates: Requirements 7.3, 7.6**
    * 

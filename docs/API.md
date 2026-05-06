@@ -213,22 +213,17 @@ terrainConfig: {
 
 ### EnhancedBiomeConfig
 
-Configuration for enhanced biome system with transitions and micro-biomes.
+Configuration for enhanced biome system with transitions and elevation bands.
 
 ```typescript
 interface EnhancedBiomeConfig extends BiomeConfig {
   enableTransitions: boolean;           // Enable biome transitions
   transitionWidth: number;              // Transition width (world units)
-  enableMicroBiomes: boolean;           // Enable micro-biomes
-  microBiomeFrequency: number;          // Frequency (0-0.5)
-  microBiomeMaxSize: number;            // Max size (tiles)
   enableElevationBands: boolean;        // Enable mountain bands
   snowLineElevation: number;            // Snow line (0-1)
   treeLineElevation: number;            // Tree line (0-1)
   enableClimateSystem?: boolean;        // Use climate system
   enableCompatibilityMatrix?: boolean;  // Enforce biome compatibility
-  depressionDepthThreshold?: number;    // Depression detection
-  clearingGradientThreshold?: number;   // Flat terrain detection
 }
 ```
 
@@ -356,7 +351,6 @@ interface ChunkData {
   sparseBiomeTypes: Uint8Array;       // Sparse biome types
   sparseBiomeWeights: Float32Array;   // Sparse biome weights
   sparseBiomeOffsets: Uint16Array;    // Sparse offsets
-  microBiomeMap?: Uint8Array;         // Micro-biome IDs (255 = none)
   lakes: LakeData[];                  // Lake bodies
   resources: Resource[];              // Resource instances
   structures: Structure[];            // Structure instances

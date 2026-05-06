@@ -28,11 +28,10 @@ Welcome to the tQandtD project documentation.
 
 ### Advanced Topics
 
-- [Advanced Guide](ADVANCED.md) - Multi-threading, serialization, custom biomes, terrain editing
+- [Advanced Guide](ADVANCED.md) - Multi-threading, serialization, custom biomes, and profiling
 - [Multi-Threading](ADVANCED.md#multi-threading) - Using Web Workers
 - [World Serialization](ADVANCED.md#world-serialization) - Saving and loading worlds
 - [Custom Biomes](ADVANCED.md#custom-biomes) - Creating custom biome systems
-- [Terrain Editing](ADVANCED.md#terrain-editing) - Modifying generated terrain
 - [Performance Profiling](ADVANCED.md#performance-profiling) - Monitoring performance
 - [Custom Generators](ADVANCED.md#custom-generators) - Extending the engine
 

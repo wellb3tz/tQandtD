@@ -8,7 +8,7 @@ A TypeScript library for generating infinite, deterministic procedural worlds in
 - **Chunk-based loading** — lazy generation with LRU caching, load only what you need
 - **Multi-layer terrain** — fBM noise with domain warping, continental shapes, mountain ridges
 - **3D noise support** — volumetric noise for more varied terrain slices
-- **13 biome types** — climate-driven classification with smooth transitions and micro-biomes
+- **13 biome types** — climate-driven classification with smooth transitions
 - **Lakes** — flood-fill detection of closed depressions with physically correct water levels
 - **Resources & structures** — noise-clustered resources and Poisson Disk Sampling for structures
 - **Web Worker support** — non-blocking parallel chunk generation
@@ -191,7 +191,7 @@ Each tile also carries blend weights (`biomeWeights`) for smooth color interpola
 | `biomeConfig` | `BiomeConfig` | Temperature/moisture noise scales |
 | `resourceConfig` | `ResourceConfig` | Resource types and placement rules |
 | `structureConfig` | `StructureConfig` | Structure types and placement rules |
-| `enhancedBiomeConfig` | `EnhancedBiomeConfig?` | Transitions, micro-biomes, elevation bands |
+| `enhancedBiomeConfig` | `EnhancedBiomeConfig?` | Transitions, elevation bands |
 | `lakeConfig` | `LakeConfig?` | Lake generation parameters |
 | `noise3DConfig` | `Noise3DConfig?` | Enable 3D volumetric noise |
 | `workerPoolConfig` | `WorkerPoolConfig?` | Multi-threaded generation |
@@ -230,10 +230,6 @@ const manager = new ChunkManager({
     enableTransitions: true,
     transitionWidth: 10,
 
-    // Small special zones within biomes
-    enableMicroBiomes: true,
-    microBiomeFrequency: 0.1,   // [0.0, 0.5]
-    microBiomeMaxSize: 20,
 
     // Mountain elevation zones
     enableElevationBands: true,
@@ -249,7 +245,6 @@ const manager = new ChunkManager({
 });
 ```
 
-**Micro-biome types**: `OASIS` (desert depressions), `POND` (plain depressions), `CLEARING` (flat forest), `GROVE` (flat tundra).
 
 **Elevation bands**: `FOOTHILLS`, `SLOPES`, `PEAKS`.
 
@@ -363,30 +358,6 @@ const region = manager.saveWorld({
 manager.loadWorld(saved);
 ```
 
-### Modification Tracking
-
-```typescript
-// Record terrain edits
-manager.recordTerrainEdit(chunkX, chunkY, tileIndex, newHeight);
-
-// Batch edits
-manager.recordTerrainEdits(chunkX, chunkY, new Map([
-  [tileIndex, 0.75],
-  [tileIndex + 1, 0.80],
-]));
-
-// Record structure changes
-manager.recordStructureAddition(chunkX, chunkY, { x: 5, y: 10, type: StructureType.TOWER });
-manager.recordStructureRemoval(chunkX, chunkY, structureIndex);
-
-// Save only modified chunks
-const delta = manager.saveWorld({
-  format: SerializationFormat.JSON,
-  compress: true,
-  modifiedOnly: true,
-});
-```
-
 ## Low-Level API
 
 The core primitives are exported for direct use:
@@ -426,10 +397,9 @@ npm run preview     # Preview production build
 **App features:**
 - FPS camera (WASD + mouse, Shift for speed boost)
 - Top-down orthographic view
-- Biome color blending with micro-biome tinting
+- Biome color blending with biome tinting
 - Separate ocean and lake water meshes
 - Underwater terrain darkening
-- Interactive terrain editing (raise / lower / flatten / smooth)
 - Fog of War for explored chunks
 - Real-time statistics and performance monitor
 - World save / load UI
@@ -493,7 +463,6 @@ app/
 ├── src/
 │   ├── core/       # WorldApp — state management
 │   ├── viewer/     # Three.js scene, water layer, materials
-│   ├── editor/     # Terrain editing tools
 │   ├── ui/         # Control panel, stats, minimap, tooltips
 │   └── utils/      # Coordinate helpers, error handling
 └── index.html

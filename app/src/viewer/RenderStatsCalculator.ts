@@ -1,5 +1,4 @@
 export {
-  calculateMicroBiomeCount,
   calculateRenderStats,
   type RenderStats,
   type RenderStatsChunk,

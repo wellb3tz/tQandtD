@@ -254,9 +254,9 @@ class CircularBuffer {
 2. Generate moisture noise
 3. Classify each tile based on height/temp/moisture
 4. Calculate blend weights for smooth transitions
-5. Apply micro-biomes (optional)
-6. Apply elevation bands (optional)
-7. Convert to sparse representation
+5. Apply biomes (optional)
+
+6. Convert to sparse representation
 
 **Memory:** 
 - Biome map: `chunkSize² × 1 byte`

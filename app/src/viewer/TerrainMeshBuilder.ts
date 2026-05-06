@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import {
   buildTerrainGridGeometryData,
-  MicroBiomeType,
   type ChunkData,
 } from '@engine/index';
 import {
@@ -19,12 +18,6 @@ import {
 import { createTerrainMaterial } from './TerrainAppearance';
 
 const HEIGHT_SCALE = 50;
-const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
-  [MicroBiomeType.OASIS]: { r: 0.0, g: 0.25, b: 0.0 },
-  [MicroBiomeType.CLEARING]: { r: 0.0, g: 0.20, b: 0.0 },
-  [MicroBiomeType.POND]: { r: 0.0, g: 0.0, b: 0.30 },
-  [MicroBiomeType.GROVE]: { r: 0.20, g: 0.20, b: 0.0 },
-};
 
 export interface TerrainMeshBuilderOptions {
   chunkX: number;
@@ -50,7 +43,6 @@ export function createTerrainMesh(options: TerrainMeshBuilderOptions): THREE.Mes
     wireframeMode,
   } = options;
   let { data } = options;
-  const chunkMicroBiomeCount = countMicroBiomes(data);
   const terrainGrid = buildTerrainGridGeometryData(data, chunkX, chunkY, {
     heightScale: HEIGHT_SCALE,
   });
@@ -148,7 +140,6 @@ export function createTerrainMesh(options: TerrainMeshBuilderOptions): THREE.Mes
     mesh.userData.partial = true;
     mesh.userData.stage = stage;
   }
-  mesh.userData.microBiomeCount = chunkMicroBiomeCount;
   mesh.userData.chunkData = data;
   return mesh;
 }
@@ -171,18 +162,6 @@ function calculateTerrainVertexColor(
     color = getBiomeColor(data.biomeMap[bmIndex]);
   } else {
     color = { r: 0.5, g: 0.5, b: 0.5 };
-  }
-
-  if (data.microBiomeMap && bmIndex < data.microBiomeMap.length) {
-    const microBiome = data.microBiomeMap[bmIndex];
-    const tint = microBiome !== 255 ? MICRO_BIOME_TINT[microBiome] : undefined;
-    if (tint) {
-      color = {
-        r: Math.min(1.0, color.r + tint.r),
-        g: Math.min(1.0, color.g + tint.g),
-        b: Math.min(1.0, color.b + tint.b),
-      };
-    }
   }
 
   const riverTrenchDarken = getRiverTrenchDarkening(data, vertexX, vertexY);
@@ -221,16 +200,6 @@ function calculateBlendedColorFromSparse(data: ChunkData, tileIndex: number): Bi
   }
 
   return data.biomeMap ? getBiomeColor(data.biomeMap[tileIndex]) : { r: 0.5, g: 0.5, b: 0.5 };
-}
-
-function countMicroBiomes(data: ChunkData): number {
-  let count = 0;
-  if (!data.microBiomeMap) return count;
-
-  for (let i = 0; i < data.microBiomeMap.length; i++) {
-    if (data.microBiomeMap[i] !== 255) count++;
-  }
-  return count;
 }
 
 function getPartialGenerationStyle(partial: boolean, stage: number | undefined): {

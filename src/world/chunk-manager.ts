@@ -410,7 +410,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
     let sparseBiomeTypes: Uint8Array;
     let sparseBiomeWeights: Float32Array;
     let sparseBiomeOffsets: Uint16Array;
-    let microBiomeMap: Uint8Array | undefined;
     
     try {
       this.config.onProgress?.('biomes', 0.4);
@@ -421,7 +420,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes = biomeData.sparseBiomeTypes;
       sparseBiomeWeights = biomeData.sparseBiomeWeights;
       sparseBiomeOffsets = biomeData.sparseBiomeOffsets;
-      microBiomeMap = biomeData.microBiomeMap;
       
       if (this.config.enablePerformanceMetrics) {
         metrics.biomeTime = performance.now() - biomeStart;
@@ -445,7 +443,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes,
       sparseBiomeWeights,
       sparseBiomeOffsets,
-      microBiomeMap,
       lakes: [],
       rivers: [],
       resources: [],
@@ -676,13 +673,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
     sparseBiomeTypes: Uint8Array;
     sparseBiomeWeights: Float32Array;
     sparseBiomeOffsets: Uint16Array;
-    microBiomeMap?: Uint8Array;
   } {
     const size = this.config.chunkSize;
     const biomeMap = new Uint8Array(size * size);
 
-    // Initialize micro-biome map if enhanced biome system is available
-    const microBiomeMap = this.enhancedBiomeSystem ? new Uint8Array(size * size).fill(255) : undefined;
 
     // Collect weight maps for all tiles (will convert to sparse at the end)
     const tileWeights: Map<number, number>[] = [];
@@ -726,14 +720,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
         // Use EnhancedBiomeSystem if available (Requirement 2.1), otherwise use BiomeSystem
         if (this.enhancedBiomeSystem) {
-          // Get enhanced biome data with transitions and micro-biomes
+          // Get enhanced biome data with transitions and elevation bands
           const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeight);
           biomeMap[index] = enhancedData.biome;
           
-          // Store micro-biome data if present
-          if (microBiomeMap && enhancedData.microBiome !== undefined) {
-            microBiomeMap[index] = enhancedData.microBiome;
-          }
           
           // Store weights for sparse conversion
           tileWeights.push(enhancedData.weights);
@@ -776,7 +766,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes: new Uint8Array(types),
       sparseBiomeWeights: new Float32Array(weights),
       sparseBiomeOffsets: new Uint16Array(offsets),
-      microBiomeMap 
     };
   }
 

@@ -152,10 +152,6 @@ const manager = new ChunkManager({
     types: [],
   },
   
-  // Disable micro-biomes (-2ms per chunk)
-  enhancedBiomeConfig: {
-    enableMicroBiomes: false,
-  },
 });
 
 // Result: ~31ms → ~17ms per chunk
@@ -283,7 +279,6 @@ const manager = new ChunkManager({
   resourceConfig: { types: [] },
   structureConfig: { types: [] },
   enhancedBiomeConfig: {
-    enableMicroBiomes: false,
     enableTransitions: false,
   },
   maxCacheSize: 100,
@@ -313,7 +308,6 @@ const manager = new ChunkManager({
     useMultiChunk: true,
   },
   enhancedBiomeConfig: {
-    enableMicroBiomes: true,
     enableTransitions: true,
   },
   maxCacheSize: 500,
@@ -345,7 +339,6 @@ const manager = new ChunkManager({
     useMultiChunk: true,
   },
   enhancedBiomeConfig: {
-    enableMicroBiomes: true,
     enableTransitions: true,
     enableElevationBands: true,
     enableClimateSystem: true,
