@@ -7,6 +7,7 @@
 
 export interface Poolable {
   reset(): void;
+  dispose?(): void;
 }
 
 export class ObjectPool<T extends Poolable> {
@@ -86,6 +87,12 @@ export class ObjectPool<T extends Poolable> {
    * Clear the pool
    */
   clear(): void {
+    for (const obj of this.available) {
+      obj.dispose?.();
+    }
+    for (const obj of this.inUse) {
+      obj.dispose?.();
+    }
     this.available = [];
     this.inUse.clear();
   }

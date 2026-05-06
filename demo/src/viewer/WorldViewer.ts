@@ -7,372 +7,125 @@
  */
 
 import * as THREE from 'three';
-import { BiomeType, ChunkData, getBiomeWeightForTile } from '../../../src/index';
-import { getRiverChannelWidth, type RiverPoint } from '../../../src/gen/rivers';
-import {
-  getBiomeColor,
-  calculateBlendedColor,
-  createTerrainSurfaceTextureLibrary,
-  createTerrainBlendMaterial,
-  createBiomeColorTerrainMaterial,
-  selectTerrainSurfaceKey,
-  toGrayscale,
-  BiomeColor,
-  TerrainSurfaceKey,
-  TerrainSurfaceTextureLibrary
-} from './materials';
-import { raycastTerrain } from '../utils/coordinates';
+import { ChunkData } from '../../../src/index';
+import { createTerrainSurfaceTextureLibrary } from './materials';
+import type { RaycastHit, Vector3 } from '../utils/coordinates';
 import { WaterLayerManager } from './water/WaterLayerManager';
-import { adjustUnderwaterColors } from './water/UnderwaterTerrainProcessor';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 import type { WaterConfig } from './water/types';
-import { MicroBiomeType } from '../../../src/world/enhanced-biome';
 import { createWaterNormalTexture } from './water/WaterMaterialFactory';
+import { AtmosphereController } from './AtmosphereController';
+import { RenderLayer } from './RenderLayerVisibility';
+import { calculateMicroBiomeCount, type RenderStats } from './RenderStatsCalculator';
+import { FogOfWarManager } from './FogOfWarManager';
+import { CameraInputController } from './CameraInputController';
+import type { ChunkMesh } from './ChunkMesh';
+import { setBackgroundOceanMode, setupWorldScene } from './WorldSceneSetup';
+import { CameraViewController } from './CameraViewController';
+import { WorldRenderLoop } from './WorldRenderLoop';
+import { WorldViewSettings } from './WorldViewSettings';
+import { ViewerRenderStatsCache } from './ViewerRenderStatsCache';
+import { ViewerTerrainRaycaster } from './ViewerTerrainRaycaster';
+import { ViewerCanvasHost } from './ViewerCanvasHost';
+import { WorldChunkController } from './WorldChunkController';
 
-/**
- * Colour offsets per MicroBiomeType (applied additively, clamped to [0,1])
- * Note: GROVE uses 0.20 (not 0.15) to meet the 0.2 contrast requirement from Property 8
- */
-const MICRO_BIOME_TINT: Record<number, { r: number; g: number; b: number }> = {
-  [MicroBiomeType.OASIS]: { r: 0.0, g: 0.25, b: 0.0 },     // Greener
-  [MicroBiomeType.CLEARING]: { r: 0.0, g: 0.20, b: 0.0 },  // Lighter green
-  [MicroBiomeType.POND]: { r: 0.0, g: 0.0, b: 0.30 },      // Bluer
-  [MicroBiomeType.GROVE]: { r: 0.20, g: 0.20, b: 0.0 },    // Warmer (corrected to 0.20)
-};
-
-const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
-const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
-const MAX_SHRUB_INSTANCES_PER_CHUNK = 192;
-const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
-const FOLIAGE_BANK_WIDTH = 2.4;
-const SHRUB_PROTOTYPE_MIN_Y = -0.30;
-const CLEARING_CELL_SIZE = 25;
-const ATMOSPHERIC_BACKGROUND_STOPS = {
-  sky: {
-    top: 0x1d3433,
-    bottom: 0x1d3433,
-    fog: 0x1d3433,
-    fogDensity: 0.00105,
-  },
-  ocean: {
-    top: 0x050810,
-    bottom: 0x101b1a,
-    fog: 0x101b1a,
-    fogDensity: 0.0016,
-  },
-} as const;
-const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
-const ATMOSPHERIC_OCEAN_PLANE_SPECULAR = 0x2e4a48;
-const LEGACY_SKY_BACKGROUND_COLOR = 0x87ceeb;
-const SUN_LIGHT_OFFSET = { x: 90, y: 138, z: 56 } as const;
-const SUN_VISUAL_DISTANCE = 620;
-const SUN_VISUAL_SIZE = 88;
-
-type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
-type FoliageProfile = {
-  density: number;
-  height: number;
-  radius: number;
-  color: THREE.ColorRepresentation;
-  maxSlope: number;
-};
-type FoliagePlacement = {
-  x: number;
-  y: number;
-  z: number;
-  radius: number;
-  height: number;
-  rotation: number;
-  color: THREE.ColorRepresentation;
-  rank: number;
-};
-type TreeVariant = 'spire' | 'compact' | 'broad';
-type TreePlacement = FoliagePlacement & {
-  variant: TreeVariant;
-};
-type TerrainPropPlacement = FoliagePlacement & {
-  kind: 'stumps';
-};
-type FoliageWaterInfluence = {
-  inWater: boolean;
-  bank: number;
-};
-type FoliageClearingInfluence = {
-  strength: number;
-  centerX: number;
-  centerZ: number;
-  coreRadius: number;
-};
-
-/**
- * 3D vector for camera position and target
- */
-export interface Vector3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/**
- * Render layers that can be toggled
- */
-export enum RenderLayer {
-  TERRAIN = 'terrain',
-  BIOMES = 'biomes',
-  RESOURCES = 'resources',
-  STRUCTURES = 'structures',
-  CHUNK_BOUNDARIES = 'chunkBoundaries'
-}
-
-/**
- * Raycast hit result
- */
-export interface RaycastHit {
-  point: Vector3;
-  chunkX: number;
-  chunkY: number;
-  localX: number;
-  localY: number;
-  height: number;
-}
-
-/**
- * Chunk coordinate
- */
-export interface ChunkCoord {
-  chunkX: number;
-  chunkY: number;
-}
-
-/**
- * Chunk mesh data
- */
-interface ChunkMesh {
-  terrain: THREE.Mesh;
-  water?: import('./water/types').WaterLayerData; // New: separate water layer
-  foliage?: THREE.Group;
-  resources?: THREE.Group;
-  structures?: THREE.Group;
-  boundaries?: THREE.LineSegments;
-  boundingBox?: THREE.Box3; // For frustum culling
-  visible?: boolean; // Frustum culling visibility state
-}
+export { RenderLayer } from './RenderLayerVisibility';
+export type { ChunkCoord, RaycastHit, Vector3 } from '../utils/coordinates';
 
 /**
  * WorldViewer - Manages 3D visualization of the procedural world
  */
 export class WorldViewer {
-  private static readonly KEYBOARD_CODE_MAP: Record<string, string> = {
-    'KeyW': 'w',
-    'KeyA': 'a',
-    'KeyS': 's',
-    'KeyD': 'd',
-    'Space': 'space',
-    'ShiftLeft': 'shift',
-    'ShiftRight': 'shift',
-  };
-
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
   private renderer: THREE.WebGLRenderer;
+  private cameraInputController: CameraInputController;
+  private cameraViewController: CameraViewController;
+  private renderLoop: WorldRenderLoop;
+  private viewSettings: WorldViewSettings;
+  private renderStatsCache: ViewerRenderStatsCache;
+  private terrainRaycaster: ViewerTerrainRaycaster;
+  private canvasHost: ViewerCanvasHost;
+  private chunkController: WorldChunkController;
   
-  // Lighting
-  private ambientLight: THREE.AmbientLight;
-  private directionalLight: THREE.DirectionalLight;
-  private sunSprite: THREE.Sprite | null = null;
-  private sunTexture: THREE.Texture | null = null;
+  private atmosphereController: AtmosphereController | null = null;
   
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
   
   // Fog of war - explored chunks shown as gray planes
-  private fogOfWarMeshes: Map<string, THREE.Mesh>;
-  
-  // Layer visibility
-  private layerVisibility: Map<RenderLayer, boolean>;
-  
-  // Wireframe mode
-  private wireframeMode: boolean;
-  private terrainTexturesEnabled: boolean;
-  private terrainTextures: TerrainSurfaceTextureLibrary;
+  private fogOfWarManager: FogOfWarManager;
   
   // Container element
   private container: HTMLElement | null;
   
-  // Animation frame ID
-  private animationFrameId: number | null;
-  
-  // Free camera controls (FPS-style)
-  private useFreeCamera: boolean;
-  private cameraRotation: { pitch: number; yaw: number };
-  private cameraVelocity: THREE.Vector3;
-  private keyboardState: Map<string, boolean>;
-  private keyboardMoveSpeed: number;
-  private mouseSensitivity: number;
-  private isPointerLocked: boolean;
-  private isMouseDragRotating: boolean;
-  private lastMouseDragPosition: { x: number; y: number } | null;
-  
-  // Camera modes
-  private followTerrainMode: boolean;
-  private followTerrainHeight: number;
-  private orthographicCamera: THREE.OrthographicCamera | null;
-  private isOrthographic: boolean;
-  private cameraTarget: THREE.Vector3; // Track target even in free camera mode
-  
-  // Performance optimizations
-  private frustum: THREE.Frustum;
-  private frustumMatrix: THREE.Matrix4;
-  private enableFrustumCulling: boolean;
-  private cullingCheckInterval: number;
-  private lastCullingCheck: number;
-  
-  // Water system
   private waterLayerManager: WaterLayerManager;
-  private waterConfig: WaterConfig;
 
   // Background ocean plane (kept hidden while the atmospheric UI-matched backdrop is active)
   private bgOceanMesh: THREE.Mesh | null = null;
-  private backgroundTexture: THREE.Texture | null = null;
-
-  // Micro-biome tracking
-  private microBiomeCount: number;
-
-  private readonly handleContainerClick = (): void => {
-    if (this.useFreeCamera && !this.isPointerLocked) {
-      try {
-        const pointerLockRequest = this.container?.requestPointerLock?.();
-        if (pointerLockRequest && typeof (pointerLockRequest as Promise<void>).catch === 'function') {
-          (pointerLockRequest as Promise<void>).catch(() => undefined);
-        }
-      } catch {
-        // Embedded browsers can deny pointer lock; drag rotation remains available.
-      }
-    }
-  };
-
-  private readonly handlePointerLockChange = (): void => {
-    this.isPointerLocked = document.pointerLockElement === this.container;
-  };
-
-  private readonly handlePointerLockedMouseMove = (e: MouseEvent): void => {
-    if (this.isPointerLocked && this.useFreeCamera) {
-      this.cameraRotation.yaw -= e.movementX * this.mouseSensitivity;
-      this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
-      this.updateCameraRotation();
-    }
-  };
-
-  private readonly handleCameraDragStart = (e: MouseEvent): void => {
-    if (!this.useFreeCamera || this.isPointerLocked || e.button !== 0) return;
-
-    this.isMouseDragRotating = true;
-    this.lastMouseDragPosition = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-  };
-
-  private readonly handleCameraDragMove = (e: MouseEvent): void => {
-    if (!this.isMouseDragRotating || this.isPointerLocked || !this.lastMouseDragPosition) return;
-
-    const deltaX = e.clientX - this.lastMouseDragPosition.x;
-    const deltaY = e.clientY - this.lastMouseDragPosition.y;
-
-    this.cameraRotation.yaw -= deltaX * this.mouseSensitivity;
-    this.cameraRotation.pitch -= deltaY * this.mouseSensitivity;
-    this.updateCameraRotation();
-
-    this.lastMouseDragPosition = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-  };
-
-  private readonly handleCameraDragEnd = (): void => {
-    this.isMouseDragRotating = false;
-    this.lastMouseDragPosition = null;
-  };
-
-  private readonly handlePointerLockEscape = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && this.isPointerLocked) {
-      document.exitPointerLock();
-    }
-  };
-
-  private readonly handleKeyboardDown = (e: KeyboardEvent): void => {
-    const key = WorldViewer.KEYBOARD_CODE_MAP[e.code];
-    if (key) {
-      this.keyboardState.set(key, true);
-      e.preventDefault();
-    }
-  };
-
-  private readonly handleKeyboardUp = (e: KeyboardEvent): void => {
-    const key = WorldViewer.KEYBOARD_CODE_MAP[e.code];
-    if (key) {
-      this.keyboardState.set(key, false);
-      e.preventDefault();
-    }
-  };
 
   constructor() {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 2000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    
-    this.chunkMeshes = new Map();
-    this.fogOfWarMeshes = new Map();
-    this.layerVisibility = new Map();
-    this.wireframeMode = false;
-    this.terrainTexturesEnabled = true;
-    this.terrainTextures = createTerrainSurfaceTextureLibrary();
-    this.container = null;
-    this.animationFrameId = null;
-    
-    // Initialize free camera controls (FPS-style)
-    this.useFreeCamera = true; // Default to free camera
-    this.cameraRotation = { pitch: 0, yaw: 0 };
-    this.cameraVelocity = new THREE.Vector3();
-    this.keyboardState = new Map();
-    this.keyboardMoveSpeed = 0.5; // Units per frame
-    this.mouseSensitivity = 0.002;
-    this.isPointerLocked = false;
-    this.isMouseDragRotating = false;
-    this.lastMouseDragPosition = null;
-    
-    // Initialize camera modes
-    this.followTerrainMode = false;
-    this.followTerrainHeight = 50;
-    this.orthographicCamera = null;
-    this.isOrthographic = false;
-    this.cameraTarget = new THREE.Vector3(0, 0, 0); // Default target at origin
-    
-    // Initialize performance optimizations
-    this.frustum = new THREE.Frustum();
-    this.frustumMatrix = new THREE.Matrix4();
-    this.enableFrustumCulling = true;
-    this.cullingCheckInterval = 16; // Check every 16ms (every frame at 60 FPS)
-    this.lastCullingCheck = 0;
-    
-    // Initialize micro-biome tracking
-    this.microBiomeCount = 0;
-    // Initialize water system
-    this.waterLayerManager = new WaterLayerManager();
-    this.waterConfig = {
-      ...DEFAULT_WATER_CONFIG,
-      ocean: {
-        ...DEFAULT_WATER_CONFIG.ocean,
-        normalMap: createWaterNormalTexture(),
-      },
-    };
-    
-    // Initialize layer visibility (all visible by default)
-    Object.values(RenderLayer).forEach(layer => {
-      this.layerVisibility.set(layer, true);
+    this.canvasHost = new ViewerCanvasHost({
+      camera: this.camera,
+      renderer: this.renderer,
+    });
+    this.cameraViewController = new CameraViewController(this.camera, () => this.chunkMeshes.values());
+    this.cameraInputController = new CameraInputController({
+      camera: this.camera,
+      getContainer: () => this.container,
+      getActiveCamera: () => this.cameraViewController.getActiveCamera(),
+      isOrthographic: () => this.cameraViewController.isOrthographic(),
+      getOrthographicCamera: () => this.cameraViewController.getOrthographicCamera(),
     });
     
-    // Create lighting — actual setup happens in setupScene()
-    // Initialize with placeholders; setupScene() will replace them
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    this.directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-
+    this.chunkMeshes = new Map();
+    this.fogOfWarManager = new FogOfWarManager();
+    const terrainTextures = createTerrainSurfaceTextureLibrary();
+    this.container = null;
+    
+    this.waterLayerManager = new WaterLayerManager();
+    this.viewSettings = new WorldViewSettings({
+      chunkMeshes: this.chunkMeshes,
+      waterLayerManager: this.waterLayerManager,
+      terrainTextures,
+      waterConfig: {
+        ...DEFAULT_WATER_CONFIG,
+        ocean: {
+          ...DEFAULT_WATER_CONFIG.ocean,
+          normalMap: createWaterNormalTexture(),
+        },
+      },
+    });
+    this.renderLoop = new WorldRenderLoop({
+      scene: this.scene,
+      renderer: this.renderer,
+      cameraInputController: this.cameraInputController,
+      cameraViewController: this.cameraViewController,
+      chunkMeshes: this.chunkMeshes,
+      layerVisibility: this.viewSettings.getLayerVisibility(),
+      waterLayerManager: this.waterLayerManager,
+      getWaterConfig: () => this.viewSettings.getWaterConfigReference(),
+      beforeRender: activeCamera => this.atmosphereController?.updateSunAndShadowFocus(activeCamera),
+    });
+    this.renderStatsCache = new ViewerRenderStatsCache(this.chunkMeshes.values());
+    this.terrainRaycaster = new ViewerTerrainRaycaster({
+      camera: this.camera,
+      canvas: this.renderer.domElement,
+      chunks: this.chunkMeshes.values(),
+      getContainer: () => this.container,
+    });
+    this.chunkController = new WorldChunkController({
+      scene: this.scene,
+      chunkMeshes: this.chunkMeshes,
+      viewSettings: this.viewSettings,
+      waterLayerManager: this.waterLayerManager,
+      fogOfWarManager: this.fogOfWarManager,
+      onChunksChanged: () => this.invalidateRenderStatsCache(),
+    });
+    
     this.setupScene();
   }
 
@@ -380,510 +133,44 @@ export class WorldViewer {
    * Set up the Three.js scene
    */
   private setupScene(): void {
-    // Position camera for free camera mode
     this.camera.position.set(50, 100, 50);
-    this.cameraRotation.yaw = 0;
-    this.cameraRotation.pitch = -0.3; // Look slightly down
-    this.updateCameraRotation();
+    this.cameraInputController.resetRotation();
 
-    // Configure renderer — tone mapping for cinematic look
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.81; // Softened grade keeps forest shadows readable without returning to the washed-out look.
-
-    // Large background ocean plane — covers the infinite horizon beyond loaded chunks.
-    // Positioned at sea level (seaLevel * heightScale = 0.3 * 50 = 15).
-    // Size 20 000 units ensures it fills the view at any reasonable camera distance.
-    const bgOceanGeo = new THREE.PlaneGeometry(20000, 20000);
-    bgOceanGeo.rotateX(-Math.PI / 2);
-    const bgOceanMat = new THREE.MeshPhongMaterial({
-      color: ATMOSPHERIC_OCEAN_PLANE_COLOR,
-      transparent: false,   // opaque — no blending conflicts with chunk water meshes
-      shininess: 40,
-      specular: new THREE.Color(ATMOSPHERIC_OCEAN_PLANE_SPECULAR),
-    });
-    const bgOceanMesh = new THREE.Mesh(bgOceanGeo, bgOceanMat);
-    // Place well below the lowest possible ocean floor (near Y=0) so the
-    // opaque terrain mesh always occludes it — only visible beyond loaded chunks.
-    bgOceanMesh.position.set(0, -200, 0);
-    bgOceanMesh.renderOrder = 0;
-    bgOceanMesh.renderOrder = 0;
-    bgOceanMesh.visible = false; // hidden by default (legacy blue sky is default)
-    this.scene.add(bgOceanMesh);
-    this.bgOceanMesh = bgOceanMesh;
+    const { atmosphereController, backgroundOceanMesh } = setupWorldScene(this.scene, this.renderer);
+    this.atmosphereController = atmosphereController;
+    this.bgOceanMesh = backgroundOceanMesh;
     this.setBackgroundMode(false);
-
-    // Soft ambient — cool overcast sky, low intensity so shadows read clearly
-    this.ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
-    this.scene.add(this.ambientLight);
-
-    // Main sun — warm but softened, raised enough to keep tree shadows compact.
-    this.directionalLight = new THREE.DirectionalLight(0xffe2b8, 1.12);
-    this.directionalLight.position.set(SUN_LIGHT_OFFSET.x, SUN_LIGHT_OFFSET.y, SUN_LIGHT_OFFSET.z);
-    this.directionalLight.castShadow = true;
-    this.directionalLight.shadow.camera.left   = -200;
-    this.directionalLight.shadow.camera.right  =  200;
-    this.directionalLight.shadow.camera.top    =  200;
-    this.directionalLight.shadow.camera.bottom = -200;
-    this.directionalLight.shadow.mapSize.width  = 2048;
-    this.directionalLight.shadow.mapSize.height = 2048;
-    this.directionalLight.shadow.bias = -0.0005;
-    this.scene.add(this.directionalLight);
-    this.scene.add(this.directionalLight.target);
-    this.addSunVisual();
     this.updateSunAndShadowFocus();
-
-    // Subtle fill light — very dim, just lifts the darkest shadows slightly
-    const fillLight = new THREE.DirectionalLight(0xb0c8e8, 0.15);
-    fillLight.position.set(-60, 40, -40);
-    this.scene.add(fillLight);
   }
   
-  /**
-   * Update camera rotation based on pitch and yaw
-   */
-  private updateCameraRotation(): void {
-    // Clamp pitch to prevent camera flipping
-    this.cameraRotation.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.cameraRotation.pitch));
-    
-    // Create rotation quaternion from yaw and pitch
-    const euler = new THREE.Euler(this.cameraRotation.pitch, this.cameraRotation.yaw, 0, 'YXZ');
-    this.camera.quaternion.setFromEuler(euler);
-  }
-
   /**
    * Initialize the viewer with a container element
    */
   initialize(container: HTMLElement): void {
     this.container = container;
-    
-    // Set initial size
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    
-    this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    
-    // Append canvas to container
-    container.appendChild(this.renderer.domElement);
-    
-    // Set up keyboard controls
-    this.setupKeyboardControls();
-    
-    // Set up mouse controls for free camera
-    this.setupMouseControls();
-    
-    // Start render loop
-    this.startRenderLoop();
+    this.canvasHost.attachToContainer(container);
+    this.cameraInputController.attach();
+    this.renderLoop.start();
     
     console.log('WorldViewer initialized with free camera mode');
   }
   
-  /**
-   * Set up mouse controls for free camera (FPS-style)
-   */
-  private setupMouseControls(): void {
-    if (!this.container) return;
-    
-    // Click to lock pointer
-    this.container.addEventListener('click', this.handleContainerClick);
-    this.container.addEventListener('mousedown', this.handleCameraDragStart);
-    this.container.addEventListener('mouseleave', this.handleCameraDragEnd);
-    
-    // Handle pointer lock change
-    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
-    
-    // Handle mouse movement when pointer is locked
-    document.addEventListener('mousemove', this.handlePointerLockedMouseMove);
-    document.addEventListener('mousemove', this.handleCameraDragMove);
-    document.addEventListener('mouseup', this.handleCameraDragEnd);
-    
-    // Exit pointer lock on Escape
-    document.addEventListener('keydown', this.handlePointerLockEscape);
-  }
-  
-  /**
-   * Set up keyboard event listeners for WASD camera movement
-   */
-  private setupKeyboardControls(): void {
-    // Use e.code (physical key) instead of e.key so layout doesn't matter.
-    // KeyW = W regardless of whether keyboard is in Russian, English, etc.
-    window.addEventListener('keydown', this.handleKeyboardDown);
-    window.addEventListener('keyup', this.handleKeyboardUp);
-  }
-  
-  /**
-   * Start the render loop
-   */
-  private startRenderLoop(): void {
-    const animate = () => {
-      this.animationFrameId = requestAnimationFrame(animate);
-      
-      // Update free camera movement
-      if (this.useFreeCamera) {
-        this.updateFreeCameraMovement();
-      }
-      
-      // Update follow terrain mode
-      if (this.followTerrainMode) {
-        this.updateFollowTerrainMode();
-      }
-      
-      // Perform frustum culling check periodically
-      const now = performance.now();
-      if (this.enableFrustumCulling && now - this.lastCullingCheck > this.cullingCheckInterval) {
-        this.updateFrustumCulling();
-        this.lastCullingCheck = now;
-        
-        // Apply water-specific optimizations
-        const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-        
-        // Apply frustum culling to water meshes
-        if (this.waterConfig.performance.enableFrustumCulling) {
-          this.waterLayerManager.applyFrustumCulling(activeCamera, this.waterConfig);
-        }
-      }
-      
-      // Render scene
-      const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-      this.updateSunAndShadowFocus();
-      this.renderer.render(this.scene, activeCamera);
-    };
-    
-    animate();
-  }
-
-  private addSunVisual(): void {
-    this.sunTexture = this.createSunSpriteTexture();
-    const material = new THREE.SpriteMaterial({
-      map: this.sunTexture,
-      color: 0xffe8b0,
-      transparent: true,
-      opacity: 0.78,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-    });
-
-    const sunSprite = new THREE.Sprite(material);
-    sunSprite.name = 'directional-light-sun';
-    sunSprite.castShadow = false;
-    sunSprite.receiveShadow = false;
-    sunSprite.renderOrder = 5;
-    sunSprite.scale.set(SUN_VISUAL_SIZE, SUN_VISUAL_SIZE, 1);
-    this.sunSprite = sunSprite;
-    this.syncSunVisualToDirectionalLight();
-    this.scene.add(sunSprite);
-  }
-
-  private syncSunVisualToDirectionalLight(): void {
-    if (!this.sunSprite) {
-      return;
-    }
-    const direction = this.directionalLight.position.clone().sub(this.directionalLight.target.position).normalize();
-    this.sunSprite.position.copy(this.directionalLight.target.position).add(direction.multiplyScalar(SUN_VISUAL_DISTANCE));
-  }
-
   private updateSunAndShadowFocus(): void {
-    const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-    this.directionalLight.target.position.set(activeCamera.position.x, 0, activeCamera.position.z);
-    this.directionalLight.position.set(
-      activeCamera.position.x + SUN_LIGHT_OFFSET.x,
-      SUN_LIGHT_OFFSET.y,
-      activeCamera.position.z + SUN_LIGHT_OFFSET.z
-    );
-    this.directionalLight.target.updateMatrixWorld();
-    this.directionalLight.updateMatrixWorld();
-    this.syncSunVisualToDirectionalLight();
-  }
-
-  private createSunSpriteTexture(): THREE.DataTexture {
-    const size = 32;
-    const data = new Uint8Array(size * size * 4);
-    const center = (size - 1) / 2;
-
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const dx = (x - center) / center;
-        const dy = (y - center) / center;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const core = Math.max(0, 1 - distance * 1.25);
-        const halo = Math.max(0, 1 - distance);
-        const alpha = Math.min(1, core * 0.78 + Math.pow(halo, 2.2) * 0.32);
-        const offset = (y * size + x) * 4;
-        data[offset] = 255;
-        data[offset + 1] = Math.round(222 + core * 28);
-        data[offset + 2] = Math.round(150 + core * 55);
-        data[offset + 3] = Math.round(alpha * 255);
-      }
-    }
-
-    const texture = new THREE.DataTexture(data, size, size);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    texture.needsUpdate = true;
-    return texture;
+    this.atmosphereController?.updateSunAndShadowFocus(this.cameraViewController.getActiveCamera());
   }
   
-  /**
-   * Update free camera movement based on keyboard input (FPS-style)
-   * Also supports orthographic camera movement in top-down view
-   */
-  private updateFreeCameraMovement(): void {
-    let moveSpeed = this.keyboardMoveSpeed;
-    
-    // Apply speed boost when Shift is held
-    if (this.keyboardState.get('shift')) {
-      moveSpeed *= 3; // 3x speed when holding Shift
-    }
-    
-    // Use orthographic camera if in top-down mode, otherwise use perspective camera
-    const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-    
-    // Calculate movement direction
-    const movement = new THREE.Vector3();
-    
-    if (this.isOrthographic) {
-      // In top-down view, use simple horizontal movement
-      // W/S = forward/backward (Z axis), A/D = left/right (X axis)
-      if (this.keyboardState.get('w')) {
-        movement.z -= 1; // Move forward (negative Z)
-      }
-      if (this.keyboardState.get('s')) {
-        movement.z += 1; // Move backward (positive Z)
-      }
-      if (this.keyboardState.get('a')) {
-        movement.x -= 1; // Move left (negative X)
-      }
-      if (this.keyboardState.get('d')) {
-        movement.x += 1; // Move right (positive X)
-      }
-      // Space = zoom in (move camera down = closer), Shift = zoom out
-      if (this.orthographicCamera) {
-        const cam = this.orthographicCamera;
-        const zoomSpeed = moveSpeed * 2;
-        if (this.keyboardState.get('space')) {
-          // Zoom in: shrink frustum
-          const scale = 1 - 0.02;
-          cam.left   *= scale;
-          cam.right  *= scale;
-          cam.top    *= scale;
-          cam.bottom *= scale;
-          cam.updateProjectionMatrix();
-        }
-        if (this.keyboardState.get('shift')) {
-          // Zoom out: expand frustum
-          const scale = 1 + 0.02;
-          cam.left   *= scale;
-          cam.right  *= scale;
-          cam.top    *= scale;
-          cam.bottom *= scale;
-          cam.updateProjectionMatrix();
-        }
-      }
-    } else {
-      // Free camera mode - use camera direction
-      const forward = new THREE.Vector3();
-      const right = new THREE.Vector3();
-      const up = new THREE.Vector3(0, 1, 0);
-      
-      // Use perspective camera for free camera mode (orthographic doesn't have getWorldDirection)
-      this.camera.getWorldDirection(forward);
-      right.crossVectors(forward, up).normalize();
-      
-      if (this.keyboardState.get('w')) {
-        movement.add(forward);
-      }
-      if (this.keyboardState.get('s')) {
-        movement.sub(forward);
-      }
-      if (this.keyboardState.get('a')) {
-        movement.sub(right);
-      }
-      if (this.keyboardState.get('d')) {
-        movement.add(right);
-      }
-      
-      // Add vertical movement with Space (only in free camera mode)
-      if (this.keyboardState.get('space')) {
-        movement.add(up);
-      }
-    }
-    
-    // Normalize and apply speed
-    if (movement.length() > 0) {
-      movement.normalize().multiplyScalar(moveSpeed);
-      activeCamera.position.add(movement);
-    }
-  }
-
   /**
    * Add a chunk to the scene
    */
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): void {
-    const key = this.getChunkKey(chunkX, chunkY);
-    
-    // Skip if heightmap is not yet generated (early stage of incremental generation)
-    if (!data.heightmap) {
-      console.log(`Skipping chunk (${chunkX}, ${chunkY}) - heightmap not yet generated`);
-      return;
-    }
-    
-    // Remove fog of war plane if it exists (chunk is being reloaded)
-    this.removeFogOfWarPlane(chunkX, chunkY);
-    
-    // Remove existing chunk if present
-    if (this.chunkMeshes.has(key)) {
-      this.removeChunk(chunkX, chunkY, false); // Don't create fog of war when replacing
-    }
-    
-    const chunkMesh: ChunkMesh = {
-      terrain: this.createTerrainMesh(chunkX, chunkY, data, partial, stage),
-      visible: true
-    };
-    
-    // Compute bounding box for frustum culling
-    chunkMesh.terrain.geometry.computeBoundingBox();
-    chunkMesh.boundingBox = chunkMesh.terrain.geometry.boundingBox!.clone();
-    chunkMesh.boundingBox.applyMatrix4(chunkMesh.terrain.matrixWorld);
-    
-    // Add terrain to scene
-    this.scene.add(chunkMesh.terrain);
-    
-    // Generate and add water layer
-    if (this.waterConfig.enabled && data.heightmap) {
-      const chunkKey = this.getChunkKey(chunkX, chunkY);
-      this.waterLayerManager.addWaterToChunk(chunkKey, data, this.scene, this.waterConfig);
-      
-      // Store water layer reference in ChunkMesh
-      const waterLayer = this.waterLayerManager.getWaterLayer(chunkKey);
-      if (waterLayer) {
-        chunkMesh.water = waterLayer;
-        // Ensure water renders above terrain
-        waterLayer.group.renderOrder = 1;
-      }
-    }
-
-    const foliage = this.createFoliageLayer(chunkX, chunkY, data);
-    if (foliage) {
-      foliage.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-      chunkMesh.foliage = foliage;
-      this.scene.add(foliage);
-    }
-    
-    // Only add complete layers if not partial or if stage is complete
-    // Resources: always render when available
-    if (!partial || (stage !== undefined && stage >= 2)) {
-      if (data.resources && data.resources.length > 0) {
-        chunkMesh.resources = this.createResourceMarkers(chunkX, chunkY, data);
-        chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
-        this.scene.add(chunkMesh.resources);
-      }
-    }
-    
-    // Structures: render when available
-    if (!partial || (stage !== undefined && stage >= 3)) {
-      if (data.structures && data.structures.length > 0) {
-        chunkMesh.structures = this.createStructureMarkers(chunkX, chunkY, data);
-        chunkMesh.structures.visible = this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
-        this.scene.add(chunkMesh.structures);
-      }
-    }
-    
-    // Always create chunk boundaries, but respect visibility setting
-    chunkMesh.boundaries = this.createChunkBoundaries(chunkX, chunkY, data);
-    chunkMesh.boundaries.visible = this.layerVisibility.get(RenderLayer.CHUNK_BOUNDARIES) !== false;
-    this.scene.add(chunkMesh.boundaries);
-    
-    this.chunkMeshes.set(key, chunkMesh);
-    
-    // Инвалидируем кэш статистики рендеринга
-    this.invalidateRenderStatsCache();
-
-    // Stitch only lake-touching terrain positions. A full-edge position stitch
-    // can create trenches, but lake boundary vertices still need exact agreement
-    // to hide cracks where carved basins cross chunk borders.
-    this.stitchLakeBoundaryPositions(chunkX, chunkY);
-    this.stitchBoundaryNormals(chunkX, chunkY);
-    this.stitchBoundaryColors(chunkX, chunkY);
-    this.stitchBoundarySurfaceBlends(chunkX, chunkY);
-    this.stitchBoundaryDetailBlends(chunkX, chunkY);
-    for (const [dx, dz] of [[-1,0],[0,-1],[-1,-1],[1,0],[0,1],[1,1],[-1,1],[1,-1]]) {
-      const nKey = this.getChunkKey(chunkX + dx, chunkY + dz);
-      if (this.chunkMeshes.has(nKey)) {
-        this.stitchLakeBoundaryPositions(chunkX + dx, chunkY + dz);
-        this.stitchBoundaryNormals(chunkX + dx, chunkY + dz);
-        this.stitchBoundaryColors(chunkX + dx, chunkY + dz);
-        this.stitchBoundarySurfaceBlends(chunkX + dx, chunkY + dz);
-        this.stitchBoundaryDetailBlends(chunkX + dx, chunkY + dz);
-        this.waterLayerManager.stitchWaterBoundaryHeights(key, nKey, data.size);
-      }
-    }
+    this.chunkController.addChunk(chunkX, chunkY, data, partial, stage);
   }
 
   /**
    * Remove a chunk from the scene
    */
   removeChunk(chunkX: number, chunkY: number, keepFogOfWar: boolean = false): void {
-    const key = this.getChunkKey(chunkX, chunkY);
-    const chunkMesh = this.chunkMeshes.get(key);
-    
-    if (!chunkMesh) return;
-    
-    // Create fog of war plane before removing the chunk
-    if (keepFogOfWar) {
-      this.createFogOfWarPlane(chunkX, chunkY, chunkMesh.terrain);
-    }
-    
-    // Remove water layer first
-    if (chunkMesh.water) {
-      this.waterLayerManager.removeWaterFromChunk(key, this.scene);
-    }
-    
-    // Remove all mesh components from scene
-    this.scene.remove(chunkMesh.terrain);
-    chunkMesh.terrain.geometry.dispose();
-    if (Array.isArray(chunkMesh.terrain.material)) {
-      chunkMesh.terrain.material.forEach(m => m.dispose());
-    } else {
-      chunkMesh.terrain.material.dispose();
-    }
-    
-    if (chunkMesh.resources) {
-      this.scene.remove(chunkMesh.resources);
-      this.disposeGroup(chunkMesh.resources);
-    }
-
-    if (chunkMesh.foliage) {
-      this.scene.remove(chunkMesh.foliage);
-      this.disposeGroup(chunkMesh.foliage);
-    }
-    
-    if (chunkMesh.structures) {
-      this.scene.remove(chunkMesh.structures);
-      this.disposeGroup(chunkMesh.structures);
-    }
-    
-    if (chunkMesh.boundaries) {
-      this.scene.remove(chunkMesh.boundaries);
-      chunkMesh.boundaries.geometry.dispose();
-      if (Array.isArray(chunkMesh.boundaries.material)) {
-        chunkMesh.boundaries.material.forEach(m => m.dispose());
-      } else {
-        chunkMesh.boundaries.material.dispose();
-      }
-    }
-    
-    this.chunkMeshes.delete(key);
-    
-    // Инвалидируем кэш статистики рендеринга
-    this.invalidateRenderStatsCache();
+    this.chunkController.removeChunk(chunkX, chunkY, keepFogOfWar);
   }
   
   /**
@@ -892,1307 +179,42 @@ export class WorldViewer {
    * the newly generated starting area.
    */
   clearChunks(): void {
-    const keys = Array.from(this.chunkMeshes.keys());
-    for (const key of keys) {
-      const [chunkX, chunkY] = key.split(',').map(Number);
-      this.removeChunk(chunkX, chunkY, false);
-    }
-
-    this.invalidateRenderStatsCache();
+    this.chunkController.clearChunks();
   }
 
-  /**
-   * Create a fog of war plane for an explored chunk
-   */
-  private createFogOfWarPlane(chunkX: number, chunkY: number, originalTerrain: THREE.Mesh): void {
-    const key = this.getChunkKey(chunkX, chunkY);
-    
-    // Remove existing fog of war mesh if present
-    this.removeFogOfWarPlane(chunkX, chunkY);
-    
-    // Get chunk size from original terrain
-    const geometry = originalTerrain.geometry as THREE.BufferGeometry;
-    const positions = geometry.getAttribute('position');
-    
-    // Calculate average height for the plane
-    let avgHeight = 0;
-    let count = 0;
-    for (let i = 0; i < positions.count; i++) {
-      avgHeight += positions.getY(i);
-      count++;
-    }
-    avgHeight = count > 0 ? avgHeight / count : 0;
-    
-    // Create simplified plane geometry
-    const chunkSize = Math.sqrt(positions.count) - 1;
-    const planeGeometry = new THREE.PlaneGeometry(chunkSize, chunkSize, 1, 1);
-    
-    // Rotate to match terrain orientation (XZ plane)
-    planeGeometry.rotateX(-Math.PI / 2);
-    
-    // Create gray material with transparency
-    const material = new THREE.MeshBasicMaterial({
-      color: 0x808080,
-      transparent: true,
-      opacity: 0.3,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    });
-    
-    const plane = new THREE.Mesh(planeGeometry, material);
-    
-    // Position at chunk location with average height
-    plane.position.set(
-      chunkX * chunkSize + chunkSize / 2,
-      avgHeight,
-      chunkY * chunkSize + chunkSize / 2
-    );
-    
-    // Add to scene and track
-    this.scene.add(plane);
-    this.fogOfWarMeshes.set(key, plane);
-  }
-  
-  /**
-   * Remove fog of war plane for a chunk
-   */
-  private removeFogOfWarPlane(chunkX: number, chunkY: number): void {
-    const key = this.getChunkKey(chunkX, chunkY);
-    const plane = this.fogOfWarMeshes.get(key);
-    
-    if (plane) {
-      this.scene.remove(plane);
-      plane.geometry.dispose();
-      if (Array.isArray(plane.material)) {
-        plane.material.forEach(m => m.dispose());
-      } else {
-        plane.material.dispose();
-      }
-      this.fogOfWarMeshes.delete(key);
-    }
-  }
-  
   /**
    * Clear all fog of war planes
    */
   clearFogOfWar(): void {
-    for (const [key, plane] of this.fogOfWarMeshes.entries()) {
-      this.scene.remove(plane);
-      plane.geometry.dispose();
-      if (Array.isArray(plane.material)) {
-        plane.material.forEach(m => m.dispose());
-      } else {
-        plane.material.dispose();
-      }
-    }
-    this.fogOfWarMeshes.clear();
+    this.fogOfWarManager.clear(this.scene);
   }
   
   /**
    * Set fog of war visibility
    */
   setFogOfWarVisibility(visible: boolean): void {
-    for (const plane of this.fogOfWarMeshes.values()) {
-      plane.visible = visible;
-    }
+    this.fogOfWarManager.setVisible(visible);
   }
 
   /**
    * Update an existing chunk
    */
   updateChunk(chunkX: number, chunkY: number, data: ChunkData): void {
-    const key = this.getChunkKey(chunkX, chunkY);
-    
-    // Update water layer if it exists
-    if (this.waterConfig.enabled && data.heightmap) {
-      this.waterLayerManager.updateWaterMeshes(key, data, this.scene, this.waterConfig);
-    }
-    
-    // Simply remove and re-add terrain and other layers
-    this.removeChunk(chunkX, chunkY);
-    this.addChunk(chunkX, chunkY, data);
-  }
-
-  /**
-   * Create terrain mesh from heightmap data with smooth biome color blending
-   * Optionally applies partial generation visualization (opacity/color based on stage)
-   * 
-   * Optimized for performance with large chunk counts:
-   * - Uses typed arrays for better memory efficiency
-   * - Pre-allocates arrays to avoid resizing
-   * - Uses indexed geometry to reduce vertex count
-   */
-  private createTerrainMesh(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): THREE.Mesh {
-    const chunkSize = data.size;
-    
-    // Count micro-biomes in this chunk
-    let chunkMicroBiomeCount = 0;
-    if (data.microBiomeMap) {
-      for (let i = 0; i < data.microBiomeMap.length; i++) {
-        if (data.microBiomeMap[i] !== 255) {
-          chunkMicroBiomeCount++;
-        }
-      }
-    }
-    
-    // VALIDATION: Check if heightmap has the correct size
-    const expectedHeightmapSize = (chunkSize + 1) * (chunkSize + 1);
-    if (data.heightmap.length !== expectedHeightmapSize) {
-      console.error(
-        `Heightmap size mismatch! Expected ${expectedHeightmapSize} (${chunkSize + 1}x${chunkSize + 1}), ` +
-        `got ${data.heightmap.length}. Chunk: (${chunkX}, ${chunkY})`
-      );
-      
-      // Create fallback heightmap with the correct size
-      const fallbackHeightmap = new Float32Array(expectedHeightmapSize);
-      // Copy available data
-      const copySize = Math.min(data.heightmap.length, expectedHeightmapSize);
-      for (let i = 0; i < copySize; i++) {
-        fallbackHeightmap[i] = data.heightmap[i];
-      }
-      data = { ...data, heightmap: fallbackHeightmap };
-    }
-    
-    const geometry = new THREE.BufferGeometry();
-    
-    // For seamless boundaries, we need (chunkSize + 1) vertices per side
-    // This allows the last vertex of one chunk to overlap with the first vertex of the next
-    const verticesPerSide = chunkSize + 1;
-    const vertexCount = verticesPerSide * verticesPerSide;
-    const triangleCount = chunkSize * chunkSize * 2;
-    const indexCount = triangleCount * 3;
-    
-    // Pre-allocate typed arrays for better performance
-    const vertices = new Float32Array(vertexCount * 3);
-    const colors = new Float32Array(vertexCount * 3);
-    const uvs = new Float32Array(vertexCount * 2);
-    const surfaceBlendA = new Float32Array(vertexCount * 4);
-    const surfaceBlendB = new Float32Array(vertexCount * 4);
-    const surfaceBlendC = new Float32Array(vertexCount * 4);
-    const terrainDetailBlend = new Float32Array(vertexCount * 4);
-    const indices = new Uint32Array(indexCount);
-    
-    // Determine if we have biome weights for smooth blending
-    const hasBlendWeights = data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0;
-    
-    // Apply underwater color adjustments if heightmap and biome data available
-    let underwaterColors: (BiomeColor | null)[] | null = null;
-    if (data.heightmap && hasBlendWeights) {
-      // For underwater colors, we need to convert sparse weights to a format the function can use
-      // We'll pass the chunk data directly and let the function handle sparse access
-      underwaterColors = adjustUnderwaterColors(
-        data.heightmap,
-        data, // Pass full chunk data for sparse weight access
-        chunkSize,
-        {
-          seaLevel: this.waterConfig.seaLevel,
-          darkenFactor: this.waterConfig.rendering.underwaterDarkenFactor,
-          desaturationFactor: this.waterConfig.rendering.underwaterDesaturationFactor,
-          enableDepthGradient: this.waterConfig.rendering.enableDepthGradient,
-        }
-      );
-    }
-    
-    // Partial generation visualization
-    let partialTint = { r: 1.0, g: 1.0, b: 1.0 };
-    let partialOpacity = 1.0;
-    
-    if (partial && stage !== undefined) {
-      if (stage === 0) { // TERRAIN only
-        partialTint = { r: 0.6, g: 0.6, b: 0.6 };
-        partialOpacity = 0.5;
-      } else if (stage === 1) { // BIOMES
-        partialTint = { r: 0.8, g: 0.8, b: 0.8 };
-        partialOpacity = 0.7;
-      } else if (stage < 4) { // RESOURCES/STRUCTURES
-        partialOpacity = 0.9;
-      }
-    }
-    
-    // Generate vertices and colors (optimized loop)
-    const worldXBase = chunkX * chunkSize;
-    const worldZBase = chunkY * chunkSize;
-    const heightScale = 50;
-    
-    for (let y = 0; y <= chunkSize; y++) {
-      const worldZ = worldZBase + y;
-      const rowOffset = y * verticesPerSide;
-      
-      for (let x = 0; x <= chunkSize; x++) {
-        const index = rowOffset + x;
-        const vertexIndex = index * 3;
-        const uvIndex = index * 2;
-        const surfaceBlendAIndex = index * 4;
-        const surfaceBlendBIndex = index * 4;
-        const surfaceBlendCIndex = index * 4;
-        
-        // The heightmap is (chunkSize + 1) x (chunkSize + 1) for seamless boundaries
-        // Access it directly with the current x, y coordinates
-        const height = data.heightmap ? data.heightmap[index] : 0;
-        const worldX = worldXBase + x;
-        
-        // Set vertex position
-        vertices[vertexIndex] = worldX;
-        vertices[vertexIndex + 1] = height * heightScale;
-        vertices[vertexIndex + 2] = worldZ;
-        uvs[uvIndex] = worldX / chunkSize;
-        uvs[uvIndex + 1] = worldZ / chunkSize;
-        
-        // Calculate color with smooth blending if weights available
-        // For biome map, clamp to chunkSize x chunkSize since biomes don't have overlap
-        const bmX = Math.min(x, chunkSize - 1);
-        const bmY = Math.min(y, chunkSize - 1);
-        const bmIndex = bmY * chunkSize + bmX;
-        
-        let color: BiomeColor;
-        
-        // Use pre-calculated underwater colors if available (null = use original biome color)
-        if (underwaterColors && bmIndex < underwaterColors.length && underwaterColors[bmIndex] !== null) {
-          color = underwaterColors[bmIndex]!;
-        } else if (hasBlendWeights && data.biomeMap) {
-          // Calculate blended color from sparse biome weights
-          color = this.calculateBlendedColorFromSparse(data, bmIndex);
-        } else if (data.biomeMap) {
-          const biome = data.biomeMap[bmIndex];
-          color = getBiomeColor(biome);
-        } else {
-          color = { r: 0.5, g: 0.5, b: 0.5 };
-        }
-        
-        // Apply micro-biome tint if present
-        if (data.microBiomeMap && bmIndex < data.microBiomeMap.length) {
-          const microBiome = data.microBiomeMap[bmIndex];
-          if (microBiome !== 255 && MICRO_BIOME_TINT[microBiome]) {
-            const tint = MICRO_BIOME_TINT[microBiome];
-            color = {
-              r: Math.min(1.0, color.r + tint.r),
-              g: Math.min(1.0, color.g + tint.g),
-              b: Math.min(1.0, color.b + tint.b),
-            };
-          }
-        }
-
-        const riverTrenchDarken = this.getRiverTrenchDarkening(data, x, y);
-        color = {
-          r: color.r * riverTrenchDarken,
-          g: color.g * riverTrenchDarken,
-          b: color.b * riverTrenchDarken,
-        };
-        
-        // Apply tints
-        colors[vertexIndex] = color.r * partialTint.r;
-        colors[vertexIndex + 1] = color.g * partialTint.g;
-        colors[vertexIndex + 2] = color.b * partialTint.b;
-
-        const surfaceWeights = this.calculateVertexSurfaceWeights(data, x, y);
-        surfaceBlendA[surfaceBlendAIndex] = surfaceWeights.plains;
-        surfaceBlendA[surfaceBlendAIndex + 1] = surfaceWeights.desert;
-        surfaceBlendA[surfaceBlendAIndex + 2] = surfaceWeights.beach;
-        surfaceBlendA[surfaceBlendAIndex + 3] = surfaceWeights.mountainRock;
-        surfaceBlendB[surfaceBlendBIndex] = surfaceWeights.snow;
-        surfaceBlendB[surfaceBlendBIndex + 1] = surfaceWeights.forestFloor;
-        surfaceBlendB[surfaceBlendBIndex + 2] = surfaceWeights.dryGrass;
-        surfaceBlendB[surfaceBlendBIndex + 3] = surfaceWeights.swampMud;
-        surfaceBlendC[surfaceBlendCIndex] = surfaceWeights.volcanicRock;
-        surfaceBlendC[surfaceBlendCIndex + 1] = surfaceWeights.ice;
-        surfaceBlendC[surfaceBlendCIndex + 2] = surfaceWeights.riverbed;
-      }
-    }
-    
-    // Generate indices for triangles (optimized loop)
-    let indexOffset = 0;
-    for (let y = 0; y < chunkSize; y++) {
-      const rowStart = y * verticesPerSide;
-      const nextRowStart = (y + 1) * verticesPerSide;
-      
-      for (let x = 0; x < chunkSize; x++) {
-        const topLeft = rowStart + x;
-        const topRight = topLeft + 1;
-        const bottomLeft = nextRowStart + x;
-        const bottomRight = bottomLeft + 1;
-        
-        // First triangle
-        indices[indexOffset++] = topLeft;
-        indices[indexOffset++] = bottomLeft;
-        indices[indexOffset++] = topRight;
-        
-        // Second triangle
-        indices[indexOffset++] = topRight;
-        indices[indexOffset++] = bottomLeft;
-        indices[indexOffset++] = bottomRight;
-      }
-    }
-    
-    // Set geometry attributes
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geometry.setAttribute('surfaceBlendA', new THREE.BufferAttribute(surfaceBlendA, 4));
-    geometry.setAttribute('surfaceBlendB', new THREE.BufferAttribute(surfaceBlendB, 4));
-    geometry.setAttribute('surfaceBlendC', new THREE.BufferAttribute(surfaceBlendC, 4));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    geometry.computeVertexNormals();
-
-    // --- Slope-based and altitude color modulation ---
-    // After normals are computed, read them to darken steep slopes (rock effect)
-    // and modulate brightness by elevation.
-    const normals = geometry.getAttribute('normal') as THREE.BufferAttribute;
-    const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
-
-    // Rock color (gray stone) blended onto steep slopes
-    const ROCK_R = 0.38, ROCK_G = 0.36, ROCK_B = 0.34;
-    // Snow color — only on MOUNTAIN/GLACIER biomes, not volcanic
-    const SNOW_R = 0.92, SNOW_G = 0.93, SNOW_B = 0.95;
-    // Volcanic lava glow — blended onto steep slopes of volcanic peaks
-    const LAVA_R = 0.72, LAVA_G = 0.12, LAVA_B = 0.04;
-
-    for (let i = 0; i < normals.count; i++) {
-      const ny = normals.getY(i); // Y component of normal: 1 = flat, 0 = vertical
-      const vi = i * 3;
-      const rawHeight = vertices[vi + 1] / heightScale; // back to [0,1]
-
-      // Biome at this vertex (clamped to biome map bounds)
-      const bvX = Math.min(Math.round(vertices[vi]     - worldXBase), chunkSize - 1);
-      const bvY = Math.min(Math.round(vertices[vi + 2] - worldZBase), chunkSize - 1);
-      const bmIdx = Math.max(0, bvY) * chunkSize + Math.max(0, bvX);
-      const vertexBiome = data.biomeMap ? data.biomeMap[Math.min(bmIdx, data.biomeMap.length - 1)] : -1;
-
-      // Slope factor: 0 = flat, 1 = vertical cliff
-      const slopeFactor = Math.max(0, 1.0 - ny * ny);
-      const steepness = Math.pow(slopeFactor, 1.5);
-      const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.14) / 0.54));
-
-      // Subtle altitude brightness: valleys very slightly darker, peaks slightly brighter
-      // Reduced range to avoid washing out high terrain
-      const altitudeBrightness = 0.92 + rawHeight * 0.12;
-
-      let r = colorAttr.getX(i);
-      let g = colorAttr.getY(i);
-      let b = colorAttr.getZ(i);
-
-      const isVolcanic = vertexBiome === 11; // BiomeType.VOLCANIC = 11
-      const isMountain = vertexBiome === 7;  // BiomeType.MOUNTAIN = 7
-      const isGlacier  = vertexBiome === 12; // BiomeType.GLACIER  = 12
-      const isBeach    = vertexBiome === 1;  // BiomeType.BEACH    = 1
-      const isOcean    = vertexBiome === 0;  // BiomeType.OCEAN    = 0
-      const seaLevel = this.waterConfig.seaLevel;
-      const belowWaterBand = 0.05;
-      const aboveWaterBand = 0.20;
-      const wetBand = rawHeight >= seaLevel - belowWaterBand && rawHeight <= seaLevel + aboveWaterBand
-        ? rawHeight <= seaLevel
-          ? 1.0 - Math.min(1, (seaLevel - rawHeight) / belowWaterBand)
-          : 1.0 - Math.min(1, (rawHeight - seaLevel) / aboveWaterBand)
-        : 0;
-      const snowDetail = (isMountain || isGlacier)
-        ? Math.min(1, Math.max(0, (rawHeight - 0.73) / 0.14) * (1.0 - steepness * 0.35))
-        : 0;
-      const riverbedDetail = Math.min(1, Math.max(0, (1 - this.getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH));
-
-      if (isOcean) {
-        // Ocean floor: no slope-shading, just altitude brightness
-        // (underwater terrain stays its biome color)
-      } else if (isBeach) {
-        // Beach / coastal: steep slopes become wet dark sand / rocky shore,
-        // NOT gray mountain rock. This eliminates the gray cliff look.
-        const WET_SAND_R = 0.55, WET_SAND_G = 0.48, WET_SAND_B = 0.32;
-        const CLIFF_R = 0.46, CLIFF_G = 0.42, CLIFF_B = 0.36; // dark coastal rock
-        if (steepness > 0.5) {
-          // Very steep coastal cliff — dark rock
-          const cliffFactor = (steepness - 0.5) / 0.5;
-          r = r + (CLIFF_R - r) * cliffFactor;
-          g = g + (CLIFF_G - g) * cliffFactor;
-          b = b + (CLIFF_B - b) * cliffFactor;
-        } else if (steepness > 0.15) {
-          // Moderate slope — wet sand
-          const wetFactor = (steepness - 0.15) / 0.35;
-          r = r + (WET_SAND_R - r) * wetFactor;
-          g = g + (WET_SAND_G - g) * wetFactor;
-          b = b + (WET_SAND_B - b) * wetFactor;
-        }
-        // Flat beach stays pure sand color
-      } else if (isVolcanic) {        // Volcanic: steep slopes get lava-glow tint, flat areas stay dark rock
-        r = r + (ROCK_R - r) * steepness * 0.6;
-        g = g + (ROCK_G - g) * steepness * 0.6;
-        b = b + (ROCK_B - b) * steepness * 0.6;
-        // Add lava glow on very steep volcanic slopes
-        const lavaFactor = Math.pow(steepness, 2.5) * 0.5;
-        if (lavaFactor > 0) {
-          r = r + (LAVA_R - r) * lavaFactor;
-          g = g + (LAVA_G - g) * lavaFactor;
-          b = b + (LAVA_B - b) * lavaFactor;
-        }
-      } else {
-        // Non-volcanic: steep slopes become rocky gray
-        r = r + (ROCK_R - r) * steepness;
-        g = g + (ROCK_G - g) * steepness;
-        b = b + (ROCK_B - b) * steepness;
-
-        // Snow on mountain/glacier peaks — height-based, only on flat/gentle slopes
-        if ((isMountain || isGlacier) && rawHeight > 0.76) {
-          const snowFactor = Math.min(1.0, (rawHeight - 0.76) / 0.10) * (1.0 - steepness * 0.7);
-          if (snowFactor > 0) {
-            r = r + (SNOW_R - r) * snowFactor;
-            g = g + (SNOW_G - g) * snowFactor;
-            b = b + (SNOW_B - b) * snowFactor;
-          }
-        }
-      }
-
-      // Apply altitude brightness modulation
-      r = Math.min(1.0, r * altitudeBrightness);
-      g = Math.min(1.0, g * altitudeBrightness);
-      b = Math.min(1.0, b * altitudeBrightness);
-
-      colorAttr.setXYZ(i, r, g, b);
-      terrainDetailBlend[i * 4] = cliffDetail;
-      terrainDetailBlend[i * 4 + 1] = snowDetail;
-      terrainDetailBlend[i * 4 + 2] = wetBand;
-      terrainDetailBlend[i * 4 + 3] = riverbedDetail;
-    }
-    colorAttr.needsUpdate = true;
-    geometry.setAttribute('terrainDetailBlend', new THREE.BufferAttribute(terrainDetailBlend, 4));
-    // --- end slope/altitude modulation ---
-    
-    // Create material using materials module
-    const material = this.createTerrainMaterial();
-    
-    // Apply opacity for partial chunks
-    if (partial && partialOpacity < 1.0) {
-      material.transparent = true;
-      material.opacity = partialOpacity;
-    }
-    
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.receiveShadow = true;
-    mesh.castShadow = true;
-    
-    // Store partial status and micro-biome count in mesh userData for reference
-    if (partial) {
-      mesh.userData.partial = true;
-      mesh.userData.stage = stage;
-    }
-    mesh.userData.microBiomeCount = chunkMicroBiomeCount;
-    mesh.userData.chunkData = data; // Store chunk data for re-rendering
-    
-    return mesh;
-  }
-
-  private createTerrainMaterial(): THREE.MeshStandardMaterial {
-    return this.terrainTexturesEnabled
-      ? createTerrainBlendMaterial(this.terrainTextures, this.wireframeMode)
-      : createBiomeColorTerrainMaterial(this.wireframeMode);
-  }
-
-  private getRiverTrenchDarkening(data: ChunkData, x: number, y: number): number {
-    const rivers = data.rivers ?? [];
-    if (rivers.length === 0) return 1;
-
-    let strongest = 0;
-    for (const river of rivers) {
-      const points = river.points;
-      if (points.length < 2) continue;
-
-      for (let i = 0; i < points.length - 1; i++) {
-        const sample = this.closestRiverRenderSample(x, y, points[i], points[i + 1]);
-        const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
-        if (channelRadius <= 0 || sample.distance > channelRadius) continue;
-
-        const centerWeight = 1 - sample.distance / channelRadius;
-        strongest = Math.max(strongest, centerWeight * centerWeight);
-      }
-    }
-
-    return 1 - strongest * RIVER_TRENCH_DARKEN_STRENGTH;
-  }
-
-  private closestRiverRenderSample(
-    x: number,
-    y: number,
-    a: RiverPoint,
-    b: RiverPoint
-  ): RiverPoint & { distance: number } {
-    const vx = b.x - a.x;
-    const vy = b.y - a.y;
-    const lenSq = vx * vx + vy * vy || 1;
-    const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
-    const px = a.x + vx * t;
-    const py = a.y + vy * t;
-    const optional = (start: number | undefined, end: number | undefined): number | undefined => {
-      if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined;
-      const from = Number.isFinite(start) ? (start as number) : (end as number);
-      const to = Number.isFinite(end) ? (end as number) : from;
-      return from + (to - from) * t;
-    };
-
-    return {
-      ...a,
-      x: px,
-      y: py,
-      height: a.height + (b.height - a.height) * t,
-      surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * t,
-      width: a.width + (b.width - a.width) * t,
-      depth: a.depth + (b.depth - a.depth) * t,
-      flow: optional(a.flow, b.flow),
-      channelWidth: optional(a.channelWidth, b.channelWidth),
-      valleyWidth: optional(a.valleyWidth, b.valleyWidth),
-      channelDepth: optional(a.channelDepth, b.channelDepth),
-      valleyDepth: optional(a.valleyDepth, b.valleyDepth),
-      flowX: a.flowX + (b.flowX - a.flowX) * t,
-      flowY: a.flowY + (b.flowY - a.flowY) * t,
-      distance: Math.hypot(x - px, y - py),
-    };
-  }
-
-  private getFoliageWaterInfluence(
-    data: ChunkData,
-    tileIndex: number,
-    worldTileX: number,
-    worldTileZ: number,
-    worldXBase: number,
-    worldZBase: number
-  ): FoliageWaterInfluence {
-    if (data.lakes?.some(lake => lake.tiles.has(tileIndex))) {
-      return { inWater: true, bank: 1 };
-    }
-
-    const localX = worldTileX - worldXBase;
-    const localZ = worldTileZ - worldZBase;
-    const riverEdgeDistance = this.getRiverChannelEdgeDistance(data, localX, localZ);
-    if (riverEdgeDistance !== undefined && riverEdgeDistance <= 0) {
-      return { inWater: true, bank: 1 };
-    }
-
-    let bank = riverEdgeDistance !== undefined
-      ? Math.max(0, 1 - riverEdgeDistance / FOLIAGE_BANK_WIDTH)
-      : 0;
-    bank = Math.max(bank, this.getLakeBankInfluence(data, localX, localZ));
-
-    return { inWater: false, bank };
-  }
-
-  private getRiverChannelEdgeDistance(data: ChunkData, localX: number, localZ: number): number | undefined {
-    const rivers = data.rivers ?? [];
-    if (rivers.length === 0) return undefined;
-
-    let closest: number | undefined;
-    for (const river of rivers) {
-      const points = river.points;
-      if (points.length < 2) continue;
-
-      for (let i = 0; i < points.length - 1; i++) {
-        const sample = this.closestRiverRenderSample(localX, localZ, points[i], points[i + 1]);
-        const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
-        if (channelRadius <= 0) continue;
-        const edgeDistance = sample.distance - channelRadius;
-        closest = closest === undefined ? edgeDistance : Math.min(closest, edgeDistance);
-      }
-    }
-
-    return closest;
-  }
-
-  private getLakeBankInfluence(data: ChunkData, localX: number, localZ: number): number {
-    const lakes = data.lakes ?? [];
-    if (lakes.length === 0) return 0;
-
-    let bank = 0;
-    for (const lake of lakes) {
-      for (const lakeTileIndex of lake.tiles) {
-        const lakeTileX = lakeTileIndex % data.size;
-        const lakeTileZ = Math.floor(lakeTileIndex / data.size);
-        const edgeDistance = Math.hypot(localX - (lakeTileX + 0.5), localZ - (lakeTileZ + 0.5)) - 0.72;
-        if (edgeDistance <= 0) continue;
-        bank = Math.max(bank, 1 - edgeDistance / FOLIAGE_BANK_WIDTH);
-      }
-    }
-
-    return Math.max(0, Math.min(1, bank));
-  }
-
-  private calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
-    const chunkSize = data.size;
-    const verticesPerSide = chunkSize + 1;
-    const weights: TerrainSurfaceWeights = {
-      plains: 0,
-      desert: 0,
-      beach: 0,
-      mountainRock: 0,
-      snow: 0,
-      forestFloor: 0,
-      dryGrass: 0,
-      swampMud: 0,
-      volcanicRock: 0,
-      ice: 0,
-      riverbed: 0,
-    };
-
-    const samples: Array<{ x: number; y: number }> = [
-      { x: vertexX - 1, y: vertexY - 1 },
-      { x: vertexX, y: vertexY - 1 },
-      { x: vertexX - 1, y: vertexY },
-      { x: vertexX, y: vertexY },
-    ];
-
-    let sampleCount = 0;
-    for (const sample of samples) {
-      if (sample.x < 0 || sample.y < 0 || sample.x >= chunkSize || sample.y >= chunkSize) {
-        continue;
-      }
-
-      const tileIndex = sample.y * chunkSize + sample.x;
-      const biome = data.biomeMap ? data.biomeMap[tileIndex] : 3;
-      const heightIndex = sample.y * verticesPerSide + sample.x;
-      const elevation = data.heightmap ? data.heightmap[heightIndex] : 0;
-      const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
-      const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
-      const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
-      const surfaceKey = this.getRiverTrenchDarkening(data, sample.x, sample.y) < 0.82
-        ? 'riverbed'
-        : selectTerrainSurfaceKey(biome, elevation, slope);
-      weights[surfaceKey] += 1;
-      sampleCount++;
-    }
-
-    if (sampleCount === 0) {
-      weights.plains = 1;
-      return weights;
-    }
-
-    for (const key of Object.keys(weights) as TerrainSurfaceKey[]) {
-      weights[key] /= sampleCount;
-    }
-    return weights;
-  }
-
-  private createFoliageLayer(chunkX: number, chunkY: number, data: ChunkData): THREE.Group | undefined {
-    if (!data.biomeMap || !data.heightmap) return undefined;
-
-    const chunkSize = data.size;
-    const verticesPerSide = chunkSize + 1;
-    const worldXBase = chunkX * chunkSize;
-    const worldZBase = chunkY * chunkSize;
-    const heightScale = 50;
-    const treePlacements: TreePlacement[] = [];
-    const shrubPlacements: FoliagePlacement[] = [];
-    const terrainPropPlacements: TerrainPropPlacement[] = [];
-    let clearingCount = 0;
-    let clearingSample: { x: number; z: number; radius: number } | undefined;
-
-    for (let tileY = 0; tileY < chunkSize; tileY++) {
-      for (let tileX = 0; tileX < chunkSize; tileX++) {
-        const tileIndex = tileY * chunkSize + tileX;
-        const profile = this.getFoliageProfileForTile(data, tileIndex);
-        if (!profile) continue;
-
-        const heightIndex = tileY * verticesPerSide + tileX;
-        const elevation = data.heightmap[heightIndex];
-        if (elevation <= this.waterConfig.seaLevel + 0.035) continue;
-
-        const right = data.heightmap[heightIndex + 1] ?? elevation;
-        const down = data.heightmap[heightIndex + verticesPerSide] ?? elevation;
-        const slope = Math.abs(right - elevation) + Math.abs(down - elevation);
-        if (slope > profile.maxSlope) continue;
-
-        const worldTileX = worldXBase + tileX;
-        const worldTileZ = worldZBase + tileY;
-        const jitterX = 0.08 + this.deterministic01(worldTileX, worldTileZ, 23) * 0.84;
-        const jitterZ = 0.08 + this.deterministic01(worldTileX, worldTileZ, 31) * 0.84;
-        const scaleJitter = 0.82 + this.deterministic01(worldTileX, worldTileZ, 43) * 0.46;
-        const placementX = worldTileX + jitterX;
-        const placementZ = worldTileZ + jitterZ;
-        const waterInfluence = this.getFoliageWaterInfluence(data, tileIndex, placementX, placementZ, worldXBase, worldZBase);
-        if (waterInfluence.inWater) continue;
-
-        const clearingInfluence = this.getClearingInfluence(placementX, placementZ);
-        if (clearingInfluence.strength > 0.82) {
-          clearingCount++;
-          clearingSample ??= {
-            x: clearingInfluence.centerX,
-            z: clearingInfluence.centerZ,
-            radius: clearingInfluence.coreRadius,
-          };
-        }
-
-        const chance = this.deterministic01(worldTileX, worldTileZ, 17);
-        const clusterDensity = this.getForestClusterDensity(worldTileX, worldTileZ);
-        const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
-        const propChance = this.deterministic01(worldTileX, worldTileZ, 181);
-        const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
-        if (propChance <= propDensity) {
-          const propScale = 0.72 + this.deterministic01(worldTileX, worldTileZ, 193) * 0.56;
-          const stumpHeight = 0.30;
-          const stumpRadius = 0.25;
-          terrainPropPlacements.push({
-            x: placementX,
-            y: elevation * heightScale + stumpHeight * propScale * 0.5,
-            z: placementZ,
-            radius: stumpRadius * propScale,
-            height: stumpHeight * propScale,
-            rotation: this.deterministic01(worldTileX, worldTileZ, 197) * Math.PI * 2,
-            color: 0x6a4325,
-            rank: this.deterministic01(worldTileX, worldTileZ, 199),
-            kind: 'stumps',
-          });
-        }
-
-        const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
-        const bankTreeScale = 1 - waterInfluence.bank * 0.82;
-        const clearingTreeScale = 1 - clearingInfluence.strength;
-        const treeDensity = profile.density * clusterDensity * slopeDensityScale * bankTreeScale * clearingTreeScale;
-        if (chance <= treeDensity) {
-          const treeHeightScale = (1 - waterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - clearingInfluence.strength * 0.18);
-          treePlacements.push({
-            x: placementX,
-            y: elevation * heightScale + profile.height * scaleJitter * treeHeightScale * 0.5,
-            z: placementZ,
-            radius: profile.radius * scaleJitter * Math.max(0.72, treeHeightScale),
-            height: profile.height * scaleJitter * Math.max(0.68, treeHeightScale),
-            rotation: this.deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
-            color: profile.color,
-            rank: this.deterministic01(worldTileX, worldTileZ, 101),
-            variant: this.selectTreeVariant(profile, worldTileX, worldTileZ),
-          });
-        }
-
-        if (waterInfluence.bank > 0.18 && clearingInfluence.strength < 0.72) {
-          const shrubChance = this.deterministic01(worldTileX, worldTileZ, 131);
-          const shrubDensity = Math.min(0.92, 0.18 + waterInfluence.bank * 0.74);
-          if (shrubChance <= shrubDensity) {
-            const shrubScale = 0.70 + this.deterministic01(worldTileX, worldTileZ, 137) * 0.48;
-            const shrubHeight = (0.34 + waterInfluence.bank * 0.22) * shrubScale;
-            shrubPlacements.push({
-              x: placementX,
-              y: elevation * heightScale - SHRUB_PROTOTYPE_MIN_Y * shrubHeight,
-              z: placementZ,
-              radius: (0.30 + waterInfluence.bank * 0.16) * shrubScale,
-              height: shrubHeight,
-              rotation: this.deterministic01(worldTileX, worldTileZ, 149) * Math.PI * 2,
-              color: waterInfluence.bank > 0.6 ? 0x527a35 : 0x3d7130,
-              rank: this.deterministic01(worldTileX, worldTileZ, 151),
-            });
-          }
-        }
-      }
-    }
-
-    if (treePlacements.length === 0 && shrubPlacements.length === 0 && terrainPropPlacements.length === 0) return undefined;
-
-    this.capPlacements(treePlacements, MAX_FOLIAGE_INSTANCES_PER_CHUNK);
-    this.capPlacements(shrubPlacements, MAX_SHRUB_INSTANCES_PER_CHUNK);
-    this.capPlacements(terrainPropPlacements, MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK);
-
-    const group = new THREE.Group();
-    group.name = `foliage-${chunkX},${chunkY}`;
-    group.userData.treeCount = treePlacements.length;
-    group.userData.shrubCount = shrubPlacements.length;
-    group.userData.terrainPropCount = terrainPropPlacements.length;
-    group.userData.foliageCount = treePlacements.length + shrubPlacements.length + terrainPropPlacements.length;
-    group.userData.clearingCount = clearingCount;
-    if (clearingSample) group.userData.clearingSample = clearingSample;
-
-    if (treePlacements.length > 0) {
-      const treeVariants: Array<{ variant: TreeVariant; geometry: THREE.BufferGeometry }> = [
-        { variant: 'spire', geometry: this.createFoliagePrototypeGeometry() },
-        { variant: 'compact', geometry: this.createCompactTreePrototypeGeometry() },
-        { variant: 'broad', geometry: this.createBroadTreePrototypeGeometry() },
-      ];
-
-      let treeVariantCount = 0;
-      for (const { variant, geometry } of treeVariants) {
-        const variantPlacements = treePlacements.filter(placement => placement.variant === variant);
-        if (variantPlacements.length === 0) {
-          geometry.dispose();
-          continue;
-        }
-
-        const treeMesh = this.createFoliageInstancedMesh(geometry, variantPlacements);
-        treeMesh.name = `foliage-trees-${variant}`;
-        treeMesh.castShadow = true;
-        treeMesh.receiveShadow = true;
-        group.add(treeMesh);
-        treeVariantCount++;
-      }
-      group.userData.treeVariantCount = treeVariantCount;
-    }
-
-    if (shrubPlacements.length > 0) {
-      const shrubMesh = this.createFoliageInstancedMesh(this.createShrubPrototypeGeometry(), shrubPlacements);
-      shrubMesh.name = 'foliage-shrubs';
-      shrubMesh.castShadow = false;
-      shrubMesh.receiveShadow = true;
-      group.add(shrubMesh);
-    }
-
-    if (terrainPropPlacements.length > 0) {
-      const propMesh = this.createFoliageInstancedMesh(this.createStumpPrototypeGeometry(), terrainPropPlacements);
-      propMesh.name = 'foliage-props-stumps';
-      propMesh.castShadow = false;
-      propMesh.receiveShadow = true;
-      group.add(propMesh);
-      group.userData.terrainPropKindCount = 1;
-    }
-
-    return group;
-  }
-
-  private capPlacements(placements: FoliagePlacement[], cap: number): void {
-    if (placements.length <= cap) return;
-    placements.sort((a, b) => a.rank - b.rank);
-    placements.length = cap;
-  }
-
-  private createFoliageInstancedMesh(geometry: THREE.BufferGeometry, placements: FoliagePlacement[]): THREE.InstancedMesh {
-    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
-    const canopy = new THREE.InstancedMesh(geometry, material, placements.length);
-
-    const matrix = new THREE.Matrix4();
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    const rotation = new THREE.Euler();
-
-    placements.forEach((placement, index) => {
-      position.set(placement.x, placement.y, placement.z);
-      rotation.set(0, placement.rotation, 0);
-      quaternion.setFromEuler(rotation);
-      scale.set(placement.radius, placement.height, placement.radius);
-      matrix.compose(position, quaternion, scale);
-      canopy.setMatrixAt(index, matrix);
-    });
-
-    canopy.instanceMatrix.needsUpdate = true;
-    return canopy;
-  }
-
-  private createFoliagePrototypeGeometry(): THREE.BufferGeometry {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    this.addPrism(vertices, colors, indices, 0.12, -0.50, -0.10, 6, new THREE.Color(0.42, 0.24, 0.10));
-    this.addConeLayer(vertices, colors, indices, 0.58, -0.30, 0.28, 8, new THREE.Color(0.10, 0.34, 0.12));
-    this.addConeLayer(vertices, colors, indices, 0.45, 0.02, 0.58, 8, new THREE.Color(0.08, 0.40, 0.14));
-    this.addConeLayer(vertices, colors, indices, 0.30, 0.32, 0.90, 8, new THREE.Color(0.12, 0.48, 0.18));
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createCompactTreePrototypeGeometry(): THREE.BufferGeometry {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    this.addPrism(vertices, colors, indices, 0.14, -0.50, -0.02, 6, new THREE.Color(0.40, 0.22, 0.10));
-    this.addConeLayer(vertices, colors, indices, 0.64, -0.22, 0.26, 8, new THREE.Color(0.11, 0.36, 0.13));
-    this.addConeLayer(vertices, colors, indices, 0.48, 0.02, 0.50, 8, new THREE.Color(0.10, 0.43, 0.16));
-    this.addConeLayer(vertices, colors, indices, 0.30, 0.22, 0.72, 8, new THREE.Color(0.15, 0.50, 0.20));
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createBroadTreePrototypeGeometry(): THREE.BufferGeometry {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    this.addPrism(vertices, colors, indices, 0.16, -0.50, 0.10, 7, new THREE.Color(0.43, 0.25, 0.12));
-    this.addConeLayer(vertices, colors, indices, 0.76, -0.04, 0.38, 9, new THREE.Color(0.13, 0.38, 0.13));
-    this.addConeLayer(vertices, colors, indices, 0.62, 0.12, 0.58, 9, new THREE.Color(0.14, 0.48, 0.17));
-    this.addConeLayer(vertices, colors, indices, 0.42, 0.28, 0.78, 9, new THREE.Color(0.20, 0.56, 0.22));
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createShrubPrototypeGeometry(): THREE.BufferGeometry {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    this.addConeLayer(vertices, colors, indices, 0.54, -0.30, 0.18, 7, new THREE.Color(0.20, 0.43, 0.16));
-    this.addConeLayer(vertices, colors, indices, 0.42, -0.12, 0.34, 7, new THREE.Color(0.26, 0.52, 0.20));
-    this.addConeLayer(vertices, colors, indices, 0.24, 0.08, 0.46, 7, new THREE.Color(0.34, 0.58, 0.24));
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private createStumpPrototypeGeometry(): THREE.BufferGeometry {
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    this.addPrism(vertices, colors, indices, 0.34, -0.50, 0.36, 7, new THREE.Color(0.40, 0.24, 0.12));
-    this.addConeLayer(vertices, colors, indices, 0.28, 0.28, 0.42, 7, new THREE.Color(0.55, 0.34, 0.17));
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
-  }
-
-  private addPrism(
-    vertices: number[],
-    colors: number[],
-    indices: number[],
-    radius: number,
-    yBottom: number,
-    yTop: number,
-    sides: number,
-    color: THREE.Color,
-  ): void {
-    for (let side = 0; side < sides; side++) {
-      const a0 = (side / sides) * Math.PI * 2;
-      const a1 = ((side + 1) / sides) * Math.PI * 2;
-      const baseIndex = vertices.length / 3;
-      vertices.push(
-        Math.cos(a0) * radius, yBottom, Math.sin(a0) * radius,
-        Math.cos(a1) * radius, yBottom, Math.sin(a1) * radius,
-        Math.cos(a1) * radius * 0.82, yTop, Math.sin(a1) * radius * 0.82,
-        Math.cos(a0) * radius * 0.82, yTop, Math.sin(a0) * radius * 0.82,
-      );
-      for (let i = 0; i < 4; i++) {
-        colors.push(color.r, color.g, color.b);
-      }
-      indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
-    }
-  }
-
-  private addConeLayer(
-    vertices: number[],
-    colors: number[],
-    indices: number[],
-    radius: number,
-    yBase: number,
-    yTip: number,
-    sides: number,
-    color: THREE.Color,
-  ): void {
-    for (let side = 0; side < sides; side++) {
-      const a0 = (side / sides) * Math.PI * 2;
-      const a1 = ((side + 1) / sides) * Math.PI * 2;
-      const baseIndex = vertices.length / 3;
-      vertices.push(
-        Math.cos(a0) * radius, yBase, Math.sin(a0) * radius,
-        Math.cos(a1) * radius, yBase, Math.sin(a1) * radius,
-        0, yTip, 0,
-      );
-      for (let i = 0; i < 3; i++) {
-        colors.push(color.r, color.g, color.b);
-      }
-      indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
-    }
-  }
-
-  private getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
-    switch (biome) {
-      case BiomeType.FOREST:
-        return { density: 0.72, height: 1.35, radius: 0.48, color: 0x2f6f28, maxSlope: 0.16 };
-      case BiomeType.RAINFOREST:
-        return { density: 0.88, height: 1.55, radius: 0.56, color: 0x1d5f25, maxSlope: 0.18 };
-      case BiomeType.TAIGA:
-        return { density: 0.58, height: 1.75, radius: 0.44, color: 0x2a5a43, maxSlope: 0.14 };
-      case BiomeType.SWAMP:
-        return { density: 0.42, height: 1.10, radius: 0.50, color: 0x3f6230, maxSlope: 0.10 };
-      default:
-        return undefined;
-    }
-  }
-
-  private getFoliageProfileForTile(data: ChunkData, tileIndex: number): FoliageProfile | undefined {
-    if (data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0 && data.sparseBiomeOffsets) {
-      const weightedProfiles: Array<{ biome: BiomeType; weight: number }> = [
-        { biome: BiomeType.FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.FOREST) },
-        { biome: BiomeType.RAINFOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.RAINFOREST) },
-        { biome: BiomeType.TAIGA, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.TAIGA) },
-        { biome: BiomeType.SWAMP, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.SWAMP) },
-      ];
-      let best = weightedProfiles[0];
-      for (const candidate of weightedProfiles) {
-        if (candidate.weight > best.weight) best = candidate;
-      }
-
-      if (best.weight >= 0.28) {
-        const profile = this.getFoliageProfile(best.biome);
-        return profile
-          ? { ...profile, density: profile.density * Math.min(1, best.weight * 1.25) }
-          : undefined;
-      }
-    }
-
-    const biome = data.biomeMap?.[tileIndex] as BiomeType | undefined;
-    return biome !== undefined ? this.getFoliageProfile(biome) : undefined;
-  }
-
-  private getForestClusterDensity(worldX: number, worldZ: number): number {
-    const broadX = Math.floor(worldX / 7);
-    const broadZ = Math.floor(worldZ / 7);
-    const midX = Math.floor(worldX / 3);
-    const midZ = Math.floor(worldZ / 3);
-    const broad = this.deterministic01(broadX, broadZ, 211);
-    const mid = this.deterministic01(midX, midZ, 223);
-    return Math.max(0.28, Math.min(1.18, 0.30 + broad * 0.66 + mid * 0.22));
-  }
-
-  private selectTreeVariant(profile: FoliageProfile, worldX: number, worldZ: number): TreeVariant {
-    const roll = this.deterministic01(worldX, worldZ, 167);
-    if (profile.height >= 1.65) {
-      return roll < 0.72 ? 'spire' : 'compact';
-    }
-    if (profile.radius >= 0.54) {
-      if (roll < 0.58) return 'broad';
-      return roll < 0.82 ? 'compact' : 'spire';
-    }
-    if (roll < 0.44) return 'spire';
-    return roll < 0.76 ? 'compact' : 'broad';
-  }
-
-  private getClearingInfluence(worldX: number, worldZ: number): FoliageClearingInfluence {
-    const cellX = Math.floor(worldX / CLEARING_CELL_SIZE);
-    const cellZ = Math.floor(worldZ / CLEARING_CELL_SIZE);
-    let strongest: FoliageClearingInfluence = {
-      strength: 0,
-      centerX: 0,
-      centerZ: 0,
-      coreRadius: 0,
-    };
-
-    for (let z = cellZ - 1; z <= cellZ + 1; z++) {
-      for (let x = cellX - 1; x <= cellX + 1; x++) {
-        const centerX = (x + 0.5) * CLEARING_CELL_SIZE + (this.deterministic01(x, z, 307) - 0.5) * 7.0;
-        const centerZ = (z + 0.5) * CLEARING_CELL_SIZE + (this.deterministic01(x, z, 311) - 0.5) * 7.0;
-        const radius = 4.8 + this.deterministic01(x, z, 313) * 3.4;
-        const coreRadius = radius * 0.48;
-        const distance = Math.hypot(worldX - centerX, worldZ - centerZ);
-        if (distance >= radius) continue;
-
-        const strength = distance <= coreRadius
-          ? 1
-          : 1 - (distance - coreRadius) / (radius - coreRadius);
-        if (strength > strongest.strength) {
-          strongest = { strength, centerX, centerZ, coreRadius };
-        }
-      }
-    }
-
-    return strongest;
-  }
-
-  private deterministic01(x: number, y: number, salt: number): number {
-    let h = Math.imul(Math.trunc(x), 374761393) ^ Math.imul(Math.trunc(y), 668265263) ^ Math.imul(salt, 224682251);
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h = (h ^ (h >>> 16)) >>> 0;
-    return h / 4294967296;
-  }
-
-  /**
-   * Create resource markers
-   */
-  private createResourceMarkers(chunkX: number, chunkY: number, data: ChunkData): THREE.Group {
-    const group = new THREE.Group();
-    const chunkSize = data.size;
-    
-    // Check if resources exist
-    if (!data.resources || data.resources.length === 0) {
-      return group;
-    }
-    
-    for (const resource of data.resources) {
-      const height = data.heightmap[resource.y * chunkSize + resource.x];
-      const worldX = chunkX * chunkSize + resource.x;
-      const worldZ = chunkY * chunkSize + resource.y;
-      
-      const geometry = new THREE.SphereGeometry(0.5, 8, 8);
-      const material = new THREE.MeshBasicMaterial({ color: this.getResourceColor(resource.type) });
-      const marker = new THREE.Mesh(geometry, material);
-      
-      marker.position.set(worldX, height * 50 + 1, worldZ);
-      group.add(marker);
-    }
-    
-    return group;
-  }
-
-  /**
-   * Create structure markers
-   */
-  private createStructureMarkers(chunkX: number, chunkY: number, data: ChunkData): THREE.Group {
-    const group = new THREE.Group();
-    const chunkSize = data.size;
-    
-    // Check if structures exist
-    if (!data.structures || data.structures.length === 0) {
-      return group;
-    }
-    
-    for (const structure of data.structures) {
-      const height = data.heightmap[structure.y * chunkSize + structure.x];
-      const worldX = chunkX * chunkSize + structure.x;
-      const worldZ = chunkY * chunkSize + structure.y;
-      
-      // Convert type to number if needed
-      const typeNum = typeof structure.type === 'string' ? parseInt(structure.type, 10) : structure.type;
-      
-      // Create different geometry based on structure type
-      let geometry: THREE.BufferGeometry;
-      let markerHeight: number;
-      
-      switch (typeNum) {
-        case 0: // VILLAGE - Multiple small boxes (houses)
-          geometry = new THREE.BoxGeometry(3, 2, 3);
-          markerHeight = 1;
-          break;
-        case 1: // RUINS - Broken/irregular shape (cylinder)
-          geometry = new THREE.CylinderGeometry(1.5, 1.5, 2.5, 8);
-          markerHeight = 1.25;
-          break;
-        case 2: // TOWER - Tall thin structure
-          geometry = new THREE.BoxGeometry(1.5, 5, 1.5);
-          markerHeight = 2.5;
-          break;
-        default:
-          geometry = new THREE.BoxGeometry(2, 3, 2);
-          markerHeight = 1.5;
-      }
-      
-      const material = new THREE.MeshLambertMaterial({ color: this.getStructureColor(typeNum) });
-      const marker = new THREE.Mesh(geometry, material);
-      
-      marker.position.set(worldX, height * 50 + markerHeight, worldZ);
-      group.add(marker);
-    }
-    
-    return group;
-  }
-
-  /**
-   * Create chunk boundary visualization
-   * Only draws top and left edges to avoid doubling with adjacent chunks
-   */
-  private createChunkBoundaries(chunkX: number, chunkY: number, data: ChunkData): THREE.LineSegments {
-    const chunkSize = data.size;
-    const vertices: number[] = [];
-    
-    // Get corner heights
-    const topLeft = data.heightmap[0];
-    const topRight = data.heightmap[chunkSize];
-    const bottomLeft = data.heightmap[chunkSize * chunkSize];
-    
-    const worldX = chunkX * chunkSize;
-    const worldZ = chunkY * chunkSize;
-    
-    // Only draw top and left edges to avoid doubling
-    // Top edge (left to right)
-    vertices.push(
-      worldX, topLeft * 50, worldZ,
-      worldX + chunkSize, topRight * 50, worldZ
-    );
-    
-    // Left edge (top to bottom)
-    vertices.push(
-      worldX, topLeft * 50, worldZ,
-      worldX, bottomLeft * 50, worldZ + chunkSize
-    );
-    
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    
-    const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
-    
-    return new THREE.LineSegments(geometry, material);
-  }
-
-  /**
-   * Get resource color
-   */
-  private getResourceColor(type: string | number): number {
-    const typeStr = typeof type === 'number' ? String(type) : type;
-    const colors: { [key: string]: number } = {
-      'iron': 0xc0c0c0,
-      'gold': 0xffd700,
-      'coal': 0x000000,
-      'stone': 0x808080,
-      'wood': 0x8b4513
-    };
-    
-    return colors[typeStr] || 0xff00ff;
-  }
-
-  /**
-   * Get structure color
-   */
-  private getStructureColor(type: string | number): number {
-    // Convert to number if string
-    const typeNum = typeof type === 'string' ? parseInt(type, 10) : type;
-    
-    // Map structure types to colors
-    // 0 = VILLAGE (brown), 1 = RUINS (gray), 2 = TOWER (gold)
-    const colors: { [key: number]: number } = {
-      0: 0x8b4513,  // VILLAGE - Brown (saddle brown)
-      1: 0x708090,  // RUINS - Gray (slate gray)
-      2: 0xdaa520   // TOWER - Gold
-    };
-    
-    return colors[typeNum] ?? 0xff00ff; // Magenta fallback for unknown types
+    this.chunkController.updateChunk(chunkX, chunkY, data);
   }
 
   /**
    * Set visibility of a render layer
    */
   setVisibility(layer: RenderLayer, visible: boolean): void {
-    this.layerVisibility.set(layer, visible);
-    
-    // Update all chunks
-    for (const [key, chunkMesh] of this.chunkMeshes.entries()) {
-      const [chunkX, chunkY] = key.split(',').map(Number);
-      
-      switch (layer) {
-        case RenderLayer.TERRAIN:
-          chunkMesh.terrain.visible = visible;
-          if (chunkMesh.foliage) chunkMesh.foliage.visible = visible;
-          break;
-        case RenderLayer.BIOMES:
-          // Toggle between biome colors and grayscale
-          this.updateTerrainBiomeColors(chunkMesh.terrain, visible);
-          break;
-        case RenderLayer.RESOURCES:
-          if (chunkMesh.resources) chunkMesh.resources.visible = visible;
-          break;
-        case RenderLayer.STRUCTURES:
-          if (chunkMesh.structures) chunkMesh.structures.visible = visible;
-          break;
-        case RenderLayer.CHUNK_BOUNDARIES:
-          if (chunkMesh.boundaries) chunkMesh.boundaries.visible = visible;
-          break;
-      }
-    }
+    this.viewSettings.setVisibility(layer, visible);
   }
   
   /**
    * Toggle water layer visibility
    */
   setWaterVisibility(visible: boolean): void {
-    this.waterLayerManager.toggleWaterVisibility(visible);
+    this.viewSettings.setWaterVisibility(visible);
   }
 
   /**
@@ -2200,346 +222,85 @@ export class WorldViewer {
    * @param skyMode - true = UI-matched haze, false = legacy blue sky
    */
   setBackgroundMode(skyMode: boolean): void {
-    if (skyMode) {
-      const background = ATMOSPHERIC_BACKGROUND_STOPS.sky;
-      this.setAtmosphericBackground('sky');
-      this.scene.fog = new THREE.FogExp2(background.fog, background.fogDensity);
-    } else {
-      this.setLegacyBlueBackground();
-    }
-
-    if (this.bgOceanMesh) {
-      this.bgOceanMesh.visible = false;
-      const material = this.bgOceanMesh.material as THREE.MeshPhongMaterial;
-      material.color.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_COLOR : LEGACY_SKY_BACKGROUND_COLOR);
-      material.specular.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_SPECULAR : LEGACY_SKY_BACKGROUND_COLOR);
-      material.shininess = skyMode ? 18 : 22;
-    }
-  }
-
-  private setLegacyBlueBackground(): void {
-    if (this.backgroundTexture) {
-      this.backgroundTexture.dispose();
-      this.backgroundTexture = null;
-    }
-    this.scene.background = new THREE.Color(LEGACY_SKY_BACKGROUND_COLOR);
-    this.scene.fog = new THREE.FogExp2(LEGACY_SKY_BACKGROUND_COLOR, 0.0012);
-  }
-
-  private setAtmosphericBackground(mode: keyof typeof ATMOSPHERIC_BACKGROUND_STOPS): void {
-    if (this.backgroundTexture) {
-      this.backgroundTexture.dispose();
-    }
-    this.backgroundTexture = this.createAtmosphericBackgroundTexture(mode);
-    this.scene.background = this.backgroundTexture;
-  }
-
-  private createAtmosphericBackgroundTexture(mode: keyof typeof ATMOSPHERIC_BACKGROUND_STOPS): THREE.DataTexture {
-    const stops = ATMOSPHERIC_BACKGROUND_STOPS[mode];
-    const top = {
-      r: (stops.top >> 16) & 0xff,
-      g: (stops.top >> 8) & 0xff,
-      b: stops.top & 0xff,
-    };
-    const bottom = {
-      r: (stops.bottom >> 16) & 0xff,
-      g: (stops.bottom >> 8) & 0xff,
-      b: stops.bottom & 0xff,
-    };
-    const width = 96;
-    const height = 64;
-    const data = new Uint8Array(width * height * 4);
-
-    for (let y = 0; y < height; y++) {
-      const t = y / (height - 1);
-      for (let x = 0; x < width; x++) {
-        const u = x / (width - 1);
-        const n1 = this.smoothValueNoise(u * 3.2, t * 2.1, 31);
-        const n2 = this.smoothValueNoise(u * 8.0 + 2.7, t * 5.5 + 1.8, 73);
-        const n3 = this.smoothValueNoise(u * 18.0 + 9.1, t * 10.0 + 3.4, 137);
-        const cloud = (n1 - 0.5) * 14 + (n2 - 0.5) * 7 + (n3 - 0.5) * 3;
-        const band = Math.sin((t * 4.2 + u * 0.7) * Math.PI) * 1.4;
-        const vignette = -Math.max(0, Math.abs(u - 0.5) - 0.28) * 18 - Math.max(0, t - 0.82) * 9;
-        const offset = (y * width + x) * 4;
-        data[offset] = Math.max(0, Math.min(255, Math.round(bottom.r + (top.r - bottom.r) * t + cloud + band + vignette)));
-        data[offset + 1] = Math.max(0, Math.min(255, Math.round(bottom.g + (top.g - bottom.g) * t + cloud * 0.92 + band + vignette)));
-        data[offset + 2] = Math.max(0, Math.min(255, Math.round(bottom.b + (top.b - bottom.b) * t + cloud * 0.86 + band * 0.85 + vignette)));
-        data[offset + 3] = 255;
-      }
-    }
-
-    const texture = new THREE.DataTexture(data, width, height);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = false;
-    texture.needsUpdate = true;
-    texture.userData.backgroundMode = mode;
-    return texture;
-  }
-
-  private smoothValueNoise(x: number, y: number, seed: number): number {
-    const x0 = Math.floor(x);
-    const y0 = Math.floor(y);
-    const xf = x - x0;
-    const yf = y - y0;
-    const sx = xf * xf * (3 - 2 * xf);
-    const sy = yf * yf * (3 - 2 * yf);
-    const a = this.hashUnit(x0, y0, seed);
-    const b = this.hashUnit(x0 + 1, y0, seed);
-    const c = this.hashUnit(x0, y0 + 1, seed);
-    const d = this.hashUnit(x0 + 1, y0 + 1, seed);
-    const topMix = a + (b - a) * sx;
-    const bottomMix = c + (d - c) * sx;
-    return topMix + (bottomMix - topMix) * sy;
-  }
-
-  private hashUnit(x: number, y: number, seed: number): number {
-    const value = Math.sin(x * 127.1 + y * 311.7 + seed * 19.19) * 43758.5453;
-    return value - Math.floor(value);
+    this.atmosphereController?.setBackgroundMode(skyMode);
+    setBackgroundOceanMode(this.bgOceanMesh, skyMode);
   }
 
   /**
    * Configure water system
    */
   setWaterConfig(config: Partial<WaterConfig>): void {
-    this.waterConfig = { ...this.waterConfig, ...config };
+    this.viewSettings.setWaterConfig(config);
   }
   
   /**
    * Get current water configuration
    */
   getWaterConfig(): WaterConfig {
-    return { ...this.waterConfig };
-  }
-
-  /**
-   * Update terrain mesh to show/hide biome colors
-   */
-  private updateTerrainBiomeColors(mesh: THREE.Mesh, showBiomes: boolean): void {
-    const geometry = mesh.geometry;
-    const colors = geometry.getAttribute('color') as THREE.BufferAttribute;
-    
-    if (!colors) return;
-    
-    const colorArray = colors.array as Float32Array;
-    
-    if (showBiomes) {
-      // Restore original biome colors (stored in userData)
-      if (mesh.userData.originalColors) {
-        for (let i = 0; i < colorArray.length; i++) {
-          colorArray[i] = mesh.userData.originalColors[i];
-        }
-      }
-    } else {
-      // Store original colors if not already stored
-      if (!mesh.userData.originalColors) {
-        mesh.userData.originalColors = new Float32Array(colorArray);
-      }
-      
-      // Convert to grayscale using materials module
-      for (let i = 0; i < colorArray.length; i += 3) {
-        const color: BiomeColor = {
-          r: colorArray[i],
-          g: colorArray[i + 1],
-          b: colorArray[i + 2]
-        };
-        
-        const gray = toGrayscale(color);
-        
-        colorArray[i] = gray.r;
-        colorArray[i + 1] = gray.g;
-        colorArray[i + 2] = gray.b;
-      }
-    }
-    
-    colors.needsUpdate = true;
+    return this.viewSettings.getWaterConfig();
   }
 
   /**
    * Set wireframe mode
    */
   setWireframeMode(enabled: boolean): void {
-    this.wireframeMode = enabled;
-    
-    // Update all terrain meshes
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      const material = chunkMesh.terrain.material as THREE.MeshStandardMaterial;
-      material.wireframe = enabled;
-    }
+    this.viewSettings.setWireframeMode(enabled);
   }
 
   /**
    * Enable or disable biome terrain texture maps while keeping vertex biome colors.
    */
   setTerrainTexturesEnabled(enabled: boolean): void {
-    if (this.terrainTexturesEnabled === enabled) return;
-
-    this.terrainTexturesEnabled = enabled;
-
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      const previousMaterial = chunkMesh.terrain.material;
-      const nextMaterial = this.createTerrainMaterial();
-
-      if (!Array.isArray(previousMaterial)) {
-        nextMaterial.transparent = previousMaterial.transparent;
-        nextMaterial.opacity = previousMaterial.opacity;
-        previousMaterial.dispose();
-      }
-
-      chunkMesh.terrain.material = nextMaterial;
-    }
+    this.viewSettings.setTerrainTexturesEnabled(enabled);
   }
 
   areTerrainTexturesEnabled(): boolean {
-    return this.terrainTexturesEnabled;
+    return this.viewSettings.areTerrainTexturesEnabled();
   }
 
   /**
    * Set camera position
    */
   setCameraPosition(position: Vector3): void {
-    this.camera.position.set(position.x, position.y, position.z);
+    this.cameraViewController.setCameraPosition(position);
   }
 
   /**
    * Set camera target
    */
   setCameraTarget(target: Vector3): void {
-    // Update internal target
-    this.cameraTarget.set(target.x, target.y, target.z);
+    this.cameraViewController.setCameraTarget(target);
   }
 
   /**
    * Reset camera to default position
    */
   resetCamera(): void {
-    // Switch back to perspective if in orthographic mode
-    if (this.isOrthographic) {
-      this.setOrthographicView(false);
-    }
-    
-    // Disable follow terrain mode
-    this.followTerrainMode = false;
-    
-    // Reset camera position
-    this.camera.position.set(50, 100, 50);
-    
-    // Reset camera rotation for free camera mode
-    if (this.useFreeCamera) {
-      this.cameraRotation.yaw = 0;
-      this.cameraRotation.pitch = -0.3; // Look slightly down
-      this.updateCameraRotation();
-    }
-    
-    // Reset internal target
-    this.cameraTarget.set(0, 0, 0);
+    this.cameraViewController.resetCamera();
+    this.cameraInputController.resetRotation();
   }
   
   /**
    * Set orthographic (top-down) view mode
    */
   setOrthographicView(enabled: boolean): void {
-    if (enabled === this.isOrthographic) return;
-    
-    this.isOrthographic = enabled;
-    
-    if (enabled) {
-      // Create orthographic camera if it doesn't exist
-      if (!this.orthographicCamera) {
-        const aspect = this.camera.aspect;
-        const frustumSize = 100;
-        this.orthographicCamera = new THREE.OrthographicCamera(
-          -frustumSize * aspect / 2,
-          frustumSize * aspect / 2,
-          frustumSize / 2,
-          -frustumSize / 2,
-          0.1,
-          2000
-        );
-      }
-      
-      // Position orthographic camera above current perspective camera position
-      const px = this.camera.position.x;
-      const pz = this.camera.position.z;
-      this.orthographicCamera.position.set(px, 200, pz);
-      this.orthographicCamera.lookAt(px, 0, pz);
-    }
+    this.cameraViewController.setOrthographicView(enabled);
   }
   
   /**
    * Set follow terrain mode
    */
   setFollowTerrainMode(enabled: boolean): void {
-    this.followTerrainMode = enabled;
-    
-    if (enabled) {
-      // Disable orthographic mode if active
-      if (this.isOrthographic) {
-        this.setOrthographicView(false);
-      }
-    }
-  }
-  
-  /**
-   * Update camera position to follow terrain at fixed height
-   */
-  private updateFollowTerrainMode(): void {
-    if (!this.followTerrainMode) return;
-    
-    const camera = this.camera;
-    const targetPos = this.cameraTarget;
-    
-    // Raycast downward from camera position to find terrain height
-    const raycaster = new THREE.Raycaster();
-    const rayOrigin = new THREE.Vector3(targetPos.x, 1000, targetPos.z);
-    const rayDirection = new THREE.Vector3(0, -1, 0);
-    
-    raycaster.set(rayOrigin, rayDirection);
-    
-    // Get all terrain meshes
-    const terrainMeshes: THREE.Mesh[] = [];
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      terrainMeshes.push(chunkMesh.terrain);
-    }
-    
-    if (terrainMeshes.length > 0) {
-      const intersects = raycaster.intersectObjects(terrainMeshes);
-      
-      if (intersects.length > 0) {
-        const terrainHeight = intersects[0].point.y;
-        const targetHeight = terrainHeight + this.followTerrainHeight;
-        
-        // Smoothly adjust camera height
-        const currentHeight = camera.position.y;
-        const newHeight = currentHeight + (targetHeight - currentHeight) * 0.1;
-        
-        camera.position.y = newHeight;
-      }
-    }
+    this.cameraViewController.setFollowTerrainMode(enabled);
   }
 
-  /**
-   * Get current camera position
-   */
   /**
    * Get current camera position.
    * In orthographic mode returns the orthographic camera's XZ position
    * so chunk loading stays in sync with what's actually visible.
    */
   getCameraPosition(): Vector3 {
-    if (this.isOrthographic && this.orthographicCamera) {
-      return {
-        x: this.orthographicCamera.position.x,
-        y: this.orthographicCamera.position.y,
-        z: this.orthographicCamera.position.z
-      };
-    }
-    return {
-      x: this.camera.position.x,
-      y: this.camera.position.y,
-      z: this.camera.position.z
-    };
+    return this.cameraViewController.getCameraPosition();
   }
 
   /**
@@ -2547,574 +308,21 @@ export class WorldViewer {
    * Derived from the camera's yaw rotation.
    */
   getCameraHeading(): number {
-    // yaw=0 means camera looks toward -Z (North in our world).
-    // Convert to compass degrees: 0° = North, clockwise positive.
-    const deg = ((-this.cameraRotation.yaw) * 180 / Math.PI) % 360;
-    return (deg + 360) % 360;
+    return this.cameraInputController.getHeadingDegrees();
   }
 
   /**
    * Get current camera target
    */
   getCameraTarget(): Vector3 {
-    return {
-      x: this.cameraTarget.x,
-      y: this.cameraTarget.y,
-      z: this.cameraTarget.z
-    };
+    return this.cameraViewController.getCameraTarget();
   }
 
   /**
    * Resize the viewer
    */
   resize(width: number, height: number): void {
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
-  }
-
-  /**
-   * Dispose of a group and its children
-   */
-  private disposeGroup(group: THREE.Group): void {
-    group.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.geometry.dispose();
-        if (Array.isArray(object.material)) {
-          object.material.forEach(m => m.dispose());
-        } else {
-          object.material.dispose();
-        }
-      }
-    });
-  }
-
-  /**
-   * Calculate blended color from sparse biome weights
-   * @param data - Chunk data with sparse biome weights
-   * @param tileIndex - Tile index in the chunk
-   * @returns Blended biome color
-   */
-  private calculateBlendedColorFromSparse(data: ChunkData, tileIndex: number): BiomeColor {
-    // Get sparse weight data for this tile
-    const start = data.sparseBiomeOffsets[tileIndex];
-    const end = tileIndex < data.sparseBiomeOffsets.length - 1
-      ? data.sparseBiomeOffsets[tileIndex + 1]
-      : data.sparseBiomeTypes.length;
-    
-    // If no weights, use biome map
-    if (start === end && data.biomeMap) {
-      return getBiomeColor(data.biomeMap[tileIndex]);
-    }
-    
-    // Blend colors based on weights
-    let r = 0, g = 0, b = 0;
-    
-    for (let i = start; i < end; i++) {
-      const biomeType = data.sparseBiomeTypes[i];
-      const weight = data.sparseBiomeWeights[i];
-      const color = getBiomeColor(biomeType);
-      
-      r += color.r * weight;
-      g += color.g * weight;
-      b += color.b * weight;
-    }
-    
-    return { r, g, b };
-  }
-
-  /**
-   * Generate chunk key
-   */
-  private getChunkKey(chunkX: number, chunkY: number): string {
-    return `${chunkX},${chunkY}`;
-  }
-
-  /**
-   * Stitch duplicated boundary vertex positions only where an edge vertex is
-   * part of a lake basin. This closes lake cracks without pulling entire chunk
-   * borders down into trenches.
-   */
-  private stitchLakeBoundaryPositions(chunkX: number, chunkY: number): void {
-    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
-    if (!mesh) return;
-
-    const dataA = mesh.terrain.userData.chunkData as ChunkData | undefined;
-    if (!dataA) return;
-
-    const geomA = mesh.terrain.geometry as THREE.BufferGeometry;
-    const posA = geomA.getAttribute('position') as THREE.BufferAttribute;
-    const verticesPerSide = Math.round(Math.sqrt(posA.count));
-    const chunkSize = verticesPerSide - 1;
-    let changedA = false;
-
-    const neighbours: Array<{ dx: number; dz: number }> = [
-      { dx: 1, dz: 0 },
-      { dx: 0, dz: 1 },
-      { dx: 1, dz: 1 },
-    ];
-
-    for (const { dx, dz } of neighbours) {
-      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
-      if (!neighbourMesh) continue;
-
-      const dataB = neighbourMesh.terrain.userData.chunkData as ChunkData | undefined;
-      if (!dataB) continue;
-
-      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
-      const posB = geomB.getAttribute('position') as THREE.BufferAttribute;
-      let changedB = false;
-
-      if (dx === 1 && dz === 0) {
-        for (let row = 0; row <= chunkSize; row++) {
-          const idxA = row * verticesPerSide + chunkSize;
-          const idxB = row * verticesPerSide;
-          const touchesLake =
-            this.vertexTouchesLake(dataA, chunkSize, row) ||
-            this.vertexTouchesLake(dataB, 0, row);
-          if (!touchesLake && !this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) continue;
-
-          const changed = this.stitchVertexHeightIfDifferent(
-            posA,
-            idxA,
-            posB,
-            idxB,
-          );
-          changedA ||= changed;
-          changedB ||= changed;
-        }
-      } else if (dx === 0 && dz === 1) {
-        for (let col = 0; col <= chunkSize; col++) {
-          const idxA = chunkSize * verticesPerSide + col;
-          const idxB = col;
-          const touchesLake =
-            this.vertexTouchesLake(dataA, col, chunkSize) ||
-            this.vertexTouchesLake(dataB, col, 0);
-          if (!touchesLake && !this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) continue;
-
-          const changed = this.stitchVertexHeightIfDifferent(
-            posA,
-            idxA,
-            posB,
-            idxB,
-          );
-          changedA ||= changed;
-          changedB ||= changed;
-        }
-      } else {
-        const touchesLake =
-          this.vertexTouchesLake(dataA, chunkSize, chunkSize) ||
-          this.vertexTouchesLake(dataB, 0, 0);
-        const idxA = chunkSize * verticesPerSide + chunkSize;
-        const idxB = 0;
-        if (touchesLake || this.isLikelyLakeBoundaryHeightGap(posA, idxA, posB, idxB)) {
-          const changed = this.stitchVertexHeightIfDifferent(
-            posA,
-            idxA,
-            posB,
-            idxB,
-          );
-          changedA ||= changed;
-          changedB ||= changed;
-        }
-      }
-
-      if (changedB) {
-        posB.needsUpdate = true;
-        geomB.computeVertexNormals();
-        geomB.computeBoundingBox();
-        geomB.computeBoundingSphere();
-      }
-    }
-
-    if (changedA) {
-      posA.needsUpdate = true;
-      geomA.computeVertexNormals();
-      geomA.computeBoundingBox();
-      geomA.computeBoundingSphere();
-    }
-  }
-
-  private vertexTouchesLake(data: ChunkData, vx: number, vy: number): boolean {
-    const size = data.size;
-    const lakes = data.lakes ?? [];
-    if (lakes.length === 0) return false;
-
-    for (const lake of lakes) {
-      if (
-        this.lakeHasTile(lake.tiles, vx, vy, size) ||
-        this.lakeHasTile(lake.tiles, vx - 1, vy, size) ||
-        this.lakeHasTile(lake.tiles, vx, vy - 1, size) ||
-        this.lakeHasTile(lake.tiles, vx - 1, vy - 1, size)
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private lakeHasTile(tiles: Set<number>, tx: number, ty: number, size: number): boolean {
-    return tx >= 0 && ty >= 0 && tx < size && ty < size && tiles.has(ty * size + tx);
-  }
-
-  private isLikelyLakeBoundaryHeightGap(
-    posA: THREE.BufferAttribute,
-    idxA: number,
-    posB: THREE.BufferAttribute,
-    idxB: number,
-  ): boolean {
-    const heightGap = Math.abs(posA.getY(idxA) - posB.getY(idxB));
-    // Terrain generated from the same world coordinates should already match.
-    // Lake carving can leave a larger local gap when only one side owns the
-    // lake tile; keep this threshold above normal floating point noise.
-    return heightGap > 0.25;
-  }
-
-  private stitchVertexHeightIfDifferent(
-    posA: THREE.BufferAttribute,
-    idxA: number,
-    posB: THREE.BufferAttribute,
-    idxB: number,
-  ): boolean {
-    const sharedY = Math.min(posA.getY(idxA), posB.getY(idxB));
-    const changed = posA.getY(idxA) !== sharedY || posB.getY(idxB) !== sharedY;
-    if (changed) {
-      posA.setY(idxA, sharedY);
-      posB.setY(idxB, sharedY);
-    }
-    return changed;
-  }
-
-  /**
-   * Stitch normals between this chunk and all loaded neighbours.
-   *
-   * Three.js computes vertex normals purely from the triangles inside each mesh.
-   * Boundary vertices therefore get normals that ignore the adjacent chunk's
-   * geometry, producing a visible lighting seam.
-   *
-   * Fix: for every shared edge, average the normals of the two coincident
-   * vertices (one from each mesh) and write the result back to both meshes.
-   *
-   * Called after addChunk() for the new chunk AND for each already-loaded
-   * neighbour so both sides are updated.
-   */
-  private stitchBoundaryNormals(chunkX: number, chunkY: number): void {
-    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
-    if (!mesh) return;
-
-    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
-    const normA = geom.getAttribute('normal') as THREE.BufferAttribute;
-    const posA  = geom.getAttribute('position') as THREE.BufferAttribute;
-
-    // Infer chunkSize from vertex count: verticesPerSide = sqrt(vertexCount)
-    const verticesPerSide = Math.round(Math.sqrt(posA.count));
-    const chunkSize = verticesPerSide - 1;
-
-    // Neighbours: right (+X), bottom (+Z), and diagonal (+X+Z) for corner
-    const neighbours: Array<{ dx: number; dz: number }> = [
-      { dx: 1, dz: 0 },
-      { dx: 0, dz: 1 },
-      { dx: 1, dz: 1 },
-    ];
-
-    for (const { dx, dz } of neighbours) {
-      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
-      if (!neighbourMesh) continue;
-
-      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
-      const normB = geomB.getAttribute('normal') as THREE.BufferAttribute;
-
-      if (dx === 1 && dz === 0) {
-        // Right edge of A  ↔  Left edge of B
-        // A: x = chunkSize, y = 0..chunkSize
-        // B: x = 0,         y = 0..chunkSize
-        for (let row = 0; row <= chunkSize; row++) {
-          const idxA = row * verticesPerSide + chunkSize;
-          const idxB = row * verticesPerSide + 0;
-          this._averageNormals(normA, idxA, normB, idxB);
-        }
-      } else if (dx === 0 && dz === 1) {
-        // Bottom edge of A  ↔  Top edge of B
-        // A: y = chunkSize, x = 0..chunkSize
-        // B: y = 0,         x = 0..chunkSize
-        for (let col = 0; col <= chunkSize; col++) {
-          const idxA = chunkSize * verticesPerSide + col;
-          const idxB = 0 * verticesPerSide + col;
-          this._averageNormals(normA, idxA, normB, idxB);
-        }
-      } else {
-        // Corner vertex only
-        const idxA = chunkSize * verticesPerSide + chunkSize;
-        const idxB = 0;
-        this._averageNormals(normA, idxA, normB, idxB);
-      }
-
-      normB.needsUpdate = true;
-    }
-
-    normA.needsUpdate = true;
-  }
-
-  /** Average the normals of two vertices (one in each buffer) and write back to both. */
-  private _averageNormals(
-    normA: THREE.BufferAttribute, idxA: number,
-    normB: THREE.BufferAttribute, idxB: number,
-  ): void {
-    const ax = normA.getX(idxA), ay = normA.getY(idxA), az = normA.getZ(idxA);
-    const bx = normB.getX(idxB), by = normB.getY(idxB), bz = normB.getZ(idxB);
-    // Average and re-normalise
-    let nx = ax + bx, ny = ay + by, nz = az + bz;
-    const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    if (len > 0) { nx /= len; ny /= len; nz /= len; }
-    normA.setXYZ(idxA, nx, ny, nz);
-    normB.setXYZ(idxB, nx, ny, nz);
-  }
-
-  /** Average the vertex colors of two coincident boundary vertices and write back to both. */
-  private _averageColors(
-    colA: THREE.BufferAttribute, idxA: number,
-    colB: THREE.BufferAttribute, idxB: number,
-  ): void {
-    const r = (colA.getX(idxA) + colB.getX(idxB)) * 0.5;
-    const g = (colA.getY(idxA) + colB.getY(idxB)) * 0.5;
-    const b = (colA.getZ(idxA) + colB.getZ(idxB)) * 0.5;
-    colA.setXYZ(idxA, r, g, b);
-    colB.setXYZ(idxB, r, g, b);
-  }
-
-  /**
-   * Stitch vertex colors along shared edges between this chunk and loaded neighbours.
-   * Averages the colors of coincident boundary vertices to eliminate color seams
-   * caused by biome blending differences at chunk edges.
-   */
-  private stitchBoundaryColors(chunkX: number, chunkY: number): void {
-    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
-    if (!mesh) return;
-
-    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
-    const colA = geom.getAttribute('color') as THREE.BufferAttribute;
-    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
-    const verticesPerSide = Math.round(Math.sqrt(posA.count));
-    const chunkSize = verticesPerSide - 1;
-
-    const neighbours: Array<{ dx: number; dz: number }> = [
-      { dx: 1, dz: 0 },
-      { dx: 0, dz: 1 },
-      { dx: 1, dz: 1 },
-    ];
-
-    for (const { dx, dz } of neighbours) {
-      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
-      if (!neighbourMesh) continue;
-
-      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
-      const colB = geomB.getAttribute('color') as THREE.BufferAttribute;
-
-      if (dx === 1 && dz === 0) {
-        for (let row = 0; row <= chunkSize; row++) {
-          this._averageColors(colA, row * verticesPerSide + chunkSize, colB, row * verticesPerSide + 0);
-        }
-      } else if (dx === 0 && dz === 1) {
-        for (let col = 0; col <= chunkSize; col++) {
-          this._averageColors(colA, chunkSize * verticesPerSide + col, colB, 0 * verticesPerSide + col);
-        }
-      } else {
-        this._averageColors(colA, chunkSize * verticesPerSide + chunkSize, colB, 0);
-      }
-
-      colB.needsUpdate = true;
-    }
-
-    colA.needsUpdate = true;
-  }
-
-  /**
-   * Stitch texture surface weights between loaded chunks.
-   *
-   * Color and normal data already agree on shared edges, but textured terrain
-   * also depends on surfaceBlendA/B/C. If those attributes differ across coincident
-   * vertices the shader can switch texture sets abruptly at chunk borders.
-   */
-  private stitchBoundarySurfaceBlends(chunkX: number, chunkY: number): void {
-    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
-    if (!mesh) return;
-
-    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
-    const blendAA = geom.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
-    const blendBA = geom.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
-    const blendCA = geom.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined;
-    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
-
-    if (!blendAA || !blendBA || !blendCA) return;
-
-    const verticesPerSide = Math.round(Math.sqrt(posA.count));
-    const chunkSize = verticesPerSide - 1;
-
-    const neighbours: Array<{ dx: number; dz: number }> = [
-      { dx: 1, dz: 0 },
-      { dx: 0, dz: 1 },
-      { dx: 1, dz: 1 },
-    ];
-
-    for (const { dx, dz } of neighbours) {
-      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
-      if (!neighbourMesh) continue;
-
-      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
-      const blendAB = geomB.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined;
-      const blendBB = geomB.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined;
-      const blendCB = geomB.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined;
-
-      if (!blendAB || !blendBB || !blendCB) continue;
-
-      if (dx === 1 && dz === 0) {
-        for (let row = 0; row <= chunkSize; row++) {
-          this._averageSurfaceBlend(
-            blendAA,
-            blendBA,
-            blendCA,
-            row * verticesPerSide + chunkSize,
-            blendAB,
-            blendBB,
-            blendCB,
-            row * verticesPerSide,
-          );
-        }
-      } else if (dx === 0 && dz === 1) {
-        for (let col = 0; col <= chunkSize; col++) {
-          this._averageSurfaceBlend(
-            blendAA,
-            blendBA,
-            blendCA,
-            chunkSize * verticesPerSide + col,
-            blendAB,
-            blendBB,
-            blendCB,
-            col,
-          );
-        }
-      } else {
-        this._averageSurfaceBlend(
-          blendAA,
-          blendBA,
-          blendCA,
-          chunkSize * verticesPerSide + chunkSize,
-          blendAB,
-          blendBB,
-          blendCB,
-          0,
-        );
-      }
-
-      blendAB.needsUpdate = true;
-      blendBB.needsUpdate = true;
-      blendCB.needsUpdate = true;
-    }
-
-    blendAA.needsUpdate = true;
-    blendBA.needsUpdate = true;
-    blendCA.needsUpdate = true;
-  }
-
-  private _averageSurfaceBlend(
-    blendAA: THREE.BufferAttribute,
-    blendBA: THREE.BufferAttribute,
-    blendCA: THREE.BufferAttribute,
-    idxA: number,
-    blendAB: THREE.BufferAttribute,
-    blendBB: THREE.BufferAttribute,
-    blendCB: THREE.BufferAttribute,
-    idxB: number,
-  ): void {
-    const weights = [
-      (blendAA.getX(idxA) + blendAB.getX(idxB)) * 0.5,
-      (blendAA.getY(idxA) + blendAB.getY(idxB)) * 0.5,
-      (blendAA.getZ(idxA) + blendAB.getZ(idxB)) * 0.5,
-      (blendAA.getW(idxA) + blendAB.getW(idxB)) * 0.5,
-      (blendBA.getX(idxA) + blendBB.getX(idxB)) * 0.5,
-      (blendBA.getY(idxA) + blendBB.getY(idxB)) * 0.5,
-      (blendBA.getZ(idxA) + blendBB.getZ(idxB)) * 0.5,
-      (blendBA.getW(idxA) + blendBB.getW(idxB)) * 0.5,
-      (blendCA.getX(idxA) + blendCB.getX(idxB)) * 0.5,
-      (blendCA.getY(idxA) + blendCB.getY(idxB)) * 0.5,
-      (blendCA.getZ(idxA) + blendCB.getZ(idxB)) * 0.5,
-    ];
-    const sum = weights.reduce((total, weight) => total + weight, 0) || 1;
-
-    blendAA.setXYZW(idxA, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
-    blendBA.setXYZW(idxA, weights[4] / sum, weights[5] / sum, weights[6] / sum, weights[7] / sum);
-    blendCA.setXYZW(idxA, weights[8] / sum, weights[9] / sum, weights[10] / sum, 0);
-    blendAB.setXYZW(idxB, weights[0] / sum, weights[1] / sum, weights[2] / sum, weights[3] / sum);
-    blendBB.setXYZW(idxB, weights[4] / sum, weights[5] / sum, weights[6] / sum, weights[7] / sum);
-    blendCB.setXYZW(idxB, weights[8] / sum, weights[9] / sum, weights[10] / sum, 0);
-  }
-
-  /**
-   * Stitch terrain detail masks between loaded chunks.
-   *
-   * These masks drive cliff, snow peak, wet shoreline, and riverbed accents in
-   * the shader. If coincident boundary vertices disagree, the detail tint can
-   * show up as a faint line exactly on chunk edges.
-   */
-  private stitchBoundaryDetailBlends(chunkX: number, chunkY: number): void {
-    const mesh = this.chunkMeshes.get(this.getChunkKey(chunkX, chunkY));
-    if (!mesh) return;
-
-    const geom = mesh.terrain.geometry as THREE.BufferGeometry;
-    const detailA = geom.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined;
-    const posA = geom.getAttribute('position') as THREE.BufferAttribute;
-
-    if (!detailA) return;
-
-    const verticesPerSide = Math.round(Math.sqrt(posA.count));
-    const chunkSize = verticesPerSide - 1;
-
-    const neighbours: Array<{ dx: number; dz: number }> = [
-      { dx: 1, dz: 0 },
-      { dx: 0, dz: 1 },
-      { dx: 1, dz: 1 },
-    ];
-
-    for (const { dx, dz } of neighbours) {
-      const neighbourMesh = this.chunkMeshes.get(this.getChunkKey(chunkX + dx, chunkY + dz));
-      if (!neighbourMesh) continue;
-
-      const geomB = neighbourMesh.terrain.geometry as THREE.BufferGeometry;
-      const detailB = geomB.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined;
-
-      if (!detailB) continue;
-
-      if (dx === 1 && dz === 0) {
-        for (let row = 0; row <= chunkSize; row++) {
-          this._averageDetailBlend(detailA, row * verticesPerSide + chunkSize, detailB, row * verticesPerSide);
-        }
-      } else if (dx === 0 && dz === 1) {
-        for (let col = 0; col <= chunkSize; col++) {
-          this._averageDetailBlend(detailA, chunkSize * verticesPerSide + col, detailB, col);
-        }
-      } else {
-        this._averageDetailBlend(detailA, chunkSize * verticesPerSide + chunkSize, detailB, 0);
-      }
-
-      detailB.needsUpdate = true;
-    }
-
-    detailA.needsUpdate = true;
-  }
-
-  private _averageDetailBlend(
-    detailA: THREE.BufferAttribute,
-    idxA: number,
-    detailB: THREE.BufferAttribute,
-    idxB: number,
-  ): void {
-    const x = (detailA.getX(idxA) + detailB.getX(idxB)) * 0.5;
-    const y = (detailA.getY(idxA) + detailB.getY(idxB)) * 0.5;
-    const z = (detailA.getZ(idxA) + detailB.getZ(idxB)) * 0.5;
-    const w = (detailA.getW(idxA) + detailB.getW(idxB)) * 0.5;
-    detailA.setXYZW(idxA, x, y, z, w);
-    detailB.setXYZW(idxB, x, y, z, w);
+    this.canvasHost.resize(width, height);
   }
 
   /**
@@ -3122,33 +330,7 @@ export class WorldViewer {
    * Returns hit information including world position and chunk coordinates
    */
   raycastTerrain(screenX: number, screenY: number): RaycastHit | null {
-    if (!this.container) {
-      return null;
-    }
-
-    // Get all terrain meshes
-    const terrainMeshes: THREE.Mesh[] = [];
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      terrainMeshes.push(chunkMesh.terrain);
-    }
-
-    if (terrainMeshes.length === 0) {
-      return null;
-    }
-
-    // Use raycasting utility
-    const canvas = this.renderer.domElement;
-    const chunkSize = 32; // Default chunk size - could be passed as parameter
-    
-    return raycastTerrain(
-      screenX,
-      screenY,
-      this.camera,
-      canvas,
-      terrainMeshes,
-      chunkSize,
-      50 // heightScale
-    );
+    return this.terrainRaycaster.raycast(screenX, screenY);
   }
 
   /**
@@ -3173,251 +355,57 @@ export class WorldViewer {
   }
   
   /**
-   * Update frustum culling for all chunks
-   * Hides chunks that are outside the camera frustum to improve performance
-   */
-  private updateFrustumCulling(): void {
-    if (!this.enableFrustumCulling) return;
-    
-    // Safety check for test environments where frustum might not be fully mocked
-    if (typeof this.frustum.intersectsBox !== 'function') {
-      return;
-    }
-    
-    const activeCamera = this.isOrthographic && this.orthographicCamera ? this.orthographicCamera : this.camera;
-    
-    // Update frustum from camera
-    this.frustumMatrix.multiplyMatrices(
-      activeCamera.projectionMatrix,
-      activeCamera.matrixWorldInverse
-    );
-    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
-    
-    // Check each chunk against frustum
-    for (const [key, chunkMesh] of this.chunkMeshes.entries()) {
-      if (!chunkMesh.boundingBox) continue;
-      
-      const isVisible = this.frustum.intersectsBox(chunkMesh.boundingBox);
-      
-      // Only update visibility if it changed
-      if (chunkMesh.visible !== isVisible) {
-        chunkMesh.visible = isVisible;
-        
-        // Update visibility for all mesh components
-        chunkMesh.terrain.visible = isVisible && this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-
-        if (chunkMesh.foliage) {
-          chunkMesh.foliage.visible = isVisible && this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-        }
-        
-        if (chunkMesh.resources) {
-          chunkMesh.resources.visible = isVisible && this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
-        }
-        
-        if (chunkMesh.structures) {
-          chunkMesh.structures.visible = isVisible && this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
-        }
-        
-        if (chunkMesh.boundaries) {
-          chunkMesh.boundaries.visible = isVisible && this.layerVisibility.get(RenderLayer.CHUNK_BOUNDARIES) !== false;
-        }
-      }
-    }
-  }
-  
-  /**
    * Enable or disable frustum culling
    */
   setFrustumCulling(enabled: boolean): void {
-    this.enableFrustumCulling = enabled;
-    
-    // If disabling, make all chunks visible
-    if (!enabled) {
-      for (const chunkMesh of this.chunkMeshes.values()) {
-        chunkMesh.visible = true;
-        chunkMesh.terrain.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-
-        if (chunkMesh.foliage) {
-          chunkMesh.foliage.visible = this.layerVisibility.get(RenderLayer.TERRAIN) !== false;
-        }
-        
-        if (chunkMesh.resources) {
-          chunkMesh.resources.visible = this.layerVisibility.get(RenderLayer.RESOURCES) !== false;
-        }
-        
-        if (chunkMesh.structures) {
-          chunkMesh.structures.visible = this.layerVisibility.get(RenderLayer.STRUCTURES) !== false;
-        }
-        
-        if (chunkMesh.boundaries) {
-          chunkMesh.boundaries.visible = this.layerVisibility.get(RenderLayer.CHUNK_BOUNDARIES) !== false;
-        }
-      }
-    }
+    this.renderLoop.setFrustumCulling(enabled);
   }
   
   /**
    * Get frustum culling statistics
    */
   getFrustumCullingStats() {
-    let visible = 0;
-    let hidden = 0;
-    
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      if (chunkMesh.visible) {
-        visible++;
-      } else {
-        hidden++;
-      }
-    }
-    
-    return {
-      enabled: this.enableFrustumCulling,
-      visible,
-      hidden,
-      total: visible + hidden
-    };
+    return this.renderLoop.getFrustumCullingStats();
   }
-  
-  /**
-   * Get render statistics (vertex count, draw calls)
-   * Кэшируем результаты чтобы избежать дорогого scene.traverse()
-   */
-  private cachedRenderStats: { vertexCount: number; drawCalls: number } | null = null;
-  private lastRenderStatsUpdate = 0;
-  private readonly RENDER_STATS_CACHE_DURATION = 1000; // Кэшируем на 1 секунду
-  
-  getRenderStats(): { vertexCount: number; drawCalls: number } {
-    const now = performance.now();
-    
-    // Возвращаем кэшированные данные если они актуальны
-    if (this.cachedRenderStats && now - this.lastRenderStatsUpdate < this.RENDER_STATS_CACHE_DURATION) {
-      return this.cachedRenderStats;
-    }
-    
-    let vertexCount = 0;
-    let drawCalls = 0;
-    
-    // Count vertices and draw calls from all chunk meshes
-    // Используем более эффективный подход: считаем только чанки
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      if (chunkMesh.terrain && chunkMesh.terrain.visible) {
-        const geometry = chunkMesh.terrain.geometry;
-        
-        // Count vertices
-        if (geometry.attributes.position) {
-          vertexCount += geometry.attributes.position.count;
-        }
-        
-        // Each terrain mesh is a draw call
-        drawCalls++;
-      }
 
-      if (chunkMesh.foliage && chunkMesh.foliage.visible) {
-        drawCalls += chunkMesh.foliage.children.length;
-      }
-      
-      // Count resources
-      if (chunkMesh.resources && chunkMesh.resources.visible) {
-        drawCalls += chunkMesh.resources.children.length;
-      }
-      
-      // Count structures
-      if (chunkMesh.structures && chunkMesh.structures.visible) {
-        drawCalls += chunkMesh.structures.children.length;
-      }
-      
-      // Count boundaries
-      if (chunkMesh.boundaries && chunkMesh.boundaries.visible) {
-        drawCalls++;
-      }
-    }
-    
-    // Кэшируем результаты
-    this.cachedRenderStats = { vertexCount, drawCalls };
-    this.lastRenderStatsUpdate = now;
-    
-    return this.cachedRenderStats;
-  }
-  
   /**
-   * Сбросить кэш статистики рендеринга (вызывать при добавлении/удалении чанков)
+   * Get render statistics (vertex count, draw calls).
    */
+  getRenderStats(): RenderStats {
+    return this.renderStatsCache.getRenderStats();
+  }
+
   private invalidateRenderStatsCache(): void {
-    this.cachedRenderStats = null;
+    this.renderStatsCache.invalidate();
   }
 
   /**
    * Get the total count of micro-biomes currently visible across all chunks
    */
   getMicroBiomeCount(): number {
-    let totalCount = 0;
-    
-    for (const chunkMesh of this.chunkMeshes.values()) {
-      if (chunkMesh.terrain && chunkMesh.terrain.userData.microBiomeCount !== undefined) {
-        totalCount += chunkMesh.terrain.userData.microBiomeCount;
-      }
-    }
-    
-    return totalCount;
+    return calculateMicroBiomeCount(this.chunkMeshes.values());
   }
 
   /**
    * Clean up resources
    */
   dispose(): void {
-    // Stop render loop
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    this.renderLoop.stop();
     
-    // Remove all chunks
-    for (const [key] of this.chunkMeshes.entries()) {
-      const [chunkX, chunkY] = key.split(',').map(Number);
-      this.removeChunk(chunkX, chunkY);
-    }
+    this.chunkController.clearChunks();
     
     // Dispose water layer manager
     this.waterLayerManager.dispose();
 
-    if (this.backgroundTexture) {
-      this.backgroundTexture.dispose();
-      this.backgroundTexture = null;
-    }
-
-    if (this.sunSprite) {
-      this.scene.remove(this.sunSprite);
-      (this.sunSprite.material as THREE.SpriteMaterial).dispose();
-      this.sunSprite = null;
-    }
-    if (this.sunTexture) {
-      this.sunTexture.dispose();
-      this.sunTexture = null;
-    }
+    this.atmosphereController?.dispose();
+    this.atmosphereController = null;
     
     // Dispose renderer
     this.renderer.dispose();
     
-    // Remove input listeners registered during initialize()
-    if (this.container) {
-      this.container.removeEventListener('click', this.handleContainerClick);
-      this.container.removeEventListener('mousedown', this.handleCameraDragStart);
-      this.container.removeEventListener('mouseleave', this.handleCameraDragEnd);
-    }
-    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
-    document.removeEventListener('mousemove', this.handlePointerLockedMouseMove);
-    document.removeEventListener('mousemove', this.handleCameraDragMove);
-    document.removeEventListener('mouseup', this.handleCameraDragEnd);
-    document.removeEventListener('keydown', this.handlePointerLockEscape);
-    window.removeEventListener('keydown', this.handleKeyboardDown);
-    window.removeEventListener('keyup', this.handleKeyboardUp);
-    this.keyboardState.clear();
+    this.cameraInputController.detach();
 
-    // Remove canvas from container
-    if (this.container && this.renderer.domElement.parentElement === this.container) {
-      this.container.removeChild(this.renderer.domElement);
-    }
+    this.canvasHost.detachFromContainer(this.container);
     
     console.log('WorldViewer disposed');
   }

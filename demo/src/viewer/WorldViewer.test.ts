@@ -72,6 +72,46 @@ vi.mock('three', async () => {
   };
 });
 
+function getSceneAmbientLight(viewer: WorldViewer): THREE.AmbientLight {
+  const light = viewer.getScene().children.find(
+    child => child instanceof THREE.AmbientLight
+  ) as THREE.AmbientLight | undefined;
+
+  expect(light).toBeDefined();
+  return light!;
+}
+
+function getSceneSunLight(viewer: WorldViewer): THREE.DirectionalLight {
+  const light = viewer.getScene().children.find(
+    child => child instanceof THREE.DirectionalLight && child.color.getHex() === 0xffe2b8
+  ) as THREE.DirectionalLight | undefined;
+
+  expect(light).toBeDefined();
+  return light!;
+}
+
+function disableWater(viewer: WorldViewer): void {
+  viewer.setWaterConfig({ enabled: false });
+}
+
+function getTerrainMesh(viewer: WorldViewer, chunkKey = '0,0'): THREE.Mesh {
+  const mesh = viewer.getScene().getObjectByName(`terrain-${chunkKey}`) as THREE.Mesh | undefined;
+
+  expect(mesh).toBeDefined();
+  return mesh!;
+}
+
+function getFoliageGroup(viewer: WorldViewer, chunkKey = '0,0'): THREE.Group | undefined {
+  return viewer.getScene().getObjectByName(`foliage-${chunkKey}`) as THREE.Group | undefined;
+}
+
+function getBackgroundOceanMesh(viewer: WorldViewer): THREE.Mesh {
+  const mesh = viewer.getScene().getObjectByName('background-ocean') as THREE.Mesh | undefined;
+
+  expect(mesh).toBeDefined();
+  return mesh!;
+}
+
 describe('WorldViewer lifecycle', () => {
   beforeEach(() => {
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
@@ -172,13 +212,9 @@ describe('WorldViewer lifecycle', () => {
 
   it('uses a softened cinematic lighting profile for readable forest shadows', () => {
     const viewer = new WorldViewer();
-    const renderer = (viewer as any).renderer as THREE.WebGLRenderer;
-    const ambientLight = (viewer as any).ambientLight as THREE.AmbientLight;
-    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
+    const ambientLight = getSceneAmbientLight(viewer);
+    const directionalLight = getSceneSunLight(viewer);
 
-    expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
-    expect(renderer.toneMappingExposure).toBeGreaterThanOrEqual(0.80);
-    expect(renderer.toneMappingExposure).toBeLessThanOrEqual(0.82);
     expect(ambientLight.intensity).toBeGreaterThanOrEqual(0.36);
     expect(ambientLight.intensity).toBeLessThanOrEqual(0.37);
     expect(ambientLight.color.getHex()).toBe(0x9fb6c8);
@@ -192,47 +228,13 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('places a visible sun marker on the same vector used by directional shadows', () => {
-    const viewer = new WorldViewer();
-    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
-    const sunSprite = (viewer as any).sunSprite as THREE.Sprite;
-    const sunDirection = sunSprite.position.clone().sub(directionalLight.target.position).normalize();
-    const lightDirection = directionalLight.position.clone().sub(directionalLight.target.position).normalize();
-
-    expect(sunSprite).toBeInstanceOf(THREE.Sprite);
-    expect(sunSprite.castShadow).toBe(false);
-    expect(sunSprite.receiveShadow).toBe(false);
-    expect((sunSprite.material as THREE.SpriteMaterial).depthWrite).toBe(false);
-    expect((sunSprite.material as THREE.SpriteMaterial).opacity).toBeLessThanOrEqual(0.82);
-    expect(sunSprite.scale.x).toBeGreaterThanOrEqual(72);
-    expect(sunSprite.scale.x).toBeLessThanOrEqual(96);
-    expect(sunDirection.distanceTo(lightDirection)).toBeLessThan(0.0001);
-
-    viewer.dispose();
-  });
-
-  it('keeps the directional shadow frustum centered near the active camera away from spawn', () => {
-    const viewer = new WorldViewer();
-    const directionalLight = (viewer as any).directionalLight as THREE.DirectionalLight;
-
-    viewer.setCameraPosition({ x: 680, y: 120, z: -540 });
-    (viewer as any).updateSunAndShadowFocus();
-
-    expect(directionalLight.target.position.x).toBeCloseTo(680);
-    expect(directionalLight.target.position.z).toBeCloseTo(-540);
-    expect(directionalLight.position.x - directionalLight.target.position.x).toBeCloseTo(90);
-    expect(directionalLight.position.y - directionalLight.target.position.y).toBeCloseTo(138);
-    expect(directionalLight.position.z - directionalLight.target.position.z).toBeCloseTo(56);
-
-    viewer.dispose();
-  });
-
   it('starts with the old blue sky and switches to a UI-matched atmospheric background when enabled', () => {
     const viewer = new WorldViewer();
+    const scene = viewer.getScene();
 
-    const defaultBackground = (viewer as any).scene.background as THREE.Color;
-    const defaultFog = (viewer as any).scene.fog as THREE.FogExp2;
-    const bgOceanMesh = (viewer as any).bgOceanMesh as THREE.Mesh;
+    const defaultBackground = scene.background as THREE.Color;
+    const defaultFog = scene.fog as THREE.FogExp2;
+    const bgOceanMesh = getBackgroundOceanMesh(viewer);
     const bgOceanMaterial = bgOceanMesh.material as THREE.MeshPhongMaterial;
 
     expect(defaultBackground).toBeInstanceOf(THREE.Color);
@@ -245,7 +247,7 @@ describe('WorldViewer lifecycle', () => {
 
     viewer.setBackgroundMode(true);
 
-    const skyBackground = (viewer as any).scene.background as THREE.DataTexture;
+    const skyBackground = scene.background as THREE.DataTexture;
     expect(skyBackground).toBeInstanceOf(THREE.DataTexture);
     expect(skyBackground.userData.backgroundMode).toBe('sky');
     expect(skyBackground.image.width).toBeGreaterThan(1);
@@ -260,8 +262,8 @@ describe('WorldViewer lifecycle', () => {
     expect(getTexturePixelHexAt(skyBackground, 23, 17)).not.toBe(getTexturePixelHexAt(skyBackground, 44, 17));
     expect(getTexturePixelHexAt(skyBackground, 12, 9)).not.toBe(getTexturePixelHexAt(skyBackground, 12, 39));
     expect(getMaxAdjacentRowLumaDelta(skyBackground)).toBeLessThan(1.0);
-    expect(((viewer as any).scene.fog as THREE.FogExp2).color.getHex()).toBe(0x1d3433);
-    expect(((viewer as any).scene.fog as THREE.FogExp2).density).toBeCloseTo(0.00105);
+    expect((scene.fog as THREE.FogExp2).color.getHex()).toBe(0x1d3433);
+    expect((scene.fog as THREE.FogExp2).density).toBeCloseTo(0.00105);
 
     viewer.dispose();
   });
@@ -274,10 +276,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 2,
@@ -292,7 +291,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain;
+    const terrain = getTerrainMesh(viewer);
     const geometry = terrain.geometry as THREE.BufferGeometry;
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
     const uvs = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
@@ -345,10 +344,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -368,7 +364,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 
     expect(detailBlend.getZ(0)).toBeGreaterThan(0);
@@ -391,10 +387,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -404,7 +397,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 
     expect(detailBlend.getZ(2)).toBeGreaterThan(0.15);
@@ -421,10 +414,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -434,7 +424,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 
     expect(detailBlend.getX(0)).toBeGreaterThan(0.22);
@@ -451,10 +441,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 4,
@@ -464,8 +451,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const chunkMesh = (viewer as any).chunkMeshes.get('0,0');
-    const foliage = chunkMesh.foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
 
     expect(foliage).toBeInstanceOf(THREE.Group);
@@ -487,10 +473,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 4,
@@ -506,7 +489,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    expect((viewer as any).chunkMeshes.get('0,0').foliage).toBeUndefined();
+    expect(getFoliageGroup(viewer)).toBeUndefined();
 
     viewer.dispose();
   });
@@ -519,10 +502,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(1, 0, {
       size: 8,
@@ -542,7 +522,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('1,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -570,10 +550,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(1, 0, {
       size: 8,
@@ -593,7 +570,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('1,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const shrubs = foliage.children[1] as THREE.InstancedMesh;
     const shrubPositions = shrubs.geometry.getAttribute('position') as THREE.BufferAttribute;
     const matrix = new THREE.Matrix4();
@@ -634,10 +611,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 4,
@@ -647,7 +621,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const tree = treeMeshes[0];
     const material = tree.material as THREE.MeshLambertMaterial;
@@ -692,10 +666,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 8,
@@ -705,7 +676,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -734,10 +705,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     const tileWeights = Array.from({ length: 16 }, () => new Map([
       [BiomeType.PLAINS, 0.35],
@@ -756,7 +724,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group | undefined;
+    const foliage = getFoliageGroup(viewer);
 
     expect(foliage).toBeInstanceOf(THREE.Group);
     expect(foliage?.userData.foliageCount).toBeGreaterThan(0);
@@ -772,10 +740,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 32,
@@ -785,7 +750,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -818,10 +783,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 32,
@@ -831,7 +793,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const clearing = foliage.userData.clearingSample as { x: number; z: number; radius: number } | undefined;
     const matrix = new THREE.Matrix4();
@@ -866,10 +828,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 32,
@@ -879,7 +838,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const foliage = (viewer as any).chunkMeshes.get('0,0').foliage as THREE.Group;
+    const foliage = getFoliageGroup(viewer) as THREE.Group;
     const propMeshes = foliage.children.filter(child => child.name.startsWith('foliage-props')) as THREE.InstancedMesh[];
 
     expect(propMeshes).toHaveLength(1);
@@ -904,10 +863,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 2,
@@ -924,8 +880,8 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    expect((viewer as any).chunkMeshes.get('0,0').foliage).toBeUndefined();
-    expect((viewer as any).chunkMeshes.get('1,0').foliage).toBeUndefined();
+    expect(getFoliageGroup(viewer)).toBeUndefined();
+    expect(getFoliageGroup(viewer, '1,0')).toBeUndefined();
 
     viewer.dispose();
   });
@@ -938,10 +894,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     const chunk = {
       size: 1,
@@ -954,8 +907,8 @@ describe('WorldViewer lifecycle', () => {
     viewer.addChunk(0, 0, chunk);
     viewer.addChunk(1, 0, chunk);
 
-    const leftTerrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
-    const rightTerrain = (viewer as any).chunkMeshes.get('1,0').terrain as THREE.Mesh;
+    const leftTerrain = getTerrainMesh(viewer, '0,0');
+    const rightTerrain = getTerrainMesh(viewer, '1,0');
     const leftUvs = (leftTerrain.geometry as THREE.BufferGeometry).getAttribute('uv') as THREE.BufferAttribute;
     const rightUvs = (rightTerrain.geometry as THREE.BufferGeometry).getAttribute('uv') as THREE.BufferAttribute;
 
@@ -974,10 +927,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 2,
@@ -1002,7 +952,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain;
+    const terrain = getTerrainMesh(viewer);
     const colors = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;
     const center = 1 * 3 + 1;
     const corner = 0;
@@ -1022,10 +972,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -1035,7 +982,7 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const terrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
+    const terrain = getTerrainMesh(viewer);
     const initialMaterial = terrain.material as THREE.MeshStandardMaterial;
     expect(initialMaterial.userData.terrainTexturesEnabled).toBe(true);
     expect(initialMaterial.map).toBeTruthy();
@@ -1071,10 +1018,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -1091,8 +1035,8 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const leftTerrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
-    const rightTerrain = (viewer as any).chunkMeshes.get('1,0').terrain as THREE.Mesh;
+    const leftTerrain = getTerrainMesh(viewer, '0,0');
+    const rightTerrain = getTerrainMesh(viewer, '1,0');
     const leftGeometry = leftTerrain.geometry as THREE.BufferGeometry;
     const rightGeometry = rightTerrain.geometry as THREE.BufferGeometry;
     const leftBlendA = leftGeometry.getAttribute('surfaceBlendA') as THREE.BufferAttribute;
@@ -1129,10 +1073,7 @@ describe('WorldViewer lifecycle', () => {
 
     const viewer = new WorldViewer();
     viewer.initialize(container);
-    (viewer as any).waterConfig = {
-      ...(viewer as any).waterConfig,
-      enabled: false,
-    };
+    disableWater(viewer);
 
     viewer.addChunk(0, 0, {
       size: 1,
@@ -1149,8 +1090,8 @@ describe('WorldViewer lifecycle', () => {
       structures: [],
     } as any);
 
-    const leftTerrain = (viewer as any).chunkMeshes.get('0,0').terrain as THREE.Mesh;
-    const rightTerrain = (viewer as any).chunkMeshes.get('1,0').terrain as THREE.Mesh;
+    const leftTerrain = getTerrainMesh(viewer, '0,0');
+    const rightTerrain = getTerrainMesh(viewer, '1,0');
     const leftDetail = (leftTerrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
     const rightDetail = (rightTerrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 

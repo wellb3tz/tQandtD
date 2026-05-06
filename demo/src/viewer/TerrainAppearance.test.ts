@@ -1,0 +1,97 @@
+import * as THREE from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createTerrainMaterial,
+  replaceTerrainMaterial,
+  setTerrainWireframe,
+  updateTerrainBiomeColors,
+} from './TerrainAppearance';
+import type { TerrainSurfaceTextureLibrary } from './materials';
+
+describe('TerrainAppearance', () => {
+  it('switches terrain materials between textured and biome-color modes', () => {
+    const terrainTextures = createTestTerrainTextures();
+
+    const textured = createTerrainMaterial({
+      terrainTextures,
+      terrainTexturesEnabled: true,
+      wireframeMode: false,
+    });
+    const colorOnly = createTerrainMaterial({
+      terrainTextures,
+      terrainTexturesEnabled: false,
+      wireframeMode: true,
+    });
+
+    expect(textured.userData.terrainTexturesEnabled).toBe(true);
+    expect(textured.map).toBeTruthy();
+    expect(colorOnly.userData.terrainTexturesEnabled).toBe(false);
+    expect(colorOnly.map).toBeNull();
+    expect(colorOnly.wireframe).toBe(true);
+    textured.dispose();
+    colorOnly.dispose();
+  });
+
+  it('converts terrain colors to grayscale and restores original biome colors', () => {
+    const mesh = createColorMesh(new Float32Array([
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+    ]));
+    const colors = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+
+    updateTerrainBiomeColors(mesh, false);
+
+    expect(colors.getX(0)).toBeCloseTo(colors.getY(0));
+    expect(colors.getY(0)).toBeCloseTo(colors.getZ(0));
+    expect(mesh.userData.originalColors).toBeInstanceOf(Float32Array);
+
+    updateTerrainBiomeColors(mesh, true);
+
+    expect(colors.getX(0)).toBeCloseTo(1);
+    expect(colors.getY(0)).toBeCloseTo(0);
+    expect(colors.getZ(0)).toBeCloseTo(0);
+    expect(colors.getX(1)).toBeCloseTo(0);
+    expect(colors.getY(1)).toBeCloseTo(1);
+    expect(colors.getZ(1)).toBeCloseTo(0);
+  });
+
+  it('updates wireframe and preserves opacity when replacing material', () => {
+    const mesh = createColorMesh(new Float32Array([1, 1, 1]));
+    const previous = mesh.material as THREE.MeshStandardMaterial;
+    previous.transparent = true;
+    previous.opacity = 0.5;
+    previous.dispose = vi.fn();
+
+    setTerrainWireframe(mesh, true);
+    expect(previous.wireframe).toBe(true);
+
+    const next = new THREE.MeshStandardMaterial();
+    replaceTerrainMaterial(mesh, next);
+
+    expect(previous.dispose).toHaveBeenCalledOnce();
+    expect(next.transparent).toBe(true);
+    expect(next.opacity).toBe(0.5);
+    expect(mesh.material).toBe(next);
+  });
+});
+
+function createColorMesh(colors: Float32Array): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(colors.length), 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ vertexColors: true }));
+}
+
+function createTestTerrainTextures(): TerrainSurfaceTextureLibrary {
+  const texture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  texture.needsUpdate = true;
+
+  return {
+    albedoAtlas: texture,
+    plains: {
+      albedo: texture,
+      normal: texture,
+      roughness: texture,
+    },
+  } as TerrainSurfaceTextureLibrary;
+}

@@ -87,12 +87,20 @@ export class GeometryPools {
   private vector3Pool: ObjectPool<PoolableVector3>;
   private colorPool: ObjectPool<PoolableColor>;
   private float32Pools: Map<number, ObjectPool<PoolableFloat32Array>>;
+  private geometryWrappers: Map<THREE.BufferGeometry, PoolableGeometry>;
+  private vector3Wrappers: Map<THREE.Vector3, PoolableVector3>;
+  private colorWrappers: Map<THREE.Color, PoolableColor>;
+  private float32Wrappers: Map<Float32Array, PoolableFloat32Array>;
 
   constructor() {
     this.geometryPool = new ObjectPool(() => new PoolableGeometry(), 20, 100);
     this.vector3Pool = new ObjectPool(() => new PoolableVector3(), 50, 200);
     this.colorPool = new ObjectPool(() => new PoolableColor(), 20, 100);
     this.float32Pools = new Map();
+    this.geometryWrappers = new Map();
+    this.vector3Wrappers = new Map();
+    this.colorWrappers = new Map();
+    this.float32Wrappers = new Map();
   }
 
   /**
@@ -100,6 +108,7 @@ export class GeometryPools {
    */
   acquireGeometry(): THREE.BufferGeometry {
     const poolable = this.geometryPool.acquire();
+    this.geometryWrappers.set(poolable.geometry, poolable);
     return poolable.geometry;
   }
 
@@ -107,11 +116,11 @@ export class GeometryPools {
    * Release a BufferGeometry back to the pool
    */
   releaseGeometry(geometry: THREE.BufferGeometry): void {
-    // Find the poolable wrapper
-    // Note: This is a simplified approach. In production, you'd want to track
-    // the mapping between geometries and their poolable wrappers.
-    const poolable = new PoolableGeometry();
-    poolable.geometry = geometry;
+    const poolable = this.geometryWrappers.get(geometry);
+    if (!poolable) {
+      return;
+    }
+    this.geometryWrappers.delete(geometry);
     this.geometryPool.release(poolable);
   }
 
@@ -120,6 +129,7 @@ export class GeometryPools {
    */
   acquireVector3(): THREE.Vector3 {
     const poolable = this.vector3Pool.acquire();
+    this.vector3Wrappers.set(poolable.vector, poolable);
     return poolable.vector;
   }
 
@@ -127,8 +137,11 @@ export class GeometryPools {
    * Release a Vector3 back to the pool
    */
   releaseVector3(vector: THREE.Vector3): void {
-    const poolable = new PoolableVector3();
-    poolable.vector = vector;
+    const poolable = this.vector3Wrappers.get(vector);
+    if (!poolable) {
+      return;
+    }
+    this.vector3Wrappers.delete(vector);
     this.vector3Pool.release(poolable);
   }
 
@@ -137,6 +150,7 @@ export class GeometryPools {
    */
   acquireColor(): THREE.Color {
     const poolable = this.colorPool.acquire();
+    this.colorWrappers.set(poolable.color, poolable);
     return poolable.color;
   }
 
@@ -144,8 +158,11 @@ export class GeometryPools {
    * Release a Color back to the pool
    */
   releaseColor(color: THREE.Color): void {
-    const poolable = new PoolableColor();
-    poolable.color = color;
+    const poolable = this.colorWrappers.get(color);
+    if (!poolable) {
+      return;
+    }
+    this.colorWrappers.delete(color);
     this.colorPool.release(poolable);
   }
 
@@ -162,6 +179,7 @@ export class GeometryPools {
 
     const pool = this.float32Pools.get(size)!;
     const poolable = pool.acquire();
+    this.float32Wrappers.set(poolable.array, poolable);
     return poolable.array;
   }
 
@@ -171,10 +189,10 @@ export class GeometryPools {
   releaseFloat32Array(array: Float32Array): void {
     const size = array.length;
     const pool = this.float32Pools.get(size);
-    
-    if (pool) {
-      const poolable = new PoolableFloat32Array(size);
-      poolable.array = array;
+
+    const poolable = this.float32Wrappers.get(array);
+    if (pool && poolable) {
+      this.float32Wrappers.delete(array);
       pool.release(poolable);
     }
   }
@@ -201,6 +219,13 @@ export class GeometryPools {
     this.geometryPool.clear();
     this.vector3Pool.clear();
     this.colorPool.clear();
+    for (const pool of this.float32Pools.values()) {
+      pool.clear();
+    }
     this.float32Pools.clear();
+    this.geometryWrappers.clear();
+    this.vector3Wrappers.clear();
+    this.colorWrappers.clear();
+    this.float32Wrappers.clear();
   }
 }
