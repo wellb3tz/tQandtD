@@ -3,7 +3,7 @@
  * Uses WorldViewer.raycastTerrain() to get hit info, then looks up ChunkData.
  */
 
-import { DemoApp } from '../core/DemoApp';
+import { WorldApp } from '../core/WorldApp';
 import { ChunkData } from '../../../src/index';
 
 const BIOME_NAMES: Record<number, string> = {
@@ -38,7 +38,7 @@ function getLakeAtTile(chunk: ChunkData, tileIndex: number): number | null {
 
 export class TerrainTooltip {
   private el: HTMLElement | null = null;
-  private app: DemoApp | null = null;
+  private app: WorldApp | null = null;
   private viewer: any = null;
   private visible = false;
   private rafId: number | null = null;
@@ -46,7 +46,7 @@ export class TerrainTooltip {
   private lastY = 0;
   private dirty = false;
 
-  initialize(app: DemoApp, viewer: any): void {
+  initialize(app: WorldApp, viewer: any): void {
     this.app    = app;
     this.viewer = viewer;
 

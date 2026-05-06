@@ -5,11 +5,11 @@
 ```
 procedural-world-engine/
 ├── src/              # Core library source code
-├── demo/             # Interactive demo application
+├── app/              # Interactive world application
 ├── examples/         # Usage examples and tutorials
 ├── tests/            # Test suites (integration, property-based)
 ├── dist/             # Compiled library output (gitignored)
-├── dist-demo/        # Compiled demo output (gitignored)
+├── dist-app/         # Compiled app output (gitignored)
 └── scripts/          # Build and verification scripts
 ```
 
@@ -47,26 +47,26 @@ Specialized generators for world features:
 - `index.ts`: Main library exports (public API)
 - `worker.ts`: Web Worker support for non-blocking generation
 
-## Demo Application (`demo/`)
+## Interactive App (`app/`)
 
 ### Structure
 ```
-demo/
+app/
 ├── index.html           # Entry HTML
 ├── main.ts              # Application entry point
 ├── styles.css           # Global styles
 ├── worker-loader.ts     # Worker initialization
 ├── public/              # Static assets
 └── src/
-    ├── core/            # Demo application core (DemoApp)
+    ├── core/            # App core (WorldApp)
     ├── viewer/          # Three.js 3D rendering
     ├── editor/          # Terrain editing tools
     ├── ui/              # UI components (controls, stats, modals)
-    └── utils/           # Demo-specific utilities
+    └── utils/           # App-specific utilities
 ```
 
-### Demo Components
-- **DemoApp**: Main application orchestrator
+### App Components
+- **WorldApp**: Main application orchestrator
 - **WorldViewer**: Three.js scene management and rendering
 - **TerrainEditor**: Interactive terrain modification
 - **ControlPanel**: User controls for generation parameters
@@ -91,7 +91,7 @@ Self-contained usage examples demonstrating specific features:
 - `tests/validation.test.ts`: Configuration validation tests
 - `tests/error-handling.test.ts`: Error recovery and handling tests
 - `tests/performance.test.ts`: Performance benchmarks and memory usage tests
-- `demo/src/**/*.test.ts`: Co-located unit tests with demo source
+- `app/src/**/*.test.ts`: Co-located unit tests with app source
 
 ### Test Patterns
 - Unit tests: Co-located with source files (`.test.ts`)
@@ -159,5 +159,5 @@ Advanced features (3D noise, enhanced biomes, lakes, worker pool) are opt-in via
 
 - Use relative imports within the library
 - Export public API through `src/index.ts`
-- Demo imports library via alias: `'procedural-world-engine'`
+- App imports library via alias: `'procedural-world-engine'`
 - Test files import directly from source for better coverage

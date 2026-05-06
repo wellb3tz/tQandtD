@@ -3,12 +3,12 @@
  * Does NOT create or clear any markup — all structure is in index.html.
  */
 
-import { DemoApp, AppState } from '../core/DemoApp';
+import { WorldApp, AppState } from '../core/WorldApp';
 import { BiomeType, ResourceType, StructureType } from '../../../src/index';
 
 export class StatisticsDisplay {
   private container: HTMLElement | null = null;
-  private app: DemoApp | null = null;
+  private app: WorldApp | null = null;
 
   // Bound elements
   private chunkCountElement:    HTMLElement | null = null;
@@ -220,7 +220,7 @@ export class StatisticsDisplay {
     this.updateStructureCounts(s.structureCounts);
   }
 
-  setApp(app: DemoApp): void {
+  setApp(app: WorldApp): void {
     this.app = app;
     app.subscribeToState((state: AppState) => {
       if (state.loadedChunkCount !== this.lastLoadedChunkCount) {

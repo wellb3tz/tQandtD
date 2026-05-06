@@ -5,7 +5,7 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { DemoApp, AppState, TerrainTool } from '../core/DemoApp';
+import { WorldApp, AppState, TerrainTool } from '../core/WorldApp';
 import type { WorldConfig } from '../../../src/world/chunk-manager';
 import { DEFAULT_RIVER_CONFIG } from '../../../src/gen/rivers';
 import { TerrainEditor } from '../editor/TerrainEditor';
@@ -79,7 +79,7 @@ const ELEMENT_IDS = {
  * ControlPanel class - Manages all UI controls for parameter adjustment
  */
 export class ControlPanel {
-  private app: DemoApp | null = null;
+  private app: WorldApp | null = null;
   private terrainEditor: TerrainEditor | null = null;
   private container: HTMLElement | null = null;
   private parameterChangeCallbacks: Set<ParameterChangeCallback> = new Set();
@@ -90,7 +90,7 @@ export class ControlPanel {
   /**
    * Initialize the control panel
    */
-  initialize(container: HTMLElement, app: DemoApp, terrainEditor?: TerrainEditor): void {
+  initialize(container: HTMLElement, app: WorldApp, terrainEditor?: TerrainEditor): void {
     this.container = container;
     this.app = app;
     this.terrainEditor = terrainEditor || null;

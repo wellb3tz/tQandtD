@@ -21,13 +21,13 @@
     "baseUrl": ".",
     "paths": {
       "@engine/*": ["src/*"],
-      "@core/*": ["demo/src/core/*"],
-      "@viewer/*": ["demo/src/viewer/*"],
-      "@ui/*": ["demo/src/ui/*"],
-      "@editor/*": ["demo/src/editor/*"],
-      "@utils/*": ["demo/src/utils/*"]
+      "@core/*": ["app/src/core/*"],
+      "@viewer/*": ["app/src/viewer/*"],
+      "@ui/*": ["app/src/ui/*"],
+      "@editor/*": ["app/src/editor/*"],
+      "@utils/*": ["app/src/utils/*"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "dist-demo", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "dist-app", "**/*.test.ts"]
 }

@@ -2,7 +2,7 @@
  * ErrorHandler - Centralized error handling and user feedback system
  * 
  * Provides error toast notifications, error dialogs, validation, and fallback strategies
- * for various error scenarios in the demo application.
+ * for various error scenarios in the world application.
  */
 
 /**
@@ -31,7 +31,7 @@ export enum ErrorSeverity {
 /**
  * Custom error class with additional metadata
  */
-export class DemoError extends Error {
+export class AppError extends Error {
   constructor(
     message: string,
     public category: ErrorCategory,
@@ -41,7 +41,7 @@ export class DemoError extends Error {
     public originalError?: Error
   ) {
     super(message);
-    this.name = 'DemoError';
+    this.name = 'AppError';
   }
 }
 
@@ -99,11 +99,11 @@ export class ErrorHandler {
   /**
    * Handle an error with appropriate user feedback
    */
-  handleError(error: DemoError | Error): void {
-    // Convert to DemoError if needed
-    const demoError = error instanceof DemoError
+  handleError(error: AppError | Error): void {
+    // Convert to AppError if needed
+    const appError = error instanceof AppError
       ? error
-      : new DemoError(
+      : new AppError(
           error.message,
           ErrorCategory.GENERATION,
           ErrorSeverity.ERROR,
@@ -113,13 +113,13 @@ export class ErrorHandler {
         );
 
     // Log to console
-    this.logError(demoError);
+    this.logError(appError);
 
     // Show appropriate user feedback based on severity
-    if (demoError.severity === ErrorSeverity.CRITICAL) {
+    if (appError.severity === ErrorSeverity.CRITICAL) {
       this.showErrorDialog(
         'Critical Error',
-        demoError.userMessage,
+        appError.userMessage,
         [
           {
             label: 'Reload Page',
@@ -132,16 +132,16 @@ export class ErrorHandler {
           }
         ]
       );
-    } else if (demoError.severity === ErrorSeverity.ERROR) {
-      this.showErrorToast(demoError.userMessage, 5000);
-    } else if (demoError.severity === ErrorSeverity.WARNING) {
-      this.showWarningToast(demoError.userMessage, 4000);
+    } else if (appError.severity === ErrorSeverity.ERROR) {
+      this.showErrorToast(appError.userMessage, 5000);
+    } else if (appError.severity === ErrorSeverity.WARNING) {
+      this.showWarningToast(appError.userMessage, 4000);
     } else {
-      this.showInfoToast(demoError.userMessage, 3000);
+      this.showInfoToast(appError.userMessage, 3000);
     }
 
     // Apply fallback strategy if available
-    this.applyFallback(demoError);
+    this.applyFallback(appError);
   }
 
   /**
@@ -338,7 +338,7 @@ export class ErrorHandler {
   /**
    * Log error to console with details
    */
-  logError(error: DemoError): void {
+  logError(error: AppError): void {
     const logLevel = error.severity === ErrorSeverity.CRITICAL || error.severity === ErrorSeverity.ERROR
       ? 'error'
       : error.severity === ErrorSeverity.WARNING
@@ -356,7 +356,7 @@ export class ErrorHandler {
   /**
    * Apply fallback strategy based on error category
    */
-  private applyFallback(error: DemoError): void {
+  private applyFallback(error: AppError): void {
     if (!error.recoverable) return;
 
     switch (error.category) {

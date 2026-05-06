@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export default defineConfig({
-  root: 'demo',
+  root: 'app',
   base: './',
   server: {
     port: 3000,
@@ -15,15 +15,15 @@ export default defineConfig({
     alias: {
       'procedural-world-engine': resolve(__dirname, './src/index.ts'),
       '@engine': resolve(__dirname, './src'),
-      '@core': resolve(__dirname, './demo/src/core'),
-      '@viewer': resolve(__dirname, './demo/src/viewer'),
-      '@ui': resolve(__dirname, './demo/src/ui'),
-      '@editor': resolve(__dirname, './demo/src/editor'),
-      '@utils': resolve(__dirname, './demo/src/utils')
+      '@core': resolve(__dirname, './app/src/core'),
+      '@viewer': resolve(__dirname, './app/src/viewer'),
+      '@ui': resolve(__dirname, './app/src/ui'),
+      '@editor': resolve(__dirname, './app/src/editor'),
+      '@utils': resolve(__dirname, './app/src/utils')
     }
   },
   build: {
-    outDir: '../dist-demo',
+    outDir: '../dist-app',
     emptyOutDir: true,
     target: 'es2020',
     minify: 'terser',
@@ -37,7 +37,7 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'demo/index.html')
+        main: resolve(__dirname, 'app/index.html')
       },
       output: {
         manualChunks: {

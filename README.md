@@ -24,7 +24,7 @@ npm install procedural-world-engine
 ```
 
 > **Runtime dependency**: `pako` is installed automatically and used for world serialization with compression.
-> Three.js is only needed if you use the demo application.
+> Three.js is only needed if you use the interactive app.
 
 ## Documentation
 
@@ -365,17 +365,17 @@ import { poissonDiskSampling } from 'procedural-world-engine';
 const points = poissonDiskSampling({ width: 100, height: 100, minDistance: 10, maxAttempts: 30, seed: 42 });
 ```
 
-## Demo Application
+## Interactive App
 
-The repository includes a full 3D demo built with Three.js:
+The repository includes a full 3D world app built with Three.js:
 
 ```bash
-npm run demo        # Dev server on http://localhost:3000
-npm run build:demo  # Production build → dist-demo/
+npm run app         # Dev server on http://localhost:3000
+npm run build:app   # Production build → dist-app/
 npm run preview     # Preview production build
 ```
 
-**Demo features:**
+**App features:**
 - FPS camera (WASD + mouse, Shift for speed boost)
 - Top-down orthographic view
 - Biome color blending with micro-biome tinting
@@ -427,9 +427,9 @@ src/
 ├── index.ts        # Public API
 └── worker.ts       # Web Worker entry point
 
-demo/
+app/
 ├── src/
-│   ├── core/       # DemoApp — state management
+│   ├── core/       # WorldApp — state management
 │   ├── viewer/     # Three.js scene, water layer, materials
 │   ├── editor/     # Terrain editing tools
 │   ├── ui/         # Control panel, stats, minimap, tooltips

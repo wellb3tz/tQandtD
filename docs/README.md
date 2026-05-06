@@ -31,7 +31,7 @@ Welcome to the Procedural World Engine documentation!
 
 ## 🎯 Quick Links
 
-- [Live Demo](https://your-demo-url.com) - Try it in your browser
+- [Live App](https://your-app-url.com) - Try it in your browser
 - [GitHub Repository](https://github.com/your-repo) - Source code
 - [Issue Tracker](https://github.com/your-repo/issues) - Report bugs
 

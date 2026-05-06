@@ -3,7 +3,7 @@
  * Draws biome colors per chunk, camera position marker, and heading arrow.
  */
 
-import { DemoApp } from '../core/DemoApp';
+import { WorldApp } from '../core/WorldApp';
 import { BIOME_COLORS } from '../viewer/materials';
 import { BiomeType } from '../../../src/index';
 
@@ -17,7 +17,7 @@ const BIOME_NAMES: Record<number, string> = {
 export class Minimap {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private app: DemoApp | null = null;
+  private app: WorldApp | null = null;
   private getHeading: (() => number) | null = null;
   private getCamPos: (() => { x: number; y: number; z: number }) | null = null;
   private lastDrawnChunks: unknown = null;
@@ -29,7 +29,7 @@ export class Minimap {
 
   initialize(
     canvas: HTMLCanvasElement,
-    app: DemoApp,
+    app: WorldApp,
     getHeading: () => number,
     getCamPos: () => { x: number; y: number; z: number }
   ): void {

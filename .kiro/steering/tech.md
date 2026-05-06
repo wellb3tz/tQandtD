@@ -21,16 +21,16 @@
 ## Key Dependencies
 
 - **pako 2.1+**: Compression for world serialization
-- **three.js 0.160+**: 3D rendering (demo only, peer dependency)
+- **three.js 0.160+**: 3D rendering (interactive app only, peer dependency)
 
 ## Common Commands
 
 ### Development
 ```bash
-npm run demo              # Start Vite dev server on port 3000
+npm run app               # Start Vite dev server on port 3000
 npm run build             # Compile TypeScript library to dist/
-npm run build:demo        # Build demo application to dist-demo/
-npm run preview           # Preview production demo build
+npm run build:app         # Build interactive app to dist-app/
+npm run preview           # Preview production app build
 ```
 
 ### Testing
@@ -66,7 +66,7 @@ Comprehensive documentation in `docs/` directory:
 - **No Unused**: Enforces no unused locals or parameters
 - **No Implicit Returns**: All code paths must return
 - **Declaration Maps**: Generated for debugging
-- **Source Maps**: Enabled for both library and demo
+- **Source Maps**: Enabled for both library and app
 
 ## Code Quality Standards
 

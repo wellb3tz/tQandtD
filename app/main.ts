@@ -1,16 +1,18 @@
 /**
- * Main entry point for the Comprehensive Engine Demo
+ * Main entry point for the tQandtD world app
  * 
- * This demo application showcases all features of the procedural world generation engine
+ * This application showcases all features of the procedural world generation engine
  * through an interactive 3D visualization interface built with Three.js.
  */
 
 // Import styles
 import './styles.css';
 
-import { DemoApp, AppEvent, TerrainTool } from './src/core/DemoApp';
+import { WorldScene } from '@engine/index';
+import { WorldApp, AppEvent, TerrainTool } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
+import { WorldViewerRendererAdapter } from './src/viewer/WorldViewerRendererAdapter';
 import { TerrainEditor } from './src/editor/TerrainEditor';
 import { WorldManager } from './src/ui/WorldManager';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
@@ -18,14 +20,16 @@ import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
 import { Minimap } from './src/ui/Minimap';
 import { TerrainTooltip } from './src/ui/TerrainTooltip';
 import { HelpModal } from './src/ui/HelpModal';
-import { errorHandler, ErrorCategory, ErrorSeverity, DemoError } from './src/utils/ErrorHandler';
+import { errorHandler, ErrorCategory, ErrorSeverity, AppError } from './src/utils/ErrorHandler';
 
-console.log('tQandtD project Demo - Initializing...');
+console.log('tQandtD project - Initializing...');
 
 // Global app instance
-let app: DemoApp | null = null;
+let app: WorldApp | null = null;
 let controlPanelInstance: ControlPanel | null = null;
 let worldViewer: WorldViewer | null = null;
+let worldRenderer: WorldViewerRendererAdapter | null = null;
+let worldScene: WorldScene | null = null;
 let terrainEditor: TerrainEditor | null = null;
 let worldManager: WorldManager | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
@@ -41,12 +45,12 @@ let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('DOM loaded, setting up demo application...');
+  console.log('DOM loaded, setting up world application...');
   
   // Check WebGL compatibility first (Requirement 18.4)
   const webglCheck = errorHandler.checkWebGLCompatibility();
   if (!webglCheck.supported) {
-    errorHandler.handleError(new DemoError(
+    errorHandler.handleError(new AppError(
       'WebGL not supported',
       ErrorCategory.WEBGL,
       ErrorSeverity.CRITICAL,
@@ -110,9 +114,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (seedInput) seedInput.value = randomSeed.toString();
   });
   
-  // Initialize DemoApp
+  // Initialize application core
   try {
-    app = new DemoApp();
+    app = new WorldApp();
     await app.initialize();
     
     // Initialize WorldViewer
@@ -120,9 +124,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (viewerContainer) {
       worldViewer = new WorldViewer();
       worldViewer.initialize(viewerContainer);
+      worldRenderer = new WorldViewerRendererAdapter({ viewer: worldViewer });
+      const chunkManager = app.getState().chunkManager;
+      if (chunkManager) {
+        worldScene = new WorldScene({
+          world: chunkManager,
+          renderer: worldRenderer,
+          input: false,
+          movement: false,
+          streaming: false,
+          player: false,
+        });
+      }
       console.log('WorldViewer initialized successfully');
       
-      // Apply initial visibility state from DemoApp
+      // Apply initial visibility state from application core
       const initialState = app.getState();
       worldViewer.setVisibility(RenderLayer.TERRAIN, initialState.showTerrain);
       worldViewer.setVisibility(RenderLayer.BIOMES, initialState.showBiomes);
@@ -311,6 +327,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
         if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
         if (performanceTimer !== null) clearInterval(performanceTimer);
+        if (worldScene) worldScene.dispose();
         if (worldViewer) worldViewer.dispose();
         if (app) app.destroy();
       });
@@ -487,6 +504,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
+      const chunkManager = app?.getState().chunkManager;
+      if (chunkManager && worldScene) {
+        worldScene.setWorld(chunkManager);
+      }
       if (worldViewer) {
         worldViewer.clearChunks();
         worldViewer.clearFogOfWar();
@@ -499,22 +520,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     app.on(AppEvent.CHUNK_LOADED, (data) => {
-      // Add chunk to viewer
-      if (worldViewer) {
-        worldViewer.addChunk(data.chunkX, data.chunkY, data.chunk, data.partial, data.stage);
+      if (!data.partial && data.stage === undefined && worldScene?.renderSystem) {
+        worldScene.renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
+      } else if (worldRenderer) {
+        worldRenderer.addChunk(data.chunk, { x: data.chunkX, y: data.chunkY }, {
+          partial: data.partial,
+          stage: data.stage,
+        });
       }
     });
 
     app.on(AppEvent.CHUNK_UPDATED, (data) => {
-      if (worldViewer) {
-        worldViewer.updateChunk(data.chunkX, data.chunkY, data.chunk);
+      if (worldRenderer) {
+        worldRenderer.updateChunk(data.chunk, { x: data.chunkX, y: data.chunkY });
       }
     });
     
     app.on(AppEvent.CHUNK_UNLOADED, (data) => {
-      // Remove chunk from viewer
-      if (worldViewer) {
-        worldViewer.removeChunk(data.chunkX, data.chunkY, data.keepFogOfWar || false);
+      if (!data.keepFogOfWar && worldScene?.renderSystem) {
+        worldScene.renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
+      } else if (worldRenderer) {
+        worldRenderer.removeChunk({ x: data.chunkX, y: data.chunkY }, {
+          keepFogOfWar: data.keepFogOfWar || false,
+        });
       }
     });
     
@@ -568,7 +596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     app.on(AppEvent.ERROR, (data) => {
-      errorHandler.handleError(new DemoError(
+      errorHandler.handleError(new AppError(
         data.message,
         ErrorCategory.GENERATION,
         ErrorSeverity.ERROR,
@@ -603,16 +631,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }) as EventListener);
     
-    console.log('DemoApp initialized successfully');
+    console.log('Application core initialized successfully');
   } catch (error) {
-    console.error('Failed to initialize DemoApp:', error);
+    console.error('Failed to initialize application core:', error);
     
     // Clean up any timers that might have been created
     if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
     if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
     if (performanceTimer !== null) clearInterval(performanceTimer);
     
-    errorHandler.handleError(new DemoError(
+    errorHandler.handleError(new AppError(
       'Application initialization failed',
       ErrorCategory.INITIALIZATION,
       ErrorSeverity.CRITICAL,
@@ -811,7 +839,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('Failed to generate world:', error);
       errorHandler.hideProgress(progressId);
-      errorHandler.handleError(new DemoError(
+      errorHandler.handleError(new AppError(
         'World generation failed',
         ErrorCategory.GENERATION,
         ErrorSeverity.ERROR,
@@ -847,7 +875,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   
-  console.log('Demo application initialized successfully');
+  console.log('World application initialized successfully');
 });
 
 /**

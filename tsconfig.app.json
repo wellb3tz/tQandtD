@@ -3,18 +3,18 @@
   "compilerOptions": {
     "module": "ESNext",
     "rootDir": ".",
-    "outDir": "./dist-demo",
+    "outDir": "./dist-app",
     "types": ["vite/client"],
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": [
     "src/**/*",
-    "demo/**/*"
+    "app/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "dist-demo",
+    "dist-app",
     "**/*.test.ts"
   ]
 }

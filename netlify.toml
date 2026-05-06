@@ -1,12 +1,12 @@
-# Netlify configuration for tQandtD project Demo
+# Netlify configuration for tQandtD project app
 # Deployment: https://app.netlify.com/
 
 [build]
   # Build command
-  command = "npm run build:demo"
+  command = "npm run build:app"
   
   # Output directory
-  publish = "dist-demo"
+  publish = "dist-app"
   
   # Node version
   environment = { NODE_VERSION = "18" }

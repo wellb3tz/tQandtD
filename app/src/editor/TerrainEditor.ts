@@ -9,7 +9,7 @@
  */
 
 import * as THREE from 'three';
-import { DemoApp, TerrainTool } from '../core/DemoApp';
+import { WorldApp, TerrainTool } from '../core/WorldApp';
 import { WorldViewer } from '../viewer/WorldViewer';
 
 /**
@@ -38,7 +38,7 @@ interface HistoryEntry {
  * TerrainEditor - Provides terrain modification tools and brush controls
  */
 export class TerrainEditor {
-  private app: DemoApp | null;
+  private app: WorldApp | null;
   private viewer: WorldViewer | null;
   
   // Current tool and brush settings
@@ -81,7 +81,7 @@ export class TerrainEditor {
   /**
    * Initialize the terrain editor
    */
-  initialize(app: DemoApp, viewer: WorldViewer): void {
+  initialize(app: WorldApp, viewer: WorldViewer): void {
     this.app = app;
     this.viewer = viewer;
     

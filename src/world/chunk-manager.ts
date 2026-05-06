@@ -140,7 +140,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private enhancedBiomeSystem: EnhancedBiomeSystem | null;
   private lakeManager: LakeManager | null;
   private riverManager: RiverManager | null;
-  /** @internal exposed for WorkerPool shutdown in DemoApp */ workerPool: WorkerPool | null;
+  /** @internal exposed for WorkerPool shutdown in WorldApp */ workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
   /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
   private maxCacheSize: number;

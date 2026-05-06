@@ -1,6 +1,6 @@
 node_modules/
 dist/
-dist-demo/
+dist-app/
 coverage/
 test-results/
 *.log
@@ -8,9 +8,9 @@ test-results/
 .env
 .worktrees/
 
-# Compiled TypeScript files in demo folder
-demo/**/*.js
-demo/**/*.d.ts
-demo/**/*.js.map
-demo/**/*.d.ts.map
-!demo/vite-env.d.ts
+# Compiled TypeScript files in app source folder
+app/**/*.js
+app/**/*.d.ts
+app/**/*.js.map
+app/**/*.d.ts.map
+!app/vite-env.d.ts

@@ -1,7 +1,7 @@
 /**
  * HelpModal Component
  * 
- * Displays comprehensive documentation and help information for the demo application.
+ * Displays comprehensive documentation and help information for the world application.
  * Includes feature descriptions, keyboard shortcuts, and links to engine documentation.
  * 
  * Requirements: 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7
@@ -55,7 +55,7 @@ export class HelpModal {
       <div class="help-section">
         <h4>🎮 Getting Started</h4>
         <p>
-          This demo showcases the tQandtD project's capabilities through an interactive 3D visualization.
+          This application showcases the tQandtD project's capabilities through an interactive 3D visualization.
           Use the controls on the left to adjust generation parameters, and explore the generated world in the 3D viewer.
         </p>
       </div>

@@ -1,5 +1,5 @@
 /**
- * DemoApp - Core application class for the Comprehensive Engine Demo
+ * WorldApp - Core application class for the tQandtD world app
  * 
  * Manages application state, coordinates components, and integrates with the
  * procedural world generation engine. Provides state management with reactive
@@ -189,13 +189,13 @@ const DEFAULT_CONFIG: WorldConfig = {
 };
 
 /**
- * DemoApp - Central coordinator for the demo application
+ * WorldApp - Central coordinator for the world application
  * 
  * Manages application lifecycle, state, and component communication.
  * Integrates with ChunkManager for world generation and provides
  * reactive state updates through subscription mechanism.
  */
-export class DemoApp {
+export class WorldApp {
   private state: AppState;
   private subscribers: Set<StateChangeCallback>;
   private eventListeners: Map<AppEvent, Set<EventCallback>>;
@@ -263,7 +263,7 @@ export class DemoApp {
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
-      console.warn('DemoApp already initialized');
+      console.warn('WorldApp already initialized');
       return;
     }
 
@@ -287,12 +287,12 @@ export class DemoApp {
       this.state.config = initConfig;
       
       this.initialized = true;
-      console.log('DemoApp initialized successfully');
+      console.log('WorldApp initialized successfully');
       
       // Notify subscribers of initial state
       this.notifySubscribers();
     } catch (error) {
-      console.error('Failed to initialize DemoApp:', error);
+      console.error('Failed to initialize WorldApp:', error);
       this.emit(AppEvent.ERROR, { message: 'Initialization failed', error });
       throw error;
     }
@@ -581,14 +581,14 @@ export class DemoApp {
   updateEngineConfig(config: Partial<WorldConfig>): void {
     // Prevent recursive calls
     if (this.isUpdatingConfig) {
-      console.warn('[DemoApp] Ignoring recursive updateEngineConfig call');
-      console.trace('[DemoApp] Recursive call stack:');
+      console.warn('[WorldApp] Ignoring recursive updateEngineConfig call');
+      console.trace('[WorldApp] Recursive call stack:');
       return;
     }
     
     // Log ALL calls to updateEngineConfig with stack trace
-    console.log('[DemoApp] updateEngineConfig called with:', Object.keys(config));
-    console.trace('[DemoApp] Call stack:');
+    console.log('[WorldApp] updateEngineConfig called with:', Object.keys(config));
+    console.trace('[WorldApp] Call stack:');
     
     this.isUpdatingConfig = true;
     
@@ -627,7 +627,7 @@ export class DemoApp {
       // Shut down old worker pool to prevent memory leaks
       const oldManager = this.state.chunkManager as any;
       if (oldManager?.workerPool) {
-        console.log('[DemoApp] Shutting down old worker pool');
+        console.log('[WorldApp] Shutting down old worker pool');
         oldManager.workerPool.shutdown();
       }
       
@@ -649,7 +649,7 @@ export class DemoApp {
             
             this.state.chunkManager = newManager;
             workerPoolEnabled = true;
-            console.log('[DemoApp] Worker pool enabled successfully');
+            console.log('[WorldApp] Worker pool enabled successfully');
           } catch (error) {
             console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
             newConfig.workerPoolConfig = undefined;
@@ -667,7 +667,7 @@ export class DemoApp {
           // Disabling worker pool
           this.state.chunkManager = new ChunkManager(newConfig);
           workerPoolEnabled = false;
-          console.log('[DemoApp] Worker pool disabled');
+          console.log('[WorldApp] Worker pool disabled');
         }
       } else {
         // Other config changes that require manager recreation
@@ -932,6 +932,6 @@ export class DemoApp {
     this.state.chunkManager = null;
     this.initialized = false;
     
-    console.log('DemoApp destroyed');
+    console.log('WorldApp destroyed');
   }
 }

@@ -6,7 +6,7 @@
  * Displays world checksums and validates data integrity.
  */
 
-import { DemoApp } from '@core/DemoApp';
+import { WorldApp } from '@core/WorldApp';
 import { WorldSerializer, SerializationFormat, SerializationOptions } from '@engine/world/serialization';
 import { errorHandler } from '../utils/ErrorHandler';
 
@@ -31,7 +31,7 @@ export enum ImageFormat {
  * WorldManager - Manages world persistence and export operations
  */
 export class WorldManager {
-  private app: DemoApp | null = null;
+  private app: WorldApp | null = null;
   private serializer: WorldSerializer;
   private saveDialog: HTMLElement | null = null;
   private loadDialog: HTMLElement | null = null;
@@ -45,7 +45,7 @@ export class WorldManager {
   /**
    * Initialize the world manager
    */
-  initialize(app: DemoApp): void {
+  initialize(app: WorldApp): void {
     this.app = app;
     
     // Create dialogs
