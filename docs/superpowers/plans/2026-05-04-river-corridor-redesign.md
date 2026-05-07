@@ -1,4 +1,4 @@
-# River Corridor Redesign Implementation Plan
+﻿# River Corridor Redesign Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -949,3 +949,5 @@ If no tweaks were needed, do not create an empty commit.
 - Spec coverage: corridor data is Task 1, generation and no fake tributaries are Tasks 2 and 6, terrain-first carving is Task 3, channel-contained water is Task 4, serialization/worker preservation is Task 5, demo verification is Task 7.
 - Type consistency: corridor fields are optional on `RiverPoint` so existing tests and transitional data still compile; helpers centralize default behavior.
 - Migration scope: this plan replaces the strip visual path for demo output while keeping the existing route tracer as the first source of centerlines.
+
+

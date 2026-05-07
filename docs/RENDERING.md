@@ -1,4 +1,4 @@
-# Rendering Helpers
+﻿# Rendering Helpers
 
 The `procedural-world-engine/rendering` entrypoint contains renderer-neutral helpers. These helpers do not create DOM nodes, WebGL objects, or Three.js classes. They return plain data that can be consumed by any renderer.
 
@@ -46,3 +46,5 @@ Visibility and stats helpers work with structural objects:
 - `RenderStatsCache`
 
 These helpers are intentionally small and generic so renderer adapters can share behavior without inheriting the app's scene classes.
+
+

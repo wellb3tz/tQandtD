@@ -1,4 +1,4 @@
-# ⚙️ Configuration Guide
+﻿# Configuration Guide
 
 Detailed reference for all configuration options in Procedural World Engine.
 
@@ -64,14 +64,14 @@ Number of tiles per chunk side. Chunks are square.
 **Valid range:** 4 to 256
 
 **Recommended values:**
-- `16` — Fast generation, low memory, more chunks
-- `32` — Balanced (recommended)
-- `64` — Fewer chunks, slower generation
+- `16x16` - Fast generation, low memory, more chunks
+- `32x32` - Balanced (recommended)
+- `64x64` - Fewer chunks, slower generation
 
 **Memory per chunk:**
-- 16×16: ~2 KB
-- 32×32: ~7 KB
-- 64×64: ~28 KB
+- 16x16: ~2 KB
+- 32x32: ~7 KB
+- 64x64: ~28 KB
 
 **Example:**
 ```typescript
@@ -92,12 +92,12 @@ Maximum number of chunks to keep in LRU cache.
 
 **Memory usage:**
 ```
-Total memory = maxCacheSize × memory per chunk
+Total memory = maxCacheSize x memory per chunk
 ```
 
 **Examples:**
 ```typescript
-maxCacheSize: 100   // ~700 KB (32×32 chunks)
+maxCacheSize: 100   // ~700 KB (32x32 chunks)
 maxCacheSize: 500   // ~3.5 MB
 maxCacheSize: 1000  // ~7 MB
 ```
@@ -164,11 +164,11 @@ Base noise frequency. Lower values = larger features.
 **Valid range:** 0.001 to 0.1
 
 **Recommended values:**
-- `0.001` — Continent-sized features
-- `0.005` — Large mountains and valleys
-- `0.01` — Medium terrain (recommended)
-- `0.02` — Small hills
-- `0.05` — Very detailed, noisy terrain
+- `0.001` - Continent-sized features
+- `0.005` - Large mountains and valleys
+- `0.01` - Medium terrain (recommended)
+- `0.02` - Small hills
+- `0.05` - Very detailed, noisy terrain
 
 **Example:**
 ```typescript
@@ -184,10 +184,10 @@ Number of noise layers to combine. More octaves = more detail.
 **Valid range:** 1 to 16
 
 **Recommended values:**
-- `2` — Fast, smooth terrain
-- `4` — Balanced detail (recommended)
-- `6` — High detail
-- `8+` — Very detailed, slower
+- `2` - Fast, smooth terrain
+- `4` - Balanced detail (recommended)
+- `6` - High detail
+- `8+` - Very detailed, slower
 
 **Performance impact:** Each octave adds ~2-3ms per chunk
 
@@ -205,11 +205,11 @@ Amplitude decay per octave. Controls how much each octave contributes.
 **Valid range:** 0 to 1
 
 **Recommended values:**
-- `0.3` — Smooth, gentle terrain
-- `0.5` — Balanced (recommended)
-- `0.7` — Rough, detailed terrain
+- `0.3` - Smooth, gentle terrain
+- `0.5` - Balanced (recommended)
+- `0.7` - Rough, detailed terrain
 
-**Formula:** `amplitude[i] = amplitude[i-1] × persistence`
+**Formula:** `amplitude[i] = amplitude[i-1] x persistence`
 
 **Example:**
 ```typescript
@@ -225,12 +225,12 @@ Frequency multiplier per octave. Controls detail scale.
 **Valid range:** 1 to 4
 
 **Recommended values:**
-- `1.5` — Gradual detail increase
-- `2.0` — Standard (recommended)
-- `2.5` — Sharp detail increase
-- `3.0+` — Very sharp, noisy
+- `1.5` - Gradual detail increase
+- `2.0` - Standard (recommended)
+- `2.5` - Sharp detail increase
+- `3.0+` - Very sharp, noisy
 
-**Formula:** `frequency[i] = frequency[i-1] × lacunarity`
+**Formula:** `frequency[i] = frequency[i-1] x lacunarity`
 
 **Example:**
 ```typescript
@@ -246,11 +246,11 @@ Domain warping intensity. Creates swirls and organic shapes.
 **Valid range:** 0 to 100
 
 **Recommended values:**
-- `0` — No warping (straight noise)
-- `10` — Subtle warping
-- `30` — Moderate warping (recommended)
-- `50` — Strong warping
-- `100` — Extreme warping
+- `0` - No warping (straight noise)
+- `10` - Subtle warping
+- `30` - Moderate warping (recommended)
+- `50` - Strong warping
+- `100` - Extreme warping
 
 **Performance impact:** +1-2ms per chunk
 
@@ -268,10 +268,10 @@ Final height scaling factor.
 **Valid range:** 0.1 to 10
 
 **Recommended values:**
-- `0.5` — Flat world
-- `1.0` — Normal height (recommended)
-- `2.0` — Tall mountains
-- `3.0+` — Extreme elevation
+- `0.5` - Flat world
+- `1.0` - Normal height (recommended)
+- `2.0` - Tall mountains
+- `3.0+` - Extreme elevation
 
 **Example:**
 ```typescript
@@ -532,7 +532,7 @@ enableClimateSystem: true
 
 #### `enableCompatibilityMatrix?: boolean`
 
-Prevent impossible biome neighbors (Desert↔Taiga, etc.).
+Prevent impossible biome neighbors (Desert -> Taiga, etc.).
 
 **Default:** false
 
@@ -1006,18 +1006,20 @@ try {
 
 | Field | Min | Max | Default |
 |-------|-----|-----|---------|
-| `chunkSize` | 4 | 256 | — |
+| `chunkSize` | 4 | 256 | - |
 | `maxCacheSize` | 1 | 10000 | 100 |
-| `terrainConfig.baseScale` | 0.001 | 0.1 | — |
-| `terrainConfig.octaves` | 1 | 16 | — |
-| `terrainConfig.persistence` | 0 | 1 | — |
-| `terrainConfig.lacunarity` | 1 | 4 | — |
-| `terrainConfig.warpStrength` | 0 | 100 | — |
-| `terrainConfig.heightMultiplier` | 0.1 | 10 | — |
+| `terrainConfig.baseScale` | 0.001 | 0.1 | - |
+| `terrainConfig.octaves` | 1 | 16 | - |
+| `terrainConfig.persistence` | 0 | 1 | - |
+| `terrainConfig.lacunarity` | 1 | 4 | - |
+| `terrainConfig.warpStrength` | 0 | 100 | - |
+| `terrainConfig.heightMultiplier` | 0.1 | 10 | - |
 | `biomeConfig.blendRadius` | 0 | 20 | 5 |
 | `lakeConfig.maxLakeTiles` | 10 | 500 | 80 |
 | `lakeConfig.maxFillDepth` | 0.01 | 0.2 | 0.06 |
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

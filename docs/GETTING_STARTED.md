@@ -1,4 +1,4 @@
-# 🚀 Getting Started
+﻿# Getting Started
 
 Get up and running with Procedural World Engine in 5 minutes!
 
@@ -127,10 +127,10 @@ console.log('Cache stats:', {
 
 ## Next Steps
 
-- 📖 Read the [API Reference](API.md) for detailed documentation
-- 🎨 Check out [Examples](EXAMPLES.md) for more use cases
-- ⚙️ Learn about [Configuration](CONFIGURATION.md) options
-- ⚡ Optimize with the [Performance Guide](PERFORMANCE.md)
+- Read the [API Reference](API.md) for detailed documentation
+- Check out [Examples](EXAMPLES.md) for more use cases
+- Learn about [Configuration](CONFIGURATION.md) options
+- Optimize with the [Performance Guide](PERFORMANCE.md)
 
 ## Common Patterns
 
@@ -165,15 +165,15 @@ const chunks = await loadChunksAround(100, 200, 2);
 ```typescript
 import { worldToChunk, chunkToWorld, localToIndex } from 'procedural-world-engine';
 
-// World position → Chunk coordinates
+// World position -> Chunk coordinates
 const worldX = 100, worldY = 200;
 const [chunkX, chunkY] = worldToChunk(worldX, worldY, 32);
 console.log(`Position (${worldX}, ${worldY}) is in chunk (${chunkX}, ${chunkY})`);
 
-// Chunk coordinates → World position (top-left corner)
+// Chunk coordinates -> World position (top-left corner)
 const [wx, wy] = chunkToWorld(chunkX, chunkY, 32);
 
-// Local tile → Array index
+// Local tile -> Array index
 const localX = 5, localY = 10;
 const index = localToIndex(localX, localY, 32);
 console.log(`Tile (${localX}, ${localY}) is at index ${index}`);
@@ -294,12 +294,14 @@ Check the [Configuration Guide](CONFIGURATION.md) for valid ranges.
 
 Now that you have the basics, explore:
 
-- 🎨 [Examples](EXAMPLES.md) - More code examples
-- 📖 [API Reference](API.md) - Complete API docs
-- ⚙️ [Configuration](CONFIGURATION.md) - All config options
-- ⚡ [Performance](PERFORMANCE.md) - Optimization tips
-- 🏗️ [Architecture](ARCHITECTURE.md) - How it works
+- [Examples](EXAMPLES.md) - More code examples
+- [API Reference](API.md) - Complete API docs
+- [Configuration](CONFIGURATION.md) - All config options
+- [Performance](PERFORMANCE.md) - Optimization tips
+- [Architecture](ARCHITECTURE.md) - How it works
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

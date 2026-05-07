@@ -1,4 +1,4 @@
-# 🏗️ Architecture
+﻿# Architecture
 
 Internal architecture and design decisions of Procedural World Engine.
 
@@ -21,30 +21,30 @@ Procedural World Engine is built around a **chunk-based architecture** with **de
 ### Key Components
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     ChunkManager                        │
-│  - Entry point for all generation                      │
-│  - LRU cache management                                 │
-│  - Orchestrates generation pipeline                     │
-└─────────────────────────────────────────────────────────┘
-                          │
-        ┌─────────────────┼─────────────────┐
-        ▼                 ▼                 ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Terrain    │  │    Biomes    │  │    Lakes     │
-│  Generator   │  │  Classifier  │  │   Manager    │
-└──────────────┘  └──────────────┘  └──────────────┘
-        │                 │                 │
-        └─────────────────┼─────────────────┘
-                          ▼
-                  ┌──────────────┐
-                  │  ChunkData   │
-                  │  - heightmap │
-                  │  - biomeMap  │
-                  │  - resources │
-                  │  - structures│
-                  │  - lakes     │
-                  └──────────────┘
+в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+в”‚                     ChunkManager                        в”‚
+в”‚  - Entry point for all generation                      в”‚
+в”‚  - LRU cache management                                 в”‚
+в”‚  - Orchestrates generation pipeline                     в”‚
+в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+                          в”‚
+        в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+        в–ј                 в–ј                 в–ј
+в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+в”‚   Terrain    в”‚  в”‚    Biomes    в”‚  в”‚    Lakes     в”‚
+в”‚  Generator   в”‚  в”‚  Classifier  в”‚  в”‚   Manager    в”‚
+в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+        в”‚                 в”‚                 в”‚
+        в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+                          в–ј
+                  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+                  в”‚  ChunkData   в”‚
+                  в”‚  - heightmap в”‚
+                  в”‚  - biomeMap  в”‚
+                  в”‚  - resources в”‚
+                  в”‚  - structuresв”‚
+                  в”‚  - lakes     в”‚
+                  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
 ```
 
 ---
@@ -237,9 +237,9 @@ class CircularBuffer {
 5. Apply 3D noise slice (optional)
 6. Normalize to [0, 1]
 
-**Memory:** `(chunkSize + 1)² × 4 bytes`
+**Memory:** `(chunkSize + 1)ВІ x 4 bytes`
 
-**Time:** ~8-15ms (32×32 chunk)
+**Time:** ~8-15ms (32x32 chunk)
 
 ---
 
@@ -259,10 +259,10 @@ class CircularBuffer {
 6. Convert to sparse representation
 
 **Memory:** 
-- Biome map: `chunkSize² × 1 byte`
-- Sparse weights: ~4 KB (32×32 chunk)
+- Biome map: `chunkSizeВІ x 1 byte`
+- Sparse weights: ~4 KB (32x32 chunk)
 
-**Time:** ~5-8ms (32×32 chunk)
+**Time:** ~5-8ms (32x32 chunk)
 
 ---
 
@@ -281,7 +281,7 @@ class CircularBuffer {
 
 **Memory:** ~1-2 KB per lake
 
-**Time:** ~80-100ms (32×32 chunk with lakes)
+**Time:** ~80-100ms (32x32 chunk with lakes)
 
 ---
 
@@ -299,9 +299,9 @@ class CircularBuffer {
    - Place resource with random amount
 3. Store as array of Resource objects
 
-**Memory:** ~1.5 KB (32×32 chunk)
+**Memory:** ~1.5 KB (32x32 chunk)
 
-**Time:** ~2-3ms (32×32 chunk)
+**Time:** ~2-3ms (32x32 chunk)
 
 ---
 
@@ -318,15 +318,15 @@ class CircularBuffer {
    - Accept or reject
 3. Store as array of Structure objects
 
-**Memory:** ~0.1 KB (32×32 chunk)
+**Memory:** ~0.1 KB (32x32 chunk)
 
-**Time:** ~1-2ms (32×32 chunk)
+**Time:** ~1-2ms (32x32 chunk)
 
 ---
 
 ## Memory Management
 
-### Chunk Memory Breakdown (32×32)
+### Chunk Memory Breakdown (32x32)
 
 | Component | Size | Percentage |
 |-----------|------|------------|
@@ -357,13 +357,9 @@ Tile 0: [FOREST: 0.7, PLAINS: 0.3]
 Tile 1: [PLAINS: 1.0]
 Tile 2: [FOREST: 0.5, MOUNTAIN: 0.5]
 
-↓
-
-sparseBiomeTypes:   [FOREST, PLAINS, PLAINS, FOREST, MOUNTAIN]
-sparseBiomeWeights: [0.7,    0.3,    1.0,    0.5,    0.5]
-sparseBiomeOffsets: [0,      2,      3]
-                     ↑       ↑       ↑
-                   Tile 0  Tile 1  Tile 2
+  -> sparseBiomeTypes:   [FOREST, PLAINS, PLAINS, FOREST, MOUNTAIN]
+  -> sparseBiomeWeights: [0.7,    0.3,    1.0,    0.5,    0.5]
+  -> sparseBiomeOffsets: [0,      2,      3]
 ```
 
 **Access Pattern:**
@@ -381,16 +377,16 @@ function getBiomeWeightsForTile(chunk: ChunkData, tileIndex: number) {
 ```
 
 **Results:**
-- Memory: 13 KB → 3.96 KB (70% reduction)
+- Memory: 13 KB -> 3.96 KB (70% reduction)
 - Access time: +13ns per tile (negligible)
-- Total chunk memory: 16 KB → 7 KB (56% reduction)
+- Total chunk memory: 16 KB -> 7 KB (56% reduction)
 
 ---
 
 ### Cache Memory
 
-With LRU cache of 500 chunks (32×32):
-- Memory: 500 × 7 KB = 3.5 MB
+With LRU cache of 500 chunks (32x32):
+- Memory: 500 x 7 KB = 3.5 MB
 - Cache hit rate: 50-70%
 - Eviction time: <0.1ms
 
@@ -439,8 +435,8 @@ function hash(...values: number[]): number {
 
 ### Guarantees
 
-1. **Same seed → same world**
-2. **Same chunk coordinates → same chunk**
+1. **Same seed -> same world**
+2. **Same chunk coordinates -> same chunk**
 3. **Platform independent** (no floating-point precision issues)
 4. **Order independent** (chunks can be generated in any order)
 
@@ -654,4 +650,6 @@ function removeRandom(array: any[], index: number): void {
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

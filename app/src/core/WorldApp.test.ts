@@ -14,8 +14,8 @@ describe('WorldApp app/viewer settings', () => {
       showWater: false,
       terrainTexturesEnabled: false,
     });
-    expect(app.getState().showWater).toBe(false);
-    expect(app.getState().terrainTexturesEnabled).toBe(false);
+    expect(app.getState().viewerSettings.showWater).toBe(false);
+    expect(app.getState().viewerSettings.terrainTexturesEnabled).toBe(false);
     expect(visibilityEvents).toHaveLength(1);
     expect(visibilityEvents[0]).toMatchObject({
       showWater: false,
@@ -23,10 +23,10 @@ describe('WorldApp app/viewer settings', () => {
     });
   });
 
-  it('keeps legacy viewer state patches mirrored into viewerSettings', () => {
+  it('keeps viewer settings as the source of truth for visibility', () => {
     const app = new WorldApp();
 
-    app.updateState({ showResources: true });
+    app.updateViewerSettings({ showResources: true });
 
     expect(app.getViewerSettings().showResources).toBe(true);
     expect(app.getState().viewerSettings.showResources).toBe(true);
@@ -39,7 +39,6 @@ describe('WorldApp app/viewer settings', () => {
 
     expect(app.getViewDistance()).toBe(6);
     expect(app.getState().appSettings.viewDistance).toBe(6);
-    expect(app.getState().viewDistance).toBe(6);
   });
 
   it('merges viewer-only water settings without dropping prior water values', () => {

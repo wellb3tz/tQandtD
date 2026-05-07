@@ -1,4 +1,4 @@
-# Engine API
+﻿# Engine API
 
 This package is organized around stable public entrypoints. Application code should import from these entrypoints instead of reaching into `dist` internals.
 
@@ -72,3 +72,5 @@ Three.js is optional. The adapter is exposed as a separate subpath and is backed
 ```ts
 import { ThreeWorldRendererAdapter } from 'procedural-world-engine/adapters/three';
 ```
+
+

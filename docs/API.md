@@ -1,4 +1,4 @@
-# 📖 API Reference
+﻿# API Reference
 
 Complete API documentation for Procedural World Engine.
 
@@ -346,8 +346,8 @@ interface ChunkData {
   x: number;                          // Chunk X coordinate
   y: number;                          // Chunk Y coordinate
   size: number;                       // Chunk size
-  heightmap: Float32Array;            // (size+1)×(size+1) heights
-  biomeMap: Uint8Array;               // size×size biome IDs
+  heightmap: Float32Array;            // (size+1)x(size+1) heights
+  biomeMap: Uint8Array;               // sizexsize biome IDs
   sparseBiomeTypes: Uint8Array;       // Sparse biome types
   sparseBiomeWeights: Float32Array;   // Sparse biome weights
   sparseBiomeOffsets: Uint16Array;    // Sparse offsets
@@ -357,7 +357,7 @@ interface ChunkData {
 }
 ```
 
-**Memory Usage (32×32 chunk):**
+**Memory Usage (32x32 chunk):**
 - Heightmap: 1.13 KB
 - Biome map: 0.25 KB
 - Sparse biome weights: ~4 KB
@@ -647,4 +647,6 @@ enum LogCategory {
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

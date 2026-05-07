@@ -1,4 +1,4 @@
-# 💡 Examples
+﻿# Examples
 
 Practical code examples for common use cases.
 
@@ -422,7 +422,7 @@ await manager.getChunk(0, 1);
 // Serialize to JSON
 const data = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
-  includeModifications: true,
+  modifiedOnly: false,
 });
 
 // Save to file or localStorage
@@ -438,7 +438,7 @@ console.log('World saved');
 // Serialize to binary (smaller, faster)
 const data = serializer.serialize(manager, {
   format: SerializationFormat.BINARY,
-  compression: true,
+  compress: true,
 });
 
 // Convert to Blob for download
@@ -483,7 +483,7 @@ if (savedData) {
 // Export only chunks in a specific region
 const data = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
-  regionFilter: {
+  region: {
     minX: 0,
     maxX: 10,
     minY: 0,
@@ -639,4 +639,6 @@ console.log(`Cache hit rate: ${(stats.hitRate * 100).toFixed(1)}%`);
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

@@ -1,4 +1,4 @@
-# 🚀 Advanced Topics
+﻿# Advanced Topics
 
 Advanced features and techniques for Procedural World Engine.
 
@@ -72,20 +72,20 @@ const chunk = await manager.getChunk(0, 0);
 
 ```
 Main Thread                    Worker Pool
-    │                              │
-    ├─ getChunk(0, 0) ────────────>│
-    │                              ├─ Worker 1: Generate (0, 0)
-    ├─ getChunk(1, 0) ────────────>│
-    │                              ├─ Worker 2: Generate (1, 0)
-    ├─ getChunk(0, 1) ────────────>│
-    │                              ├─ Worker 3: Generate (0, 1)
-    ├─ getChunk(1, 1) ────────────>│
-    │                              ├─ Worker 4: Generate (1, 1)
-    │                              │
-    │<──────────── Chunk (0, 0) ───┤
-    │<──────────── Chunk (1, 0) ───┤
-    │<──────────── Chunk (0, 1) ───┤
-    │<──────────── Chunk (1, 1) ───┤
+    в”‚                              в”‚
+    в”њв”Ђ getChunk(0, 0) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ>в”‚
+    в”‚                              в”њв”Ђ Worker 1: Generate (0, 0)
+    в”њв”Ђ getChunk(1, 0) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ>в”‚
+    в”‚                              в”њв”Ђ Worker 2: Generate (1, 0)
+    в”њв”Ђ getChunk(0, 1) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ>в”‚
+    в”‚                              в”њв”Ђ Worker 3: Generate (0, 1)
+    в”њв”Ђ getChunk(1, 1) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ>в”‚
+    в”‚                              в”њв”Ђ Worker 4: Generate (1, 1)
+    в”‚                              в”‚
+    в”‚<в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Chunk (0, 0) в”Ђв”Ђв”Ђв”¤
+    в”‚<в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Chunk (1, 0) в”Ђв”Ђв”Ђв”¤
+    в”‚<в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Chunk (0, 1) в”Ђв”Ђв”Ђв”¤
+    в”‚<в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Chunk (1, 1) в”Ђв”Ђв”Ђв”¤
 ```
 
 ---
@@ -106,7 +106,7 @@ console.log(`Generated ${chunks.length} chunks in parallel`);
 ```
 
 **Performance:**
-- Without workers: 16 × 30ms = 480ms
+- Without workers: 16 x 30ms = 480ms
 - With 4 workers: ~120ms (4x faster)
 
 ---
@@ -173,7 +173,7 @@ await manager.getChunk(0, 1);
 // Serialize to JSON
 const data = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
-  includeModifications: true,
+  modifiedOnly: false,
 });
 
 // Save to localStorage
@@ -190,7 +190,7 @@ Binary format is smaller and faster:
 // Serialize to binary
 const data = serializer.serialize(manager, {
   format: SerializationFormat.BINARY,
-  compression: true,  // Use zlib compression
+  compress: true,  // Use zlib compression
 });
 
 // Size comparison (1000 chunks):
@@ -208,7 +208,7 @@ Export only a specific region:
 ```typescript
 const data = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
-  regionFilter: {
+  region: {
     minX: -10,
     maxX: 10,
     minY: -10,
@@ -276,10 +276,10 @@ console.log(`Saved ${delta.chunks.length} delta chunks`);
 function downloadWorld(manager: ChunkManager, filename: string) {
   const serializer = new WorldSerializer();
   
-  const data = serializer.serialize(manager, {
-    format: SerializationFormat.BINARY,
-    compression: true,
-  });
+const data = serializer.serialize(manager, {
+  format: SerializationFormat.BINARY,
+  compress: true,
+});
   
   const blob = new Blob([JSON.stringify(data)], {
     type: 'application/json',
@@ -426,7 +426,7 @@ async function profileGeneration(
   const end = performance.now();
   
   console.log(`Generation time: ${(end - start).toFixed(2)}ms`);
-  console.log(`Chunk size: ${chunk.size}×${chunk.size}`);
+  console.log(`Chunk size: ${chunk.size}x${chunk.size}`);
   console.log(`Resources: ${chunk.resources.length}`);
   console.log(`Structures: ${chunk.structures.length}`);
   console.log(`Lakes: ${chunk.lakes?.length || 0}`);
@@ -607,4 +607,6 @@ class CustomStructureGenerator {
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

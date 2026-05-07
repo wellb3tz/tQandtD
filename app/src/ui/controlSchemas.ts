@@ -68,17 +68,17 @@ export const STRUCTURE_TYPE_BY_CONTROL_ID: Record<string, number> = {
 
 export const VIEW_DISTANCE_SLIDER: SliderConfig = {
   id: 'viewDistance',
-  label: 'View Distance (chunks)',
+  label: 'Chunk Radius',
   min: 1,
   max: 8,
   step: 1,
   defaultValue: 3,
-  tooltip: 'Number of chunks to load around camera (higher = more visible terrain, lower performance)',
+  tooltip: 'Number of chunks to keep active around the camera (higher = more visible terrain, lower performance)',
 };
 
 export const CACHE_SIZE_SLIDER: SliderConfig = {
   id: 'maxCacheSize',
-  label: 'Cache Size (chunks)',
+  label: 'Chunk Cache',
   min: 100,
   max: 2000,
   step: 100,
@@ -114,14 +114,14 @@ export const WATER_VIEW_CONTROLS = {
 } as const;
 
 export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
-  { id: 'showTerrain', label: 'Show Terrain', defaultValue: true },
-  { id: 'showBiomes', label: 'Show Biome Colors', defaultValue: true },
-  { id: 'showWater', label: 'Show Water Layer', defaultValue: true },
-  { id: 'showResources', label: 'Show Resources', defaultValue: false },
-  { id: 'showStructures', label: 'Show Structures', defaultValue: false },
-  { id: 'showChunkBoundaries', label: 'Show Chunk Boundaries', defaultValue: false },
-  { id: 'showWireframe', label: 'Wireframe Mode', defaultValue: false },
-  { id: 'terrainTexturesEnabled', label: 'Terrain Textures', defaultValue: true, tooltip: 'Toggle biome surface texture maps while keeping terrain colors' },
-  { id: 'fogOfWarEnabled', label: 'Fog of War (Explored Chunks)', defaultValue: false },
-  { id: 'skyBackground', label: 'Atmospheric Background', defaultValue: false, tooltip: 'Switch between UI-matched haze and the legacy blue sky' },
+  { id: 'showTerrain', label: 'Terrain Layer', defaultValue: true },
+  { id: 'showBiomes', label: 'Biome Colors', defaultValue: true },
+  { id: 'showWater', label: 'Water Layer', defaultValue: true },
+  { id: 'showResources', label: 'Resource Markers', defaultValue: false },
+  { id: 'showStructures', label: 'Structure Markers', defaultValue: false },
+  { id: 'showChunkBoundaries', label: 'Chunk Grid', defaultValue: false },
+  { id: 'showWireframe', label: 'Wireframe View', defaultValue: false },
+  { id: 'terrainTexturesEnabled', label: 'Surface Textures', defaultValue: true, tooltip: 'Toggle terrain texture maps while keeping the underlying colors' },
+  { id: 'fogOfWarEnabled', label: 'Exploration Mask', defaultValue: false },
+  { id: 'skyBackground', label: 'Atmospheric Sky', defaultValue: false, tooltip: 'Switch between the hazy world backdrop and the legacy blue sky' },
 ];

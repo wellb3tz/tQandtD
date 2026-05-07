@@ -288,6 +288,34 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('applies viewer settings and water view through a single viewer-side entrypoint', () => {
+    const viewer = new WorldViewer();
+
+    viewer.applyViewerSettings({
+      showTerrain: true,
+      showBiomes: true,
+      showWater: true,
+      showResources: false,
+      showStructures: false,
+      showChunkBoundaries: false,
+      showWireframe: false,
+      terrainTexturesEnabled: true,
+      fogOfWarEnabled: false,
+      skyBackground: false,
+      waterView: {
+        ocean: {
+          color: 0x123456,
+          opacity: 0.42,
+        },
+      },
+    });
+
+    expect(viewer.getWaterConfig().ocean.color).toBe(0x123456);
+    expect(viewer.getWaterConfig().ocean.opacity).toBeCloseTo(0.42);
+
+    viewer.dispose();
+  });
+
   it('adds terrain UVs and surface blend attributes so textures can blend inside a chunk', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
@@ -1026,6 +1054,26 @@ describe('WorldViewer lifecycle', () => {
     expect(texturedAgainMaterial.userData.terrainTexturesEnabled).toBe(true);
     expect(texturedAgainMaterial.map).toBeTruthy();
     expect(texturedAgainMaterial.wireframe).toBe(true);
+
+    viewer.dispose();
+  });
+
+  it('refreshes loaded chunks through the viewer when water view changes', () => {
+    const viewer = new WorldViewer();
+    const refreshSpy = vi.spyOn(viewer, 'updateChunk');
+    const loadedChunks = new Map<string, ChunkData>([
+      ['0,0', createViewerChunkData({
+        size: 1,
+        heightmap: new Float32Array(4),
+        biomeMap: new Uint8Array([BiomeType.PLAINS]),
+        resources: [],
+        structures: [],
+      })],
+    ]);
+
+    viewer.refreshLoadedChunks(loadedChunks);
+
+    expect(refreshSpy).toHaveBeenCalledWith(0, 0, expect.any(Object));
 
     viewer.dispose();
   });

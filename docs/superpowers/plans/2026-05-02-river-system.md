@@ -1,4 +1,4 @@
-# River System Implementation Plan
+﻿# River System Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1661,3 +1661,5 @@ Spec coverage:
 - Determinism and performance verification: Task 8.
 
 No first-version lake inflow, erosion simulation, flooding, or flow animation is included. Those are intentionally excluded by the spec.
+
+

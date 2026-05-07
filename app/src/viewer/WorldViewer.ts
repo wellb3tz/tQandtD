@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import type { ChunkData } from '@engine/index';
+import type { ViewerSettings } from '../core/WorldApp';
 import { createTerrainSurfaceTextureLibrary } from './materials';
 import type { RaycastHit, Vector3 } from '../utils/coordinates';
 import { WaterLayerManager } from './water/WaterLayerManager';
@@ -197,10 +198,59 @@ export class WorldViewer {
   }
 
   /**
+   * Apply a full viewer settings snapshot to the renderer stack.
+   */
+  applyViewerSettings(settings: ViewerSettings, loadedChunks?: Map<string, ChunkData>): void {
+    this.setVisibility(RenderLayer.TERRAIN, settings.showTerrain);
+    this.setVisibility(RenderLayer.BIOMES, settings.showBiomes);
+    this.setWaterVisibility(settings.showWater);
+    this.setVisibility(RenderLayer.RESOURCES, settings.showResources);
+    this.setVisibility(RenderLayer.STRUCTURES, settings.showStructures);
+    this.setVisibility(RenderLayer.CHUNK_BOUNDARIES, settings.showChunkBoundaries);
+    this.setWireframeMode(settings.showWireframe);
+    this.setTerrainTexturesEnabled(settings.terrainTexturesEnabled);
+    this.setFogOfWarVisibility(settings.fogOfWarEnabled);
+    this.setBackgroundMode(settings.skyBackground);
+
+    if (settings.waterView) {
+      const currentWaterConfig = this.getWaterConfig();
+      this.setWaterConfig({
+        ...currentWaterConfig,
+        ocean: {
+          ...currentWaterConfig.ocean,
+          ...settings.waterView.ocean,
+        },
+        lake: {
+          ...currentWaterConfig.lake,
+          ...settings.waterView.lake,
+        },
+        river: {
+          ...currentWaterConfig.river,
+          ...settings.waterView.river,
+        },
+      });
+
+      if (loadedChunks) {
+        this.refreshLoadedChunks(loadedChunks);
+      }
+    }
+  }
+
+  /**
    * Update an existing chunk
    */
   updateChunk(chunkX: number, chunkY: number, data: ChunkData): void {
     this.chunkController.updateChunk(chunkX, chunkY, data);
+  }
+
+  /**
+   * Re-apply chunk rendering with the current view settings.
+   */
+  refreshLoadedChunks(loadedChunks: Map<string, ChunkData>): void {
+    for (const [key, chunkData] of loadedChunks) {
+      const [chunkX, chunkY] = key.split(',').map(Number);
+      this.updateChunk(chunkX, chunkY, chunkData);
+    }
   }
 
   /**

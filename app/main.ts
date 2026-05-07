@@ -9,9 +9,9 @@
 import './styles.css';
 
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
-import { WorldApp, AppEvent, type ViewerSettings } from './src/core/WorldApp';
+import { WorldApp, AppEvent } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
-import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
+import { WorldViewer } from './src/viewer/WorldViewer';
 import { WorldManager } from './src/ui/WorldManager';
 import { PerformanceMonitor } from './src/ui/PerformanceMonitor';
 import { StatisticsDisplay } from './src/ui/StatisticsDisplay';
@@ -33,49 +33,6 @@ let statisticsDisplay: StatisticsDisplay | null = null;
 let minimap: Minimap | null = null;
 let terrainTooltip: TerrainTooltip | null = null;
 let helpModal: HelpModal | null = null;
-
-function applyViewerSettings(viewer: WorldViewer, settings: ViewerSettings): void {
-  viewer.setVisibility(RenderLayer.TERRAIN, settings.showTerrain);
-  viewer.setVisibility(RenderLayer.BIOMES, settings.showBiomes);
-  viewer.setWaterVisibility(settings.showWater);
-  viewer.setVisibility(RenderLayer.RESOURCES, settings.showResources);
-  viewer.setVisibility(RenderLayer.STRUCTURES, settings.showStructures);
-  viewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, settings.showChunkBoundaries);
-  viewer.setWireframeMode(settings.showWireframe);
-  viewer.setTerrainTexturesEnabled(settings.terrainTexturesEnabled);
-  viewer.setFogOfWarVisibility(settings.fogOfWarEnabled);
-  viewer.setBackgroundMode(settings.skyBackground);
-
-  if (settings.waterView) {
-    const currentWaterConfig = viewer.getWaterConfig();
-    viewer.setWaterConfig({
-      ...currentWaterConfig,
-      ocean: {
-        ...currentWaterConfig.ocean,
-        ...settings.waterView.ocean,
-      },
-      lake: {
-        ...currentWaterConfig.lake,
-        ...settings.waterView.lake,
-      },
-      river: {
-        ...currentWaterConfig.river,
-        ...settings.waterView.river,
-      },
-    });
-  }
-}
-
-function refreshVisibleWaterChunks(viewer: WorldViewer, appInstance: WorldApp, settings: ViewerSettings): void {
-  if (!settings.waterView) {
-    return;
-  }
-
-  appInstance.getLoadedChunksSnapshot().forEach((chunkData, key) => {
-    const [chunkX, chunkY] = key.split(',').map(Number);
-    viewer.updateChunk(chunkX, chunkY, chunkData);
-  });
-}
 
 // Global timers for cleanup
 let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -168,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log('WorldViewer initialized successfully');
       
       // Apply initial visibility state from application core
-      applyViewerSettings(worldViewer, app.getViewerSettings());
+      worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
       
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
@@ -463,10 +420,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     app.on(AppEvent.VISIBILITY_CHANGED, (visibilityState) => {
       // Update WorldViewer layer visibility
-      if (worldViewer && app) {
+      if (worldViewer && app && visibilityState) {
         const startTime = performance.now();
-        applyViewerSettings(worldViewer, visibilityState as ViewerSettings);
-        refreshVisibleWaterChunks(worldViewer, app, visibilityState as ViewerSettings);
+        worldViewer.applyViewerSettings(visibilityState, app.getLoadedChunksSnapshot());
         
         const endTime = performance.now();
         const updateTime = endTime - startTime;

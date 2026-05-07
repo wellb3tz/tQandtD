@@ -1,4 +1,4 @@
-# Release Checklist
+﻿# Release Checklist
 
 Use this checklist before publishing a package version.
 
@@ -28,3 +28,5 @@ The npm package includes:
 - `LICENSE`
 
 Historical planning files under `docs/superpowers` are intentionally excluded.
+
+

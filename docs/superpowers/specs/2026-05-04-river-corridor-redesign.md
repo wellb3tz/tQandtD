@@ -1,4 +1,4 @@
-# River Corridor Redesign
+﻿# River Corridor Redesign
 
 ## Goal
 
@@ -137,3 +137,5 @@ Implementation should proceed in small slices:
 - Perfect real-world watershed accuracy.
 
 Those can come later. The immediate goal is a visually believable river-valley system.
+
+

@@ -5,7 +5,7 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { WorldApp, AppState } from '../core/WorldApp';
+import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings } from '../core/WorldApp';
 import { DEFAULT_RIVER_CONFIG, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
@@ -357,7 +357,7 @@ export class ControlPanel {
   }
 
   /**
-   * Create water configuration controls
+   * Create water rendering controls
    */
   private createWaterControls(): void {
     const waterContainer = document.getElementById(ELEMENT_IDS.WATER_CONTROLS);
@@ -408,7 +408,7 @@ export class ControlPanel {
     const viewSection = document.createElement('div');
     viewSection.style.marginTop = '24px';
     viewSection.style.marginBottom = '16px';
-    viewSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Water View</h4>';
+    viewSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Water Surface View</h4>';
     waterContainer.appendChild(viewSection);
 
     const colorControl = this.createColorControl(WATER_VIEW_CONTROLS.color, (color) => {
@@ -504,7 +504,7 @@ export class ControlPanel {
 
     VISIBILITY_TOGGLES.forEach(config => {
       const control = this.createCheckboxControl(config, (checked) => {
-        this.updateVisibility(config.id, checked);
+        this.updateVisibility(config.id as keyof ViewerSettings, checked);
       });
       visibilityContainer.appendChild(control);
     });
@@ -755,7 +755,11 @@ export class ControlPanel {
   /**
    * Update viewer-only water material settings.
    */
-  private updateWaterViewConfig(waterType: 'ocean' | 'lake', property: string, value: number): void {
+  private updateWaterViewConfig(
+    waterType: 'ocean' | 'lake',
+    property: keyof WaterSurfaceViewSettings,
+    value: number
+  ): void {
     this.app?.updateViewerSettings({
       waterView: {
         [waterType]: {
@@ -774,19 +778,6 @@ export class ControlPanel {
       return;
     }
 
-    // Create lakeConfig if it doesn't exist
-    const currentLakeConfig = this.currentConfig.lakeConfig || {
-      enabled: true,
-      useMultiChunk: false,
-      noiseScale: 0.01,
-      noiseThreshold: 0.62,
-      minElevation: 0.32,
-      maxElevation: 0.72,
-      allowedBiomes: [3, 4, 5, 6, 7, 8, 9], // BiomeType values
-      maxLakeTiles: 80,
-      maxFillDepth: 0.06,
-    };
-
     this.patchLakeConfig({ [property]: value });
   }
 
@@ -802,7 +793,7 @@ export class ControlPanel {
   /**
    * Update visibility settings
    */
-  private updateVisibility(key: string, value: boolean): void {
+  private updateVisibility(key: keyof ViewerSettings, value: boolean): void {
     if (!this.app) return;
 
     this.app.updateViewerSettings({ [key]: value });

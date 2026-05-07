@@ -1,4 +1,4 @@
-# ❓ Frequently Asked Questions
+﻿# Frequently Asked Questions
 
 Common questions and answers about Procedural World Engine.
 
@@ -36,7 +36,7 @@ Yes! The same seed always produces the same world, on any device. This is guaran
 
 Yes! The library is:
 - Well-tested (151 tests, 100% pass rate)
-- Memory efficient (~7 KB per 32×32 chunk)
+- Memory efficient (~7 KB per 32x32 chunk)
 - Performance optimized (<100ms per chunk)
 - Actively maintained
 
@@ -64,13 +64,13 @@ Yes! MIT license. See the repository for details.
 
 ### How fast is chunk generation?
 
-Typical generation times (32×32 chunk):
+Typical generation times (32x32 chunk):
 - Terrain only: ~8ms
 - Terrain + biomes: ~15ms
 - Full generation (no lakes): ~20ms
 - Full generation (with lakes): ~115ms
 
-Target: <100ms per chunk ✅
+Target: <100ms per chunk OK
 
 ---
 
@@ -90,7 +90,7 @@ Lakes use flood-fill algorithm which is computationally expensive:
 
 ### How much memory does it use?
 
-Memory per chunk (32×32):
+Memory per chunk (32x32):
 - Heightmap: 1.13 KB
 - Biome map: 0.25 KB
 - Sparse biome weights: 3.96 KB
@@ -351,7 +351,7 @@ const serializer = new WorldSerializer();
 
 const data = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
-  includeModifications: true,
+  modifiedOnly: false,
 });
 
 localStorage.setItem('world', JSON.stringify(data));
@@ -407,7 +407,7 @@ if (savedData) {
 ### Are saved worlds compatible across versions?
 
 Generally yes, but:
-- v1.x → v2.0: Biome weights automatically converted to sparse format
+- v1.x -> v2.0: Biome weights automatically converted to sparse format
 - Major version changes may require migration
 
 See [Migration Guide](MIGRATION_GUIDE.md) for details.
@@ -488,10 +488,10 @@ Check:
 You're using the old dense array access pattern. Use helper functions:
 
 ```typescript
-// ❌ Old way (doesn't work in v2.0)
+// вќЊ Old way (doesn't work in v2.0)
 const weight = chunk.biomeWeights[tileIndex * 13 + biome];
 
-// ✅ New way
+// OK New way
 import { getBiomeWeightForTile } from 'procedural-world-engine';
 const weight = getBiomeWeightForTile(chunk, tileIndex, biome);
 ```
@@ -541,4 +541,6 @@ If your question isn't answered here:
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

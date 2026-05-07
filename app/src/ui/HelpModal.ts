@@ -41,8 +41,8 @@ export class HelpModal {
       <div class="help-section">
         <h4>Getting Started</h4>
         <p>
-          This application showcases the tQandtD project's capabilities through an interactive 3D visualization.
-          Use the controls on the left to adjust generation parameters, and explore the generated world in the 3D viewer.
+          This application is a personal world-generation workbench.
+          Use the controls on the left to tune system parameters, then inspect the generated world in the 3D viewer.
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export class HelpModal {
         <h4>World Generation</h4>
         <ul class="help-list">
           <li><strong>Seed:</strong> Enter a number to generate a deterministic world. Same seed = same world.</li>
-          <li><strong>Generate Button:</strong> Click to create a new world with current parameters.</li>
+          <li><strong>Generate:</strong> Rebuild the world with the current system parameters.</li>
         </ul>
       </div>
 
@@ -108,10 +108,10 @@ export class HelpModal {
       </div>
 
       <div class="help-section">
-        <h4>Visibility Toggles</h4>
+        <h4>Display Layers</h4>
         <p>
-          Use the checkboxes in the control panel to show/hide different world elements:
-          terrain, biomes, water, resources, structures, chunk boundaries, and wireframe mode.
+          Use the checkboxes in the control panel to choose which world layers are visible:
+          terrain, biomes, water, resources, structures, chunk boundaries, textures, fog of war, and background mode.
         </p>
       </div>
 
@@ -145,9 +145,9 @@ export class HelpModal {
         <h4>Tips</h4>
         <ul class="help-list">
           <li>Hover over any control label to see a tooltip with more information.</li>
-          <li>Enable LOD and Worker Pool for better performance with large worlds.</li>
-          <li>Use incremental generation to maintain smooth framerate during chunk loading.</li>
-          <li>Save your favorite configurations using the Export Configuration button.</li>
+          <li>Increase chunk radius carefully; it affects both visibility and loading cost.</li>
+          <li>Use the worker pool and cache settings for larger worlds.</li>
+          <li>Keep display layers separate from generation settings when comparing world variants.</li>
         </ul>
       </div>
     `;

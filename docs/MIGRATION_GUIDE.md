@@ -1,4 +1,4 @@
-# 🔄 Migration Guide
+﻿# Migration Guide
 
 Guide for upgrading to newer versions of Procedural World Engine.
 
@@ -8,7 +8,7 @@ Guide for upgrading to newer versions of Procedural World Engine.
 
 #### 1. ChunkData Structure Changed
 
-**Before (v1.x):**
+- v1.x -> v2.0: Biome weights automatically converted to sparse format
 ```typescript
 interface ChunkData {
   biomeWeights: Float32Array;  // Dense array
@@ -150,10 +150,10 @@ function serializeChunk(chunk: ChunkData) {
 
 After migrating to v2.0, you'll get:
 
-- ✅ **56% less memory** per chunk (16 KB → 7 KB)
-- ✅ **70% less biome weight memory** (13 KB → 4 KB)
-- ✅ **Better cache efficiency** (2.3x more chunks for same memory)
-- ✅ **Smoother gameplay** (fewer cache misses)
+- **56% less memory** per chunk (16 KB -> 7 KB)
+- **70% less biome weight memory** (13 KB -> 4 KB)
+- OK **Better cache efficiency** (2.3x more chunks for same memory)
+- OK **Smoother gameplay** (fewer cache misses)
 
 ### Performance Impact
 
@@ -438,7 +438,7 @@ workerPoolConfig: {
 ### Issue 3: Saved Worlds Don't Load
 
 **Problem:**
-Worlds saved with v1.x don't load in v2.0.
+- v1.x -> v2.0: Biome weights automatically converted to sparse format
 
 **Solution:**
 The serialization format is backward compatible. Sparse weights are reconstructed from biome maps:
@@ -474,4 +474,6 @@ If you encounter issues during migration:
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+

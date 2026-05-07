@@ -50,20 +50,7 @@ export interface AppState {
   cameraPosition: Vector3;
   cameraTarget: Vector3;
   appSettings: AppSettings;
-  viewDistance: number; // Compatibility mirror for appSettings.viewDistance.
   viewerSettings: ViewerSettings;
-  
-  // Compatibility mirrors for viewerSettings.
-  showTerrain: boolean;
-  showBiomes: boolean;
-  showWater: boolean;
-  showResources: boolean;
-  showStructures: boolean;
-  showChunkBoundaries: boolean;
-  showWireframe: boolean;
-  terrainTexturesEnabled: boolean;
-  fogOfWarEnabled: boolean; // Show explored chunks as gray planes
-  skyBackground: boolean;   // true = UI-matched haze, false = legacy blue sky
   
   // Chunk tracking
   exploredChunks: Set<string>; // Chunks that have been visited
@@ -166,20 +153,6 @@ export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
   skyBackground: false,
 };
 
-type FlatViewerSettingKey = Exclude<keyof ViewerSettings, 'waterView'>;
-const VIEWER_SETTING_KEYS: FlatViewerSettingKey[] = [
-  'showTerrain',
-  'showBiomes',
-  'showWater',
-  'showResources',
-  'showStructures',
-  'showChunkBoundaries',
-  'showWireframe',
-  'terrainTexturesEnabled',
-  'fogOfWarEnabled',
-  'skyBackground',
-];
-
 /**
  * Event types for component communication
  */
@@ -234,10 +207,8 @@ export class WorldApp {
       cameraPosition: { x: 50, y: 100, z: 50 },
       cameraTarget: { x: 0, y: 0, z: 0 },
       appSettings: { ...DEFAULT_APP_SETTINGS },
-      viewDistance: DEFAULT_APP_SETTINGS.viewDistance,
       
       viewerSettings: { ...DEFAULT_VIEWER_SETTINGS },
-      ...DEFAULT_VIEWER_SETTINGS,
       
       exploredChunks: new Set(),
       
@@ -414,25 +385,22 @@ export class WorldApp {
    * Update application state with partial updates
    */
   updateState(partial: AppStateUpdate): void {
-    const viewerSettingsPatch = this.extractViewerSettingsPatch(partial);
-    const visibilityChanged = Object.keys(viewerSettingsPatch).length > 0 || 'viewerSettings' in partial;
+    const { appSettings: appSettingsPatch, viewerSettings: viewerSettingsPatch, ...rest } = partial;
+    const visibilityChanged = viewerSettingsPatch !== undefined;
     const nextViewerSettings = visibilityChanged
-      ? this.mergeViewerSettings(partial.viewerSettings, viewerSettingsPatch)
+      ? this.mergeViewerSettings(viewerSettingsPatch)
       : this.state.viewerSettings;
     const nextAppSettings = {
       ...this.state.appSettings,
-      ...partial.appSettings,
-      ...('viewDistance' in partial ? { viewDistance: partial.viewDistance } : {}),
+      ...appSettingsPatch,
     };
     
     // Merge partial state into current state
     this.state = {
       ...this.state,
-      ...partial,
+      ...rest,
       appSettings: nextAppSettings,
-      viewDistance: nextAppSettings.viewDistance,
       viewerSettings: nextViewerSettings,
-      ...nextViewerSettings,
     };
     
     // Notify all subscribers of state change
@@ -484,7 +452,7 @@ export class WorldApp {
         this.emit(AppEvent.CHUNK_UNLOADED, {
           chunkX: coordinate.x,
           chunkY: coordinate.y,
-          keepFogOfWar: this.state.fogOfWarEnabled,
+          keepFogOfWar: this.state.viewerSettings.fogOfWarEnabled,
         });
       }),
       session.on('chunk_updated', ({ coordinate, chunk }) => {
@@ -615,7 +583,7 @@ export class WorldApp {
    */
   unloadDistantChunks(centerX: number, centerY: number, maxDistance: number): void {
     const result = this.requireWorldSession().unloadDistantChunks(centerX, centerY, maxDistance, {
-      syncRenderer: !this.state.fogOfWarEnabled,
+      syncRenderer: !this.state.viewerSettings.fogOfWarEnabled,
     });
     const chunksUnloaded = result.unloaded.length;
     this.syncLoadedChunksFromSession();
@@ -848,50 +816,29 @@ export class WorldApp {
     return this.worldSession;
   }
 
-  private extractViewerSettingsPatch(partial: AppStateUpdate): Partial<Pick<ViewerSettings, FlatViewerSettingKey>> {
-    const patch: Partial<Pick<ViewerSettings, FlatViewerSettingKey>> = {};
-
-    for (const key of VIEWER_SETTING_KEYS) {
-      if (key in partial) {
-        patch[key] = partial[key] as ViewerSettings[typeof key];
-      }
-    }
-
-    return patch;
-  }
-
   private mergeViewerSettings(
-    settingsPatch?: Partial<ViewerSettings>,
-    legacyPatch: Partial<ViewerSettings> = {}
+    settingsPatch?: Partial<ViewerSettings>
   ): ViewerSettings {
-    const waterViewPatch = {
-      ...settingsPatch?.waterView,
-      ...legacyPatch.waterView,
-    };
+    const waterViewPatch = settingsPatch?.waterView ?? {};
 
     return {
       ...this.state.viewerSettings,
       ...settingsPatch,
-      ...legacyPatch,
       waterView: Object.keys(waterViewPatch).length > 0
         ? {
             ...this.state.viewerSettings.waterView,
             ...settingsPatch?.waterView,
-            ...legacyPatch.waterView,
             ocean: {
               ...this.state.viewerSettings.waterView?.ocean,
               ...settingsPatch?.waterView?.ocean,
-              ...legacyPatch.waterView?.ocean,
             },
             lake: {
               ...this.state.viewerSettings.waterView?.lake,
               ...settingsPatch?.waterView?.lake,
-              ...legacyPatch.waterView?.lake,
             },
             river: {
               ...this.state.viewerSettings.waterView?.river,
               ...settingsPatch?.waterView?.river,
-              ...legacyPatch.waterView?.river,
             },
           }
         : this.state.viewerSettings.waterView,

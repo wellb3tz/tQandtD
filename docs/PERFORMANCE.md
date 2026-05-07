@@ -1,4 +1,4 @@
-# ⚡ Performance Guide
+﻿# Performance Guide
 
 Optimization tips and benchmarks for Procedural World Engine.
 
@@ -21,11 +21,11 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 | Chunk Size | No Lakes | With Lakes | 3D Noise |
 |------------|----------|------------|----------|
-| 16×16      | ~8ms     | ~12ms      | ~10ms    |
-| 32×32      | ~31ms    | ~115ms     | ~45ms    |
-| 64×64      | ~270ms   | ~800ms     | ~350ms   |
+| 16x16      | ~8ms     | ~12ms      | ~10ms    |
+| 32x32      | ~31ms    | ~115ms     | ~45ms    |
+| 64x64      | ~270ms   | ~800ms     | ~350ms   |
 
-**Target**: <100ms per 32×32 chunk ✅
+**Target**: <100ms per 32x32 chunk
 
 ---
 
@@ -42,7 +42,7 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 ### Memory Usage
 
-#### Per Chunk (32×32)
+#### Per Chunk (32x32)
 
 | Component | Size | Percentage |
 |-----------|------|------------|
@@ -59,7 +59,7 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 #### Cache Memory
 
-| Cache Size | Memory (32×32) | Memory (64×64) |
+| Cache Size | Memory (32x32) | Memory (64x64) |
 |------------|----------------|----------------|
 | 100 chunks | 703 KB | 2.8 MB |
 | 500 chunks | 3.5 MB | 14 MB |
@@ -73,7 +73,7 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 Choose chunk size based on your use case:
 
-#### Small Chunks (16×16)
+#### Small Chunks (16x16)
 ```typescript
 chunkSize: 16
 ```
@@ -92,7 +92,7 @@ chunkSize: 16
 
 ---
 
-#### Medium Chunks (32×32) ⭐ Recommended
+#### Medium Chunks (32x32) - Recommended
 ```typescript
 chunkSize: 32
 ```
@@ -109,7 +109,7 @@ chunkSize: 32
 
 ---
 
-#### Large Chunks (64×64)
+#### Large Chunks (64x64)
 ```typescript
 chunkSize: 64
 ```
@@ -154,7 +154,7 @@ const manager = new ChunkManager({
   
 });
 
-// Result: ~31ms → ~17ms per chunk
+// Result: ~31ms -> ~17ms per chunk
 ```
 
 ---
@@ -173,7 +173,7 @@ terrainConfig: {
   heightMultiplier: 1.0,
 }
 
-// Result: ~31ms → ~24ms per chunk
+// Result: ~31ms -> ~24ms per chunk
 ```
 
 ---
@@ -195,7 +195,7 @@ maxCacheSize: 1000 // ~7 MB
 
 **Formula:**
 ```
-Memory = cacheSize × 7 KB (for 32×32 chunks)
+Memory = cacheSize x 7 KB (for 32x32 chunks)
 ```
 
 ---
@@ -419,10 +419,10 @@ console.profileEnd('Chunk Generation');
 ### 1. Use Async Generation
 
 ```typescript
-// ✅ Good - non-blocking
+// OK Good - non-blocking
 const chunk = await manager.getChunk(0, 0);
 
-// ❌ Bad - blocks main thread
+// вќЊ Bad - blocks main thread
 const chunk = manager.generateChunk(0, 0);
 ```
 
@@ -431,14 +431,14 @@ const chunk = manager.generateChunk(0, 0);
 ### 2. Batch Chunk Loading
 
 ```typescript
-// ✅ Good - parallel loading
+// OK Good - parallel loading
 const chunks = await Promise.all([
   manager.getChunk(0, 0),
   manager.getChunk(1, 0),
   manager.getChunk(0, 1),
 ]);
 
-// ❌ Bad - sequential loading
+// вќЊ Bad - sequential loading
 const chunk1 = await manager.getChunk(0, 0);
 const chunk2 = await manager.getChunk(1, 0);
 const chunk3 = await manager.getChunk(0, 1);
@@ -475,12 +475,12 @@ setInterval(() => {
 ### 4. Reuse ChunkManager
 
 ```typescript
-// ✅ Good - reuse manager
+// OK Good - reuse manager
 const manager = new ChunkManager({ seed: 12345 });
 const chunk1 = await manager.getChunk(0, 0);
 const chunk2 = await manager.getChunk(1, 0);
 
-// ❌ Bad - create new manager each time
+// вќЊ Bad - create new manager each time
 const manager1 = new ChunkManager({ seed: 12345 });
 const chunk1 = await manager1.getChunk(0, 0);
 const manager2 = new ChunkManager({ seed: 12345 });
@@ -533,7 +533,7 @@ Before deploying, check:
 **Symptoms:** Chunks take >100ms to generate
 
 **Solutions:**
-1. Reduce chunk size (32 → 16)
+1. Reduce chunk size (32 -> 16)
 2. Disable lakes (`lakeConfig.enabled = false`)
 3. Reduce octaves (`terrainConfig.octaves = 2`)
 4. Enable worker pool
@@ -548,7 +548,7 @@ Before deploying, check:
 **Solutions:**
 1. Reduce cache size (`maxCacheSize = 100`)
 2. Clear cache periodically (`manager.clearCache()`)
-3. Use smaller chunks (32 → 16)
+3. Use smaller chunks (32 -> 16)
 4. Unload distant chunks
 
 ---
@@ -565,4 +565,6 @@ Before deploying, check:
 
 ---
 
-**[← Back to Documentation](README.md)**
+**[Back to Documentation](README.md)**
+
+
