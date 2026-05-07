@@ -26,6 +26,7 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
   const chunkSize = data.size;
   const verticesPerSide = chunkSize + 1;
   const weights = createEmptySurfaceWeights();
+  const lakeTiles = collectLakeTileIndices(data);
 
   const samples: Array<{ x: number; y: number }> = [
     { x: vertexX - 1, y: vertexY - 1 },
@@ -47,9 +48,10 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
     const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
     const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
+    const moisture = calculateTerrainMoisture(data, sample.x, sample.y, biome, elevation, slope, lakeTiles);
     const surfaceKey = getRiverTrenchDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
-      : selectTerrainSurfaceKey(biome, elevation, slope);
+      : selectTerrainSurfaceKey(biome, elevation, slope, moisture);
     weights[surfaceKey] += 1;
     sampleCount++;
   }
@@ -63,6 +65,119 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     weights[key] /= sampleCount;
   }
   return weights;
+}
+
+function calculateTerrainMoisture(
+  data: ChunkData,
+  vertexX: number,
+  vertexY: number,
+  biome: BiomeType,
+  elevation: number,
+  slope: number,
+  lakeTiles: Set<number>,
+): number {
+  const riverInfluence = clamp01(
+    (1 - getRiverTrenchDarkening(data, vertexX, vertexY)) / RIVER_TRENCH_DARKEN_STRENGTH
+  );
+  const lakeInfluence = calculateLakeWetness(data, vertexX, vertexY, lakeTiles);
+  const lowlandInfluence = 1 - smoothstep(0.24, 0.62, elevation);
+  const slopeRetention = 1 - Math.min(1, slope * 1.05);
+  const biomeBias = getBiomeMoistureBias(biome);
+
+  return clamp01(
+    (riverInfluence * 0.42 +
+      lakeInfluence * 0.30 +
+      lowlandInfluence * 0.18 +
+      biomeBias * 0.10) *
+      (0.58 + slopeRetention * 0.42)
+  );
+}
+
+function calculateLakeWetness(
+  data: ChunkData,
+  vertexX: number,
+  vertexY: number,
+  lakeTiles: Set<number>,
+): number {
+  if (lakeTiles.size === 0) {
+    return 0;
+  }
+
+  const minTileX = Math.max(0, Math.floor(vertexX) - 2);
+  const maxTileX = Math.min(data.size - 1, Math.floor(vertexX) + 1);
+  const minTileY = Math.max(0, Math.floor(vertexY) - 2);
+  const maxTileY = Math.min(data.size - 1, Math.floor(vertexY) + 1);
+
+  let strongest = 0;
+
+  for (let tileY = minTileY; tileY <= maxTileY; tileY++) {
+    for (let tileX = minTileX; tileX <= maxTileX; tileX++) {
+      const tileIndex = tileY * data.size + tileX;
+      if (!lakeTiles.has(tileIndex)) continue;
+
+      const centerX = tileX + 0.5;
+      const centerY = tileY + 0.5;
+      const distance = Math.hypot(vertexX - centerX, vertexY - centerY);
+
+      const wetness = distance <= 0.75
+        ? 1
+        : distance <= 1.45
+          ? 0.68
+          : distance <= 2.2
+            ? 0.34
+            : 0;
+
+      strongest = Math.max(strongest, wetness);
+      if (strongest >= 1) {
+        return 1;
+      }
+    }
+  }
+
+  return strongest;
+}
+
+function collectLakeTileIndices(data: ChunkData): Set<number> {
+  const tiles = new Set<number>();
+
+  for (const lake of data.lakes ?? []) {
+    for (const tileIndex of lake.tiles) {
+      tiles.add(tileIndex);
+    }
+  }
+
+  return tiles;
+}
+
+function getBiomeMoistureBias(biome: BiomeType): number {
+  switch (biome) {
+    case BiomeType.SWAMP:
+      return 1;
+    case BiomeType.RAINFOREST:
+      return 0.92;
+    case BiomeType.FOREST:
+      return 0.74;
+    case BiomeType.TAIGA:
+      return 0.66;
+    case BiomeType.BEACH:
+      return 0.62;
+    case BiomeType.PLAINS:
+      return 0.46;
+    case BiomeType.SAVANNA:
+      return 0.30;
+    case BiomeType.TUNDRA:
+      return 0.22;
+    case BiomeType.MOUNTAIN:
+      return 0.20;
+    case BiomeType.GLACIER:
+      return 0.16;
+    case BiomeType.DESERT:
+      return 0.06;
+    case BiomeType.VOLCANIC:
+      return 0.12;
+    default:
+      return 0.35;
+  }
 }
 
 export function applyTerrainDetailAndColorModulation(options: TerrainDetailModulationOptions): Float32Array {
@@ -85,6 +200,7 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
   const lava = { r: 0.72, g: 0.12, b: 0.04 };
   const wetSand = { r: 0.55, g: 0.48, b: 0.32 };
   const coastalCliff = { r: 0.46, g: 0.42, b: 0.36 };
+  const lakeTiles = collectLakeTileIndices(data);
 
   for (let i = 0; i < normals.count; i++) {
     const ny = normals.getY(i);
@@ -112,18 +228,20 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const isOcean = vertexBiome === BiomeType.OCEAN;
     const belowWaterBand = 0.05;
     const aboveWaterBand = 0.20;
-    const wetBand = rawHeight >= seaLevel - belowWaterBand && rawHeight <= seaLevel + aboveWaterBand
+    const shorelineWetness = rawHeight >= seaLevel - belowWaterBand && rawHeight <= seaLevel + aboveWaterBand
       ? rawHeight <= seaLevel
         ? 1.0 - Math.min(1, (seaLevel - rawHeight) / belowWaterBand)
         : 1.0 - Math.min(1, (rawHeight - seaLevel) / aboveWaterBand)
       : 0;
+    const lakeWetness = calculateLakeWetness(data, bvX, bvY, lakeTiles);
+    const riverWetness = clamp01(
+      (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
+    );
+    const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
     const snowDetail = (isMountain || isGlacier)
       ? Math.min(1, Math.max(0, (rawHeight - 0.73) / 0.14) * (1.0 - steepness * 0.35))
       : 0;
-    const riverbedDetail = Math.min(
-      1,
-      Math.max(0, (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH)
-    );
+    const riverbedDetail = riverWetness;
 
     if (isOcean) {
       // Ocean floor keeps the biome color and only receives altitude brightness.
@@ -165,6 +283,14 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       }
     }
 
+    if (wetBand > 0) {
+      const wetShade = 1.0 - wetBand * 0.14;
+      const wetSaturation = 1.0 + wetBand * 0.06;
+      r = Math.min(1.0, r * wetShade * (1.0 - wetBand * 0.03));
+      g = Math.min(1.0, g * wetShade * wetSaturation);
+      b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
+    }
+
     colorAttr.setXYZ(
       i,
       Math.min(1.0, r * altitudeBrightness),
@@ -198,4 +324,13 @@ function createEmptySurfaceWeights(): TerrainSurfaceWeights {
 
 function blend(from: number, to: number, factor: number): number {
   return from + (to - from) * factor;
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = clamp01((x - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }

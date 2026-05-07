@@ -90,14 +90,16 @@ describe('terrain texture materials', () => {
     expect(library.desert.albedo.version).toBe(0);
   });
 
-  it('selects terrain surface keys from biome, elevation, and slope context', () => {
+  it('selects terrain surface keys from biome, elevation, slope, and moisture context', () => {
     expect(selectTerrainSurfaceKey(BiomeType.DESERT, 0.35, 0.1)).toBe('desert');
     expect(selectTerrainSurfaceKey(BiomeType.BEACH, 0.32, 0.1)).toBe('beach');
     expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.72, 0.2)).toBe('mountainRock');
     expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.82, 0.2)).toBe('snow');
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.45, 0.7)).toBe('mountainRock');
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.45, 0.2)).toBe('forestFloor');
+    expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.42, 0.2, 0.84)).toBe('swampMud');
     expect(selectTerrainSurfaceKey(BiomeType.SAVANNA, 0.35, 0.1)).toBe('dryGrass');
+    expect(selectTerrainSurfaceKey(BiomeType.SAVANNA, 0.38, 0.1, 0.78)).toBe('swampMud');
     expect(selectTerrainSurfaceKey(BiomeType.SWAMP, 0.34, 0.1)).toBe('swampMud');
     expect(selectTerrainSurfaceKey(BiomeType.VOLCANIC, 0.58, 0.1)).toBe('volcanicRock');
     expect(selectTerrainSurfaceKey(BiomeType.GLACIER, 0.5, 0.1)).toBe('ice');
@@ -189,11 +191,17 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).not.toContain('terrainAlbedoMountainRock');
     expect(shader.fragmentShader).not.toContain('terrainRoughnessMountainRock');
     expect(shader.fragmentShader).not.toContain('blendedTerrainRoughness');
+    expect(shader.fragmentShader).toContain('tertiarySurfaceWeight');
+    expect(shader.fragmentShader).toContain('primaryTerrainWeight');
+    expect(shader.fragmentShader).toContain('terrainSurfaceUv');
+    expect(shader.fragmentShader).toContain('shorelineWetness');
+    expect(shader.fragmentShader).toContain('wetTerrainWeight');
+    expect(shader.fragmentShader).toContain('wetGlossTint');
     expect(shader.fragmentShader).toContain('wetShorelineTint');
     expect(shader.fragmentShader).toContain('riverbedTint');
     expect(shader.fragmentShader).toContain('vec3 cliffTint = vec3(0.64, 0.63, 0.60)');
     expect(shader.fragmentShader).toContain('vec3 snowPeakTint = vec3(1.18, 1.19, 1.20)');
-    expect(shader.fragmentShader).toContain('vec3 wetShorelineTint = vec3(0.42, 0.54, 0.56)');
+    expect(shader.fragmentShader).toContain('vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54)');
     expect(shader.fragmentShader).toContain('forestFloorTint');
     expect(shader.fragmentShader).toContain('macroGroundNoise');
     expect(shader.fragmentShader).toContain('freshGrassPatchTint');
@@ -210,6 +218,6 @@ describe('terrain texture materials', () => {
     const samplerCount = (shader.fragmentShader.match(/uniform sampler2D/g) ?? []).length;
     expect(samplerCount).toBeLessThanOrEqual(4);
     const atlasSampleCallCount = (shader.fragmentShader.match(/sampleTerrainAtlasTile\(/g) ?? []).length - 1;
-    expect(atlasSampleCallCount).toBeLessThanOrEqual(2);
+    expect(atlasSampleCallCount).toBeLessThanOrEqual(3);
   });
 });

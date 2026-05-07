@@ -1,6 +1,6 @@
 ﻿# tQandtD project Documentation
 
-Welcome to the tQandtD project documentation.
+Documentation for the tQandtD procedural world engine and browser client.
 
 ## Documentation Index
 

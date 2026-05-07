@@ -1,6 +1,6 @@
 # tQandtD project
 
-A TypeScript library for generating infinite, deterministic procedural worlds in the browser. Built around a chunk-based architecture with seed-driven randomness — the same seed always produces the same world, on any device.
+A TypeScript procedural world engine with a browser client. The engine generates infinite, deterministic worlds with chunk-based loading and seed-driven randomness, so the same seed always produces the same world on any device.
 
 ## Features
 
@@ -19,6 +19,13 @@ A TypeScript library for generating infinite, deterministic procedural worlds in
 - **Memory optimized** — sparse biome weights reduce memory by 56% per chunk
 - **Structured logging** — configurable log levels and categories for debugging
 
+## Engine And Client
+
+The repository has two parts:
+
+- `src/` — the engine package, exported as `procedural-world-engine`
+- `app/` — the browser client that uses the engine through a Three.js renderer and UI shell
+
 ## Installation
 
 ```bash
@@ -26,7 +33,7 @@ npm install procedural-world-engine
 ```
 
 > **Runtime dependency**: `pako` is installed automatically and used for world serialization with compression.
-> Three.js is only needed if you use the interactive app.
+> Three.js is only needed if you use the browser client.
 
 ## Documentation
 
@@ -384,7 +391,7 @@ import { poissonDiskSampling } from 'procedural-world-engine';
 const points = poissonDiskSampling({ width: 100, height: 100, minDistance: 10, maxAttempts: 30, seed: 42 });
 ```
 
-## Interactive App
+## Browser Client
 
 The repository includes a full 3D world app built with Three.js:
 

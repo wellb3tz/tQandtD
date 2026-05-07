@@ -1,7 +1,7 @@
 /**
  * Main entry point for the tQandtD world app
  * 
- * This application showcases all features of the procedural world generation engine
+ * This browser client connects to the procedural world engine
  * through an interactive 3D visualization interface built with Three.js.
  */
 

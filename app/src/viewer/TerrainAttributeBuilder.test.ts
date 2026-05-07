@@ -39,6 +39,35 @@ describe('TerrainAttributeBuilder', () => {
     expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
   });
 
+  it('biases lowland tiles near lakes toward wetter surfaces', () => {
+    const data = {
+      size: 2,
+      heightmap: new Float32Array([
+        0.34, 0.35, 0.36,
+        0.35, 0.36, 0.37,
+        0.36, 0.37, 0.38,
+      ]),
+      biomeMap: new Uint8Array([
+        BiomeType.PLAINS,
+        BiomeType.PLAINS,
+        BiomeType.PLAINS,
+        BiomeType.PLAINS,
+      ]),
+      lakes: [{
+        waterLevel: 0.36,
+        tiles: new Set([0]),
+        maxDepth: 0.03,
+      }],
+      resources: [],
+      structures: [],
+    } as unknown as ChunkData;
+
+    const weights = calculateVertexSurfaceWeights(data, 1, 1);
+
+    expect(weights.swampMud + weights.forestFloor).toBeGreaterThan(0);
+    expect(weights.plains).toBeLessThan(1);
+  });
+
   it('builds cliff, snow, shoreline, and riverbed detail masks', () => {
     const data = createRiverChunk({
       heightmap: new Float32Array([0.31, 0.92, 0.31, 0.84]),

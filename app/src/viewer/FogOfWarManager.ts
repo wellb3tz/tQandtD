@@ -4,7 +4,13 @@ import { disposeMesh } from './ThreeDisposal';
 export class FogOfWarManager {
   private readonly meshes = new Map<string, THREE.Mesh>();
 
-  createFogPlane(chunkX: number, chunkY: number, originalTerrain: THREE.Mesh, scene: THREE.Scene): void {
+  createFogPlane(
+    chunkX: number,
+    chunkY: number,
+    originalTerrain: THREE.Mesh,
+    scene: THREE.Scene,
+    visible: boolean = true,
+  ): void {
     const key = getChunkKey(chunkX, chunkY);
     this.removeFogPlane(chunkX, chunkY, scene);
 
@@ -30,6 +36,7 @@ export class FogOfWarManager {
     });
 
     const plane = new THREE.Mesh(planeGeometry, material);
+    plane.visible = visible;
     plane.position.set(
       chunkX * chunkSize + chunkSize / 2,
       avgHeight,

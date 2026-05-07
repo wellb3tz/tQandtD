@@ -290,7 +290,10 @@ export function selectTerrainSurfaceKey(
   biome: BiomeType,
   elevation: number,
   slope: number,
+  moisture: number = 0,
 ): TerrainSurfaceKey {
+  const wetness = clamp01(moisture);
+
   if ((biome === BiomeType.MOUNTAIN || biome === BiomeType.GLACIER) && elevation >= 0.78 && slope < 0.55) {
     return 'snow';
   }
@@ -300,19 +303,28 @@ export function selectTerrainSurfaceKey(
   }
 
   if (slope >= 0.6 || biome === BiomeType.MOUNTAIN) {
-    return 'mountainRock';
+    return biome === BiomeType.GLACIER && wetness > 0.45 ? 'ice' : 'mountainRock';
   }
 
   if (biome === BiomeType.DESERT) {
+    if (wetness > 0.7 && elevation < 0.5) {
+      return 'beach';
+    }
     return 'desert';
   }
 
   if (biome === BiomeType.SAVANNA) {
+    if (wetness > 0.72 && elevation < 0.55) {
+      return 'swampMud';
+    }
+    if (wetness > 0.42) {
+      return 'plains';
+    }
     return 'dryGrass';
   }
 
   if (biome === BiomeType.BEACH) {
-    return 'beach';
+    return wetness > 0.55 ? 'swampMud' : 'beach';
   }
 
   if (biome === BiomeType.GLACIER) {
@@ -320,15 +332,35 @@ export function selectTerrainSurfaceKey(
   }
 
   if (biome === BiomeType.TUNDRA) {
-    return 'snow';
-  }
-
-  if (biome === BiomeType.FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST) {
-    return 'forestFloor';
+    return wetness > 0.72 ? 'ice' : 'snow';
   }
 
   if (biome === BiomeType.SWAMP) {
     return 'swampMud';
+  }
+
+  if (biome === BiomeType.FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST) {
+    if (wetness > 0.74) {
+      return 'swampMud';
+    }
+
+    if (wetness > 0.42 || elevation < 0.42) {
+      return 'forestFloor';
+    }
+
+    return wetness < 0.1 && elevation > 0.5 ? 'dryGrass' : 'forestFloor';
+  }
+
+  if (wetness > 0.74 && elevation < 0.5) {
+    return 'swampMud';
+  }
+
+  if (wetness > 0.45 && elevation < 0.58) {
+    return 'forestFloor';
+  }
+
+  if (wetness < 0.22 && elevation > 0.52) {
+    return 'dryGrass';
   }
 
   return 'plains';
@@ -342,7 +374,7 @@ export function createTexturedTerrainMaterial(
     map: textures.albedo,
     normalMap: textures.normal,
     roughnessMap: textures.roughness,
-    color: new THREE.Color(2.25, 2.25, 2.25),
+    color: new THREE.Color(1.72, 1.72, 1.72),
     normalScale: new THREE.Vector2(0.35, 0.35),
     vertexColors: true,
     wireframe,
@@ -373,7 +405,7 @@ export function createTerrainBlendMaterial(
   const material = new THREE.MeshStandardMaterial({
     map: textures.albedoAtlas,
     normalMap: textures.plains.normal,
-    color: new THREE.Color(2.25, 2.25, 2.25),
+    color: new THREE.Color(1.72, 1.72, 1.72),
     normalScale: new THREE.Vector2(0.35, 0.35),
     vertexColors: true,
     wireframe,
@@ -430,6 +462,10 @@ vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
   return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
 }
 
+vec2 terrainSurfaceUv(vec2 uv) {
+  return uv * vec2(3.25, 3.25);
+}
+
 float terrainValueHash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
@@ -455,16 +491,25 @@ void considerTerrainAtlasTile(
   inout float primaryWeight,
   inout float primaryTile,
   inout float secondaryWeight,
-  inout float secondaryTile
+  inout float secondaryTile,
+  inout float tertiaryWeight,
+  inout float tertiaryTile
 ) {
   if (weight > primaryWeight) {
+    tertiaryWeight = secondaryWeight;
+    tertiaryTile = secondaryTile;
     secondaryWeight = primaryWeight;
     secondaryTile = primaryTile;
     primaryWeight = weight;
     primaryTile = tileIndex;
   } else if (weight > secondaryWeight) {
+    tertiaryWeight = secondaryWeight;
+    tertiaryTile = secondaryTile;
     secondaryWeight = weight;
     secondaryTile = tileIndex;
+  } else if (weight > tertiaryWeight) {
+    tertiaryWeight = weight;
+    tertiaryTile = tileIndex;
   }
 }`,
       )
@@ -474,45 +519,55 @@ void considerTerrainAtlasTile(
 float primarySurfaceTile = 0.0;
 float secondarySurfaceWeight = -1.0;
 float secondarySurfaceTile = 0.0;
-considerTerrainAtlasTile(vSurfaceBlendA.x, 0.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendA.y, 1.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendA.z, 2.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendA.w, 3.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendB.x, 4.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendB.y, 5.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendB.z, 6.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendB.w, 7.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendC.x, 8.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendC.y, 9.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-considerTerrainAtlasTile(vSurfaceBlendC.z, 10.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile);
-float terrainSurfaceWeightSum = max(0.0001, primarySurfaceWeight + max(0.0, secondarySurfaceWeight));
+float tertiarySurfaceWeight = -1.0;
+float tertiarySurfaceTile = 0.0;
+considerTerrainAtlasTile(vSurfaceBlendA.x, 0.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.y, 1.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.z, 2.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendA.w, 3.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.x, 4.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.y, 5.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.z, 6.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendB.w, 7.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.x, 8.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.y, 9.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+considerTerrainAtlasTile(vSurfaceBlendC.z, 10.0, primarySurfaceWeight, primarySurfaceTile, secondarySurfaceWeight, secondarySurfaceTile, tertiarySurfaceWeight, tertiarySurfaceTile);
+float primaryTerrainWeight = pow(max(0.0, primarySurfaceWeight), 0.88);
+float secondaryTerrainWeight = pow(max(0.0, secondarySurfaceWeight), 0.88);
+float tertiaryTerrainWeight = pow(max(0.0, tertiarySurfaceWeight), 0.88);
+float terrainSurfaceWeightSum = max(0.0001, primaryTerrainWeight + secondaryTerrainWeight + tertiaryTerrainWeight);
 vec4 blendedTerrainMap = (
-  sampleTerrainAtlasTile(primarySurfaceTile, vMapUv) * primarySurfaceWeight +
-  sampleTerrainAtlasTile(secondarySurfaceTile, vMapUv) * max(0.0, secondarySurfaceWeight)
+  sampleTerrainAtlasTile(primarySurfaceTile, terrainSurfaceUv(vMapUv)) * primaryTerrainWeight +
+  sampleTerrainAtlasTile(secondarySurfaceTile, terrainSurfaceUv(vMapUv)) * secondaryTerrainWeight +
+  sampleTerrainAtlasTile(tertiarySurfaceTile, terrainSurfaceUv(vMapUv)) * tertiaryTerrainWeight
 ) / terrainSurfaceWeightSum;
-vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.72)) * 1.85 + vec3(0.90), vec3(0.52), vec3(1.35));
-diffuseColor.rgb *= terrainDetailContrast;
+vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.53)) * 2.85 + vec3(0.72), vec3(0.28), vec3(1.55));
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * terrainDetailContrast, 0.98);
 diffuseColor.a *= blendedTerrainMap.a;
 float forestFloorWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
 vec3 forestFloorTint = vec3(0.86, 0.96, 0.76);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestFloorTint, forestFloorWeight * 0.16);
 float vegetatedGroundWeight = clamp(vSurfaceBlendA.x * 0.70 + vSurfaceBlendB.y + vSurfaceBlendB.z * 0.85 + vSurfaceBlendB.w * 0.55, 0.0, 1.0);
-float macroGroundNoiseValue = macroGroundNoise(vMapUv);
+float macroGroundNoiseValue = macroGroundNoise(terrainSurfaceUv(vMapUv));
 float dryGrassPatch = smoothstep(0.58, 0.86, macroGroundNoiseValue) * clamp(vSurfaceBlendA.x * 0.45 + vSurfaceBlendB.z * 0.95 + forestFloorWeight * 0.24, 0.0, 1.0);
 float freshGrassPatch = smoothstep(0.34, 0.70, 1.0 - abs(macroGroundNoiseValue - 0.42) * 2.35) * vegetatedGroundWeight;
 float wornGroundPatch = smoothstep(0.52, 0.82, 1.0 - abs(macroGroundNoiseValue - 0.52) * 2.05) * forestFloorWeight;
-float wetLowlandPatch = smoothstep(0.45, 0.86, macroGroundNoiseValue) * clamp(vTerrainDetailBlend.z + vSurfaceBlendB.w * 0.78 + vSurfaceBlendC.z * 0.45, 0.0, 1.0);
+float shorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.94 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
+float wetLowlandPatch = smoothstep(0.40, 0.84, macroGroundNoiseValue) * shorelineWetness;
+float wetTerrainWeight = clamp(max(shorelineWetness, wetLowlandPatch), 0.0, 1.0);
 vec3 freshGrassPatchTint = vec3(0.90, 1.08, 0.82);
 vec3 dryGrassPatchTint = vec3(1.12, 1.00, 0.70);
 vec3 wornGroundTint = vec3(0.74, 0.67, 0.50);
-vec3 wetLowlandTint = vec3(0.58, 0.72, 0.64);
+vec3 wetLowlandTint = vec3(0.56, 0.67, 0.61);
+vec3 wetGlossTint = vec3(0.95, 1.02, 0.98);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * freshGrassPatchTint, freshGrassPatch * 0.10);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * dryGrassPatchTint, dryGrassPatch * 0.18);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wornGroundTint, wornGroundPatch * 0.12);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetLowlandTint, wetLowlandPatch * 0.24);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetLowlandTint, wetTerrainWeight * 0.30);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetGlossTint, wetTerrainWeight * 0.12);
 vec3 cliffTint = vec3(0.64, 0.63, 0.60);
 vec3 snowPeakTint = vec3(1.18, 1.19, 1.20);
-vec3 wetShorelineTint = vec3(0.42, 0.54, 0.56);
+vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54);
 vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
 float cliffAccent = smoothstep(0.08, 1.0, vTerrainDetailBlend.x);
 float snowAccent = smoothstep(0.04, 1.0, vTerrainDetailBlend.y);
@@ -520,8 +575,8 @@ float shorelineAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.z);
 float riverbedAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.w);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.56);
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.62);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.68);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.50);`,
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.54);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
@@ -541,8 +596,9 @@ float surfaceRoughnessBlend =
 roughnessFactor *= max(0.28, surfaceRoughnessBlend);
 roughnessFactor = mix(roughnessFactor, min(1.0, roughnessFactor + 0.12), vTerrainDetailBlend.x * 0.35);
 roughnessFactor = mix(roughnessFactor, 0.72, vTerrainDetailBlend.y * 0.25);
-roughnessFactor = mix(roughnessFactor, 0.38, vTerrainDetailBlend.z * 0.65);
-roughnessFactor = mix(roughnessFactor, 0.48, vTerrainDetailBlend.w * 0.55);`,
+float roughnessShorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.94 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
+roughnessFactor = mix(roughnessFactor, 0.34, roughnessShorelineWetness * 0.68);
+roughnessFactor = mix(roughnessFactor, 0.42, vTerrainDetailBlend.w * 0.60);`,
       );
   };
 
@@ -595,4 +651,8 @@ export function lerpColor(color1: BiomeColor, color2: BiomeColor, t: number): Bi
     g: color1.g + (color2.g - color1.g) * t,
     b: color1.b + (color2.b - color1.b) * t,
   };
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
