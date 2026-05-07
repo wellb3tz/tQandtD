@@ -590,7 +590,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('adds low shoreline shrubs near riverbanks while keeping water channels clear', () => {
+  it('does not add shoreline shrub layers near riverbanks', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -619,34 +619,11 @@ describe('WorldViewer lifecycle', () => {
     }));
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
-    const shrubs = foliage.children[1] as THREE.InstancedMesh;
-    const shrubPositions = shrubs.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const matrix = new THREE.Matrix4();
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-    let minShrubGeometryY = Infinity;
-    let hasShrubInWater = false;
-
-    for (let i = 0; i < shrubPositions.count; i++) {
-      minShrubGeometryY = Math.min(minShrubGeometryY, shrubPositions.getY(i));
-    }
-
-    for (let i = 0; i < shrubs.count; i++) {
-      shrubs.getMatrixAt(i, matrix);
-      matrix.decompose(position, quaternion, scale);
-      const shrubBottomY = position.y + minShrubGeometryY * scale.y;
-      expect(shrubBottomY).toBeCloseTo(25, 5);
-      if (Math.abs(position.x - 8.5) <= 0.8) {
-        hasShrubInWater = true;
-        break;
-      }
-    }
+    const shrubs = foliage.children.find(child => child.name === 'foliage-shrubs');
 
     expect(foliage.userData.treeCount).toBeGreaterThan(0);
-    expect(foliage.userData.shrubCount).toBeGreaterThan(0);
-    expect(shrubs).toBeInstanceOf(THREE.InstancedMesh);
-    expect(hasShrubInWater).toBe(false);
+    expect(foliage.userData.shrubCount).toBe(0);
+    expect(shrubs).toBeUndefined();
 
     viewer.dispose();
   });
