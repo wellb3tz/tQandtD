@@ -41,6 +41,9 @@ const SEA_LEVEL = 0.3;
 const RIVER_MOUTH_TAPER_HEIGHT = 0.1;
 const RIVER_MOUTH_MAX_BELOW_SEA_DEPTH = 0.025;
 const RIVER_TERMINAL_CARVE_EXTENSION = 1;
+const RIVER_MIN_CHANNEL_CARVE_RADIUS = 1.35;
+const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
+const RIVER_VALLEY_PROFILE_PADDING = 0.5;
 
 /**
  * Configuration for 3D noise generation
@@ -1387,8 +1390,14 @@ export class ChunkManager implements ChunkManagerSnapshot {
           const sample = this.closestRiverSample(x, y, points, RIVER_TERMINAL_CARVE_EXTENSION);
           if (!sample) continue;
 
-          const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
-          const valleyRadius = Math.max(getRiverValleyWidth(sample) * 0.5, channelRadius);
+          const rawChannelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+          const channelRadius = rawChannelRadius > 0
+            ? Math.max(rawChannelRadius, RIVER_MIN_CHANNEL_CARVE_RADIUS)
+            : 0;
+          const valleyRadius = Math.max(
+            getRiverValleyWidth(sample) * 0.5 + (rawChannelRadius > 0 ? RIVER_VALLEY_PROFILE_PADDING : 0),
+            channelRadius,
+          );
           if (sample.distance > valleyRadius) continue;
 
           const index = y * vertexSize + x;
@@ -1399,9 +1408,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
           const mouthDepthScale = mouthT * mouthT * (3 - 2 * mouthT);
 
           if (channelRadius > 0) {
-            const trenchFalloff = 1 - Math.min(sample.distance / valleyRadius, 1);
             const channelTarget = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample) * mouthDepthScale);
-            target = heightmap[index] * (1 - trenchFalloff) + channelTarget * trenchFalloff;
+            const bankDepth = Math.min(getRiverChannelDepth(sample) * 0.6, getRiverValleyDepth(sample) * 1.2);
+            const bankTarget = Math.max(0, sample.surfaceLevel - bankDepth * mouthDepthScale);
+            target = this.calculateRiverChannelProfileHeight(
+              heightmap[index],
+              sample.distance,
+              channelRadius,
+              valleyRadius,
+              channelTarget,
+              bankTarget,
+            );
           } else if (channelRadius === 0 && sample.distance === 0) {
             target = Math.max(0, sample.surfaceLevel - getRiverChannelDepth(sample) * mouthDepthScale);
           } else {
@@ -1471,6 +1488,44 @@ export class ChunkManager implements ChunkManagerSnapshot {
     }
 
     return best;
+  }
+
+  private calculateRiverChannelProfileHeight(
+    originalHeight: number,
+    distance: number,
+    channelRadius: number,
+    valleyRadius: number,
+    channelTarget: number,
+    bankTarget: number,
+  ): number {
+    if (valleyRadius <= 0) return originalHeight;
+
+    if (channelRadius >= valleyRadius - 1e-6) {
+      const t = this.smoothStep(Math.min(Math.max(distance / valleyRadius, 0), 1));
+      return channelTarget * (1 - t) + originalHeight * t;
+    }
+
+    const floorRadius = Math.min(
+      Math.max(channelRadius * 0.35, RIVER_MIN_CHANNEL_FLOOR_RADIUS),
+      channelRadius * 0.7,
+    );
+    if (distance <= floorRadius) {
+      return channelTarget;
+    }
+
+    if (distance <= channelRadius) {
+      const channelWallT = this.smoothStep(
+        Math.min(Math.max((distance - floorRadius) / (channelRadius - floorRadius), 0), 1),
+      );
+      return channelTarget * (1 - channelWallT) + bankTarget * channelWallT;
+    }
+
+    const outerT = Math.min(Math.max((distance - channelRadius) / (valleyRadius - channelRadius), 0), 1);
+    return bankTarget * (1 - outerT) + originalHeight * outerT;
+  }
+
+  private smoothStep(t: number): number {
+    return t * t * (3 - 2 * t);
   }
 
   private interpolateOptional(a: number | undefined, b: number | undefined, t: number): number | undefined {

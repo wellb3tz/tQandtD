@@ -403,6 +403,138 @@ describe('ChunkManager rivers', () => {
     expect(largestStep).toBeLessThanOrEqual(0.05);
   });
 
+  it('keeps deep river cutting in the channel instead of dragging outer banks down', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const untouchedHeight = 0.72;
+    const worldRiver: WorldRiverData = {
+      id: 'river_bobsled_channel',
+      mainPath: [
+        {
+          x: 2,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 2,
+          depth: 0.02,
+          flow: 0.8,
+          channelWidth: 2,
+          valleyWidth: 10,
+          channelDepth: 0.2,
+          valleyDepth: 0.02,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 14,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 2,
+          depth: 0.02,
+          flow: 0.8,
+          channelWidth: 2,
+          valleyWidth: 10,
+          channelDepth: 0.2,
+          valleyDepth: 0.02,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 2, y: 8 },
+      mouth: { x: 14, y: 8 },
+      bounds: { minX: 2, maxX: 14, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(untouchedHeight),
+      getHeightAt: () => untouchedHeight,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+    const center = chunk.heightmap[8 * vertexSize + 8];
+    const outerBank = chunk.heightmap[12 * vertexSize + 8];
+
+    expect(center).toBeLessThan(0.45);
+    expect(outerBank).toBeGreaterThan(0.67);
+    expect(outerBank).toBeLessThan(untouchedHeight);
+  });
+
+  it('widens sub-cell river channels enough to avoid needle-like terrain cuts', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const untouchedHeight = 0.72;
+    const worldRiver: WorldRiverData = {
+      id: 'river_sub_cell_channel',
+      mainPath: [
+        {
+          x: 2,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 0.6,
+          depth: 0.02,
+          flow: 0.4,
+          channelWidth: 0.6,
+          valleyWidth: 4,
+          channelDepth: 0.2,
+          valleyDepth: 0.02,
+          flowX: 1,
+          flowY: 0,
+        },
+        {
+          x: 14,
+          y: 8,
+          height: untouchedHeight,
+          surfaceLevel: 0.62,
+          width: 0.6,
+          depth: 0.02,
+          flow: 0.4,
+          channelWidth: 0.6,
+          valleyWidth: 4,
+          channelDepth: 0.2,
+          valleyDepth: 0.02,
+          flowX: 1,
+          flowY: 0,
+        },
+      ],
+      tributaries: [],
+      source: { x: 2, y: 8 },
+      mouth: { x: 14, y: 8 },
+      bounds: { minX: 2, maxX: 14, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(untouchedHeight),
+      getHeightAt: () => untouchedHeight,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const vertexSize = chunk.size + 1;
+    const heights = [8, 9, 10].map(y => chunk.heightmap[y * vertexSize + 8]);
+
+    expect(heights[0]).toBeLessThan(0.45);
+    expect(heights[1]).toBeLessThan(0.58);
+    expect(heights[1] - heights[0]).toBeLessThan(0.14);
+    expect(heights[2]).toBeGreaterThan(heights[1]);
+  });
+
   it('does not carve river trenches into terrain already below sea level', () => {
     const config = makeMinimalConfig(42);
     config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
