@@ -114,8 +114,9 @@ export class WorldViewer {
     this.renderStatsCache = new ViewerRenderStatsCache(this.chunkMeshes.values());
     this.terrainRaycaster = new ViewerTerrainRaycaster({
       camera: this.camera,
+      getCamera: () => this.cameraViewController.getActiveCamera(),
       canvas: this.renderer.domElement,
-      chunks: this.chunkMeshes.values(),
+      getChunks: () => this.chunkMeshes.values(),
       getContainer: () => this.container,
     });
     this.chunkController = new WorldChunkController({

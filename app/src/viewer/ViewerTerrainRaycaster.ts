@@ -17,8 +17,10 @@ export type TerrainRaycastFunction = (
 
 export interface ViewerTerrainRaycasterOptions {
   camera: THREE.Camera;
+  getCamera?: () => THREE.Camera;
   canvas: HTMLCanvasElement;
-  chunks: Iterable<ChunkMesh>;
+  chunks?: Iterable<ChunkMesh>;
+  getChunks?: () => Iterable<ChunkMesh>;
   getContainer: () => HTMLElement | null;
   chunkSize?: number;
   heightScale?: number;
@@ -26,18 +28,18 @@ export interface ViewerTerrainRaycasterOptions {
 }
 
 export class ViewerTerrainRaycaster {
-  private readonly camera: THREE.Camera;
+  private readonly getCamera: () => THREE.Camera;
   private readonly canvas: HTMLCanvasElement;
-  private readonly chunks: Iterable<ChunkMesh>;
+  private readonly getChunks: () => Iterable<ChunkMesh>;
   private readonly getContainer: () => HTMLElement | null;
   private readonly chunkSize: number;
   private readonly heightScale: number;
   private readonly raycastTerrain: TerrainRaycastFunction;
 
   constructor(options: ViewerTerrainRaycasterOptions) {
-    this.camera = options.camera;
+    this.getCamera = options.getCamera ?? (() => options.camera);
     this.canvas = options.canvas;
-    this.chunks = options.chunks;
+    this.getChunks = options.getChunks ?? (() => options.chunks ?? []);
     this.getContainer = options.getContainer;
     this.chunkSize = options.chunkSize ?? 32;
     this.heightScale = options.heightScale ?? 50;
@@ -57,7 +59,7 @@ export class ViewerTerrainRaycaster {
     return this.raycastTerrain(
       screenX,
       screenY,
-      this.camera,
+      this.getCamera(),
       this.canvas,
       terrainMeshes,
       this.chunkSize,
@@ -68,7 +70,7 @@ export class ViewerTerrainRaycaster {
   private getTerrainMeshes(): THREE.Mesh[] {
     const terrainMeshes: THREE.Mesh[] = [];
 
-    for (const chunk of this.chunks) {
+    for (const chunk of this.getChunks()) {
       terrainMeshes.push(chunk.terrain);
     }
 

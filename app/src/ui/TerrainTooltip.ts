@@ -31,9 +31,19 @@ const LAKE_COLOR = '#4fc3d4'; // matches DEFAULT_LAKE_RENDER_CONFIG shallow colo
 function getLakeAtTile(chunk: ChunkData, tileIndex: number): number | null {
   if (!chunk.lakes) return null;
   for (const lake of chunk.lakes) {
-    if (lake.tiles.has(tileIndex)) return lake.waterLevel;
+    if (hasTile(lake.tiles, tileIndex)) return lake.waterLevel;
   }
   return null;
+}
+
+function hasTile(tiles: unknown, tileIndex: number): boolean {
+  if (tiles instanceof Set) return tiles.has(tileIndex);
+  if (Array.isArray(tiles)) return tiles.includes(tileIndex);
+  const typedTiles = tiles as { includes?: unknown };
+  if (ArrayBuffer.isView(tiles) && typeof typedTiles.includes === 'function') {
+    return (typedTiles as { includes: (value: number) => boolean }).includes(tileIndex);
+  }
+  return false;
 }
 
 export class TerrainTooltip {
@@ -131,7 +141,7 @@ export class TerrainTooltip {
     // Look up chunk data
     const state = this.app.getState();
     const key   = `${hit.chunkX},${hit.chunkY}`;
-    const chunk = state.loadedChunks.get(key) as ChunkData | undefined;
+    const chunk = (hit.chunkData ?? state.loadedChunks.get(key)) as ChunkData | undefined;
 
     // Chunk may not be loaded yet (e.g. right after world regeneration) — hide and wait
     if (!chunk) { this.hide(); return; }

@@ -48,6 +48,8 @@ export interface RaycastHit {
   height: number;
   /** Distance from ray origin to hit point */
   distance: number;
+  /** Optional chunk data carried by the intersected terrain mesh */
+  chunkData?: ChunkData;
 }
 
 /**
@@ -93,9 +95,12 @@ export function screenToNDC(
   screenY: number,
   canvas: HTMLCanvasElement
 ): Vector2 {
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+
   return {
-    x: (screenX / canvas.width) * 2 - 1,
-    y: -(screenY / canvas.height) * 2 + 1
+    x: (screenX / width) * 2 - 1,
+    y: -(screenY / height) * 2 + 1
   };
 }
 
@@ -162,7 +167,8 @@ export function raycastTerrain(
     localX,
     localY,
     height,
-    distance: intersection.distance
+    distance: intersection.distance,
+    chunkData: (intersection.object as THREE.Mesh).userData?.chunkData as ChunkData | undefined
   };
 }
 

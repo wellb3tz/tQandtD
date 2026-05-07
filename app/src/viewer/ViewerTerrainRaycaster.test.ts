@@ -59,6 +59,48 @@ describe('ViewerTerrainRaycaster', () => {
       50
     );
   });
+
+  it('uses the active camera getter when raycasting', () => {
+    const baseCamera = new THREE.PerspectiveCamera();
+    const activeCamera = new THREE.OrthographicCamera();
+    const raycastTerrain = vi.fn(() => null);
+    const canvas = createCanvas();
+    const raycaster = createRaycaster({
+      camera: baseCamera,
+      getCamera: () => activeCamera,
+      canvas,
+      raycastTerrain,
+    });
+
+    raycaster.raycast(10, 20);
+
+    expect(raycastTerrain).toHaveBeenCalledWith(
+      10,
+      20,
+      activeCamera,
+      canvas,
+      [expect.any(THREE.Mesh)],
+      32,
+      50
+    );
+  });
+
+  it('uses a fresh chunk iterable for repeated raycasts', () => {
+    const terrain = new THREE.Mesh();
+    const chunks = new Map<string, ChunkMesh>([['0,0', createChunk(terrain)]]);
+    const raycastTerrain = vi.fn(() => null);
+    const raycaster = createRaycaster({
+      getChunks: () => chunks.values(),
+      raycastTerrain,
+    });
+
+    raycaster.raycast(10, 20);
+    raycaster.raycast(11, 21);
+
+    expect(raycastTerrain).toHaveBeenCalledTimes(2);
+    expect(raycastTerrain.mock.calls[0]?.[4]).toEqual([terrain]);
+    expect(raycastTerrain.mock.calls[1]?.[4]).toEqual([terrain]);
+  });
 });
 
 function createRaycaster(overrides: Partial<ConstructorParameters<typeof ViewerTerrainRaycaster>[0]> = {}) {
