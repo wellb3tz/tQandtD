@@ -708,6 +708,39 @@ describe('WorldSession', () => {
     expect(renderer.events).toContain('chunk:0,0');
   });
 
+  it('can attach and replace a renderer after chunks are already loaded', async () => {
+    const world = makeFakeWorld(16);
+    const session = new WorldSession({
+      world,
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+    const firstRenderer = new FakeRenderer();
+    const secondRenderer = new FakeRenderer();
+
+    await session.loadChunksAround(0, 0, 0);
+    expect(session.scene.renderSystem).toBeNull();
+
+    session.setRenderer(firstRenderer);
+    expect(session.scene.renderSystem?.hasChunk({ x: 0, y: 0 })).toBe(true);
+    expect(firstRenderer.events).toEqual(['initialize', 'chunk:0,0']);
+
+    session.setRenderer(secondRenderer);
+    expect(firstRenderer.events).toContain('remove-chunk:0,0');
+    expect(firstRenderer.events).toContain('dispose');
+    expect(secondRenderer.events).toEqual(['initialize', 'chunk:0,0']);
+
+    session.clearRenderer();
+    expect(session.scene.renderSystem).toBeNull();
+    expect(secondRenderer.events).toContain('remove-chunk:0,0');
+    expect(secondRenderer.events).toContain('dispose');
+  });
+
   it('emits chunk lifecycle events and supports unsubscribe', async () => {
     const world = makeFakeWorld(16);
     const session = new WorldSession({
@@ -845,42 +878,6 @@ describe('WorldSession', () => {
     expect(world.requests).toEqual([[0, 0], [0, 0]]);
     expect(renderer.events.filter(event => event === 'chunk:0,0')).toHaveLength(2);
     expect(renderer.events).toContain('remove-chunk:0,0');
-  });
-
-  it('records terrain edits and publishes chunk updates through the session', async () => {
-    const session = new WorldSession({
-      worldConfig: makeMinimalConfig(115),
-      scene: {
-        player: false,
-        input: false,
-        movement: false,
-        streaming: false,
-        renderer: false,
-      },
-    });
-    const events: string[] = [];
-
-    session.on('chunk_updated', ({ coordinate, chunk }) => {
-      events.push(`updated:${coordinate.x},${coordinate.y}:${chunk.heightmap[0].toFixed(2)}`);
-    });
-
-    await session.loadChunksAround(0, 0, 0);
-    const chunk = await session.getChunk({ x: 0, y: 0 });
-    chunk.heightmap[0] = 0.42;
-    session.recordTerrainEdit({ x: 0, y: 0 }, 0, 0.42);
-
-    const updated = await session.notifyChunkUpdated({ x: 0, y: 0 }, { syncRenderer: false });
-    const saved = session.saveWorld({
-      format: SerializationFormat.JSON,
-      compress: false,
-      modifiedOnly: true,
-    });
-
-    expect(updated.heightmap[0]).toBeCloseTo(0.42);
-    expect(session.getLoadedChunks().get('0,0')?.heightmap[0]).toBeCloseTo(0.42);
-    expect(saved.modifications).toHaveLength(1);
-    expect(saved.modifications[0].heightChanges.get(0)).toBeCloseTo(0.42);
-    expect(events).toEqual(['updated:0,0:0.42']);
   });
 
   it('saves and loads worlds through the current chunk manager', async () => {

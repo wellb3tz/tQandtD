@@ -7,17 +7,8 @@
  */
 
 import { WorldApp } from '@core/WorldApp';
-import { WorldSerializer, SerializationFormat, SerializationOptions } from '@engine/index';
+import { WorldSerializer, SerializationFormat, type SerializationOptions } from '@engine/index';
 import { errorHandler } from '../utils/ErrorHandler';
-
-/**
- * Save dialog options
- */
-interface SaveDialogOptions {
-  format: SerializationFormat;
-  compress: boolean;
-  modifiedOnly: boolean;
-}
 
 /**
  * Export format for images
@@ -96,14 +87,6 @@ export class WorldManager {
               Enable Compression
             </label>
             <p class="help-text">Reduces file size using deflate compression</p>
-          </div>
-          
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="save-modified-only" />
-              Save Modified Chunks Only
-            </label>
-            <p class="help-text">Only save chunks that have been modified</p>
           </div>
           
           <div class="form-group">
@@ -435,17 +418,13 @@ export class WorldManager {
       const compressCheckbox = document.getElementById('save-compress') as HTMLInputElement;
       const compress = compressCheckbox.checked;
 
-      const modifiedOnlyCheckbox = document.getElementById('save-modified-only') as HTMLInputElement;
-      const modifiedOnly = modifiedOnlyCheckbox.checked;
-
       const filenameInput = document.getElementById('save-filename') as HTMLInputElement;
       const filename = filenameInput.value || 'world';
 
       // Create serialization options
       const options: SerializationOptions = {
         format,
-        compress,
-        modifiedOnly
+        compress
       };
 
       const { data: exportData, checksum } = this.app.exportWorld(options);
@@ -506,7 +485,7 @@ export class WorldManager {
       if (chunksValue) chunksValue.textContent = serializedWorld.chunks.length.toString();
       if (checksumValue) checksumValue.textContent = serializedWorld.checksum;
       if (statusValue) {
-        statusValue.textContent = 'Valid ✓';
+        statusValue.textContent = 'Valid';
         statusValue.style.color = 'var(--success-color, green)';
       }
 
@@ -528,7 +507,7 @@ export class WorldManager {
       // Show error status
       const statusValue = document.getElementById('load-status-value');
       if (statusValue) {
-        statusValue.textContent = 'Invalid ✗';
+        statusValue.textContent = 'Invalid';
         statusValue.style.color = 'var(--error-color, red)';
       }
 

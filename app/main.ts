@@ -8,9 +8,8 @@
 // Import styles
 import './styles.css';
 
-import { WorldSession } from '@engine/index';
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
-import { WorldApp, AppEvent } from './src/core/WorldApp';
+import { WorldApp, AppEvent, type ViewerSettings } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
 import { WorldViewer, RenderLayer } from './src/viewer/WorldViewer';
 import { WorldManager } from './src/ui/WorldManager';
@@ -28,13 +27,55 @@ let app: WorldApp | null = null;
 let controlPanelInstance: ControlPanel | null = null;
 let worldViewer: WorldViewer | null = null;
 let worldRenderer: ThreeWorldRendererAdapter | null = null;
-let worldSession: WorldSession | null = null;
 let worldManager: WorldManager | null = null;
 let performanceMonitor: PerformanceMonitor | null = null;
 let statisticsDisplay: StatisticsDisplay | null = null;
 let minimap: Minimap | null = null;
 let terrainTooltip: TerrainTooltip | null = null;
 let helpModal: HelpModal | null = null;
+
+function applyViewerSettings(viewer: WorldViewer, settings: ViewerSettings): void {
+  viewer.setVisibility(RenderLayer.TERRAIN, settings.showTerrain);
+  viewer.setVisibility(RenderLayer.BIOMES, settings.showBiomes);
+  viewer.setWaterVisibility(settings.showWater);
+  viewer.setVisibility(RenderLayer.RESOURCES, settings.showResources);
+  viewer.setVisibility(RenderLayer.STRUCTURES, settings.showStructures);
+  viewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, settings.showChunkBoundaries);
+  viewer.setWireframeMode(settings.showWireframe);
+  viewer.setTerrainTexturesEnabled(settings.terrainTexturesEnabled);
+  viewer.setFogOfWarVisibility(settings.fogOfWarEnabled);
+  viewer.setBackgroundMode(settings.skyBackground);
+
+  if (settings.waterView) {
+    const currentWaterConfig = viewer.getWaterConfig();
+    viewer.setWaterConfig({
+      ...currentWaterConfig,
+      ocean: {
+        ...currentWaterConfig.ocean,
+        ...settings.waterView.ocean,
+      },
+      lake: {
+        ...currentWaterConfig.lake,
+        ...settings.waterView.lake,
+      },
+      river: {
+        ...currentWaterConfig.river,
+        ...settings.waterView.river,
+      },
+    });
+  }
+}
+
+function refreshVisibleWaterChunks(viewer: WorldViewer, appInstance: WorldApp, settings: ViewerSettings): void {
+  if (!settings.waterView) {
+    return;
+  }
+
+  appInstance.getLoadedChunksSnapshot().forEach((chunkData, key) => {
+    const [chunkX, chunkY] = key.split(',').map(Number);
+    viewer.updateChunk(chunkX, chunkY, chunkData);
+  });
+}
 
 // Global timers for cleanup
 let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -123,33 +164,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       worldViewer = new WorldViewer();
       worldViewer.initialize(viewerContainer);
       worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
-      const chunkManager = app.getWorld();
-      if (chunkManager) {
-        worldSession = new WorldSession({
-          world: chunkManager,
-          disposeWorldOnReplace: true,
-          scene: {
-            renderer: worldRenderer,
-            input: false,
-            movement: false,
-            streaming: false,
-            player: false,
-          },
-        });
-        app.attachWorldSession(worldSession);
-      }
+      app.setRenderer(worldRenderer);
       console.log('WorldViewer initialized successfully');
       
       // Apply initial visibility state from application core
-      const initialState = app.getState();
-      worldViewer.setVisibility(RenderLayer.TERRAIN, initialState.showTerrain);
-      worldViewer.setVisibility(RenderLayer.BIOMES, initialState.showBiomes);
-      worldViewer.setWaterVisibility(initialState.showWater);
-      worldViewer.setVisibility(RenderLayer.RESOURCES, initialState.showResources);
-      worldViewer.setVisibility(RenderLayer.STRUCTURES, initialState.showStructures);
-      worldViewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, initialState.showChunkBoundaries);
-      worldViewer.setWireframeMode(initialState.showWireframe);
-      worldViewer.setTerrainTexturesEnabled(initialState.terrainTexturesEnabled);
+      applyViewerSettings(worldViewer, app.getViewerSettings());
       
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
@@ -158,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let lastUIUpdate = 0;
       const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
       const chunkLoadCheckInterval = 500; // Check for new chunks every 500ms
-      const performanceUpdateInterval = 1000; // Update performance metrics every 1000ms (было 500ms)
+      const performanceUpdateInterval = 1000; // Update performance metrics every 1000ms.
       const uiUpdateInterval = 100; // Update UI every 100ms
       
       // FPS tracking
@@ -187,21 +206,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       renderLoop();
       
-      // Разделяем задачи на разные интервалы для избежания пиковой нагрузки
+      // Split work across intervals to avoid frame-time spikes.
       
-      // 1. Интервал для обновления UI (каждые 100ms)
+      // 1. UI update interval (every 100ms)
       uiUpdateTimer = setInterval(() => {
         if (worldViewer && app) {
           const cameraPos = worldViewer.getCameraPosition();
           const now = performance.now();
           
-          // Обновление позиции камеры в приложении
+          // Update camera position in app state.
           if (now - lastCameraUpdate >= cameraUpdateInterval) {
             app.updateCameraPosition(cameraPos);
             lastCameraUpdate = now;
           }
           
-          // Обновление UI элементов (легкие операции)
+          // Update lightweight UI elements.
           if (now - lastUIUpdate >= uiUpdateInterval) {
             // Update camera position display
             if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
@@ -217,7 +236,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (statusChunks && app) {
               statusChunks.textContent = app.getLoadedChunkCount().toString();
             }
-            // Update compass — rotate needle opposite to camera yaw
+            // Update compass: rotate needle opposite to camera yaw.
             if (compassNeedle) {
               const heading = worldViewer.getCameraHeading();
               compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
@@ -228,13 +247,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, uiUpdateInterval);
       
-      // 2. Интервал для загрузки чанков (каждые 500ms) - выполняется асинхронно
+      // 2. Chunk loading interval (every 500ms), executed asynchronously.
       chunkLoadTimer = setInterval(() => {
         if (worldViewer && app) {
           const now = performance.now();
           
           if (now - lastChunkLoadCheck >= chunkLoadCheckInterval) {
-            // Выполняем в следующем тике event loop чтобы не блокировать рендеринг
+            // Run on the next event-loop tick to avoid blocking rendering.
             setTimeout(() => {
               const cameraPos = worldViewer!.getCameraPosition();
               const chunkSize = 32; // Default chunk size
@@ -257,15 +276,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, chunkLoadCheckInterval);
       
-      // 3. Интервал для обновления метрик производительности (каждые 1000ms) - выполняется асинхронно
+      // 3. Performance metrics interval (every 1000ms), executed asynchronously.
       performanceTimer = setInterval(() => {
         if (worldViewer && app) {
           const now = performance.now();
           
           if (now - lastPerformanceUpdate >= performanceUpdateInterval) {
-            // Выполняем в следующем тике event loop
+            // Run on the next event-loop tick.
             setTimeout(() => {
-              // Get render stats from WorldViewer (может быть тяжелой операцией)
+              // Get render stats from WorldViewer. This can be moderately expensive.
               const renderStats = worldViewer!.getRenderStats();
               
               // Calculate memory usage (approximate)
@@ -276,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 performanceMonitor.updateMemoryUsage(memoryUsage);
                 performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
               }
-              // Update status bar biome (только если нужно, не каждый раз)
+              // Update status bar biome only when needed.
               if (statusBiome && app) {
                 const dominantBiome = app!.getDominantBiomeName();
                 if (dominantBiome) {
@@ -284,7 +303,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
               }
               
-              // Redraw minimap (только если нужно)
+              // Redraw minimap only when needed.
               if (minimap) {
                 minimap.draw();
               }
@@ -300,12 +319,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, performanceUpdateInterval);
       
-      // Очистка таймеров при закрытии страницы
+      // Clean up timers when the page closes.
       window.addEventListener('beforeunload', () => {
         if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
         if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
         if (performanceTimer !== null) clearInterval(performanceTimer);
-        if (worldSession) worldSession.dispose();
         if (worldViewer) worldViewer.dispose();
         if (app) app.destroy();
       });
@@ -324,32 +342,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       controlPanelInstance = new ControlPanel();
       controlPanelInstance.initialize(controlPanelContainer, app);
       console.log('ControlPanel initialized successfully');
-
-      // Settings-changed disclaimer
-      const disclaimer = document.createElement('div');
-      disclaimer.id = 'settings-changed-disclaimer';
-      disclaimer.textContent = '⚠ Настройки изменены — требуется сгенерировать мир';
-      disclaimer.style.cssText = [
-        'display:none',
-        'position:fixed',
-        'bottom:16px',
-        'left:50%',
-        'transform:translateX(-50%)',
-        'background:rgba(30,30,30,0.92)',
-        'color:#f5c542',
-        'padding:8px 18px',
-        'border-radius:8px',
-        'font-size:0.82rem',
-        'pointer-events:none',
-        'z-index:9999',
-        'white-space:nowrap',
-        'box-shadow:0 2px 12px rgba(0,0,0,0.4)',
-      ].join(';');
-      document.body.appendChild(disclaimer);
-
-      controlPanelInstance.onParameterChange(() => {
-        disclaimer.style.display = 'block';
-      });
     }
     
     // Initialize WorldManager
@@ -431,20 +423,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Listen to app events
     app.on(AppEvent.WORLD_GENERATED, (data) => {
-      app?.syncWorldSession(worldSession);
       if (worldViewer) {
         worldViewer.clearChunks();
         worldViewer.clearFogOfWar();
       }
-      const disclaimer = document.getElementById('settings-changed-disclaimer');
-      if (disclaimer) disclaimer.style.display = 'none';
       // Update status bar seed
       if (statusSeed) statusSeed.textContent = data.seed.toString();
       errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
     });
     
     app.on(AppEvent.CHUNK_LOADED, (data) => {
-      const renderSystem = worldSession?.scene.renderSystem;
+      const renderSystem = app?.getWorldSession()?.scene.renderSystem;
       if (!data.partial && data.stage === undefined && renderSystem) {
         renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
       } else if (worldRenderer) {
@@ -462,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     app.on(AppEvent.CHUNK_UNLOADED, (data) => {
-      const renderSystem = worldSession?.scene.renderSystem;
+      const renderSystem = app?.getWorldSession()?.scene.renderSystem;
       if (!data.keepFogOfWar && renderSystem) {
         renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
       } else if (worldRenderer) {
@@ -472,46 +461,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
 
-    app.on(AppEvent.CONFIG_CHANGED, () => {
-      app?.syncWorldSession(worldSession);
-    });
-    
     app.on(AppEvent.VISIBILITY_CHANGED, (visibilityState) => {
       // Update WorldViewer layer visibility
-      if (worldViewer) {
+      if (worldViewer && app) {
         const startTime = performance.now();
-        
-        // Map state properties to RenderLayer enum
-        if ('showTerrain' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.TERRAIN, visibilityState.showTerrain);
-        }
-        if ('showBiomes' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.BIOMES, visibilityState.showBiomes);
-        }
-        if ('showWater' in visibilityState) {
-          worldViewer.setWaterVisibility(visibilityState.showWater);
-        }
-        if ('showResources' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.RESOURCES, visibilityState.showResources);
-        }
-        if ('showStructures' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.STRUCTURES, visibilityState.showStructures);
-        }
-        if ('showChunkBoundaries' in visibilityState) {
-          worldViewer.setVisibility(RenderLayer.CHUNK_BOUNDARIES, visibilityState.showChunkBoundaries);
-        }
-        if ('showWireframe' in visibilityState) {
-          worldViewer.setWireframeMode(visibilityState.showWireframe);
-        }
-        if ('terrainTexturesEnabled' in visibilityState) {
-          worldViewer.setTerrainTexturesEnabled(visibilityState.terrainTexturesEnabled);
-        }
-        if ('fogOfWarEnabled' in visibilityState) {
-          worldViewer.setFogOfWarVisibility(visibilityState.fogOfWarEnabled);
-        }
-        if ('skyBackground' in visibilityState) {
-          worldViewer.setBackgroundMode(visibilityState.skyBackground);
-        }
+        applyViewerSettings(worldViewer, visibilityState as ViewerSettings);
+        refreshVisibleWaterChunks(worldViewer, app, visibilityState as ViewerSettings);
         
         const endTime = performance.now();
         const updateTime = endTime - startTime;
@@ -535,30 +490,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         data.error
       ));
     });
-    
-    // Listen for water configuration changes from ControlPanel
-    window.addEventListener('waterConfigChanged', ((event: CustomEvent) => {
-      if (worldViewer) {
-        const { waterType, property, value } = event.detail;
-        const currentConfig = worldViewer.getWaterConfig();
-        const updatedConfig = {
-          ...currentConfig,
-          [waterType as keyof typeof currentConfig]: {
-            ...(currentConfig[waterType as keyof typeof currentConfig] as any),
-            [property]: value
-          }
-        };
-        worldViewer.setWaterConfig(updatedConfig);
-        
-        // Update all visible chunks to apply new water configuration
-        if (app && worldViewer) {
-          app.getLoadedChunksSnapshot().forEach((chunkData, key) => {
-            const [chunkX, chunkY] = key.split(',').map(Number);
-            worldViewer!.updateChunk(chunkX, chunkY, chunkData);
-          });
-        }
-      }
-    }) as EventListener);
     
     console.log('Application core initialized successfully');
   } catch (error) {

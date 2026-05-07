@@ -5,7 +5,14 @@
     "rootDir": ".",
     "outDir": "./dist-app",
     "types": ["vite/client"],
-    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@engine/*": ["src/*"],
+      "@core/*": ["app/src/core/*"],
+      "@viewer/*": ["app/src/viewer/*"],
+      "@ui/*": ["app/src/ui/*"],
+      "@utils/*": ["app/src/utils/*"]
+    }
   },
   "include": [
     "src/**/*",

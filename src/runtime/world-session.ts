@@ -7,6 +7,7 @@ import type {
 } from '../world/serialization';
 import { WorldSerializer } from '../world/serialization';
 import type { ChunkCoordinate } from './chunk-streaming-system';
+import type { RendererAdapter, RenderSyncSystemOptions } from './renderer';
 import { WorldScene, type WorldSceneOptions } from './world-scene';
 
 export type WorldSessionSceneOptions = Omit<WorldSceneOptions, 'world' | 'worldConfig'>;
@@ -90,10 +91,6 @@ export interface WorldSessionUnloadChunksOptions {
 
 export interface WorldSessionUnloadChunksResult {
   unloaded: WorldSessionChunkEntry[];
-}
-
-export interface WorldSessionNotifyChunkUpdatedOptions {
-  syncRenderer?: boolean;
 }
 
 export interface WorldSessionWorldChangedEvent {
@@ -223,6 +220,20 @@ export class WorldSession {
     this.scene.tick(deltaTime);
   }
 
+  setRenderer(renderer: RendererAdapter | RenderSyncSystemOptions): void {
+    this.assertNotDisposed();
+    this.scene.setRenderer(renderer);
+
+    for (const [key, chunk] of this.loadedChunks.entries()) {
+      this.scene.renderSystem?.onChunkLoaded(chunk, this.parseChunkKey(key));
+    }
+  }
+
+  clearRenderer(): void {
+    this.assertNotDisposed();
+    this.scene.clearRenderer();
+  }
+
   regenerate(options: WorldSessionRegenerateOptions = {}): ChunkManager {
     this.assertNotDisposed();
     return this.updateConfig({
@@ -285,37 +296,6 @@ export class WorldSession {
   getChunk(coordinate: ChunkCoordinate): Promise<ChunkData> {
     this.assertNotDisposed();
     return this.world.getChunk(coordinate.x, coordinate.y);
-  }
-
-  recordTerrainEdit(coordinate: ChunkCoordinate, tileIndex: number, newHeight: number): void {
-    this.assertNotDisposed();
-    this.world.recordTerrainEdit(coordinate.x, coordinate.y, tileIndex, newHeight);
-  }
-
-  recordTerrainEdits(coordinate: ChunkCoordinate, heightChanges: Map<number, number>): void {
-    this.assertNotDisposed();
-    this.world.recordTerrainEdits(coordinate.x, coordinate.y, heightChanges);
-  }
-
-  async notifyChunkUpdated(
-    coordinate: ChunkCoordinate,
-    options: WorldSessionNotifyChunkUpdatedOptions = {}
-  ): Promise<ChunkData> {
-    this.assertNotDisposed();
-
-    const chunk = await this.world.getChunk(coordinate.x, coordinate.y);
-    const key = this.getChunkKey(coordinate);
-    if (this.loadedChunks.has(key)) {
-      this.loadedChunks.set(key, chunk);
-    }
-
-    if (options.syncRenderer ?? true) {
-      this.scene.renderSystem?.onChunkRemoved(coordinate);
-      this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
-    }
-
-    this.emit('chunk_updated', { coordinate, chunk });
-    return chunk;
   }
 
   async loadChunksAround(
@@ -525,6 +505,11 @@ export class WorldSession {
 
   private getChunkKey(coordinate: ChunkCoordinate): string {
     return `${coordinate.x},${coordinate.y}`;
+  }
+
+  private parseChunkKey(key: string): ChunkCoordinate {
+    const [x, y] = key.split(',').map(Number);
+    return { x, y };
   }
 
   private getEventListeners<TEvent extends WorldSessionEvent>(

@@ -257,7 +257,6 @@ export {
   type WorldSessionLoadChunksOptions,
   type WorldSessionLoadChunksResult,
   type WorldSessionLoadOptions,
-  type WorldSessionNotifyChunkUpdatedOptions,
   type WorldSessionOptions,
   type WorldSessionRegenerateOptions,
   type WorldSessionSceneOptions,

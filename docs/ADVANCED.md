@@ -259,13 +259,13 @@ manager.recordStructureAddition(chunkX, chunkY, {
 // Record structure removal
 manager.recordStructureRemoval(chunkX, chunkY, structureIndex);
 
-// Save only modified chunks
+// Save only chunks with recorded system deltas
 const delta = serializer.serialize(manager, {
   format: SerializationFormat.JSON,
   modifiedOnly: true,
 });
 
-console.log(`Saved ${delta.chunks.length} modified chunks`);
+console.log(`Saved ${delta.chunks.length} delta chunks`);
 ```
 
 ---

@@ -949,78 +949,6 @@ export class ChunkManager implements ChunkManagerSnapshot {
   }
 
   /**
-   * Records terrain height modifications for a chunk.
-   * Creates a ChunkModification object tracking height changes at specific tile indices.
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   * @param tileIndex - Flat index of the modified tile within the chunk
-   * @param newHeight - New height value for the tile
-   * 
-   * @remarks
-   * This helper method simplifies recording terrain edits (Requirement 14.2).
-   * Multiple terrain edits can be batched by calling this method multiple times
-   * before the modifications are serialized.
-   * 
-   * @example
-   * ```typescript
-   * // Edit terrain at tile (5, 10) in chunk (0, 0)
-   * const tileIndex = 10 * chunkSize + 5;
-   * chunkManager.recordTerrainEdit(0, 0, tileIndex, 0.75);
-   * ```
-   */
-  recordTerrainEdit(chunkX: number, chunkY: number, tileIndex: number, newHeight: number): void {
-    const modification: ChunkModification = {
-      chunkX,
-      chunkY,
-      timestamp: Date.now(),
-      modifiedTiles: new Set([tileIndex]),
-      heightChanges: new Map([[tileIndex, newHeight]]),
-      addedStructures: [],
-      removedStructures: [],
-    };
-
-    this.recordModification(chunkX, chunkY, modification);
-  }
-
-  /**
-   * Records multiple terrain height modifications for a chunk in a single operation.
-   * Creates a ChunkModification object tracking multiple height changes.
-   * 
-   * @param chunkX - Chunk X coordinate
-   * @param chunkY - Chunk Y coordinate
-   * @param heightChanges - Map of tile indices to new height values
-   * 
-   * @remarks
-   * This helper method is more efficient than calling recordTerrainEdit multiple times
-   * when editing multiple tiles at once (Requirement 14.2).
-   * 
-   * @example
-   * ```typescript
-   * // Edit multiple terrain tiles in chunk (0, 0)
-   * const changes = new Map([
-   *   [10, 0.75],  // tile 10 -> height 0.75
-   *   [11, 0.80],  // tile 11 -> height 0.80
-   *   [20, 0.65],  // tile 20 -> height 0.65
-   * ]);
-   * chunkManager.recordTerrainEdits(0, 0, changes);
-   * ```
-   */
-  recordTerrainEdits(chunkX: number, chunkY: number, heightChanges: Map<number, number>): void {
-    const modification: ChunkModification = {
-      chunkX,
-      chunkY,
-      timestamp: Date.now(),
-      modifiedTiles: new Set(heightChanges.keys()),
-      heightChanges: new Map(heightChanges),
-      addedStructures: [],
-      removedStructures: [],
-    };
-
-    this.recordModification(chunkX, chunkY, modification);
-  }
-
-  /**
    * Records the addition of a structure to a chunk.
    * Creates a ChunkModification object tracking the added structure.
    * 
@@ -1140,7 +1068,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * including all cached chunks, configuration, and modifications (Requirements 12.1, 13.1, 15.1).
    * 
    * Supports both JSON and binary formats with optional compression.
-   * Can selectively export specific regions or only modified chunks.
+   * Can selectively export specific regions or chunks with recorded system deltas.
    * 
    * @example
    * ```typescript
@@ -1151,7 +1079,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    *   modifiedOnly: false,
    * });
    * 
-   * // Save only modified chunks in a specific region
+   * // Save only chunks with recorded system deltas in a specific region
    * const serialized = chunkManager.saveWorld({
    *   format: SerializationFormat.BINARY,
    *   compress: true,

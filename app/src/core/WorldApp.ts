@@ -7,24 +7,27 @@
  */
 
 import {
-  ChunkManager,
   WorldSession,
-  WorldConfig,
-  ChunkData,
-  BiomeType,
-  ResourceType,
-  StructureType,
   configureLogger,
   LogLevel,
-  SerializationOptions,
-  SerializedWorld,
-  WorldSessionCacheStats,
-  WorldSessionWorldStats,
+  type ChunkManager,
+  type WorldConfig,
+  type ChunkData,
+  type BiomeType,
+  type ResourceType,
+  type StructureType,
+  type SerializationOptions,
+  type SerializedWorld,
+  type WorldSessionCacheStats,
+  type WorldSessionWorldStats,
+  type RendererAdapter,
+  type RenderSyncSystemOptions,
   cloneWorldConfig,
   createDefaultWorldConfig,
   prepareWorldConfig,
   WorldConfigOverrides,
 } from '@engine/index';
+import { requiresWorldRebuild } from './configChange';
 
 /**
  * 3D vector for camera position and target
@@ -40,16 +43,17 @@ export interface Vector3 {
  */
 export interface AppState {
   // Engine state
-  chunkManager: ChunkManager | null;
   loadedChunks: Map<string, ChunkData>;
   config: WorldConfig;
   
   // UI state
   cameraPosition: Vector3;
   cameraTarget: Vector3;
-  viewDistance: number; // Chunk load radius
+  appSettings: AppSettings;
+  viewDistance: number; // Compatibility mirror for appSettings.viewDistance.
+  viewerSettings: ViewerSettings;
   
-  // Visibility toggles
+  // Compatibility mirrors for viewerSettings.
   showTerrain: boolean;
   showBiomes: boolean;
   showWater: boolean;
@@ -92,6 +96,10 @@ export interface AppState {
  * State change callback type
  */
 export type StateChangeCallback = (state: AppState) => void;
+export type AppStateUpdate = Partial<Omit<AppState, 'appSettings' | 'viewerSettings'>> & {
+  appSettings?: Partial<AppSettings>;
+  viewerSettings?: Partial<ViewerSettings>;
+};
 
 /**
  * Unsubscribe function type
@@ -110,6 +118,67 @@ export interface AppWorkerPoolStats {
   completedTasks: number;
   avgWorkerTime: number;
 }
+
+export interface AppSettings {
+  viewDistance: number;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  viewDistance: 3,
+};
+
+export interface ViewerSettings {
+  showTerrain: boolean;
+  showBiomes: boolean;
+  showWater: boolean;
+  showResources: boolean;
+  showStructures: boolean;
+  showChunkBoundaries: boolean;
+  showWireframe: boolean;
+  terrainTexturesEnabled: boolean;
+  fogOfWarEnabled: boolean;
+  skyBackground: boolean;
+  waterView?: WaterViewSettings;
+}
+
+export interface WaterViewSettings {
+  ocean?: WaterSurfaceViewSettings;
+  lake?: WaterSurfaceViewSettings;
+  river?: WaterSurfaceViewSettings;
+}
+
+export interface WaterSurfaceViewSettings {
+  color?: number;
+  opacity?: number;
+  shininess?: number;
+}
+
+export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
+  showTerrain: true,
+  showBiomes: true,
+  showWater: true,
+  showResources: false,
+  showStructures: false,
+  showChunkBoundaries: false,
+  showWireframe: false,
+  terrainTexturesEnabled: true,
+  fogOfWarEnabled: false,
+  skyBackground: false,
+};
+
+type FlatViewerSettingKey = Exclude<keyof ViewerSettings, 'waterView'>;
+const VIEWER_SETTING_KEYS: FlatViewerSettingKey[] = [
+  'showTerrain',
+  'showBiomes',
+  'showWater',
+  'showResources',
+  'showStructures',
+  'showChunkBoundaries',
+  'showWireframe',
+  'terrainTexturesEnabled',
+  'fogOfWarEnabled',
+  'skyBackground',
+];
 
 /**
  * Event types for component communication
@@ -135,7 +204,7 @@ export type EventCallback = (data?: any) => void;
  * WorldApp - Central coordinator for the world application
  * 
  * Manages application lifecycle, state, and component communication.
- * Integrates with ChunkManager for world generation and provides
+ * Integrates with WorldSession for world generation and provides
  * reactive state updates through subscription mechanism.
  */
 export class WorldApp {
@@ -159,24 +228,16 @@ export class WorldApp {
     
     // Initialize state with defaults
     this.state = {
-      chunkManager: null,
       loadedChunks: new Map(),
       config: createDefaultWorldConfig(),
       
       cameraPosition: { x: 50, y: 100, z: 50 },
       cameraTarget: { x: 0, y: 0, z: 0 },
-      viewDistance: 3, // Default chunk load radius
+      appSettings: { ...DEFAULT_APP_SETTINGS },
+      viewDistance: DEFAULT_APP_SETTINGS.viewDistance,
       
-      showTerrain: true,
-      showBiomes: true,
-      showWater: true,
-      showResources: false,
-      showStructures: false,
-      showChunkBoundaries: false,
-      showWireframe: false,
-      terrainTexturesEnabled: true,
-      fogOfWarEnabled: false,
-      skyBackground: false,
+      viewerSettings: { ...DEFAULT_VIEWER_SETTINGS },
+      ...DEFAULT_VIEWER_SETTINGS,
       
       exploredChunks: new Set(),
       
@@ -221,12 +282,23 @@ export class WorldApp {
         timestamps: isDevelopment,
       });
       
-      // Create ChunkManager with default configuration
+      // Create the engine session with default configuration.
       const initConfig = prepareWorldConfig(this.state.config, {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
-      this.state.chunkManager = new ChunkManager(initConfig);
+      const session = new WorldSession({
+        worldConfig: initConfig,
+        disposeWorldOnReplace: true,
+        scene: {
+          input: false,
+          movement: false,
+          streaming: false,
+          renderer: false,
+          player: false,
+        },
+      });
       this.state.config = initConfig;
+      this.attachWorldSession(session);
       
       this.initialized = true;
       console.log('WorldApp initialized successfully');
@@ -247,40 +319,44 @@ export class WorldApp {
     return this.state;
   }
 
+  getViewerSettings(): ViewerSettings {
+    return { ...this.state.viewerSettings };
+  }
+
   getConfigSnapshot(): WorldConfig {
     return cloneWorldConfig(this.state.config);
   }
 
   getWorld(): ChunkManager | null {
-    return this.state.chunkManager;
+    return this.worldSession?.getWorld() ?? null;
+  }
+
+  getWorldSession(): WorldSession | null {
+    return this.getActiveWorldSession();
+  }
+
+  setRenderer(renderer: RendererAdapter | RenderSyncSystemOptions): void {
+    this.requireWorldSession().setRenderer(renderer);
+  }
+
+  clearRenderer(): void {
+    this.requireWorldSession().clearRenderer();
   }
 
   getLoadedChunkCount(): number {
-    const session = this.getActiveWorldSession();
-    return session?.getLoadedChunkCount() ?? this.state.loadedChunks.size;
+    return this.requireWorldSession().getLoadedChunkCount();
   }
 
   getLoadedChunksSnapshot(): Map<string, ChunkData> {
-    const session = this.getActiveWorldSession();
-    return session?.getLoadedChunksSnapshot() ?? new Map(this.state.loadedChunks);
+    return this.requireWorldSession().getLoadedChunksSnapshot();
   }
 
   getCacheStats(): WorldSessionCacheStats {
-    const session = this.getActiveWorldSession();
-    if (session) {
-      return session.getCacheStats();
-    }
-
-    return this.state.chunkManager?.getCacheStats() ?? {
-      size: 0,
-      maxSize: this.state.config.maxCacheSize ?? 0,
-      hitRate: 0,
-    };
+    return this.requireWorldSession().getCacheStats();
   }
 
   getWorldStats(): WorldSessionWorldStats {
-    const session = this.getActiveWorldSession();
-    return session?.getWorldStats() ?? calculateWorldStats(this.state.loadedChunks);
+    return this.requireWorldSession().getWorldStats();
   }
 
   getApproximateMemoryUsage(): number {
@@ -323,7 +399,7 @@ export class WorldApp {
   }
 
   getViewDistance(): number {
-    return this.state.viewDistance;
+    return this.state.appSettings.viewDistance;
   }
 
   getSeed(): number {
@@ -334,33 +410,29 @@ export class WorldApp {
     return this.state.workerPoolEnabled;
   }
 
-  syncWorldSession(session: WorldSession | null): void {
-    const world = this.state.chunkManager;
-    if (!world || !session || session.getWorld() === world) {
-      return;
-    }
-
-    session.setWorld(world);
-    this.attachWorldSession(session);
-  }
-
   /**
    * Update application state with partial updates
    */
-  updateState(partial: Partial<AppState>): void {
-    // Check if visibility settings changed
-    const visibilityKeys = [
-      'showTerrain', 'showBiomes', 'showWater', 'showResources',
-      'showStructures', 'showChunkBoundaries', 'showWireframe', 'fogOfWarEnabled',
-      'terrainTexturesEnabled', 'skyBackground'
-    ];
-    
-    const visibilityChanged = visibilityKeys.some(key => key in partial);
+  updateState(partial: AppStateUpdate): void {
+    const viewerSettingsPatch = this.extractViewerSettingsPatch(partial);
+    const visibilityChanged = Object.keys(viewerSettingsPatch).length > 0 || 'viewerSettings' in partial;
+    const nextViewerSettings = visibilityChanged
+      ? this.mergeViewerSettings(partial.viewerSettings, viewerSettingsPatch)
+      : this.state.viewerSettings;
+    const nextAppSettings = {
+      ...this.state.appSettings,
+      ...partial.appSettings,
+      ...('viewDistance' in partial ? { viewDistance: partial.viewDistance } : {}),
+    };
     
     // Merge partial state into current state
     this.state = {
       ...this.state,
-      ...partial
+      ...partial,
+      appSettings: nextAppSettings,
+      viewDistance: nextAppSettings.viewDistance,
+      viewerSettings: nextViewerSettings,
+      ...nextViewerSettings,
     };
     
     // Notify all subscribers of state change
@@ -369,19 +441,16 @@ export class WorldApp {
     
     // Emit visibility change event if visibility settings changed
     if (visibilityChanged) {
-      this.emit(AppEvent.VISIBILITY_CHANGED, {
-        showTerrain: this.state.showTerrain,
-        showBiomes: this.state.showBiomes,
-        showWater: this.state.showWater,
-        showResources: this.state.showResources,
-        showStructures: this.state.showStructures,
-        showChunkBoundaries: this.state.showChunkBoundaries,
-        showWireframe: this.state.showWireframe,
-        terrainTexturesEnabled: this.state.terrainTexturesEnabled,
-        fogOfWarEnabled: this.state.fogOfWarEnabled,
-        skyBackground: this.state.skyBackground,
-      });
+      this.emit(AppEvent.VISIBILITY_CHANGED, this.getViewerSettings());
     }
+  }
+
+  updateViewerSettings(patch: Partial<ViewerSettings>): void {
+    this.updateState({ viewerSettings: patch });
+  }
+
+  updateAppSettings(patch: Partial<AppSettings>): void {
+    this.updateState({ appSettings: patch });
   }
 
   /**
@@ -400,51 +469,47 @@ export class WorldApp {
     };
   }
 
-  attachWorldSession(session: WorldSession | null): void {
+  private attachWorldSession(session: WorldSession): void {
     this.detachWorldSessionEvents();
     this.worldSession = session;
-    if (session) {
-      this.worldSessionUnsubscribers = [
-        session.on('chunk_loaded', ({ coordinate, chunk }) => {
-          this.emit(AppEvent.CHUNK_LOADED, {
-            chunkX: coordinate.x,
-            chunkY: coordinate.y,
-            chunk,
-          });
-        }),
-        session.on('chunk_unloaded', ({ coordinate }) => {
-          this.emit(AppEvent.CHUNK_UNLOADED, {
-            chunkX: coordinate.x,
-            chunkY: coordinate.y,
-            keepFogOfWar: this.state.fogOfWarEnabled,
-          });
-        }),
-        session.on('chunk_updated', ({ coordinate, chunk }) => {
-          this.syncLoadedChunksFromSession();
-          this.updateState({
-            loadedChunks: new Map(this.state.loadedChunks),
-          });
-          this.emit(AppEvent.CHUNK_UPDATED, {
-            chunkX: coordinate.x,
-            chunkY: coordinate.y,
-            chunk,
-          });
-        }),
-        session.on('world_changed', () => {
-          this.syncLoadedChunksFromSession();
-        }),
-        session.on('world_loaded', ({ config, world }) => {
-          this.state.chunkManager = world;
-          this.state.config = config;
-          this.syncLoadedChunksFromSession();
-        }),
-        session.on('config_changed', ({ config, world }) => {
-          this.state.chunkManager = world;
-          this.state.config = config;
-          this.syncLoadedChunksFromSession();
-        }),
-      ];
-    }
+    this.worldSessionUnsubscribers = [
+      session.on('chunk_loaded', ({ coordinate, chunk }) => {
+        this.emit(AppEvent.CHUNK_LOADED, {
+          chunkX: coordinate.x,
+          chunkY: coordinate.y,
+          chunk,
+        });
+      }),
+      session.on('chunk_unloaded', ({ coordinate }) => {
+        this.emit(AppEvent.CHUNK_UNLOADED, {
+          chunkX: coordinate.x,
+          chunkY: coordinate.y,
+          keepFogOfWar: this.state.fogOfWarEnabled,
+        });
+      }),
+      session.on('chunk_updated', ({ coordinate, chunk }) => {
+        this.syncLoadedChunksFromSession();
+        this.updateState({
+          loadedChunks: new Map(this.state.loadedChunks),
+        });
+        this.emit(AppEvent.CHUNK_UPDATED, {
+          chunkX: coordinate.x,
+          chunkY: coordinate.y,
+          chunk,
+        });
+      }),
+      session.on('world_changed', () => {
+        this.syncLoadedChunksFromSession();
+      }),
+      session.on('world_loaded', ({ config, world }) => {
+        this.state.config = config;
+        this.syncLoadedChunksFromSession();
+      }),
+      session.on('config_changed', ({ config, world }) => {
+        this.state.config = config;
+        this.syncLoadedChunksFromSession();
+      }),
+    ];
     this.syncLoadedChunksFromSession();
   }
 
@@ -452,10 +517,6 @@ export class WorldApp {
    * Generate a new world with the given seed
    */
   async generateWorld(seed: number): Promise<void> {
-    if (!this.state.chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
     try {
       // Update configuration with new seed
       const newConfig = prepareWorldConfig(this.state.config, {
@@ -463,14 +524,7 @@ export class WorldApp {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
       
-      const session = this.getActiveWorldSession();
-      const newManager = session
-        ? session.regenerate({ config: newConfig, seed })
-        : new ChunkManager(newConfig);
-
-      if (!session) {
-        this.state.chunkManager.dispose();
-      }
+      const newManager = this.requireWorldSession().regenerate({ config: newConfig, seed });
       
       // Clear existing chunks and explored chunks
       this.state.loadedChunks.clear();
@@ -478,7 +532,6 @@ export class WorldApp {
       
       // Update state
       this.updateState({
-        chunkManager: newManager,
         config: newManager.config,
         loadedChunks: new Map(),
         exploredChunks: new Set()
@@ -502,45 +555,14 @@ export class WorldApp {
   }
 
   exportWorld(options: SerializationOptions): AppWorldExportResult {
-    const chunkManager = this.state.chunkManager;
-    if (!chunkManager) {
-      throw new Error('No chunk manager available');
-    }
-
-    const session = this.getActiveWorldSession();
-    if (session) {
-      return session.exportWorld(options);
-    }
-
-    const serializedWorld = chunkManager.saveWorld(options);
-    return {
-      data: chunkManager.exportWorld(options),
-      serializedWorld,
-      checksum: serializedWorld.checksum,
-    };
+    return this.requireWorldSession().exportWorld(options);
   }
 
   loadSerializedWorld(serializedWorld: SerializedWorld): ChunkManager {
-    const previousManager = this.state.chunkManager;
-    const session = this.getActiveWorldSession();
-    let nextManager: ChunkManager;
-
-    if (session) {
-      nextManager = session.loadWorld(serializedWorld);
-    } else {
-      nextManager = new ChunkManager(serializedWorld.config);
-      try {
-        nextManager.loadWorld(serializedWorld);
-      } catch (error) {
-        nextManager.dispose();
-        throw error;
-      }
-      previousManager?.dispose();
-    }
+    const nextManager = this.requireWorldSession().loadWorld(serializedWorld);
 
     this.invalidatingChunks.clear();
     this.updateState({
-      chunkManager: nextManager,
       config: nextManager.config,
       loadedChunks: new Map(),
       exploredChunks: new Set(),
@@ -548,7 +570,6 @@ export class WorldApp {
     });
     this.emit(AppEvent.WORLD_LOADED, {
       seed: serializedWorld.seed,
-      chunkManager: nextManager,
       serializedWorld,
     });
     return nextManager;
@@ -558,44 +579,13 @@ export class WorldApp {
    * Load chunks in a radius around a center point
    */
   async loadChunksAround(centerX: number, centerY: number, radius: number): Promise<void> {
-    if (!this.state.chunkManager) {
-      throw new Error('ChunkManager not initialized');
-    }
-
     const startTime = performance.now();
     let chunksLoaded = 0;
 
     try {
-      const session = this.getActiveWorldSession();
-
-      if (session) {
-        const result = await session.loadChunksAround(centerX, centerY, radius);
-        chunksLoaded = result.loaded.length;
-        this.syncLoadedChunksFromSession();
-      } else {
-        // Load chunks in a square grid around center
-        for (let dy = -radius; dy <= radius; dy++) {
-          for (let dx = -radius; dx <= radius; dx++) {
-            const chunkX = centerX + dx;
-            const chunkY = centerY + dy;
-            const key = this.getChunkKey(chunkX, chunkY);
-            
-            // Skip if already loaded
-            if (this.state.loadedChunks.has(key)) {
-              continue;
-            }
-            
-            // Generate chunk directly
-            const chunk = await this.state.chunkManager.getChunk(chunkX, chunkY);
-            
-            this.state.loadedChunks.set(key, chunk);
-            this.state.exploredChunks.add(key); // Mark as explored
-            chunksLoaded++;
-            
-            this.emit(AppEvent.CHUNK_LOADED, { chunkX, chunkY, chunk });
-          }
-        }
-      }
+      const result = await this.requireWorldSession().loadChunksAround(centerX, centerY, radius);
+      chunksLoaded = result.loaded.length;
+      this.syncLoadedChunksFromSession();
       
       // Update performance metrics
       const endTime = performance.now();
@@ -624,46 +614,11 @@ export class WorldApp {
    * Unload chunks that are too far from a center point
    */
   unloadDistantChunks(centerX: number, centerY: number, maxDistance: number): void {
-    const session = this.getActiveWorldSession();
-    let chunksUnloaded = 0;
-
-    if (session) {
-      const result = session.unloadDistantChunks(centerX, centerY, maxDistance, {
-        syncRenderer: !this.state.fogOfWarEnabled,
-      });
-      chunksUnloaded = result.unloaded.length;
-      this.syncLoadedChunksFromSession();
-    } else {
-      const chunksToUnload: string[] = [];
-      
-      // Find chunks beyond max distance using Chebyshev distance (matches square grid loading)
-      for (const [key, chunk] of this.state.loadedChunks.entries()) {
-        const dx = Math.abs(chunk.x - centerX);
-        const dy = Math.abs(chunk.y - centerY);
-        const distance = Math.max(dx, dy); // Chebyshev distance for square grid
-        
-        if (distance > maxDistance) {
-          chunksToUnload.push(key);
-        }
-      }
-      
-      // Unload distant chunks
-      for (const key of chunksToUnload) {
-        const chunk = this.state.loadedChunks.get(key);
-        if (chunk) {
-          this.state.loadedChunks.delete(key);
-          
-          // Emit unload event with fog of war flag
-          this.emit(AppEvent.CHUNK_UNLOADED, { 
-            chunkX: chunk.x, 
-            chunkY: chunk.y,
-            keepFogOfWar: this.state.fogOfWarEnabled 
-          });
-        }
-      }
-
-      chunksUnloaded = chunksToUnload.length;
-    }
+    const result = this.requireWorldSession().unloadDistantChunks(centerX, centerY, maxDistance, {
+      syncRenderer: !this.state.fogOfWarEnabled,
+    });
+    const chunksUnloaded = result.unloaded.length;
+    this.syncLoadedChunksFromSession();
 
     if (chunksUnloaded > 5) {
       this.updateState({
@@ -690,37 +645,24 @@ export class WorldApp {
       return;
     }
 
-    const manager = this.state.chunkManager;
-    if (!manager) {
-      return;
-    }
+    const manager = this.requireWorldSession().getWorld();
 
     this.invalidatingChunks.add(key);
 
     queueMicrotask(async () => {
       try {
-        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key)) {
+        if (this.requireWorldSession().getWorld() !== manager || !this.state.loadedChunks.has(key)) {
           return;
         }
 
-        const session = this.getActiveWorldSession();
-        const chunk = session
-          ? await session.refreshChunk({ x: chunkX, y: chunkY }, { syncRenderer: false })
-          : await manager.getChunk(chunkX, chunkY);
+        const session = this.requireWorldSession();
+        const chunk = await session.refreshChunk({ x: chunkX, y: chunkY }, { syncRenderer: false });
 
-        if (this.state.chunkManager !== manager || !this.state.loadedChunks.has(key) || !chunk) {
+        if (this.requireWorldSession().getWorld() !== manager || !this.state.loadedChunks.has(key) || !chunk) {
           return;
         }
 
-        if (session) {
-          this.syncLoadedChunksFromSession();
-        } else {
-          this.state.loadedChunks.set(key, chunk);
-          this.updateState({
-            loadedChunks: new Map(this.state.loadedChunks),
-          });
-          this.emit(AppEvent.CHUNK_UPDATED, { chunkX, chunkY, chunk });
-        }
+        this.syncLoadedChunksFromSession();
       } catch (error) {
         console.error(`Failed to refresh invalidated chunk (${chunkX}, ${chunkY}):`, error);
         this.emit(AppEvent.ERROR, { message: 'Chunk refresh failed', error });
@@ -737,13 +679,8 @@ export class WorldApp {
     // Prevent recursive calls
     if (this.isUpdatingConfig) {
       console.warn('[WorldApp] Ignoring recursive updateEngineConfig call');
-      console.trace('[WorldApp] Recursive call stack:');
       return;
     }
-    
-    // Log ALL calls to updateEngineConfig with stack trace
-    console.log('[WorldApp] updateEngineConfig called with:', Object.keys(config));
-    console.trace('[WorldApp] Call stack:');
     
     this.isUpdatingConfig = true;
     
@@ -753,23 +690,10 @@ export class WorldApp {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
 
-      // Check if this requires recreating the ChunkManager
-      const shouldRecreateManager =
-        'terrainConfig' in config ||
-        'biomeConfig' in config ||
-        'enhancedBiomeConfig' in config ||
-        'resourceConfig' in config ||
-        'structureConfig' in config ||
-        'lakeConfig' in config ||
-        'riverConfig' in config ||
-        'noise3DConfig' in config ||
-        'seed' in config ||
-        'chunkSize' in config ||
-        'maxCacheSize' in config ||
-        'workerPoolConfig' in config;
+      const shouldRecreateWorld = requiresWorldRebuild(config);
       
       // If not recreating manager, just update config and return
-      if (!shouldRecreateManager) {
+      if (!shouldRecreateWorld) {
         this.updateState({ config: newConfig });
         this.emit(AppEvent.CONFIG_CHANGED, newConfig);
         return;
@@ -777,77 +701,26 @@ export class WorldApp {
       
       // Handle worker pool configuration
       let workerPoolEnabled = !!newConfig.workerPoolConfig;
-      const session = this.getActiveWorldSession();
-      
-      if (session) {
-        const result = session.updateConfig(newConfig, {
-          fallbackOnWorkerPoolError: 'workerPoolConfig' in config && !!config.workerPoolConfig,
+      const result = this.requireWorldSession().updateConfig(newConfig, {
+        fallbackOnWorkerPoolError: 'workerPoolConfig' in config && !!config.workerPoolConfig,
+      });
+      workerPoolEnabled = result.workerPoolEnabled;
+
+      if (result.usedWorkerPoolFallback && result.workerPoolInitializationError) {
+        newConfig.workerPoolConfig = undefined;
+        console.error(
+          'Failed to initialize Worker Pool, falling back to single-threaded:',
+          result.workerPoolInitializationError
+        );
+        this.emit(AppEvent.ERROR, {
+          message: 'Worker Pool initialization failed. Using single-threaded generation.',
+          error: result.workerPoolInitializationError,
+          category: 'worker_pool',
+          fallback: true
         });
-        this.state.chunkManager = result.world;
-        workerPoolEnabled = result.workerPoolEnabled;
-
-        if (result.usedWorkerPoolFallback && result.workerPoolInitializationError) {
-          newConfig.workerPoolConfig = undefined;
-          console.error(
-            'Failed to initialize Worker Pool, falling back to single-threaded:',
-            result.workerPoolInitializationError
-          );
-          this.emit(AppEvent.ERROR, { 
-            message: 'Worker Pool initialization failed. Using single-threaded generation.', 
-            error: result.workerPoolInitializationError,
-            category: 'worker_pool',
-            fallback: true
-          });
-        }
-
-        Object.assign(newConfig, result.config);
-      } else if ('workerPoolConfig' in config) {
-        const previousManager = this.state.chunkManager;
-        if (config.workerPoolConfig) {
-          // Enabling or updating worker pool
-          try {
-            const newManager = new ChunkManager(newConfig);
-            
-            // Check if worker pool was actually created and initialized
-            const initializationError = newManager.getWorkerPoolInitializationError();
-            if (initializationError) {
-              throw initializationError;
-            }
-            
-            previousManager?.dispose();
-            this.state.chunkManager = newManager;
-            workerPoolEnabled = true;
-            console.log('[WorldApp] Worker pool enabled successfully');
-          } catch (error) {
-            console.error('Failed to initialize Worker Pool, falling back to single-threaded:', error);
-            newConfig.workerPoolConfig = undefined;
-            const fallbackManager = new ChunkManager(newConfig);
-            previousManager?.dispose();
-            this.state.chunkManager = fallbackManager;
-            workerPoolEnabled = false;
-            
-            this.emit(AppEvent.ERROR, { 
-              message: 'Worker Pool initialization failed. Using single-threaded generation.', 
-              error,
-              category: 'worker_pool',
-              fallback: true
-            });
-          }
-        } else {
-          // Disabling worker pool
-          const newManager = new ChunkManager(newConfig);
-          previousManager?.dispose();
-          this.state.chunkManager = newManager;
-          workerPoolEnabled = false;
-          console.log('[WorldApp] Worker pool disabled');
-        }
-      } else {
-        // Other config changes that require manager recreation
-        const previousManager = this.state.chunkManager;
-        const newManager = new ChunkManager(newConfig);
-        previousManager?.dispose();
-        this.state.chunkManager = newManager;
       }
+
+      Object.assign(newConfig, result.config);
       
       this.updateState({ 
         config: newConfig,
@@ -864,22 +737,10 @@ export class WorldApp {
   }
 
   /**
-   * Get worker pool statistics from ChunkManager
+   * Get worker pool statistics from the active world session.
    */
   getWorkerPoolStats(): AppWorkerPoolStats {
-    const session = this.getActiveWorldSession();
-    const chunkManager = this.state.chunkManager;
-
-    if (!chunkManager) {
-      return {
-        activeWorkers: 0,
-        queuedTasks: 0,
-        completedTasks: 0,
-        avgWorkerTime: 0
-      };
-    }
-
-    const stats = session?.getWorkerPoolStats() ?? chunkManager.getWorkerPoolStats();
+    const stats = this.requireWorldSession().getWorkerPoolStats();
     if (!stats) {
       return {
         activeWorkers: 0,
@@ -984,11 +845,66 @@ export class WorldApp {
   }
 
   private getActiveWorldSession(): WorldSession | null {
-    if (!this.worldSession || this.worldSession.getWorld() !== this.state.chunkManager) {
-      return null;
+    return this.worldSession;
+  }
+
+  private extractViewerSettingsPatch(partial: AppStateUpdate): Partial<Pick<ViewerSettings, FlatViewerSettingKey>> {
+    const patch: Partial<Pick<ViewerSettings, FlatViewerSettingKey>> = {};
+
+    for (const key of VIEWER_SETTING_KEYS) {
+      if (key in partial) {
+        patch[key] = partial[key] as ViewerSettings[typeof key];
+      }
     }
 
-    return this.worldSession;
+    return patch;
+  }
+
+  private mergeViewerSettings(
+    settingsPatch?: Partial<ViewerSettings>,
+    legacyPatch: Partial<ViewerSettings> = {}
+  ): ViewerSettings {
+    const waterViewPatch = {
+      ...settingsPatch?.waterView,
+      ...legacyPatch.waterView,
+    };
+
+    return {
+      ...this.state.viewerSettings,
+      ...settingsPatch,
+      ...legacyPatch,
+      waterView: Object.keys(waterViewPatch).length > 0
+        ? {
+            ...this.state.viewerSettings.waterView,
+            ...settingsPatch?.waterView,
+            ...legacyPatch.waterView,
+            ocean: {
+              ...this.state.viewerSettings.waterView?.ocean,
+              ...settingsPatch?.waterView?.ocean,
+              ...legacyPatch.waterView?.ocean,
+            },
+            lake: {
+              ...this.state.viewerSettings.waterView?.lake,
+              ...settingsPatch?.waterView?.lake,
+              ...legacyPatch.waterView?.lake,
+            },
+            river: {
+              ...this.state.viewerSettings.waterView?.river,
+              ...settingsPatch?.waterView?.river,
+              ...legacyPatch.waterView?.river,
+            },
+          }
+        : this.state.viewerSettings.waterView,
+    };
+  }
+
+  private requireWorldSession(): WorldSession {
+    const session = this.getActiveWorldSession();
+    if (!session) {
+      throw new Error('WorldSession not initialized');
+    }
+
+    return session;
   }
 
   private syncLoadedChunksFromSession(): void {
@@ -1038,52 +954,10 @@ export class WorldApp {
     this.eventListeners.clear();
     this.state.loadedChunks.clear();
     this.detachWorldSessionEvents();
+    this.worldSession?.dispose();
     this.worldSession = null;
-    this.state.chunkManager = null;
     this.initialized = false;
     
     console.log('WorldApp destroyed');
   }
-}
-
-function calculateWorldStats(chunks: ReadonlyMap<string, ChunkData>): WorldSessionWorldStats {
-  const biomeDistribution = new Map<BiomeType, number>();
-  const resourceCounts = new Map<ResourceType, number>();
-  const structureCounts = new Map<StructureType, number>();
-  let totalHeight = 0;
-  let minHeight = Infinity;
-  let maxHeight = -Infinity;
-  let totalTiles = 0;
-
-  for (const chunk of chunks.values()) {
-    for (let i = 0; i < chunk.biomeMap.length; i++) {
-      const biome = chunk.biomeMap[i] as BiomeType;
-      biomeDistribution.set(biome, (biomeDistribution.get(biome) || 0) + 1);
-    }
-
-    for (const resource of chunk.resources) {
-      resourceCounts.set(resource.type, (resourceCounts.get(resource.type) || 0) + 1);
-    }
-
-    for (const structure of chunk.structures) {
-      structureCounts.set(structure.type, (structureCounts.get(structure.type) || 0) + 1);
-    }
-
-    for (let i = 0; i < chunk.heightmap.length; i++) {
-      const height = chunk.heightmap[i];
-      totalHeight += height;
-      minHeight = Math.min(minHeight, height);
-      maxHeight = Math.max(maxHeight, height);
-      totalTiles++;
-    }
-  }
-
-  return {
-    biomeDistribution,
-    resourceCounts,
-    structureCounts,
-    avgHeight: totalTiles > 0 ? totalHeight / totalTiles : 0,
-    minHeight: minHeight === Infinity ? 0 : minHeight,
-    maxHeight: maxHeight === -Infinity ? 0 : maxHeight,
-  };
 }

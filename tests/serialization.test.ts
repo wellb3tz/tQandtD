@@ -1,19 +1,20 @@
 /**
  * Serialization round-trip tests
  *
- * Verifies that save → load produces data identical to the original.
+ * Verifies that save -> load produces data identical to the original.
  * Covers JSON and binary formats, compression on/off, and lake persistence
- * (the bug we just fixed — Set<number> was silently lost before).
+ * (the bug we just fixed: Set<number> was silently lost before).
  */
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { WorldSerializer, SerializationFormat, type SerializedRiverPoint } from '../src/world/serialization';
+import { StructureType } from '../src/world/chunk';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
 import { makeMinimalConfig } from './helpers';
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// helpers
 
 /** Generate a manager with a few chunks pre-loaded. */
 async function buildManager(seed: number) {
@@ -187,11 +188,11 @@ describe('Serialization round-trip', () => {
     });
   }
 
-  it('modifiedOnly exports only chunks with recorded modifications', async () => {
+  it('modifiedOnly exports only chunks with recorded system deltas', async () => {
     const manager = await buildManager(10);
 
-    // Record a modification on chunk (0,0) only
-    manager.recordTerrainEdit(0, 0, 0, 0.99);
+    // Record a generated-content delta on chunk (0,0) only.
+    manager.recordStructureAddition(0, 0, { x: 5, y: 10, type: StructureType.RUINS });
 
     const ser = new WorldSerializer();
     const saved = ser.serialize(manager, {

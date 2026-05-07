@@ -51,7 +51,7 @@ export class WorldScene {
   readonly inputSystem: InputSystem | null;
   readonly movementSystem: MovementSystem | null;
   readonly streamingSystem: ChunkStreamingSystem | null;
-  readonly renderSystem: RenderSyncSystem | null;
+  renderSystem: RenderSyncSystem | null;
 
   constructor(options: WorldSceneOptions) {
     this.world = options.world ?? this.createWorld(options.worldConfig);
@@ -112,6 +112,22 @@ export class WorldScene {
     this.runtime.world = world;
     this.streamingSystem?.clear();
     this.renderSystem?.clearChunks();
+  }
+
+  setRenderer(renderer: RendererAdapter | RenderSyncSystemOptions): RenderSyncSystem {
+    this.clearRenderer();
+    this.renderSystem = new RenderSyncSystem(this.normalizeRenderOptions(renderer));
+    this.runtime.addSystem(this.renderSystem);
+    return this.renderSystem;
+  }
+
+  clearRenderer(): void {
+    if (!this.renderSystem) {
+      return;
+    }
+
+    this.runtime.removeSystem(this.renderSystem);
+    this.renderSystem = null;
   }
 
   dispose(): void {

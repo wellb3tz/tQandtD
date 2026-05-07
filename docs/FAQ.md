@@ -371,7 +371,7 @@ localStorage.setItem('world', JSON.stringify(data));
 
 ---
 
-### Can I save only modified chunks?
+### Can I save only chunks with recorded system deltas?
 
 Yes!
 
@@ -382,7 +382,7 @@ const delta = serializer.serialize(manager, {
 });
 ```
 
-This only saves chunks that have been edited.
+This only saves chunks that have recorded system deltas, such as generated-content changes tracked by the runtime.
 
 ---
 

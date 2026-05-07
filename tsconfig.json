@@ -20,11 +20,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@engine/*": ["src/*"],
-      "@core/*": ["app/src/core/*"],
-      "@viewer/*": ["app/src/viewer/*"],
-      "@ui/*": ["app/src/ui/*"],
-      "@utils/*": ["app/src/utils/*"]
+      "@engine/*": ["src/*"]
     }
   },
   "include": ["src/**/*"],

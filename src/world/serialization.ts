@@ -61,8 +61,8 @@ export interface SerializationOptions {
   /** Enable compression using zlib/deflate (default: true) */
   compress: boolean;
   
-  /** Include only modified chunks (default: false) */
-  modifiedOnly: boolean;
+  /** Include only chunks with recorded system deltas (default: false) */
+  modifiedOnly?: boolean;
   
   /** Chunk region to export (undefined = all chunks) */
   region?: {
@@ -269,9 +269,8 @@ export class WorldSerializer {
         }
       }
 
-      // Apply modifiedOnly filter if specified
+      // Apply delta-snapshot filter if requested.
       if (options.modifiedOnly) {
-        // Check if chunk has modifications
         const key = `${chunk.x},${chunk.y}`;
         const hasModifications = chunkManager.modifications.has(key);
         if (!hasModifications) {
@@ -536,9 +535,8 @@ export class WorldSerializer {
         }
       }
 
-      // Apply modifiedOnly filter if specified
+      // Apply delta-snapshot filter if requested.
       if (options.modifiedOnly) {
-        // Check if chunk has modifications
         const key = `${chunk.x},${chunk.y}`;
         const hasModifications = chunkManager.modifications.has(key);
         if (!hasModifications) {
