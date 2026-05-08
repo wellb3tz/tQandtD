@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import {
   getRiverChannelWidth,
   getRiverValleyWidth,
@@ -6,7 +7,8 @@ import {
   type RiverData,
 } from '@engine/index';
 import { HEIGHT_SCALE } from './config';
-import { buildRiverGeometry } from './RiverMeshGenerator';
+import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
+import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
 function river(points: RiverData['points']): RiverData {
   return {
@@ -19,21 +21,22 @@ function river(points: RiverData['points']): RiverData {
 }
 
 describe('RiverMeshGenerator', () => {
-  it('builds a strip for a two-point river', () => {
+  it('builds a subdivided surface ribbon for a two-point river', () => {
     const geometry = buildRiverGeometry([river([
       { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, flowX: 1, flowY: 0 },
       { x: 4, y: 1, height: 0.35, surfaceLevel: 0.36, width: 1, depth: 0.03, flowX: 1, flowY: 0 },
     ])], 0, 0, 16);
 
     expect(geometry).not.toBeNull();
-    expect(geometry!.getAttribute('position').count).toBe(4);
+    expect(geometry!.getAttribute('position').count).toBe(25);
+    expect(geometry!.getIndex()?.count).toBe(96);
   });
 
   it('returns null for empty river data', () => {
     expect(buildRiverGeometry([], 0, 0, 16)).toBeNull();
   });
 
-  it('uses channel width for water and never valley width', () => {
+  it('uses the water-level channel cross-section instead of the narrow floor width', () => {
     const points: RiverData['points'] = [
       {
         x: 0,
@@ -70,11 +73,11 @@ describe('RiverMeshGenerator', () => {
     const geometry = buildRiverGeometry([river(points)], 0, 0, 16)!;
     const positions = geometry.getAttribute('position').array;
     const firstLeftZ = positions[2];
-    const firstRightZ = positions[5];
+    const firstRightZ = positions[14];
     const renderedWidth = Math.abs(firstLeftZ - firstRightZ);
 
-    expect(renderedWidth).toBeLessThan(getRiverValleyWidth(points[0]) * 0.35);
-    expect(renderedWidth).toBeCloseTo(getRiverChannelWidth(points[0]), 1);
+    expect(renderedWidth).toBeGreaterThan(getRiverChannelWidth(points[0]) * 2);
+    expect(renderedWidth).toBeLessThan(getRiverValleyWidth(points[0]));
   });
 
   it('places river water at the recessed channel water level', () => {
@@ -111,16 +114,18 @@ describe('RiverMeshGenerator', () => {
     expect(positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 1.0, 5);
   });
 
-  it('uses the same shallow ocean vertex color for river water', () => {
+  it('uses the dark ocean vertex color for river water', () => {
     const geometry = buildRiverGeometry([river([
       { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, flowX: 1, flowY: 0 },
       { x: 4, y: 1, height: 0.35, surfaceLevel: 0.36, width: 1, depth: 0.03, flowX: 1, flowY: 0 },
     ])], 0, 0, 16)!;
     const colors = geometry.getAttribute('color').array;
-    const expected = [0.16, 0.71, 0.83, 0.16, 0.71, 0.83];
+    const expected = [0.04, 0.1, 0.23];
 
-    for (let i = 0; i < expected.length; i++) {
-      expect(colors[i]).toBeCloseTo(expected[i], 5);
+    for (let vertex = 0; vertex < 5; vertex++) {
+      for (let channel = 0; channel < expected.length; channel++) {
+        expect(colors[vertex * 3 + channel]).toBeCloseTo(expected[channel], 5);
+      }
     }
   });
 
@@ -147,14 +152,31 @@ describe('RiverMeshGenerator', () => {
       index % 3 === 0 ? Math.max(max, value) : max,
       -Infinity,
     );
-    const minY = Array.from(positions.array).reduce((min, value, index) =>
+    const surfacePositions = Array.from(positions.array).slice(0, 30 * 3);
+    const minSurfaceY = surfacePositions.reduce((min, value, index) =>
       index % 3 === 1 ? Math.min(min, value) : min,
       Infinity,
     );
 
-    expect(positions.count).toBe(6);
+    expect(positions.count).toBe(30);
     expect(maxX).toBeLessThan(8);
     expect(maxX).toBeGreaterThan(4);
-    expect(minY).toBeGreaterThanOrEqual(seaLevel * HEIGHT_SCALE);
+    expect(minSurfaceY).toBeGreaterThanOrEqual(seaLevel * HEIGHT_SCALE);
+  });
+
+  it('applies river normal maps for small flow ripples', () => {
+    const normalMap = new THREE.Texture();
+    const material = createRiverMaterial({
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      normalMap,
+    });
+
+    expect(material.normalMap).toBe(normalMap);
+    expect(material.normalScale.x).toBeCloseTo(WATER_NORMAL_SCALE.x);
+    expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
+    expect(material.vertexColors).toBe(true);
   });
 });

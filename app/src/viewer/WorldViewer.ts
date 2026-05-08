@@ -98,6 +98,10 @@ export class WorldViewer {
           ...DEFAULT_WATER_CONFIG.ocean,
           normalMap: createWaterNormalTexture(),
         },
+        river: {
+          ...DEFAULT_WATER_CONFIG.river,
+          normalMap: createWaterNormalTexture(),
+        },
       },
     });
     this.renderLoop = new WorldRenderLoop({

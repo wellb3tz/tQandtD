@@ -6,6 +6,7 @@ import {
 import type { RiverRenderConfig } from './types';
 import { HEIGHT_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
+import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
 const WATER_SURFACE_OFFSET = -1.0;
 
@@ -32,7 +33,7 @@ export function buildRiverGeometry(
 }
 
 export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+  const material = new THREE.MeshPhongMaterial({
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
@@ -41,4 +42,11 @@ export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshPhongM
     side: THREE.DoubleSide,
     specular: new THREE.Color(0x88ccff),
   });
+
+  if (config.normalMap) {
+    material.normalMap = config.normalMap;
+    material.normalScale = new THREE.Vector2(WATER_NORMAL_SCALE.x, WATER_NORMAL_SCALE.y);
+  }
+
+  return material;
 }

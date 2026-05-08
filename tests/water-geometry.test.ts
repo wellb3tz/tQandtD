@@ -90,7 +90,7 @@ describe('water geometry data helpers', () => {
     expect(data!.colors[0]).toBeLessThanOrEqual(0.08);
   });
 
-  it('builds and clips river strip data at ocean level', () => {
+  it('builds and clips subdivided river surface data at ocean level', () => {
     const points: RiverData['points'] = [
       { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
       { x: 4, y: 1, height: 0.34, surfaceLevel: 0.35, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
@@ -107,8 +107,9 @@ describe('water geometry data helpers', () => {
     );
 
     expect(data).not.toBeNull();
-    expect(getIndexedGeometryVertexCount(data!)).toBe(6);
+    expect(getIndexedGeometryVertexCount(data!)).toBe(30);
     expect(data!.positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 1, 5);
-    expect(Math.abs(data!.positions[2] - data!.positions[5])).toBeCloseTo(getRiverChannelWidth(points[0]), 1);
+    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeGreaterThan(getRiverChannelWidth(points[0]) * 1.5);
+    expect(data!.colors.slice(0, 6)).toEqual([0.04, 0.1, 0.23, 0.04, 0.1, 0.23]);
   });
 });

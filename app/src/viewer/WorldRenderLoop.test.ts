@@ -22,6 +22,7 @@ describe('WorldRenderLoop', () => {
     const beforeRender = vi.fn();
     const cameraInputController = { updateMovement: vi.fn() } as unknown as CameraInputController;
     const cameraViewController = createCameraViewController();
+    const waterLayerManager = createWaterLayerManager();
 
     const loop = new WorldRenderLoop({
       scene: new THREE.Scene(),
@@ -30,7 +31,7 @@ describe('WorldRenderLoop', () => {
       cameraViewController,
       chunkMeshes: new Map(),
       layerVisibility: createLayerVisibility(),
-      waterLayerManager: createWaterLayerManager(),
+      waterLayerManager,
       getWaterConfig: () => DEFAULT_WATER_CONFIG,
       beforeRender,
     });
@@ -41,6 +42,11 @@ describe('WorldRenderLoop', () => {
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
     expect(cameraInputController.updateMovement).toHaveBeenCalledOnce();
     expect(cameraViewController.updateFollowTerrainMode).toHaveBeenCalledOnce();
+    expect(waterLayerManager.updateOceanWaves).toHaveBeenCalledOnce();
+    expect(waterLayerManager.updateOceanWaves).toHaveBeenCalledWith(
+      expect.any(Number),
+      DEFAULT_WATER_CONFIG.ocean,
+    );
     expect(beforeRender).toHaveBeenCalledWith(cameraViewController.getActiveCamera());
     expect(render).toHaveBeenCalledOnce();
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7);
@@ -88,5 +94,6 @@ function createLayerVisibility(): Map<RenderLayer, boolean> {
 function createWaterLayerManager(): WaterLayerManager {
   return {
     applyFrustumCulling: vi.fn(),
+    updateOceanWaves: vi.fn(),
   } as unknown as WaterLayerManager;
 }

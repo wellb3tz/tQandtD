@@ -180,4 +180,6 @@ export interface RiverRenderConfig {
   opacity: number;
   /** Material shininess */
   shininess: number;
+  /** Optional normal map for small flow ripples */
+  normalMap?: THREE.Texture;
 }

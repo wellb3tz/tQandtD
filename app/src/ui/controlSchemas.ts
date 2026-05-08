@@ -111,6 +111,30 @@ export const WATER_VIEW_CONTROLS = {
     defaultValue: 30,
     tooltip: 'Shininess of water surface',
   },
+  enableWaves: {
+    id: 'waterEnableWaves',
+    label: 'Ocean Waves',
+    defaultValue: true,
+    tooltip: 'Animate ocean surface waves',
+  },
+  waveHeight: {
+    id: 'waterWaveHeight',
+    label: 'Wave Height',
+    min: 0,
+    max: 1.25,
+    step: 0.05,
+    defaultValue: 0.65,
+    tooltip: 'Vertical height of ocean waves',
+  },
+  waveSpeed: {
+    id: 'waterWaveSpeed',
+    label: 'Wave Speed',
+    min: 0,
+    max: 3,
+    step: 0.05,
+    defaultValue: 1.05,
+    tooltip: 'Animation speed of ocean waves',
+  },
 } as const;
 
 export const VISIBILITY_TOGGLES: CheckboxConfig[] = [

@@ -26,9 +26,9 @@ export const DEFAULT_OCEAN_CONFIG = {
   color: 0x0d4f66,
   opacity: 0.66,
   shininess: 95,
-  enableWaves: false,
-  waveHeight: 0.5,
-  waveSpeed: 1.0,
+  enableWaves: true,
+  waveHeight: 0.65,
+  waveSpeed: 1.05,
 };
 
 /**
@@ -159,6 +159,7 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
         100,
         'River shininess'
       ),
+      normalMap: config.river?.normalMap,
     },
     rendering: {
       waterOffset: Math.max(

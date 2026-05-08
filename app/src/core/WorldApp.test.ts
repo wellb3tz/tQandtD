@@ -46,10 +46,13 @@ describe('WorldApp app/viewer settings', () => {
 
     app.updateViewerSettings({ waterView: { ocean: { color: 0x112233 } } });
     app.updateViewerSettings({ waterView: { ocean: { opacity: 0.5 } } });
+    app.updateViewerSettings({ waterView: { ocean: { enableWaves: false, waveHeight: 0.2 } } });
 
     expect(app.getViewerSettings().waterView?.ocean).toEqual({
       color: 0x112233,
       opacity: 0.5,
+      enableWaves: false,
+      waveHeight: 0.2,
     });
   });
 });

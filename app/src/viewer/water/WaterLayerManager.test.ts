@@ -187,6 +187,31 @@ describe('WaterLayerManager - Integration Tests', () => {
         expect(waterMesh.boundingBox).toBeInstanceOf(THREE.Box3);
       }
     });
+
+    it('should update ocean wave animation uniforms', () => {
+      const chunkData = createMockChunkWithOcean();
+      manager.addWaterToChunk('0,0', chunkData, scene, DEFAULT_WATER_CONFIG);
+
+      const waterLayer = manager.getWaterLayer('0,0');
+      const oceanMaterial = waterLayer!.ocean[0].material;
+      const shader = {
+        uniforms: {},
+        vertexShader: '#include <common>\nvoid main() {\n#include <begin_vertex>\n}',
+        fragmentShader: '',
+      } as THREE.Shader;
+      oceanMaterial.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+      manager.updateOceanWaves(3.25, {
+        ...DEFAULT_WATER_CONFIG.ocean,
+        enableWaves: true,
+        waveHeight: 0.45,
+        waveSpeed: 1.2,
+      });
+
+      expect(shader.uniforms.uOceanWaveTime.value).toBe(3.25);
+      expect(shader.uniforms.uOceanWaveHeight.value).toBe(0.45);
+      expect(shader.uniforms.uOceanWaveSpeed.value).toBe(1.2);
+    });
   });
 
   describe('removeWaterFromChunk - Ocean Only', () => {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  OCEAN_WAVE_SHADER_KEY,
+  WATER_NORMAL_SCALE,
   WATER_NORMAL_TEXTURE_URL,
   createOceanMaterial,
   createWaterNormalTexture,
+  updateOceanMaterialWaves,
 } from './WaterMaterialFactory';
 
 describe('WaterMaterialFactory', () => {
@@ -21,8 +24,8 @@ describe('WaterMaterialFactory', () => {
     expect(texture.userData.loadedUrl).toBe(WATER_NORMAL_TEXTURE_URL);
     expect(texture.wrapS).toBe(THREE.RepeatWrapping);
     expect(texture.wrapT).toBe(THREE.RepeatWrapping);
-    expect(texture.repeat.x).toBe(6);
-    expect(texture.repeat.y).toBe(6);
+    expect(texture.repeat.x).toBe(3.7);
+    expect(texture.repeat.y).toBe(5.3);
     expect(texture.colorSpace).toBe(THREE.NoColorSpace);
     expect(texture.version).toBe(0);
   });
@@ -42,8 +45,75 @@ describe('WaterMaterialFactory', () => {
     });
 
     expect(material.normalMap).toBe(normalMap);
+    expect(material.normalScale.x).toBeCloseTo(WATER_NORMAL_SCALE.x);
+    expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);
+  });
+
+  it('injects configurable ocean wave displacement into the shader', () => {
+    const material = createOceanMaterial({
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      enableWaves: true,
+      waveHeight: 0.35,
+      waveSpeed: 0.85,
+    });
+    const shader = {
+      uniforms: {},
+      vertexShader: '#include <common>\nvoid main() {\n#include <begin_vertex>\n}',
+      fragmentShader: '',
+    } as THREE.Shader;
+
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    expect(material.customProgramCacheKey()).toBe(OCEAN_WAVE_SHADER_KEY);
+    expect(shader.uniforms).toHaveProperty('uOceanWaveTime');
+    expect(shader.uniforms).toHaveProperty('uOceanWaveShoreFadeStart');
+    expect(shader.vertexShader).toContain('attribute float waterDepth');
+    expect(shader.vertexShader).toContain('smoothstep(uOceanWaveShoreFadeStart');
+    expect(shader.vertexShader).toContain('oceanWaveSafeTrough');
+    expect(shader.vertexShader).toContain('transformed.y +=');
+    expect(shader.vertexShader).toContain('uOceanWaveHeight');
+  });
+
+  it('updates wave uniforms and scrolls ocean normal maps over time', () => {
+    const normalMap = new THREE.Texture();
+    const material = createOceanMaterial({
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      enableWaves: true,
+      waveHeight: 0.4,
+      waveSpeed: 2,
+      normalMap,
+    });
+    const shader = {
+      uniforms: {},
+      vertexShader: '#include <common>\nvoid main() {\n#include <begin_vertex>\n}',
+      fragmentShader: '',
+    } as THREE.Shader;
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+
+    updateOceanMaterialWaves(material, {
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      enableWaves: true,
+      waveHeight: 0.25,
+      waveSpeed: 1.5,
+      normalMap,
+    }, 10);
+
+    expect(shader.uniforms.uOceanWaveTime.value).toBe(10);
+    expect(shader.uniforms.uOceanWaveHeight.value).toBe(0.25);
+    expect(shader.uniforms.uOceanWaveSpeed.value).toBe(1.5);
+    expect(normalMap.offset.x).toBeCloseTo(0.135);
+    expect(normalMap.offset.y).toBeCloseTo(0.21);
   });
 
   it('uses a darker glossier water profile while preserving cheap vertex-color depth gradients', () => {

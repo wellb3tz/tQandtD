@@ -1,7 +1,10 @@
 import type { ChunkData } from '../world/chunk';
 import type { LakeData } from '../gen/lakes';
 import {
+  getRiverChannelDepth,
   getRiverChannelWidth,
+  getRiverValleyDepth,
+  getRiverValleyWidth,
   getRiverWaterLevel,
   type RiverData,
   type RiverPoint,
@@ -16,7 +19,18 @@ const CONTOUR_EPSILON = 1e-6;
 const OUTSIDE_LAKE_EPSILON = 1e-6;
 const DEFAULT_WATER_SURFACE_OFFSET = 0.15;
 const DEFAULT_RIVER_SURFACE_OFFSET = -1.0;
-const RIVER_SURFACE_VERTEX_COLOR = [0.16, 0.71, 0.83] as const;
+const RIVER_CROSS_SECTION_OFFSETS = [-1, -0.5, 0, 0.5, 1] as const;
+const RIVER_MAX_SURFACE_SEGMENT_LENGTH = 1.25;
+const RIVER_UV_DISTANCE_SCALE = 0.22;
+const RIVER_MIN_CHANNEL_CARVE_RADIUS = 1.35;
+const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
+const RIVER_WATER_DEPTH_FRACTION = 0.35;
+const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
+
+interface RiverSurfaceSample {
+  point: RiverPoint;
+  distance: number;
+}
 
 interface ContourPoint {
   x: number;
@@ -223,40 +237,158 @@ export function buildRiverGeometryData(
   for (const river of rivers) {
     if (river.points.length < 2) continue;
 
-    for (const points of getVisibleRiverRuns(river.points, seaLevel, surfaceOffset, options.heightScale)) {
-      if (points.length < 2) continue;
+    for (const visiblePoints of getVisibleRiverRuns(river.points, seaLevel, surfaceOffset, options.heightScale)) {
+      const samples = createRiverSurfaceSamples(visiblePoints);
+      if (samples.length < 2) continue;
 
-      for (let i = 0; i < points.length; i++) {
-        const point = points[i];
-        const prev = points[Math.max(0, i - 1)];
-        const next = points[Math.min(points.length - 1, i + 1)];
-        const dx = next.x - prev.x;
-        const dy = next.y - prev.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const normalX = -dy / length;
-        const normalY = dx / length;
-        const halfWidth = getRiverChannelWidth(point) * 0.5;
+      const runStart = vertexCount;
+      for (let i = 0; i < samples.length; i++) {
+        const point = samples[i].point;
+        const prev = samples[Math.max(0, i - 1)].point;
+        const next = samples[Math.min(samples.length - 1, i + 1)].point;
+        const tangent = getRiverSurfaceTangent(point, prev, next);
+        const normalX = -tangent.y;
+        const normalY = tangent.x;
+        const halfWidth = getRiverWaterSurfaceHalfWidth(point, surfaceOffset, options.heightScale);
         const worldX = chunkX * chunkSize + point.x;
         const worldZ = chunkY * chunkSize + point.y;
         const y = getRiverWaterLevel(point) * options.heightScale + surfaceOffset;
+        const v = samples[i].distance * RIVER_UV_DISTANCE_SCALE;
 
-        data.positions.push(worldX + normalX * halfWidth, y, worldZ + normalY * halfWidth);
-        data.positions.push(worldX - normalX * halfWidth, y, worldZ - normalY * halfWidth);
-        data.normals.push(0, 1, 0, 0, 1, 0);
-        data.colors.push(...RIVER_SURFACE_VERTEX_COLOR, ...RIVER_SURFACE_VERTEX_COLOR);
-        data.uvs.push(0, i, 1, i);
+        for (let column = 0; column < RIVER_CROSS_SECTION_OFFSETS.length; column++) {
+          const lateral = RIVER_CROSS_SECTION_OFFSETS[column];
+          const edgeAmount = Math.abs(lateral);
+          const [r, g, b] = riverSurfaceColor(point, edgeAmount);
+          const x = worldX + normalX * halfWidth * lateral;
+          const z = worldZ + normalY * halfWidth * lateral;
 
-        if (i < points.length - 1) {
-          const base = vertexCount;
-          data.indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+          data.positions.push(x, y, z);
+          data.normals.push(0, 1, 0);
+          data.colors.push(r, g, b);
+          data.uvs.push((lateral + 1) * 0.5, v);
+          vertexCount++;
         }
+      }
 
-        vertexCount += 2;
+      const columnCount = RIVER_CROSS_SECTION_OFFSETS.length;
+      for (let row = 0; row < samples.length - 1; row++) {
+        const rowStart = runStart + row * columnCount;
+        const nextRowStart = rowStart + columnCount;
+        for (let column = 0; column < columnCount - 1; column++) {
+          data.indices.push(
+            rowStart + column,
+            rowStart + column + 1,
+            nextRowStart + column,
+            rowStart + column + 1,
+            nextRowStart + column + 1,
+            nextRowStart + column,
+          );
+        }
       }
     }
   }
 
   return getIndexedGeometryVertexCount(data) > 0 ? data : null;
+}
+
+function getRiverWaterSurfaceHalfWidth(
+  point: RiverPoint,
+  surfaceOffset: number,
+  heightScale: number,
+): number {
+  const rawChannelRadius = Math.max(getRiverChannelWidth(point) * 0.5, 0);
+  const channelRadius = rawChannelRadius > 0
+    ? Math.max(rawChannelRadius, RIVER_MIN_CHANNEL_CARVE_RADIUS)
+    : 0;
+  const valleyRadius = Math.max(getRiverValleyWidth(point) * 0.5, channelRadius);
+  const channelDepth = Math.max(getRiverChannelDepth(point), 0);
+  const valleyDepth = Math.max(getRiverValleyDepth(point), 0);
+
+  if (channelRadius <= 0 || channelDepth <= 1e-6) {
+    return rawChannelRadius;
+  }
+
+  const renderOffsetDepth = -surfaceOffset / heightScale;
+  const waterDepth = clamp(channelDepth * RIVER_WATER_DEPTH_FRACTION + renderOffsetDepth, 0, channelDepth);
+  const bankDepth = Math.min(channelDepth * 0.6, valleyDepth * 1.2);
+  const floorRadius = Math.min(
+    Math.max(channelRadius * 0.35, RIVER_MIN_CHANNEL_FLOOR_RADIUS),
+    channelRadius * 0.7,
+  );
+
+  if (bankDepth > 1e-6 && waterDepth < bankDepth) {
+    const outerT = smoothStep((bankDepth - waterDepth) / bankDepth);
+    return channelRadius + (valleyRadius - channelRadius) * outerT;
+  }
+
+  if (channelDepth > bankDepth + 1e-6) {
+    const wallT = smoothStep((channelDepth - waterDepth) / (channelDepth - bankDepth));
+    return floorRadius + (channelRadius - floorRadius) * wallT;
+  }
+
+  return channelRadius;
+}
+
+function riverSurfaceColor(point: RiverPoint, edgeAmount: number): [number, number, number] {
+  void point;
+  void edgeAmount;
+  return [
+    RIVER_SURFACE_VERTEX_COLOR[0],
+    RIVER_SURFACE_VERTEX_COLOR[1],
+    RIVER_SURFACE_VERTEX_COLOR[2],
+  ];
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function smoothStep(t: number): number {
+  const clamped = clamp(t, 0, 1);
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function createRiverSurfaceSamples(points: RiverPoint[]): RiverSurfaceSample[] {
+  if (points.length === 0) return [];
+
+  const samples: RiverSurfaceSample[] = [{ point: points[0], distance: 0 }];
+  let distance = 0;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const segmentLength = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segmentLength <= 1e-6) continue;
+
+    const steps = Math.max(1, Math.ceil(segmentLength / RIVER_MAX_SURFACE_SEGMENT_LENGTH));
+    for (let step = 1; step <= steps; step++) {
+      const t = step / steps;
+      samples.push({
+        point: interpolateRiverPoint(a, b, t),
+        distance: distance + segmentLength * t,
+      });
+    }
+    distance += segmentLength;
+  }
+
+  return samples;
+}
+
+function getRiverSurfaceTangent(
+  point: RiverPoint,
+  previous: RiverPoint,
+  next: RiverPoint,
+): { x: number; y: number } {
+  let dx = next.x - previous.x;
+  let dy = next.y - previous.y;
+
+  if (Math.hypot(dx, dy) <= 1e-6) {
+    dx = point.flowX;
+    dy = point.flowY;
+  }
+
+  const length = Math.hypot(dx, dy) || 1;
+  return { x: dx / length, y: dy / length };
 }
 
 function depthColor(depth: number, seaLevel: number): [number, number, number] {
@@ -483,6 +615,14 @@ function interpolateRiverPointAtWaterLevel(
 ): RiverPoint {
   const denominator = waterB - waterA;
   const t = denominator === 0 ? 0 : Math.max(0, Math.min(1, (seaLevel - waterA) / denominator));
+  return interpolateRiverPoint(a, b, t);
+}
+
+function interpolateRiverPoint(
+  a: RiverPoint,
+  b: RiverPoint,
+  t: number,
+): RiverPoint {
   const optional = (start: number | undefined, end: number | undefined): number | undefined => {
     if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined;
     const from = Number.isFinite(start) ? (start as number) : (end as number);

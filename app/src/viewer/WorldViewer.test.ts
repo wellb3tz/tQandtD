@@ -306,12 +306,18 @@ describe('WorldViewer lifecycle', () => {
         ocean: {
           color: 0x123456,
           opacity: 0.42,
+          enableWaves: false,
+          waveHeight: 0.2,
+          waveSpeed: 1.8,
         },
       },
     });
 
     expect(viewer.getWaterConfig().ocean.color).toBe(0x123456);
     expect(viewer.getWaterConfig().ocean.opacity).toBeCloseTo(0.42);
+    expect(viewer.getWaterConfig().ocean.enableWaves).toBe(false);
+    expect(viewer.getWaterConfig().ocean.waveHeight).toBeCloseTo(0.2);
+    expect(viewer.getWaterConfig().ocean.waveSpeed).toBeCloseTo(1.8);
 
     viewer.dispose();
   });

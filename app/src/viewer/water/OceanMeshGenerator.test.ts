@@ -47,8 +47,13 @@ describe('OceanMeshGenerator contour mesh', () => {
     geometry!.computeBoundingBox();
     const box = geometry!.boundingBox!;
     const position = geometry!.getAttribute('position');
+    const waterDepth = geometry!.getAttribute('waterDepth');
+    const depths = Array.from({ length: waterDepth.count }, (_, i) => waterDepth.getX(i));
 
     expect(position.count).toBe(3);
+    expect(waterDepth.count).toBe(position.count);
+    expect(depths.some(depth => depth > 0)).toBe(true);
+    expect(depths).toContain(0);
     expect(box.min.x).toBe(0);
     expect(box.min.z).toBe(0);
     expect(box.max.x).toBeGreaterThan(0);

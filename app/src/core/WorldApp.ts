@@ -138,6 +138,9 @@ export interface WaterSurfaceViewSettings {
   color?: number;
   opacity?: number;
   shininess?: number;
+  enableWaves?: boolean;
+  waveHeight?: number;
+  waveSpeed?: number;
 }
 
 export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {

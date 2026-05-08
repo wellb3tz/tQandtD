@@ -8,11 +8,11 @@
 
 import * as THREE from 'three';
 import type { ChunkData } from '@engine/index';
-import type { WaterConfig, WaterLayerData, WaterMesh } from './types';
+import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
 import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
-import { createOceanMaterial } from './WaterMaterialFactory';
+import { createOceanMaterial, updateOceanMaterialWaves } from './WaterMaterialFactory';
 
 /**
  * Water layer manager class
@@ -441,6 +441,17 @@ export class WaterLayerManager {
   toggleWaterVisibility(visible: boolean): void {
     for (const waterLayer of this.waterLayers.values()) {
       waterLayer.group.visible = visible;
+    }
+  }
+
+  /**
+   * Advance animated ocean materials for all loaded chunks.
+   */
+  updateOceanWaves(elapsedSeconds: number, config: OceanConfig): void {
+    for (const waterLayer of this.waterLayers.values()) {
+      for (const waterMesh of waterLayer.ocean) {
+        updateOceanMaterialWaves(waterMesh.material, config, elapsedSeconds);
+      }
     }
   }
 

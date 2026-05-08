@@ -425,6 +425,21 @@ export class ControlPanel {
       this.updateWaterViewConfig('ocean', 'shininess', value);
     });
     viewSection.appendChild(shininessControl);
+
+    const wavesControl = this.createCheckboxControl(WATER_VIEW_CONTROLS.enableWaves, (checked) => {
+      this.updateWaterViewConfig('ocean', 'enableWaves', checked);
+    });
+    viewSection.appendChild(wavesControl);
+
+    const waveHeightControl = this.createSliderControl(WATER_VIEW_CONTROLS.waveHeight, (value) => {
+      this.updateWaterViewConfig('ocean', 'waveHeight', value);
+    });
+    viewSection.appendChild(waveHeightControl);
+
+    const waveSpeedControl = this.createSliderControl(WATER_VIEW_CONTROLS.waveSpeed, (value) => {
+      this.updateWaterViewConfig('ocean', 'waveSpeed', value);
+    });
+    viewSection.appendChild(waveSpeedControl);
   }
 
   /**
@@ -758,7 +773,7 @@ export class ControlPanel {
   private updateWaterViewConfig(
     waterType: 'ocean' | 'lake',
     property: keyof WaterSurfaceViewSettings,
-    value: number
+    value: number | boolean
   ): void {
     this.app?.updateViewerSettings({
       waterView: {
