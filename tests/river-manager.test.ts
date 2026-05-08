@@ -197,6 +197,68 @@ describe('RiverManager', () => {
     expect(rivers.length).toBeLessThanOrEqual(2);
   });
 
+  it('turns a candidate that enters an occupied corridor into a tributary', () => {
+    const manager = new RiverManager(
+      246,
+      {
+        ...DEFAULT_RIVER_CONFIG,
+        sourceThreshold: -1,
+        maxRiversPerRegion: 0,
+        minRiverLength: 4,
+        maxLength: 64,
+        maxTributaries: 4,
+      },
+      (x: number, y: number) => Math.max(0.32, 0.86 - x * 0.02 - y * 0.015),
+      alwaysPlain,
+    );
+    const mainPath = createRiverCorridorPoints([
+      { x: 8, y: 8, height: 0.58, surfaceLevel: 0.59, width: 2, depth: 0.04, flowX: 1, flowY: 0 },
+      { x: 20, y: 8, height: 0.42, surfaceLevel: 0.43, width: 2, depth: 0.04, flowX: 1, flowY: 0 },
+    ]);
+    const existing: WorldRiverData = {
+      id: 'river_existing',
+      mainPath,
+      tributaries: [],
+      source: { x: 8, y: 8 },
+      mouth: { x: 20, y: 8 },
+      bounds: { minX: 8, maxX: 20, minY: 8, maxY: 8 },
+    };
+
+    (manager as any).acceptRiver(existing);
+    const standalone = (manager as any).traceMainRiver(0, 0);
+
+    expect(standalone).toBeNull();
+    expect(existing.tributaries).toHaveLength(1);
+    expect(existing.tributaries[0].points.at(-1)!.y).toBeCloseTo(8);
+    expect(existing.tributaries[0].connectsToRiverId).toBe(existing.id);
+    expect(existing.tributaries[0].points.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('detects sources already inside an occupied river corridor', () => {
+    const manager = new RiverManager(
+      247,
+      { ...DEFAULT_RIVER_CONFIG, maxRiversPerRegion: 0 },
+      () => 0.7,
+      alwaysPlain,
+    );
+    const existing: WorldRiverData = {
+      id: 'river_occupied',
+      mainPath: createRiverCorridorPoints([
+        { x: 4, y: 6, height: 0.7, surfaceLevel: 0.62, width: 2, depth: 0.03, flowX: 1, flowY: 0 },
+        { x: 14, y: 6, height: 0.6, surfaceLevel: 0.52, width: 2, depth: 0.03, flowX: 1, flowY: 0 },
+      ]),
+      tributaries: [],
+      source: { x: 4, y: 6 },
+      mouth: { x: 14, y: 6 },
+      bounds: { minX: 4, maxX: 14, minY: 6, maxY: 6 },
+    };
+
+    (manager as any).acceptRiver(existing);
+
+    expect((manager as any).findOccupiedPoint(8, 6)).not.toBeNull();
+    expect((manager as any).findOccupiedPoint(8, 14)).toBeNull();
+  });
+
   it('does not invalidate rivers returned for earlier chunks after later exploration', () => {
     const config = {
       ...DEFAULT_RIVER_CONFIG,
