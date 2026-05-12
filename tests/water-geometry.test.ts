@@ -52,11 +52,11 @@ function createLake(tileIndices: number[]): LakeData {
   };
 }
 
-function river(points: RiverData['points']): RiverData {
+function river(points: RiverData['points'], isTributary = false): RiverData {
   return {
     riverId: 'river_1',
-    pathId: 'river_1:main',
-    isTributary: false,
+    pathId: isTributary ? 'river_1:tributary' : 'river_1:main',
+    isTributary,
     points,
     bounds: { minX: 0, maxX: 4, minY: 1, maxY: 1 },
   };
@@ -111,5 +111,31 @@ describe('water geometry data helpers', () => {
     expect(data!.positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 1, 5);
     expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeGreaterThan(getRiverChannelWidth(points[0]) * 1.5);
     expect(data!.colors.slice(0, 6)).toEqual([0.04, 0.1, 0.23, 0.04, 0.1, 0.23]);
+  });
+
+  it('tapers tributary water to zero width at the confluence', () => {
+    const points: RiverData['points'] = [
+      { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1.2, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.42, surfaceLevel: 0.43, width: 1, depth: 0.03, channelWidth: 1.4, channelDepth: 0.05, flowX: 1, flowY: 0 },
+    ];
+
+    const data = buildRiverGeometryData(
+      [river(points, true)],
+      0,
+      0,
+      16,
+      { heightScale: HEIGHT_SCALE, surfaceOffset: -1 },
+      0.3,
+    );
+
+    expect(data).not.toBeNull();
+    const columnCount = 5;
+    const vertexCount = getIndexedGeometryVertexCount(data!);
+    const firstRowZ = Array.from({ length: columnCount }, (_, column) => data!.positions[column * 3 + 2]);
+    const lastRowStart = (vertexCount - columnCount) * 3;
+    const lastRowZ = Array.from({ length: columnCount }, (_, column) => data!.positions[lastRowStart + column * 3 + 2]);
+
+    expect(Math.max(...firstRowZ) - Math.min(...firstRowZ)).toBeGreaterThan(1);
+    expect(Math.max(...lastRowZ) - Math.min(...lastRowZ)).toBeCloseTo(0, 5);
   });
 });

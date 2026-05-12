@@ -12,6 +12,7 @@ export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
 export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v2.png';
+const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 2.08;
 
 export type TerrainSurfaceKey =
   | 'plains'
@@ -374,7 +375,11 @@ export function createTexturedTerrainMaterial(
     map: textures.albedo,
     normalMap: textures.normal,
     roughnessMap: textures.roughness,
-    color: new THREE.Color(1.72, 1.72, 1.72),
+    color: new THREE.Color(
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+    ),
     normalScale: new THREE.Vector2(0.35, 0.35),
     vertexColors: true,
     wireframe,
@@ -405,7 +410,11 @@ export function createTerrainBlendMaterial(
   const material = new THREE.MeshStandardMaterial({
     map: textures.albedoAtlas,
     normalMap: textures.plains.normal,
-    color: new THREE.Color(1.72, 1.72, 1.72),
+    color: new THREE.Color(
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+      TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
+    ),
     normalScale: new THREE.Vector2(0.35, 0.35),
     vertexColors: true,
     wireframe,

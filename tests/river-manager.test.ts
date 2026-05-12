@@ -234,6 +234,36 @@ describe('RiverManager', () => {
     expect(existing.tributaries[0].points.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('steers mature routes toward valid occupied corridors for natural confluences', () => {
+    const manager = new RiverManager(
+      248,
+      {
+        ...DEFAULT_RIVER_CONFIG,
+        maxRiversPerRegion: 0,
+        minRiverLength: 4,
+        maxTributaries: 4,
+      },
+      () => 0.6,
+      alwaysPlain,
+    );
+    const existing: WorldRiverData = {
+      id: 'river_target',
+      mainPath: createRiverCorridorPoints([
+        { x: 1, y: 1, height: 0.6, surfaceLevel: 0.57, width: 2, depth: 0.03, flowX: 1, flowY: 0 },
+        { x: 8, y: 1, height: 0.52, surfaceLevel: 0.5, width: 2, depth: 0.03, flowX: 1, flowY: 0 },
+      ]),
+      tributaries: [],
+      source: { x: 1, y: 1 },
+      mouth: { x: 8, y: 1 },
+      bounds: { minX: 1, maxX: 8, minY: 1, maxY: 1 },
+    };
+
+    (manager as any).acceptRiver(existing);
+    const next = (manager as any).chooseNextStep(0, 0, 0.6, 4);
+
+    expect(next).toMatchObject({ x: 1, y: 1 });
+  });
+
   it('detects sources already inside an occupied river corridor', () => {
     const manager = new RiverManager(
       247,

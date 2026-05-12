@@ -21,6 +21,9 @@ const MAX_SAFE_COAST_APPROACH_DROP = 0.28;
 const MIN_CONFLUENCE_DRY_POINTS = 4;
 const MAX_CONFLUENCE_OPPOSING_DOT = -0.35;
 const MAX_CONFLUENCE_SURFACE_DROP = 0.14;
+const MIN_OCCUPANCY_CELL_SIZE = 4;
+const CONFLUENCE_ROUTE_BONUS = 6;
+const OCCUPIED_CORRIDOR_EARLY_PENALTY = -8;
 
 interface OccupiedRiverSegment {
   riverId: string;
@@ -54,6 +57,9 @@ export class RiverManager {
   private readonly rivers: Map<string, WorldRiverData>;
   private readonly generatedRegions: Set<string>;
   private readonly occupiedSegments: OccupiedRiverSegment[];
+  private readonly occupiedSegmentGrid: Map<string, OccupiedRiverSegment[]>;
+  private readonly occupancyCellSize: number;
+  private maxOccupiedRadius: number;
 
   constructor(
     private readonly worldSeed: number,
@@ -72,6 +78,9 @@ export class RiverManager {
     this.rivers = new Map();
     this.generatedRegions = new Set();
     this.occupiedSegments = [];
+    this.occupiedSegmentGrid = new Map();
+    this.occupancyCellSize = Math.max(MIN_OCCUPANCY_CELL_SIZE, config.carveBankWidth * 2);
+    this.maxOccupiedRadius = config.carveBankWidth;
   }
 
   getRiversForChunk(chunkX: number, chunkY: number, chunkSize: number): WorldRiverData[] {
@@ -107,6 +116,8 @@ export class RiverManager {
     this.rivers.clear();
     this.generatedRegions.clear();
     this.occupiedSegments.length = 0;
+    this.occupiedSegmentGrid.clear();
+    this.maxOccupiedRadius = this.config.carveBankWidth;
   }
 
   notifyChunkEvicted(_chunkX: number, _chunkY: number): void {
@@ -233,7 +244,8 @@ export class RiverManager {
       const oceanBonus = height <= SEA_LEVEL || biome === BiomeType.OCEAN ? 10 : 0;
       const eastwardBias = dx * 0.05;
       const meander = this.noise.noise2D(nx * 0.17 + step, ny * 0.17) * 0.02;
-      const score = downhill * 4 + oceanBonus + eastwardBias + meander;
+      const occupancyScore = this.getOccupiedCorridorStepScore(x, y, currentHeight, nx, ny, height, step);
+      const score = downhill * 4 + oceanBonus + eastwardBias + meander + occupancyScore;
 
       if (!best || score > best.score) {
         best = { x: nx, y: ny, height, score };
@@ -241,6 +253,39 @@ export class RiverManager {
     }
 
     return best;
+  }
+
+  private getOccupiedCorridorStepScore(
+    x: number,
+    y: number,
+    currentHeight: number,
+    nextX: number,
+    nextY: number,
+    nextHeight: number,
+    step: number,
+  ): number {
+    if (this.occupiedSegments.length === 0) return 0;
+
+    const current = this.createPoint(x, y, currentHeight);
+    const next = this.createPoint(nextX, nextY, nextHeight, current);
+    const hit = this.findConfluenceHit(current, next);
+    if (!hit) return 0;
+
+    const requiredPoints = Math.max(MIN_CONFLUENCE_DRY_POINTS, this.config.minRiverLength);
+    const pointsAfterStep = step + 2;
+    if (pointsAfterStep < requiredPoints) return OCCUPIED_CORRIDOR_EARLY_PENALTY;
+
+    const targetRiver = this.rivers.get(hit.segment.riverId);
+    const canMerge =
+      this.config.maxTributaries > 0 &&
+      targetRiver !== undefined &&
+      targetRiver.tributaries.length < this.config.maxTributaries &&
+      this.canMergeAtConfluence([current, next], hit);
+
+    if (!canMerge) return 0;
+
+    const distancePenalty = hit.segment.radius > 1e-6 ? hit.distance / hit.segment.radius : 0;
+    return CONFLUENCE_ROUTE_BONUS * (1 - Math.min(distancePenalty, 1));
   }
 
   private createPoint(x: number, y: number, height: number, previous?: RiverPoint): RiverPoint {
@@ -412,7 +457,7 @@ export class RiverManager {
     for (let i = 0; i < points.length - 1; i++) {
       const a = points[i];
       const b = points[i + 1];
-      this.occupiedSegments.push({
+      const segment: OccupiedRiverSegment = {
         riverId,
         segmentIndex: i,
         a,
@@ -422,12 +467,15 @@ export class RiverManager {
           getRiverValleyWidth(a) * 0.5,
           getRiverValleyWidth(b) * 0.5,
         ),
-      });
+      };
+      this.occupiedSegments.push(segment);
+      this.maxOccupiedRadius = Math.max(this.maxOccupiedRadius, segment.radius);
+      this.indexOccupiedSegment(segment);
     }
   }
 
   private findOccupiedPoint(x: number, y: number): OccupiedRiverSegment | null {
-    for (const segment of this.occupiedSegments) {
+    for (const segment of this.queryOccupiedSegmentsForPoint(x, y)) {
       const distance = this.distanceToSegment(x, y, segment.a, segment.b);
       if (distance <= segment.radius) return segment;
     }
@@ -438,7 +486,7 @@ export class RiverManager {
   private findConfluenceHit(a: RiverPoint, b: RiverPoint): RiverConfluenceHit | null {
     let best: RiverConfluenceHit | null = null;
 
-    for (const segment of this.occupiedSegments) {
+    for (const segment of this.queryOccupiedSegmentsForSegment(a, b)) {
       const closest = this.closestBetweenSegments(a, b, segment.a, segment.b);
       if (closest.distance > segment.radius) continue;
 
@@ -456,6 +504,70 @@ export class RiverManager {
     }
 
     return best;
+  }
+
+  private indexOccupiedSegment(segment: OccupiedRiverSegment): void {
+    for (const cellKey of this.getGridKeysForBounds(
+      Math.min(segment.a.x, segment.b.x) - segment.radius,
+      Math.max(segment.a.x, segment.b.x) + segment.radius,
+      Math.min(segment.a.y, segment.b.y) - segment.radius,
+      Math.max(segment.a.y, segment.b.y) + segment.radius,
+    )) {
+      const bucket = this.occupiedSegmentGrid.get(cellKey);
+      if (bucket) {
+        bucket.push(segment);
+      } else {
+        this.occupiedSegmentGrid.set(cellKey, [segment]);
+      }
+    }
+  }
+
+  private queryOccupiedSegmentsForPoint(x: number, y: number): OccupiedRiverSegment[] {
+    const bucket = this.occupiedSegmentGrid.get(this.getGridKeyForPoint(x, y));
+    return bucket ?? [];
+  }
+
+  private queryOccupiedSegmentsForSegment(a: RiverPoint, b: RiverPoint): OccupiedRiverSegment[] {
+    const result: OccupiedRiverSegment[] = [];
+    const seen = new Set<OccupiedRiverSegment>();
+
+    for (const cellKey of this.getGridKeysForBounds(
+      Math.min(a.x, b.x) - this.maxOccupiedRadius,
+      Math.max(a.x, b.x) + this.maxOccupiedRadius,
+      Math.min(a.y, b.y) - this.maxOccupiedRadius,
+      Math.max(a.y, b.y) + this.maxOccupiedRadius,
+    )) {
+      const bucket = this.occupiedSegmentGrid.get(cellKey);
+      if (!bucket) continue;
+
+      for (const segment of bucket) {
+        if (seen.has(segment)) continue;
+        seen.add(segment);
+        result.push(segment);
+      }
+    }
+
+    return result;
+  }
+
+  private getGridKeysForBounds(minX: number, maxX: number, minY: number, maxY: number): string[] {
+    const keys: string[] = [];
+    const minCellX = Math.floor(minX / this.occupancyCellSize);
+    const maxCellX = Math.floor(maxX / this.occupancyCellSize);
+    const minCellY = Math.floor(minY / this.occupancyCellSize);
+    const maxCellY = Math.floor(maxY / this.occupancyCellSize);
+
+    for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        keys.push(`${cellX},${cellY}`);
+      }
+    }
+
+    return keys;
+  }
+
+  private getGridKeyForPoint(x: number, y: number): string {
+    return `${Math.floor(x / this.occupancyCellSize)},${Math.floor(y / this.occupancyCellSize)}`;
   }
 
   private closestBetweenSegments(

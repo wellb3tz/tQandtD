@@ -25,6 +25,7 @@ const RIVER_UV_DISTANCE_SCALE = 0.22;
 const RIVER_MIN_CHANNEL_CARVE_RADIUS = 1.35;
 const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
 const RIVER_WATER_DEPTH_FRACTION = 0.35;
+const RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH = 2.25;
 const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
 
 interface RiverSurfaceSample {
@@ -242,6 +243,7 @@ export function buildRiverGeometryData(
       if (samples.length < 2) continue;
 
       const runStart = vertexCount;
+      const totalRunDistance = samples[samples.length - 1].distance;
       for (let i = 0; i < samples.length; i++) {
         const point = samples[i].point;
         const prev = samples[Math.max(0, i - 1)].point;
@@ -249,7 +251,8 @@ export function buildRiverGeometryData(
         const tangent = getRiverSurfaceTangent(point, prev, next);
         const normalX = -tangent.y;
         const normalY = tangent.x;
-        const halfWidth = getRiverWaterSurfaceHalfWidth(point, surfaceOffset, options.heightScale);
+        const halfWidth = getRiverWaterSurfaceHalfWidth(point, surfaceOffset, options.heightScale)
+          * getRiverMouthTaper(river, samples[i].distance, totalRunDistance);
         const worldX = chunkX * chunkSize + point.x;
         const worldZ = chunkY * chunkSize + point.y;
         const y = getRiverWaterLevel(point) * options.heightScale + surfaceOffset;
@@ -289,6 +292,15 @@ export function buildRiverGeometryData(
   }
 
   return getIndexedGeometryVertexCount(data) > 0 ? data : null;
+}
+
+function getRiverMouthTaper(river: RiverData, distance: number, totalDistance: number): number {
+  if (!river.isTributary) return 1;
+  if (totalDistance <= 1e-6) return 1;
+
+  const remaining = totalDistance - distance;
+  if (remaining >= RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH) return 1;
+  return smoothStep(remaining / RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH);
 }
 
 function getRiverWaterSurfaceHalfWidth(

@@ -262,6 +262,51 @@ describe('ChunkManager rivers', () => {
     expect(chunk.heightmap[carvedIndex]).toBeLessThan(0.56);
   });
 
+  it('converts natural tributaries as separate local river spans', () => {
+    const config = makeMinimalConfig(42);
+    config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
+    config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
+    const manager = new ChunkManager(config);
+    const worldRiver: WorldRiverData = {
+      id: 'river_with_tributary',
+      mainPath: [
+        { x: 2, y: 8, height: 0.62, surfaceLevel: 0.58, width: 2, depth: 0.04, flowX: 1, flowY: 0 },
+        { x: 14, y: 8, height: 0.52, surfaceLevel: 0.5, width: 2, depth: 0.04, flowX: 1, flowY: 0 },
+      ],
+      tributaries: [{
+        id: 'river_with_tributary:tributary:4_4_8_8',
+        connectsToRiverId: 'river_with_tributary',
+        connectsAtIndex: 0,
+        points: [
+          { x: 4, y: 4, height: 0.68, surfaceLevel: 0.62, width: 1.2, depth: 0.03, flowX: 1, flowY: 1 },
+          { x: 8, y: 8, height: 0.58, surfaceLevel: 0.56, width: 1.4, depth: 0.03, flowX: 1, flowY: 1 },
+        ],
+      }],
+      source: { x: 2, y: 8 },
+      mouth: { x: 14, y: 8 },
+      bounds: { minX: 2, maxX: 14, minY: 4, maxY: 8 },
+    };
+
+    (manager as any).terrainGenerator = {
+      generateHeightmap: () => new Float32Array((config.chunkSize + 1) * (config.chunkSize + 1)).fill(0.72),
+      getHeightAt: () => 0.72,
+    };
+    (manager as any).riverManager = {
+      getRiversForChunk: () => [worldRiver],
+      notifyChunkEvicted: () => undefined,
+      clear: () => undefined,
+    };
+
+    const chunk = manager.generateChunk(0, 0);
+    const main = chunk.rivers?.find(river => !river.isTributary);
+    const tributary = chunk.rivers?.find(river => river.isTributary);
+
+    expect(chunk.rivers).toHaveLength(2);
+    expect(main?.pathId).toBe('river_with_tributary:main');
+    expect(tributary?.pathId).toBe('river_with_tributary:tributary:4_4_8_8');
+    expect(tributary?.points.at(-1)).toMatchObject({ x: 8, y: 8 });
+  });
+
   it('carves a deep channel, raised inner banks, and a broad outer valley', () => {
     const config = makeMinimalConfig(42);
     config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
