@@ -36,7 +36,7 @@ let helpModal: HelpModal | null = null;
 
 // Global timers for cleanup
 let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
-let chunkLoadTimer: ReturnType<typeof setInterval> | null = null;
+let chunkLoadTimer: ReturnType<typeof setTimeout> | null = null;
 let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
 // Basic initialization
@@ -133,8 +133,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       let lastChunkLoadCheck = 0;
       let lastPerformanceUpdate = 0;
       let lastUIUpdate = 0;
+      let lastChunkLoadCameraPos: { x: number; z: number } | null = null;
       const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
-      const chunkLoadCheckInterval = 500; // Check for new chunks every 500ms
       const performanceUpdateInterval = 1000; // Update performance metrics every 1000ms.
       const uiUpdateInterval = 100; // Update UI every 100ms
       
@@ -205,34 +205,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, uiUpdateInterval);
       
-      // 2. Chunk loading interval (every 500ms), executed asynchronously.
-      chunkLoadTimer = setInterval(() => {
-        if (worldViewer && app) {
-          const now = performance.now();
-          
-          if (now - lastChunkLoadCheck >= chunkLoadCheckInterval) {
-            // Run on the next event-loop tick to avoid blocking rendering.
+      // 2. Adaptive chunk loading — faster when moving, slower when idle.
+      const scheduleChunkLoad = (delay = 100) => {
+        chunkLoadTimer = setTimeout(() => {
+          let nextInterval = 100;
+
+          if (worldViewer && app) {
+            const cameraPos = worldViewer.getCameraPosition();
+
+            // Determine how fast the camera is moving
+            let distance = 0;
+            if (lastChunkLoadCameraPos) {
+              distance = Math.hypot(
+                cameraPos.x - lastChunkLoadCameraPos.x,
+                cameraPos.z - lastChunkLoadCameraPos.z
+              );
+            }
+            lastChunkLoadCameraPos = { x: cameraPos.x, z: cameraPos.z };
+
+            // Adaptive interval: fast movement → 50ms, walking → 100ms, idle → 300ms
+            if (distance > 0.15) {
+              nextInterval = 50;   // Running
+            } else if (distance > 0.03) {
+              nextInterval = 100;  // Walking
+            } else {
+              nextInterval = 300;  // Idle
+            }
+
+            // Run chunk loading asynchronously to avoid blocking rendering.
             setTimeout(() => {
-              const cameraPos = worldViewer!.getCameraPosition();
-              const chunkSize = 32; // Default chunk size
+              const chunkSize = 32;
               const loadRadius = app!.getViewDistance();
-              
-              // Convert camera world position to chunk coordinates
               const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
               const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
-              
-              // Load chunks around camera position
               app!.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
-              
-              // Unload distant chunks to manage memory
               const unloadDistance = loadRadius + 2;
               app!.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
             }, 0);
-            
-            lastChunkLoadCheck = now;
+
+            lastChunkLoadCheck = performance.now();
           }
-        }
-      }, chunkLoadCheckInterval);
+
+          scheduleChunkLoad(nextInterval);
+        }, delay);
+      };
+      scheduleChunkLoad();
       
       // 3. Performance metrics interval (every 1000ms), executed asynchronously.
       performanceTimer = setInterval(() => {
@@ -280,7 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Clean up timers when the page closes.
       window.addEventListener('beforeunload', () => {
         if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
-        if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
+        if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
         if (performanceTimer !== null) clearInterval(performanceTimer);
         if (worldViewer) worldViewer.dispose();
         if (app) app.destroy();
@@ -454,7 +471,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Clean up any timers that might have been created
     if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
-    if (chunkLoadTimer !== null) clearInterval(chunkLoadTimer);
+    if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
     if (performanceTimer !== null) clearInterval(performanceTimer);
     
     errorHandler.handleError(new AppError(
