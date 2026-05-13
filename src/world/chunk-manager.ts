@@ -205,6 +205,13 @@ export class ChunkManager implements ChunkManagerSnapshot {
         return this.biomeSystem.getBiome(worldX, worldY, height);
       }
     ) : null;
+
+    // Cross-wire the two managers so lakes never spawn on river corridors
+    // and rivers terminate when they reach an existing lake.
+    if (this.lakeManager && this.riverManager) {
+      this.lakeManager.setRiverTileChecker((x, y) => this.riverManager!.isPointInRiverCorridor(x, y));
+      this.riverManager.setLakeTileChecker((x, y) => this.lakeManager!.isPointInLake(x, y));
+    }
     
     // Initialize WorkerPool if multi-threading is enabled (Requirement 9.1)
     this.workerPool = config.workerPoolConfig
@@ -475,44 +482,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       structures: [],
     };
 
-    // Step 3: Generate lakes using multi-chunk lake manager
+    // Step 3: Generate rivers using multi-chunk river manager
     try {
-      this.config.onProgress?.('lakes', 0.55);
-      
-      if (this.lakeManager) {
-        const worldLakes = this.lakeManager.getLakesForChunk(
-          chunkX, 
-          chunkY, 
-          this.config.chunkSize,
-          (cx: number, cy: number) => {
-            const key = this.getCacheKey(cx, cy);
-            const wasInCache = this.cache.has(key);
-            this.cache.delete(key);
-            logger.debug(LogCategory.CACHE, `Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
-            this.config.onChunkInvalidated?.(cx, cy);
-          }
-        );
-        
-        chunk.lakes = this.convertWorldLakesToChunkLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
-        
-        if (worldLakes.length > 0) {
-          this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
-        }
-      }
-    } catch (error) {
-      // Lakes are optional - log error but continue
-      logger.warn(LogCategory.LAKE, `Lake generation failed for chunk (${chunkX}, ${chunkY}), continuing without lakes`, error);
-      chunk.lakes = [];
-      
-      // Only throw if error recovery doesn't allow partial chunks
-      if (!this.errorRecovery.allowPartialChunks) {
-        throw new LakeGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
-      }
-    }
-
-    // Step 4: Generate rivers using multi-chunk river manager
-    try {
-      this.config.onProgress?.('rivers', 0.58);
+      this.config.onProgress?.('rivers', 0.55);
 
       if (this.riverManager) {
         const worldRivers = this.riverManager.getRiversForChunk(
@@ -532,6 +504,41 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
       if (!this.errorRecovery.allowPartialChunks) {
         throw new RiverGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
+      }
+    }
+
+    // Step 4: Generate lakes using multi-chunk lake manager
+    try {
+      this.config.onProgress?.('lakes', 0.58);
+
+      if (this.lakeManager) {
+        const worldLakes = this.lakeManager.getLakesForChunk(
+          chunkX,
+          chunkY,
+          this.config.chunkSize,
+          (cx: number, cy: number) => {
+            const key = this.getCacheKey(cx, cy);
+            const wasInCache = this.cache.has(key);
+            this.cache.delete(key);
+            logger.debug(LogCategory.CACHE, `Cache invalidation for chunk (${cx}, ${cy}): wasInCache=${wasInCache}`);
+            this.config.onChunkInvalidated?.(cx, cy);
+          }
+        );
+
+        chunk.lakes = this.convertWorldLakesToChunkLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+
+        if (worldLakes.length > 0) {
+          this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+        }
+      }
+    } catch (error) {
+      // Lakes are optional - log error but continue
+      logger.warn(LogCategory.LAKE, `Lake generation failed for chunk (${chunkX}, ${chunkY}), continuing without lakes`, error);
+      chunk.lakes = [];
+
+      // Only throw if error recovery doesn't allow partial chunks
+      if (!this.errorRecovery.allowPartialChunks) {
+        throw new LakeGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
       }
     }
 

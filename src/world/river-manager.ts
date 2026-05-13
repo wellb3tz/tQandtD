@@ -60,6 +60,7 @@ export class RiverManager {
   private readonly occupiedSegmentGrid: Map<string, OccupiedRiverSegment[]>;
   private readonly occupancyCellSize: number;
   private maxOccupiedRadius: number;
+  private isLakeTile?: (worldX: number, worldY: number) => boolean;
 
   constructor(
     private readonly worldSeed: number,
@@ -122,6 +123,24 @@ export class RiverManager {
 
   notifyChunkEvicted(_chunkX: number, _chunkY: number): void {
     // River cache is intentionally stable for the initial implementation.
+  }
+
+  /**
+   * Register a callback that returns true when a world tile is already
+   * occupied by a lake.  Used to prevent rivers from flowing through
+   * existing lakes (they terminate at the shore instead).
+   */
+  setLakeTileChecker(checker: (worldX: number, worldY: number) => boolean): void {
+    this.isLakeTile = checker;
+  }
+
+  /**
+   * Returns true if the world-space point lies inside any river corridor
+   * (channel or valley).  Used by LakeManager to avoid spawning lakes on
+   * top of rivers.
+   */
+  isPointInRiverCorridor(worldX: number, worldY: number): boolean {
+    return this.findOccupiedPoint(worldX, worldY) !== null;
   }
 
   private generateRiversForRegion(chunkX: number, chunkY: number, chunkSize: number): void {
@@ -194,6 +213,11 @@ export class RiverManager {
       if ((height <= SEA_LEVEL || biome === BiomeType.OCEAN) && points.length >= this.config.minRiverLength) {
         if (points.filter(point => !this.isOceanPoint(point)).length < this.config.minRiverLength) return null;
         if (!this.hasSafeOceanMouth(points)) return null;
+        return this.createRiver(points);
+      }
+
+      if (this.isLakeTile?.(currentX, currentY)) {
+        if (points.filter(point => !this.isOceanPoint(point)).length < this.config.minRiverLength) return null;
         return this.createRiver(points);
       }
 

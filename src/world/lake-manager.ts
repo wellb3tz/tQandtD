@@ -75,6 +75,8 @@ export class LakeManager {
   private getHeightAt: (worldX: number, worldY: number) => number;
   /** Callback to get biome at world coordinates */
   private getBiomeAt: (worldX: number, worldY: number) => BiomeType;
+  /** Callback that returns true when a world tile is occupied by a river corridor */
+  private isRiverTile?: (worldX: number, worldY: number) => boolean;
 
   constructor(
     worldSeed: number,
@@ -274,8 +276,9 @@ export class LakeManager {
         const worldY = worldYStart + ty;
         const tileKey = this.encodeTile(worldX, worldY);
 
-        // Skip if already part of a lake
+        // Skip if already part of a lake or a river corridor
         if (this.isTileInAnyLake(tileKey)) continue;
+        if (this.isRiverTile?.(worldX, worldY)) continue;
 
         const biome = this.getBiomeAt(worldX, worldY);
         if (!this.allowedBiomes.has(biome)) continue;
@@ -489,6 +492,10 @@ export class LakeManager {
 
         const nh = getHeight(nx, ny);
         if (nh < waterLevel) {
+          if (this.isRiverTile?.(nx, ny)) {
+            return null; // River drains the basin — treat as open
+          }
+
           visited.add(nKey);
 
           if (visited.size > maxLakeTiles) {
@@ -709,6 +716,23 @@ export class LakeManager {
     if (this.chunkAccessTime.has(chunkKey)) {
       this.chunkAccessTime.set(chunkKey, 0);
     }
+  }
+
+  /**
+   * Register a callback that returns true when a world tile is already
+   * occupied by a river corridor.  Used to prevent lakes from spawning
+   * on top of rivers.
+   */
+  setRiverTileChecker(checker: (worldX: number, worldY: number) => boolean): void {
+    this.isRiverTile = checker;
+  }
+
+  /**
+   * Returns true if the world-space point lies inside any lake.
+   * Used by RiverManager to terminate rivers at lake shores.
+   */
+  isPointInLake(worldX: number, worldY: number): boolean {
+    return this.tileToLakeId.has(this.encodeTile(worldX, worldY));
   }
 
   /**
