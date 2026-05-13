@@ -59,8 +59,10 @@ export class WorldRenderLoop {
       this.cameraViewController.updateFollowTerrainMode();
 
       const now = performance.now();
+      const elapsedSeconds = now / 1000;
       const waterConfig = this.getWaterConfig();
-      this.waterLayerManager.updateOceanWaves(now / 1000, waterConfig.ocean);
+      this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
+      this.waterLayerManager.updateRiverFlows(elapsedSeconds);
 
       if (this.enableFrustumCulling && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();

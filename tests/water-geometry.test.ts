@@ -6,6 +6,7 @@ import {
   buildRiverGeometryData,
   getIndexedGeometryVertexCount,
   getRiverChannelWidth,
+  getRiverValleyWidth,
   getRiverWaterLevel,
   identifyLakeSurfaceTiles,
   identifyOceanSurfaceTiles,
@@ -102,14 +103,17 @@ describe('water geometry data helpers', () => {
       0,
       0,
       16,
-      { heightScale: HEIGHT_SCALE, surfaceOffset: -1 },
+      { heightScale: HEIGHT_SCALE, surfaceOffset: 0.3 },
       0.3,
     );
 
     expect(data).not.toBeNull();
     expect(getIndexedGeometryVertexCount(data!)).toBe(30);
-    expect(data!.positions[1]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 1, 5);
-    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeGreaterThan(getRiverChannelWidth(points[0]) * 1.5);
+    // Centre vertex (no edge lift) sits at the water level
+    expect(data!.positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE + 0.3, 5);
+    // Width is wider than the channel floor but still within a reasonable bound
+    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeGreaterThan(getRiverChannelWidth(points[0]));
+    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeLessThan(5);
     expect(data!.colors.slice(0, 6)).toEqual([0.04, 0.1, 0.23, 0.04, 0.1, 0.23]);
   });
 
@@ -124,7 +128,7 @@ describe('water geometry data helpers', () => {
       0,
       0,
       16,
-      { heightScale: HEIGHT_SCALE, surfaceOffset: -1 },
+      { heightScale: HEIGHT_SCALE, surfaceOffset: 0.3 },
       0.3,
     );
 

@@ -115,7 +115,7 @@ export function getRiverValleyDepth(point: RiverPoint): number {
 }
 
 export function getRiverWaterLevel(point: RiverPoint): number {
-  return point.surfaceLevel - getRiverChannelDepth(point) * 0.35;
+  return point.surfaceLevel - getRiverChannelDepth(point) * 0.72;
 }
 
 export function createRiverCorridorPoints(points: RiverPoint[]): RiverPoint[] {

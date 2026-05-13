@@ -233,7 +233,11 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * @param chunkY - Chunk Y coordinate
    * @returns Promise resolving to the chunk data at the specified coordinates
    */
-  async getChunk(chunkX: number, chunkY: number): Promise<ChunkData> {
+  async getChunk(chunkX: number, chunkY: number, signal?: AbortSignal): Promise<ChunkData> {
+    if (signal?.aborted) {
+      throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
+    }
+
     const key = this.getCacheKey(chunkX, chunkY);
     
     // Check cache
@@ -261,10 +265,16 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Decide generation strategy based on worker pool availability
     const generationPromise: Promise<ChunkData> = (async () => {
       logger.debug(LogCategory.CHUNK, `Starting generation for chunk (${chunkX}, ${chunkY})`);
+      if (signal?.aborted) {
+        throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
+      }
       let chunk: ChunkData;
       if (this.workerPool) {
-        chunk = await this.generateChunkAsync(chunkX, chunkY);
+        chunk = await this.generateChunkAsync(chunkX, chunkY, signal);
       } else {
+        if (signal?.aborted) {
+          throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
+        }
         chunk = this.generateChunk(chunkX, chunkY);
       }
       logger.debug(LogCategory.CHUNK, `Finished generation for chunk (${chunkX}, ${chunkY})`);
@@ -288,9 +298,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * Generates a chunk asynchronously using the worker pool.
    * @param chunkX - Chunk X coordinate
    * @param chunkY - Chunk Y coordinate
+   * @param signal - Optional abort signal for cancellation
    * @returns Promise resolving to the generated chunk data
    */
-  private generateChunkAsync(chunkX: number, chunkY: number): Promise<ChunkData> {
+  private generateChunkAsync(chunkX: number, chunkY: number, signal?: AbortSignal): Promise<ChunkData> {
     return new Promise((resolve, reject) => {
       const task: WorkerTask = {
         id: '', // Will be assigned by submitTask
@@ -298,11 +309,20 @@ export class ChunkManager implements ChunkManagerSnapshot {
         chunkY,
         lodLevel: 0, // Always generate at full resolution
         priority: 0, // Default priority
+        signal,
         onComplete: (chunk: ChunkData) => {
+          if (signal?.aborted) {
+            reject(new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`));
+            return;
+          }
           resolve(chunk);
         },
         onError: (error: Error) => {
           // Fallback to synchronous generation on error
+          if (signal?.aborted) {
+            reject(new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`));
+            return;
+          }
           logger.warn(LogCategory.WORKER, `Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync`, error);
           try {
             const syncChunk = this.generateChunk(chunkX, chunkY);

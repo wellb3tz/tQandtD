@@ -77,6 +77,7 @@ export interface WorldSessionChunkEntry {
 
 export interface WorldSessionLoadChunksOptions {
   syncRenderer?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface WorldSessionLoadChunksResult {
@@ -310,12 +311,17 @@ export class WorldSession {
     const loaded: WorldSessionChunkEntry[] = [];
     const skipped: ChunkCoordinate[] = [];
     const syncRenderer = options.syncRenderer ?? true;
+    const signal = options.signal;
 
     // Build a list of chunk load promises so they can run in parallel.
-    const promises: Promise<WorldSessionChunkEntry>[] = [];
+    const promises: Promise<WorldSessionChunkEntry | null>[] = [];
 
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
+        if (signal?.aborted) {
+          break;
+        }
+
         const coordinate = { x: centerX + dx, y: centerY + dy };
         const key = this.getChunkKey(coordinate);
 
@@ -325,25 +331,44 @@ export class WorldSession {
         }
 
         promises.push(
-          this.world.getChunk(coordinate.x, coordinate.y).then(chunk => {
-            this.loadedChunks.set(key, chunk);
-            this.exploredChunks.add(key);
+          this.world.getChunk(coordinate.x, coordinate.y, signal)
+            .then(chunk => {
+              if (signal?.aborted) {
+                return null;
+              }
 
-            if (syncRenderer) {
-              this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
-            }
+              this.loadedChunks.set(key, chunk);
+              this.exploredChunks.add(key);
 
-            const entry = { coordinate, chunk };
-            this.emit('chunk_loaded', entry);
-            return entry;
-          })
+              if (syncRenderer) {
+                this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
+              }
+
+              const entry = { coordinate, chunk };
+              this.emit('chunk_loaded', entry);
+              return entry;
+            })
+            .catch(err => {
+              if (signal?.aborted || (err instanceof Error && err.message.includes('aborted'))) {
+                return null;
+              }
+              throw err;
+            })
         );
+      }
+
+      if (signal?.aborted) {
+        break;
       }
     }
 
     // Await all chunks in parallel rather than sequentially.
     const results = await Promise.all(promises);
-    loaded.push(...results);
+    for (const entry of results) {
+      if (entry) {
+        loaded.push(entry);
+      }
+    }
 
     return {
       loaded,

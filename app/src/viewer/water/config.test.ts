@@ -318,10 +318,10 @@ describe('Water Configuration', () => {
   });
 
   describe('DEFAULT_RIVER_RENDER_CONFIG', () => {
-    it('uses the same render values as ocean water', () => {
-      expect(DEFAULT_RIVER_RENDER_CONFIG.color).toBe(DEFAULT_OCEAN_CONFIG.color);
-      expect(DEFAULT_RIVER_RENDER_CONFIG.opacity).toBe(DEFAULT_OCEAN_CONFIG.opacity);
-      expect(DEFAULT_RIVER_RENDER_CONFIG.shininess).toBe(DEFAULT_OCEAN_CONFIG.shininess);
+    it('uses distinct freshwater values', () => {
+      expect(DEFAULT_RIVER_RENDER_CONFIG.color).toBe(0x5ab5c8);
+      expect(DEFAULT_RIVER_RENDER_CONFIG.opacity).toBe(0.82);
+      expect(DEFAULT_RIVER_RENDER_CONFIG.shininess).toBe(75);
     });
   });
 });

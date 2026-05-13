@@ -24,7 +24,7 @@ const RIVER_MAX_SURFACE_SEGMENT_LENGTH = 1.25;
 const RIVER_UV_DISTANCE_SCALE = 0.22;
 const RIVER_MIN_CHANNEL_CARVE_RADIUS = 1.35;
 const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
-const RIVER_WATER_DEPTH_FRACTION = 0.35;
+const RIVER_WATER_DEPTH_FRACTION = 0.72;
 const RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH = 2.25;
 const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
 
@@ -255,7 +255,7 @@ export function buildRiverGeometryData(
           * getRiverMouthTaper(river, samples[i].distance, totalRunDistance);
         const worldX = chunkX * chunkSize + point.x;
         const worldZ = chunkY * chunkSize + point.y;
-        const y = getRiverWaterLevel(point) * options.heightScale + surfaceOffset;
+        const baseY = getRiverWaterLevel(point) * options.heightScale + surfaceOffset;
         const v = samples[i].distance * RIVER_UV_DISTANCE_SCALE;
 
         for (let column = 0; column < RIVER_CROSS_SECTION_OFFSETS.length; column++) {
@@ -264,6 +264,9 @@ export function buildRiverGeometryData(
           const [r, g, b] = riverSurfaceColor(point, edgeAmount);
           const x = worldX + normalX * halfWidth * lateral;
           const z = worldZ + normalY * halfWidth * lateral;
+          // Very subtle edge lift for a hint of concavity without looking like a water-slide
+          const edgeLift = edgeAmount * edgeAmount * getRiverChannelDepth(point) * 0.06 * options.heightScale;
+          const y = baseY + edgeLift;
 
           data.positions.push(x, y, z);
           data.normals.push(0, 1, 0);
@@ -309,9 +312,8 @@ function getRiverWaterSurfaceHalfWidth(
   heightScale: number,
 ): number {
   const rawChannelRadius = Math.max(getRiverChannelWidth(point) * 0.5, 0);
-  const channelRadius = rawChannelRadius > 0
-    ? Math.max(rawChannelRadius, RIVER_MIN_CHANNEL_CARVE_RADIUS)
-    : 0;
+  // No hard minimum for surface width — let narrow source streams stay narrow
+  const channelRadius = rawChannelRadius;
   const valleyRadius = Math.max(getRiverValleyWidth(point) * 0.5, channelRadius);
   const channelDepth = Math.max(getRiverChannelDepth(point), 0);
   const valleyDepth = Math.max(getRiverValleyDepth(point), 0);
@@ -588,8 +590,10 @@ function getVisibleRiverRuns(
     const b = points[i + 1];
     const waterA = getRiverWaterLevel(a) + renderOffsetLevel;
     const waterB = getRiverWaterLevel(b) + renderOffsetLevel;
-    const aVisible = waterA >= seaLevel;
-    const bVisible = waterB >= seaLevel;
+    // Allow shoreline points (surfaceLevel at/above sea) to remain visible even if
+    // the recessed water level is slightly below — this gives a smooth mouth transition.
+    const aVisible = waterA >= seaLevel || a.surfaceLevel >= seaLevel;
+    const bVisible = waterB >= seaLevel || b.surfaceLevel >= seaLevel;
 
     if (aVisible && current.length === 0) {
       current.push(a);

@@ -139,8 +139,20 @@ export class TerrainGenerator {
     // Generate (chunkSize + 1) x (chunkSize + 1) vertices for seamless boundaries
     const vertexCount = chunkSize + 1;
     const heightmap = new Float32Array(vertexCount * vertexCount);
-    // Use world seed (not chunk seed) to ensure seamless boundaries across chunks
-    const noise = noiseEngine3D || new NoiseEngine(worldSeed);
+
+    // Reuse cached NoiseEngine for the same seed instead of allocating a new one
+    // on every call. The hot path (biome generation) already uses this cache,
+    // so generating the heightmap should benefit from it too.
+    let noise: NoiseEngine;
+    if (noiseEngine3D) {
+      noise = noiseEngine3D;
+    } else if (this.cachedNoiseSeed === worldSeed && this.cachedNoise) {
+      noise = this.cachedNoise;
+    } else {
+      noise = new NoiseEngine(worldSeed);
+      this.cachedNoise = noise;
+      this.cachedNoiseSeed = worldSeed;
+    }
 
     // Lazily initialise continental noise on first call (needs world seed)
     if (this.continentalNoise === null && this.config.enableContinentalness !== false) {

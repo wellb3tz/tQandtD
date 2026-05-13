@@ -8,7 +8,7 @@ import { HEIGHT_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
-const WATER_SURFACE_OFFSET = -1.0;
+const WATER_SURFACE_OFFSET = 0.3;
 
 export function buildRiverGeometry(
   rivers: RiverData[],
@@ -32,15 +32,16 @@ export function buildRiverGeometry(
   );
 }
 
-export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshPhongMaterial {
-  const material = new THREE.MeshPhongMaterial({
+export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
     opacity: config.opacity,
-    shininess: config.shininess,
+    roughness: 0.22,
+    metalness: 0.05,
     side: THREE.DoubleSide,
-    specular: new THREE.Color(0x88ccff),
+    depthWrite: false,
   });
 
   if (config.normalMap) {

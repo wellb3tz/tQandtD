@@ -192,6 +192,8 @@ export class WorldApp {
   private invalidatingChunks: Set<string>;
   private worldSession: WorldSession | null;
   private worldSessionUnsubscribers: Array<() => void>;
+  /** AbortController for in-flight chunk loads; replaced on every new load call. */
+  private loadChunksAbortController: AbortController | null;
 
   constructor() {
     this.initialized = false;
@@ -201,6 +203,7 @@ export class WorldApp {
     this.invalidatingChunks = new Set();
     this.worldSession = null;
     this.worldSessionUnsubscribers = [];
+    this.loadChunksAbortController = null;
     
     // Initialize state with defaults
     this.state = {
@@ -550,18 +553,27 @@ export class WorldApp {
    * Load chunks in a radius around a center point
    */
   async loadChunksAround(centerX: number, centerY: number, radius: number): Promise<void> {
+    // Cancel any previous in-flight chunk load so the worker pool and
+    // generation loops stop wasting time on chunks the user has already
+    // scrolled past.
+    if (this.loadChunksAbortController) {
+      this.loadChunksAbortController.abort();
+    }
+    this.loadChunksAbortController = new AbortController();
+    const signal = this.loadChunksAbortController.signal;
+
     const startTime = performance.now();
     let chunksLoaded = 0;
 
     try {
-      const result = await this.requireWorldSession().loadChunksAround(centerX, centerY, radius);
+      const result = await this.requireWorldSession().loadChunksAround(centerX, centerY, radius, { signal });
       chunksLoaded = result.loaded.length;
       this.syncLoadedChunksFromSession();
-      
+
       // Update performance metrics
       const endTime = performance.now();
       const avgTime = chunksLoaded > 0 ? (endTime - startTime) / chunksLoaded : 0;
-      
+
       if (chunksLoaded > 0) {
         this.updateState({
           loadedChunks: new Map(this.state.loadedChunks),
@@ -569,15 +581,23 @@ export class WorldApp {
           avgGenerationTime: avgTime,
         });
       }
-      
+
       // Only log if chunks were actually loaded (and more than 5 chunks)
       if (chunksLoaded > 5) {
         console.log(`Loaded ${chunksLoaded} chunks in ${(endTime - startTime).toFixed(2)}ms`);
       }
     } catch (error) {
+      // Swallow expected abort errors — they’re not real failures.
+      if (error instanceof Error && error.message.includes('aborted')) {
+        return;
+      }
       console.error('Failed to load chunks:', error);
       this.emit(AppEvent.ERROR, { message: 'Chunk loading failed', error });
       throw error;
+    } finally {
+      if (this.loadChunksAbortController?.signal === signal) {
+        this.loadChunksAbortController = null;
+      }
     }
   }
 

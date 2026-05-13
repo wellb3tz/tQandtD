@@ -38,6 +38,8 @@ export interface WorkerTask {
   onError: (error: Error) => void;
   /** Active task timeout handle, set while the task is assigned to a worker */
   timeoutId?: ReturnType<typeof setTimeout>;
+  /** Optional abort signal for cancellation support */
+  signal?: AbortSignal;
 }
 
 /**
@@ -160,9 +162,29 @@ export class WorkerPool {
       task.onError(this.initializationError || new Error('Worker pool not initialized'));
       return '';
     }
+
+    // If already aborted, reject immediately
+    if (task.signal?.aborted) {
+      task.onError(new Error('Task aborted before submission'));
+      return '';
+    }
+
     // Generate task ID if not provided
     if (!task.id) {
       task.id = `task-${this.taskIdCounter++}`;
+    }
+
+    // Wire up abort listener so cancelTask is called when the signal fires
+    if (task.signal) {
+      const onAbort = () => {
+        this.cancelTask(task.id);
+        task.onError(new Error('Task aborted'));
+      };
+      if (task.signal.aborted) {
+        onAbort();
+        return '';
+      }
+      task.signal.addEventListener('abort', onAbort, { once: true });
     }
 
     // Insert into queue maintaining priority order (binary insertion — O(n) shift

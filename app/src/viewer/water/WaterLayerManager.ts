@@ -456,6 +456,24 @@ export class WaterLayerManager {
   }
 
   /**
+   * Advance river flow animation for all loaded chunks.
+   */
+  updateRiverFlows(elapsedSeconds: number): void {
+    for (const waterLayer of this.waterLayers.values()) {
+      for (const waterMesh of waterLayer.river) {
+        const mat = waterMesh.material;
+        if (mat.normalMap) {
+          const speed = 0.18;
+          mat.normalMap.offset.set(
+            (elapsedSeconds * speed * 0.008) % 1,
+            (elapsedSeconds * speed * 0.022) % 1,
+          );
+        }
+      }
+    }
+  }
+
+  /**
    * Dispose a single ocean water mesh and its resources
    */
   private disposeMesh(waterMesh: WaterMesh): void {
