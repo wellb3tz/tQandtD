@@ -56,6 +56,7 @@ export class WorldRenderLoop {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
       this.cameraInputController.updateMovement();
+      this.cameraInputController.updateFirstPersonPhysics();
       this.cameraViewController.updateFollowTerrainMode();
 
       const now = performance.now();

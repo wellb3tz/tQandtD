@@ -80,6 +80,7 @@ export class WorldViewer {
       getActiveCamera: () => this.cameraViewController.getActiveCamera(),
       isOrthographic: () => this.cameraViewController.isOrthographic(),
       getOrthographicCamera: () => this.cameraViewController.getOrthographicCamera(),
+      getChunkMeshes: () => this.chunkMeshes.values(),
     });
     
     this.chunkMeshes = new Map();
@@ -347,6 +348,27 @@ export class WorldViewer {
    */
   setFollowTerrainMode(enabled: boolean): void {
     this.cameraViewController.setFollowTerrainMode(enabled);
+  }
+
+  /**
+   * Set first-person walking mode
+   */
+  setFirstPersonMode(enabled: boolean): void {
+    this.cameraInputController.setFirstPersonMode(enabled);
+    if (enabled) {
+      this.cameraViewController.setFollowTerrainMode(false);
+      this.cameraViewController.setOrthographicView(false);
+      this.cameraInputController.lockPointer();
+    } else {
+      this.cameraInputController.unlockPointer();
+    }
+  }
+
+  /**
+   * Check if first-person mode is active
+   */
+  isFirstPersonMode(): boolean {
+    return this.cameraInputController.isFirstPersonMode();
   }
 
   /**

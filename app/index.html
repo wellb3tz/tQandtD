@@ -214,6 +214,14 @@
           </svg>
           Follow
         </button>
+        <button id="first-person-btn" class="toolbar-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a5 5 0 0 1 5 5v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/>
+            <path d="M9 22v-5h6v5"/>
+            <path d="M8 14h8"/>
+          </svg>
+          First-Person
+        </button>
       </div>
     </div>
 
@@ -446,6 +454,11 @@
         </svg>
         Position: <span id="status-position">0, 0, 0</span>
       </span>
+    </div>
+
+    <!-- Crosshair overlay (visible in first-person mode) -->
+    <div class="crosshair-overlay">
+      <div class="crosshair-dot"></div>
     </div>
 
     <!-- Toast Notifications -->

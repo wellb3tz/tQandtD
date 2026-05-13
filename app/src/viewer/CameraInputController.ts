@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { ChunkMesh } from './ChunkMesh';
 
 const KEYBOARD_CODE_MAP: Record<string, string> = {
   KeyW: 'w',
@@ -16,6 +17,7 @@ export interface CameraInputControllerOptions {
   getActiveCamera: () => THREE.Camera;
   isOrthographic: () => boolean;
   getOrthographicCamera: () => THREE.OrthographicCamera | null;
+  getChunkMeshes?: () => Iterable<ChunkMesh>;
 }
 
 export class CameraInputController {
@@ -24,6 +26,7 @@ export class CameraInputController {
   private readonly getActiveCamera: () => THREE.Camera;
   private readonly isOrthographic: () => boolean;
   private readonly getOrthographicCamera: () => THREE.OrthographicCamera | null;
+  private readonly getChunkMeshes: (() => Iterable<ChunkMesh>) | undefined;
   private readonly keyboardState = new Map<string, boolean>();
   private readonly keyboardMoveSpeed = 0.5;
   private readonly mouseSensitivity = 0.002;
@@ -32,6 +35,12 @@ export class CameraInputController {
   private isMouseDragRotating = false;
   private lastMouseDragPosition: { x: number; y: number } | null = null;
   private cameraRotation = { pitch: 0, yaw: 0 };
+  private firstPersonMode = false;
+  private eyeHeight = 0.5;
+  private velocityY = 0;
+  private isOnGround = false;
+  private readonly gravity = 0.004;
+  private readonly jumpForce = 0.10;
 
   constructor(options: CameraInputControllerOptions) {
     this.camera = options.camera;
@@ -39,6 +48,7 @@ export class CameraInputController {
     this.getActiveCamera = options.getActiveCamera;
     this.isOrthographic = options.isOrthographic;
     this.getOrthographicCamera = options.getOrthographicCamera;
+    this.getChunkMeshes = options.getChunkMeshes;
   }
 
   attach(): void {
@@ -83,9 +93,9 @@ export class CameraInputController {
   updateMovement(): void {
     if (!this.useFreeCamera) return;
 
-    let moveSpeed = this.keyboardMoveSpeed;
+    let moveSpeed = this.firstPersonMode ? 0.05 : this.keyboardMoveSpeed;
     if (this.keyboardState.get('shift')) {
-      moveSpeed *= 3;
+      moveSpeed *= this.firstPersonMode ? 2.5 : 3;
     }
 
     const activeCamera = this.getActiveCamera();
@@ -93,6 +103,8 @@ export class CameraInputController {
 
     if (this.isOrthographic()) {
       this.applyOrthographicMovement(movement, moveSpeed);
+    } else if (this.firstPersonMode) {
+      this.applyFirstPersonMovement(movement);
     } else {
       this.applyPerspectiveMovement(movement);
     }
@@ -103,9 +115,84 @@ export class CameraInputController {
     }
   }
 
+  updateFirstPersonPhysics(): void {
+    if (!this.firstPersonMode || !this.getChunkMeshes) return;
+
+    const raycaster = new THREE.Raycaster();
+    const x = this.camera.position.x;
+    const z = this.camera.position.z;
+    raycaster.set(
+      new THREE.Vector3(x, 1000, z),
+      new THREE.Vector3(0, -1, 0),
+    );
+
+    const terrainMeshes: THREE.Mesh[] = [];
+    for (const chunkMesh of this.getChunkMeshes()) {
+      terrainMeshes.push(chunkMesh.terrain);
+    }
+
+    if (terrainMeshes.length === 0) return;
+
+    const intersects = raycaster.intersectObjects(terrainMeshes);
+    if (intersects.length === 0) return;
+
+    const terrainHeight = intersects[0].point.y;
+    const groundLevel = terrainHeight + this.eyeHeight;
+
+    // Apply gravity
+    this.velocityY -= this.gravity;
+    this.camera.position.y += this.velocityY;
+
+    // Ground collision
+    if (this.camera.position.y <= groundLevel) {
+      this.camera.position.y = groundLevel;
+      this.velocityY = 0;
+      this.isOnGround = true;
+    } else {
+      this.isOnGround = false;
+    }
+  }
+
   getHeadingDegrees(): number {
     const deg = ((-this.cameraRotation.yaw) * 180 / Math.PI) % 360;
     return (deg + 360) % 360;
+  }
+
+  setFirstPersonMode(enabled: boolean): void {
+    this.firstPersonMode = enabled;
+    if (enabled) {
+      // Lock pitch to reasonable walking view
+      this.cameraRotation.pitch = Math.max(-0.5, Math.min(0.5, this.cameraRotation.pitch));
+      this.updateCameraRotation();
+    }
+  }
+
+  isFirstPersonMode(): boolean {
+    return this.firstPersonMode;
+  }
+
+  setEyeHeight(height: number): void {
+    this.eyeHeight = height;
+  }
+
+  lockPointer(): void {
+    const container = this.getContainer();
+    if (!container) return;
+    if (document.pointerLockElement === container) return;
+    try {
+      const req = container.requestPointerLock?.();
+      if (req && typeof (req as Promise<void>).catch === 'function') {
+        (req as Promise<void>).catch(() => undefined);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  unlockPointer(): void {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
   }
 
   private updateCameraRotation(): void {
@@ -146,7 +233,35 @@ export class CameraInputController {
     if (this.keyboardState.get('s')) movement.sub(forward);
     if (this.keyboardState.get('a')) movement.sub(right);
     if (this.keyboardState.get('d')) movement.add(right);
-    if (this.keyboardState.get('space')) movement.add(up);
+    if (this.keyboardState.get('space')) {
+      movement.add(up);
+    }
+  }
+
+  private applyFirstPersonMovement(movement: THREE.Vector3): void {
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+
+    this.camera.getWorldDirection(forward);
+    // Flatten forward to XZ plane for ground movement
+    forward.y = 0;
+    if (forward.length() > 0) {
+      forward.normalize();
+    }
+    right.crossVectors(forward, up).normalize();
+
+    if (this.keyboardState.get('w')) movement.add(forward);
+    if (this.keyboardState.get('s')) movement.sub(forward);
+    if (this.keyboardState.get('a')) movement.sub(right);
+    if (this.keyboardState.get('d')) movement.add(right);
+
+    if (this.keyboardState.get('space')) {
+      if (this.isOnGround) {
+        this.velocityY = this.jumpForce;
+        this.isOnGround = false;
+      }
+    }
   }
 
   private scaleOrthographicFrustum(camera: THREE.OrthographicCamera, scale: number): void {
@@ -158,7 +273,7 @@ export class CameraInputController {
   }
 
   private readonly handleContainerClick = (): void => {
-    if (this.useFreeCamera && !this.isPointerLocked) {
+    if (!this.isPointerLocked && (this.useFreeCamera || this.firstPersonMode)) {
       try {
         const pointerLockRequest = this.getContainer()?.requestPointerLock?.();
         if (pointerLockRequest && typeof (pointerLockRequest as Promise<void>).catch === 'function') {
