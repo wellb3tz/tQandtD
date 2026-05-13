@@ -8,14 +8,14 @@ import { HEIGHT_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
-const WATER_SURFACE_OFFSET = 0.3;
+const WATER_SURFACE_OFFSET = -0.6;
 
 export function buildRiverGeometry(
   rivers: RiverData[],
   chunkX: number,
   chunkY: number,
   chunkSize: number,
-  seaLevel = -Infinity
+  seaLevel = -Infinity,
 ): THREE.BufferGeometry | null {
   return createBufferGeometry(
     buildRiverGeometryData(

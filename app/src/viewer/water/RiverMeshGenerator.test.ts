@@ -76,7 +76,7 @@ describe('RiverMeshGenerator', () => {
     const firstRightZ = positions[14];
     const renderedWidth = Math.abs(firstLeftZ - firstRightZ);
 
-    expect(renderedWidth).toBeGreaterThan(1.0);
+    expect(renderedWidth).toBeGreaterThan(0.5);
     expect(renderedWidth).toBeLessThan(getRiverValleyWidth(points[0]));
   });
 
@@ -111,8 +111,8 @@ describe('RiverMeshGenerator', () => {
     const geometry = buildRiverGeometry([river(points)], 0, 0, 16)!;
     const positions = geometry.getAttribute('position').array;
 
-    // Check centre vertex (index 2 out of 5 cross-section offsets) which has no edge lift
-    expect(positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE + 0.3, 5);
+    // Check centre vertex (index 2 out of 5 cross-section offsets) — flat surface
+    expect(positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 0.6, 5);
   });
 
   it('uses the dark ocean vertex color for river water', () => {

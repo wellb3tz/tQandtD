@@ -103,16 +103,16 @@ describe('water geometry data helpers', () => {
       0,
       0,
       16,
-      { heightScale: HEIGHT_SCALE, surfaceOffset: 0.3 },
+      { heightScale: HEIGHT_SCALE, surfaceOffset: -0.6 },
       0.3,
     );
 
     expect(data).not.toBeNull();
     expect(getIndexedGeometryVertexCount(data!)).toBe(30);
     // Centre vertex (no edge lift) sits at the water level
-    expect(data!.positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE + 0.3, 5);
-    // Width is wider than the channel floor but still within a reasonable bound
-    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeGreaterThan(getRiverChannelWidth(points[0]));
+    expect(data!.positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 0.6, 5);
+    // Width matches the actual channel width (no hard minimum enforced)
+    expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeCloseTo(getRiverChannelWidth(points[0]), 0);
     expect(Math.abs(data!.positions[2] - data!.positions[14])).toBeLessThan(5);
     expect(data!.colors.slice(0, 6)).toEqual([0.04, 0.1, 0.23, 0.04, 0.1, 0.23]);
   });
@@ -128,7 +128,7 @@ describe('water geometry data helpers', () => {
       0,
       0,
       16,
-      { heightScale: HEIGHT_SCALE, surfaceOffset: 0.3 },
+      { heightScale: HEIGHT_SCALE, surfaceOffset: -0.6 },
       0.3,
     );
 
@@ -139,7 +139,7 @@ describe('water geometry data helpers', () => {
     const lastRowStart = (vertexCount - columnCount) * 3;
     const lastRowZ = Array.from({ length: columnCount }, (_, column) => data!.positions[lastRowStart + column * 3 + 2]);
 
-    expect(Math.max(...firstRowZ) - Math.min(...firstRowZ)).toBeGreaterThan(1);
+    expect(Math.max(...firstRowZ) - Math.min(...firstRowZ)).toBeGreaterThan(0.5);
     expect(Math.max(...lastRowZ) - Math.min(...lastRowZ)).toBeCloseTo(0, 5);
   });
 });

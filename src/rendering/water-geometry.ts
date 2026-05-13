@@ -264,9 +264,8 @@ export function buildRiverGeometryData(
           const [r, g, b] = riverSurfaceColor(point, edgeAmount);
           const x = worldX + normalX * halfWidth * lateral;
           const z = worldZ + normalY * halfWidth * lateral;
-          // Very subtle edge lift for a hint of concavity without looking like a water-slide
-          const edgeLift = edgeAmount * edgeAmount * getRiverChannelDepth(point) * 0.06 * options.heightScale;
-          const y = baseY + edgeLift;
+          // Flat water surface — no edge lift so the mesh sits flush with the channel bed
+          const y = baseY;
 
           data.positions.push(x, y, z);
           data.normals.push(0, 1, 0);
@@ -590,10 +589,10 @@ function getVisibleRiverRuns(
     const b = points[i + 1];
     const waterA = getRiverWaterLevel(a) + renderOffsetLevel;
     const waterB = getRiverWaterLevel(b) + renderOffsetLevel;
-    // Allow shoreline points (surfaceLevel at/above sea) to remain visible even if
-    // the recessed water level is slightly below — this gives a smooth mouth transition.
-    const aVisible = waterA >= seaLevel || a.surfaceLevel >= seaLevel;
-    const bVisible = waterB >= seaLevel || b.surfaceLevel >= seaLevel;
+    // Small tolerance so the river strip continues a hair below sea level for a smooth mouth.
+    const tolerance = 0.05;
+    const aVisible = waterA >= seaLevel - tolerance;
+    const bVisible = waterB >= seaLevel - tolerance;
 
     if (aVisible && current.length === 0) {
       current.push(a);
