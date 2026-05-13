@@ -241,6 +241,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
     if (cached) {
       this.reconcileBoundaryHeights(cached.chunk);
       cached.lastAccessed = ++this.accessCounter;
+      // Move to the end of the Map to mark as most-recently-used (O(1) LRU)
+      this.cache.delete(key);
+      this.cache.set(key, cached);
       this.cacheHits++;
       return cached.chunk;
     }
@@ -789,18 +792,11 @@ export class ChunkManager implements ChunkManagerSnapshot {
    */
   private addToCache(key: string, chunk: ChunkData): void {
     logger.debug(LogCategory.CACHE, `Adding chunk (${chunk.x}, ${chunk.y}) to cache`);
-    
-    // If cache is full, evict least recently used entry
-    if (this.cache.size >= this.maxCacheSize) {
-      let oldestKey: string | null = null;
-      let oldestTime = Infinity;
 
-      for (const [k, entry] of this.cache.entries()) {
-        if (entry.lastAccessed < oldestTime) {
-          oldestTime = entry.lastAccessed;
-          oldestKey = k;
-        }
-      }
+    // If cache is full, evict the least recently used entry.
+    // Map preserves insertion order, so the first key is the oldest.
+    if (this.cache.size >= this.maxCacheSize) {
+      const oldestKey = this.cache.keys().next().value as string | undefined;
 
       if (oldestKey) {
         // Notify LakeManager about eviction so it can clean up
@@ -809,17 +805,20 @@ export class ChunkManager implements ChunkManagerSnapshot {
           this.lakeManager.notifyChunkEvicted(evictedChunkX, evictedChunkY);
         }
         this.riverManager?.notifyChunkEvicted(evictedChunkX, evictedChunkY);
-        
+
         this.cache.delete(oldestKey);
       }
     }
 
-    // Add new entry with incremented counter
+    // Add new entry with incremented counter.
+    // Reconcile the new chunk against existing neighbours first, then ask
+    // existing neighbours to reconcile themselves against the new chunk.
     this.reconcileBoundaryHeights(chunk);
     this.cache.set(key, {
       chunk,
       lastAccessed: ++this.accessCounter,
     });
+    this.reconcileNeighbourBoundaries(chunk);
   }
 
   /**
@@ -827,19 +826,28 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * meets an already cached neighbour. Terrain generation is naturally seamless;
    * lake carving can be discovered from either side later, so the lower carved
    * height wins and is copied to both chunk meshes.
+   *
+   * IMPORTANT: This method only mutates the `chunk` passed as the argument.
+   * Neighbouring chunks are NEVER modified directly here. If a neighbour's
+   * boundary height differs from the shared height, it is marked for lazy
+   * invalidation via `onChunkInvalidated`. When the neighbour is later
+   * retrieved (cache hit) or when `reconcileNeighbourBoundaries` is called,
+   * `reconcileBoundaryHeights` will be invoked for *that* chunk and it will
+   * apply the shared height to itself. This eliminates hidden side-effects
+   * on cached objects belonging to other chunks.
    */
   private reconcileBoundaryHeights(chunk: ChunkData): void {
     const size = chunk.size;
     const vertexSize = size + 1;
     const epsilon = 1e-6;
-    const changedNeighbours = new Set<string>();
+    const invalidatedNeighbours = new Set<string>();
 
     const reconcileVertical = (
       neighbourChunk: ChunkData,
       currentX: number,
       neighbourX: number
     ): void => {
-      let changed = false;
+      let neighbourNeedsUpdate = false;
       for (let y = 0; y <= size; y++) {
         const currentIndex = y * vertexSize + currentX;
         const neighbourIndex = y * vertexSize + neighbourX;
@@ -847,13 +855,14 @@ export class ChunkManager implements ChunkManagerSnapshot {
         if (Math.abs(chunk.heightmap[currentIndex] - sharedHeight) > epsilon) {
           chunk.heightmap[currentIndex] = sharedHeight;
         }
+        // Do NOT mutate the neighbour's heightmap here. Only record that the
+        // neighbour needs to be refreshed so it can reconcile itself later.
         if (Math.abs(neighbourChunk.heightmap[neighbourIndex] - sharedHeight) > epsilon) {
-          neighbourChunk.heightmap[neighbourIndex] = sharedHeight;
-          changed = true;
+          neighbourNeedsUpdate = true;
         }
       }
-      if (changed) {
-        changedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
+      if (neighbourNeedsUpdate) {
+        invalidatedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
       }
     };
 
@@ -862,7 +871,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       currentY: number,
       neighbourY: number
     ): void => {
-      let changed = false;
+      let neighbourNeedsUpdate = false;
       for (let x = 0; x <= size; x++) {
         const currentIndex = currentY * vertexSize + x;
         const neighbourIndex = neighbourY * vertexSize + x;
@@ -871,12 +880,11 @@ export class ChunkManager implements ChunkManagerSnapshot {
           chunk.heightmap[currentIndex] = sharedHeight;
         }
         if (Math.abs(neighbourChunk.heightmap[neighbourIndex] - sharedHeight) > epsilon) {
-          neighbourChunk.heightmap[neighbourIndex] = sharedHeight;
-          changed = true;
+          neighbourNeedsUpdate = true;
         }
       }
-      if (changed) {
-        changedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
+      if (neighbourNeedsUpdate) {
+        invalidatedNeighbours.add(this.getCacheKey(neighbourChunk.x, neighbourChunk.y));
       }
     };
 
@@ -892,10 +900,31 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const bottom = this.cache.get(this.getCacheKey(chunk.x, chunk.y + 1))?.chunk;
     if (bottom) reconcileHorizontal(bottom, size, 0);
 
-    for (const key of changedNeighbours) {
+    for (const key of invalidatedNeighbours) {
       const [cx, cy] = key.split(',').map(Number);
       this.config.onChunkInvalidated?.(cx, cy);
     }
+  }
+
+  /**
+   * After a new chunk has been added to the cache, trigger reconciliation
+   * for any already-cached neighbours so they can update their own boundary
+   * heights. This complements `reconcileBoundaryHeights` (which is side-effect
+   * free w.r.t. neighbours) by explicitly asking each neighbour to reconcile
+   * itself against the newly added chunk.
+   */
+  private reconcileNeighbourBoundaries(chunk: ChunkData): void {
+    const left = this.cache.get(this.getCacheKey(chunk.x - 1, chunk.y))?.chunk;
+    if (left) this.reconcileBoundaryHeights(left);
+
+    const right = this.cache.get(this.getCacheKey(chunk.x + 1, chunk.y))?.chunk;
+    if (right) this.reconcileBoundaryHeights(right);
+
+    const top = this.cache.get(this.getCacheKey(chunk.x, chunk.y - 1))?.chunk;
+    if (top) this.reconcileBoundaryHeights(top);
+
+    const bottom = this.cache.get(this.getCacheKey(chunk.x, chunk.y + 1))?.chunk;
+    if (bottom) this.reconcileBoundaryHeights(bottom);
   }
 
   /**

@@ -311,6 +311,9 @@ export class WorldSession {
     const skipped: ChunkCoordinate[] = [];
     const syncRenderer = options.syncRenderer ?? true;
 
+    // Build a list of chunk load promises so they can run in parallel.
+    const promises: Promise<WorldSessionChunkEntry>[] = [];
+
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         const coordinate = { x: centerX + dx, y: centerY + dy };
@@ -321,19 +324,26 @@ export class WorldSession {
           continue;
         }
 
-        const chunk = await this.world.getChunk(coordinate.x, coordinate.y);
-        this.loadedChunks.set(key, chunk);
-        this.exploredChunks.add(key);
+        promises.push(
+          this.world.getChunk(coordinate.x, coordinate.y).then(chunk => {
+            this.loadedChunks.set(key, chunk);
+            this.exploredChunks.add(key);
 
-        if (syncRenderer) {
-          this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
-        }
+            if (syncRenderer) {
+              this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
+            }
 
-        const entry = { coordinate, chunk };
-        loaded.push(entry);
-        this.emit('chunk_loaded', entry);
+            const entry = { coordinate, chunk };
+            this.emit('chunk_loaded', entry);
+            return entry;
+          })
+        );
       }
     }
+
+    // Await all chunks in parallel rather than sequentially.
+    const results = await Promise.all(promises);
+    loaded.push(...results);
 
     return {
       loaded,
