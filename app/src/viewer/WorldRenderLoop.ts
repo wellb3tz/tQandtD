@@ -59,6 +59,8 @@ export class WorldRenderLoop {
   start(): void {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
+      const activeCamera = this.cameraViewController.getActiveCamera();
+      this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
       this.chunkController?.update().catch(() => {
         // Silently ignore errors from chunk controller updates
       });
@@ -80,7 +82,6 @@ export class WorldRenderLoop {
         }
       }
 
-      const activeCamera = this.cameraViewController.getActiveCamera();
       this.beforeRender(activeCamera);
       this.renderer.render(this.scene, activeCamera);
     };

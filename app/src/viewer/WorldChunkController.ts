@@ -57,6 +57,9 @@ export class WorldChunkController {
   private readonly maxBuildTimeMs: number;
   private readonly immediateBuilds: boolean;
   private readonly pendingBuilds: PendingBuild[];
+  private chunkSize: number | null = null;
+  private cameraChunkX = 0;
+  private cameraChunkY = 0;
 
   constructor(options: WorldChunkControllerOptions) {
     this.scene = options.scene;
@@ -74,6 +77,9 @@ export class WorldChunkController {
   }
 
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial = false, stage?: number): void {
+    if (this.chunkSize === null && data.size > 0) {
+      this.chunkSize = data.size;
+    }
     if (this.immediateBuilds) {
       this.processBuild({ chunkX, chunkY, data, partial, stage });
       return;
@@ -81,6 +87,12 @@ export class WorldChunkController {
     // Queue the build instead of doing it synchronously to avoid frame drops
     // when multiple chunks arrive at once (e.g. fast camera movement).
     this.pendingBuilds.push({ chunkX, chunkY, data, partial, stage });
+  }
+
+  setCameraPosition(worldX: number, worldZ: number): void {
+    if (this.chunkSize === null) return;
+    this.cameraChunkX = Math.floor(worldX / this.chunkSize);
+    this.cameraChunkY = Math.floor(worldZ / this.chunkSize);
   }
 
   /**
@@ -92,14 +104,35 @@ export class WorldChunkController {
       return;
     }
 
+    // Sort pending builds so closest chunks to the camera are built first.
+    this.pendingBuilds.sort((a, b) => {
+      const da = Math.abs(a.chunkX - this.cameraChunkX) + Math.abs(a.chunkY - this.cameraChunkY);
+      const db = Math.abs(b.chunkX - this.cameraChunkX) + Math.abs(b.chunkY - this.cameraChunkY);
+      return da - db;
+    });
+
+    // Adaptive budgeting: increase throughput when a large backlog accumulates
+    // (e.g. fast camera movement) to avoid visible “pop-in” stagger.
+    const backlog = this.pendingBuilds.length;
+    const adaptiveMaxBuilds = backlog > 10
+      ? this.maxBuildsPerFrame * 4
+      : backlog > 5
+        ? this.maxBuildsPerFrame * 2
+        : this.maxBuildsPerFrame;
+    const adaptiveMaxTime = backlog > 10
+      ? this.maxBuildTimeMs * 3
+      : backlog > 5
+        ? this.maxBuildTimeMs * 2
+        : this.maxBuildTimeMs;
+
     const startTime = performance.now();
     let processed = 0;
     let changed = false;
 
     while (
       this.pendingBuilds.length > 0 &&
-      processed < this.maxBuildsPerFrame &&
-      performance.now() - startTime < this.maxBuildTimeMs
+      processed < adaptiveMaxBuilds &&
+      performance.now() - startTime < adaptiveMaxTime
     ) {
       const build = this.pendingBuilds.shift()!;
       if (await this.processBuild(build)) {

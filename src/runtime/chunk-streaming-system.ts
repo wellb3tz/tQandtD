@@ -1,5 +1,6 @@
 import type { ChunkData } from '../world/chunk';
 import type { ChunkManager } from '../world/chunk-manager';
+import { generateSpiralCoordinates } from '../utils/chunk-priority';
 import type { ComponentKey, Entity } from './entity';
 import type { RuntimeSystem, RuntimeUpdateContext } from './system';
 import {
@@ -137,15 +138,13 @@ export class ChunkStreamingSystem implements RuntimeSystem {
     const centerX = Math.floor(target.transform.position.x / chunkSize);
     const centerY = Math.floor(target.transform.position.z / chunkSize);
 
-    for (let y = centerY - target.radius; y <= centerY + target.radius; y++) {
-      for (let x = centerX - target.radius; x <= centerX + target.radius; x++) {
-        if (loadBudget <= 0) {
-          return loadBudget;
-        }
+    for (const coord of generateSpiralCoordinates(centerX, centerY, target.radius)) {
+      if (loadBudget <= 0) {
+        return loadBudget;
+      }
 
-        if (this.scheduleChunk(world, x, y, target.entity)) {
-          loadBudget -= 1;
-        }
+      if (this.scheduleChunk(world, coord.x, coord.y, target.entity)) {
+        loadBudget -= 1;
       }
     }
 

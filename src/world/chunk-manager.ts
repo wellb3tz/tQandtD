@@ -240,7 +240,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * @param chunkY - Chunk Y coordinate
    * @returns Promise resolving to the chunk data at the specified coordinates
    */
-  async getChunk(chunkX: number, chunkY: number, signal?: AbortSignal): Promise<ChunkData> {
+  async getChunk(chunkX: number, chunkY: number, signal?: AbortSignal, options?: { priority?: number }): Promise<ChunkData> {
     if (signal?.aborted) {
       throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
     }
@@ -277,7 +277,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       }
       let chunk: ChunkData;
       if (this.workerPool) {
-        chunk = await this.generateChunkAsync(chunkX, chunkY, signal);
+        chunk = await this.generateChunkAsync(chunkX, chunkY, signal, options?.priority);
       } else {
         if (signal?.aborted) {
           throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
@@ -308,14 +308,14 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * @param signal - Optional abort signal for cancellation
    * @returns Promise resolving to the generated chunk data
    */
-  private generateChunkAsync(chunkX: number, chunkY: number, signal?: AbortSignal): Promise<ChunkData> {
+  private generateChunkAsync(chunkX: number, chunkY: number, signal?: AbortSignal, priority?: number): Promise<ChunkData> {
     return new Promise((resolve, reject) => {
       const task: WorkerTask = {
         id: '', // Will be assigned by submitTask
         chunkX,
         chunkY,
         lodLevel: 0, // Always generate at full resolution
-        priority: 0, // Default priority
+        priority: priority ?? 0,
         signal,
         onComplete: (chunk: ChunkData) => {
           if (signal?.aborted) {

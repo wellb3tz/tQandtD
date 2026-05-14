@@ -1,4 +1,5 @@
 import { ChunkManager, type WorldConfig } from '../world/chunk-manager';
+import { generateSpiralCoordinates } from '../utils/chunk-priority';
 import type { BiomeType, ChunkData, ResourceType, StructureType } from '../world/chunk';
 import type {
   SerializationFormat,
@@ -316,50 +317,44 @@ export class WorldSession {
     // Build a list of chunk load promises so they can run in parallel.
     const promises: Promise<WorldSessionChunkEntry | null>[] = [];
 
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (signal?.aborted) {
-          break;
-        }
-
-        const coordinate = { x: centerX + dx, y: centerY + dy };
-        const key = this.getChunkKey(coordinate);
-
-        if (this.loadedChunks.has(key)) {
-          skipped.push(coordinate);
-          continue;
-        }
-
-        promises.push(
-          this.world.getChunk(coordinate.x, coordinate.y, signal)
-            .then(chunk => {
-              if (signal?.aborted) {
-                return null;
-              }
-
-              this.loadedChunks.set(key, chunk);
-              this.exploredChunks.add(key);
-
-              if (syncRenderer) {
-                this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
-              }
-
-              const entry = { coordinate, chunk };
-              this.emit('chunk_loaded', entry);
-              return entry;
-            })
-            .catch(err => {
-              if (signal?.aborted || (err instanceof Error && err.message.includes('aborted'))) {
-                return null;
-              }
-              throw err;
-            })
-        );
-      }
-
+    for (const coordinate of generateSpiralCoordinates(centerX, centerY, radius)) {
       if (signal?.aborted) {
         break;
       }
+
+      const key = this.getChunkKey(coordinate);
+
+      if (this.loadedChunks.has(key)) {
+        skipped.push(coordinate);
+        continue;
+      }
+
+      const distance = Math.abs(coordinate.x - centerX) + Math.abs(coordinate.y - centerY);
+      promises.push(
+        this.world.getChunk(coordinate.x, coordinate.y, signal, { priority: -distance })
+          .then(chunk => {
+            if (signal?.aborted) {
+              return null;
+            }
+
+            this.loadedChunks.set(key, chunk);
+            this.exploredChunks.add(key);
+
+            if (syncRenderer) {
+              this.scene.renderSystem?.onChunkLoaded(chunk, coordinate);
+            }
+
+            const entry = { coordinate, chunk };
+            this.emit('chunk_loaded', entry);
+            return entry;
+          })
+          .catch(err => {
+            if (signal?.aborted || (err instanceof Error && err.message.includes('aborted'))) {
+              return null;
+            }
+            throw err;
+          })
+      );
     }
 
     // Await all chunks in parallel rather than sequentially.
