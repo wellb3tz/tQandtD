@@ -57,7 +57,6 @@ function addTreeLayers(
   for (const { variant, geometry } of treeVariants) {
     const variantPlacements = treePlacements.filter(placement => placement.variant === variant);
     if (variantPlacements.length === 0) {
-      geometry.dispose();
       continue;
     }
 

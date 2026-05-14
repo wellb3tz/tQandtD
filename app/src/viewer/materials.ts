@@ -403,6 +403,44 @@ export function createBiomeColorTerrainMaterial(wireframe: boolean = false): THR
   return material;
 }
 
+const terrainMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+function getTerrainMaterialCacheKey(texturesEnabled: boolean, wireframe: boolean): string {
+  return `${texturesEnabled}:${wireframe}`;
+}
+
+/**
+ * Get a cached terrain material. Materials are shared across all chunks
+ * to avoid repeated shader compilation freezes.
+ */
+export function getCachedTerrainMaterial(
+  textures: TerrainSurfaceTextureLibrary | null,
+  wireframe: boolean = false,
+): THREE.MeshStandardMaterial {
+  const texturesEnabled = textures !== null;
+  const key = getTerrainMaterialCacheKey(texturesEnabled, wireframe);
+
+  let material = terrainMaterialCache.get(key);
+  if (!material) {
+    material = texturesEnabled
+      ? createTerrainBlendMaterial(textures!, wireframe)
+      : createBiomeColorTerrainMaterial(wireframe);
+    terrainMaterialCache.set(key, material);
+  }
+  return material;
+}
+
+/**
+ * Dispose all cached terrain materials and clear the cache.
+ * Call this on application shutdown.
+ */
+export function clearTerrainMaterialCache(): void {
+  for (const material of terrainMaterialCache.values()) {
+    material.dispose();
+  }
+  terrainMaterialCache.clear();
+}
+
 export function createTerrainBlendMaterial(
   textures: TerrainSurfaceTextureLibrary,
   wireframe: boolean = false,

@@ -1,14 +1,18 @@
 import * as THREE from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createTerrainMaterial,
   replaceTerrainMaterial,
   setTerrainWireframe,
   updateTerrainBiomeColors,
 } from './TerrainAppearance';
-import type { TerrainSurfaceTextureLibrary } from './materials';
+import { clearTerrainMaterialCache, type TerrainSurfaceTextureLibrary } from './materials';
 
 describe('TerrainAppearance', () => {
+  afterEach(() => {
+    clearTerrainMaterialCache();
+  });
+
   it('switches terrain materials between textured and biome-color modes', () => {
     const terrainTextures = createTestTerrainTextures();
 
@@ -28,8 +32,6 @@ describe('TerrainAppearance', () => {
     expect(colorOnly.userData.terrainTexturesEnabled).toBe(false);
     expect(colorOnly.map).toBeNull();
     expect(colorOnly.wireframe).toBe(true);
-    textured.dispose();
-    colorOnly.dispose();
   });
 
   it('converts terrain colors to grayscale and restores original biome colors', () => {
@@ -68,7 +70,9 @@ describe('TerrainAppearance', () => {
     const next = new THREE.MeshStandardMaterial();
     replaceTerrainMaterial(mesh, next);
 
-    expect(previous.dispose).toHaveBeenCalledOnce();
+    // NOTE: previous material is NOT disposed here because terrain
+    // materials are shared across chunks via getCachedTerrainMaterial().
+    expect(previous.dispose).not.toHaveBeenCalled();
     expect(next.transparent).toBe(true);
     expect(next.opacity).toBe(0.5);
     expect(mesh.material).toBe(next);

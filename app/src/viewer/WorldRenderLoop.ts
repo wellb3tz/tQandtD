@@ -10,6 +10,7 @@ import {
 import type { RenderLayer } from './RenderLayerVisibility';
 import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
+import type { WorldChunkController } from './WorldChunkController';
 
 export interface WorldRenderLoopOptions {
   scene: THREE.Scene;
@@ -21,6 +22,7 @@ export interface WorldRenderLoopOptions {
   waterLayerManager: WaterLayerManager;
   getWaterConfig: () => WaterConfig;
   beforeRender: (activeCamera: THREE.Camera) => void;
+  chunkController?: WorldChunkController;
 }
 
 export class WorldRenderLoop {
@@ -33,6 +35,7 @@ export class WorldRenderLoop {
   private readonly waterLayerManager: WaterLayerManager;
   private readonly getWaterConfig: () => WaterConfig;
   private readonly beforeRender: (activeCamera: THREE.Camera) => void;
+  private readonly chunkController: WorldChunkController | undefined;
   private readonly frustum = new THREE.Frustum();
   private readonly frustumMatrix = new THREE.Matrix4();
   private animationFrameId: number | null = null;
@@ -50,11 +53,13 @@ export class WorldRenderLoop {
     this.waterLayerManager = options.waterLayerManager;
     this.getWaterConfig = options.getWaterConfig;
     this.beforeRender = options.beforeRender;
+    this.chunkController = options.chunkController;
   }
 
   start(): void {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
+      this.chunkController?.update();
       this.cameraInputController.updateMovement();
       this.cameraInputController.updateFirstPersonPhysics();
       this.cameraViewController.updateFollowTerrainMode();

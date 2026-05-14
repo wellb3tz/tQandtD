@@ -1,7 +1,12 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { BiomeType, type ChunkData } from '@engine/index';
+import { clearFoliageGeometryCache } from './FoliageGeometryBuilder';
 import { createFoliageLayer } from './FoliageLayerBuilder';
+
+afterEach(() => {
+  clearFoliageGeometryCache();
+});
 
 describe('FoliageLayerBuilder', () => {
   it('creates named instanced foliage layers with aggregate userData', () => {

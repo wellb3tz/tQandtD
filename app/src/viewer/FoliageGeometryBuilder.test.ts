@@ -1,7 +1,11 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
-import { createFoliageInstancedMesh, createFoliagePrototypeGeometry } from './FoliageGeometryBuilder';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createFoliageInstancedMesh, createFoliagePrototypeGeometry, clearFoliageGeometryCache } from './FoliageGeometryBuilder';
 import type { FoliagePlacement } from './FoliagePlacementPlanner';
+
+afterEach(() => {
+  clearFoliageGeometryCache();
+});
 
 describe('FoliageGeometryBuilder', () => {
   it('creates colored prototype geometry for every foliage kind', () => {
@@ -15,8 +19,13 @@ describe('FoliageGeometryBuilder', () => {
       expect(colors.count).toBe(positions.count);
       expect(normals.count).toBe(positions.count);
       expect(geometry.index?.count).toBeGreaterThan(0);
-      geometry.dispose();
     }
+  });
+
+  it('reuses cached geometry instances across calls', () => {
+    const first = createFoliagePrototypeGeometry('spire');
+    const second = createFoliagePrototypeGeometry('spire');
+    expect(second).toBe(first);
   });
 
   it('keeps shrub geometry anchored low enough for shoreline placement checks', () => {
@@ -29,7 +38,6 @@ describe('FoliageGeometryBuilder', () => {
     }
 
     expect(minY).toBeCloseTo(-0.3);
-    geometry.dispose();
   });
 
   it('creates instanced foliage meshes from placement transforms', () => {
@@ -54,6 +62,5 @@ describe('FoliageGeometryBuilder', () => {
     expect(scale.y).toBeCloseTo(0.8);
     expect(scale.z).toBeCloseTo(0.5);
     expect((mesh.material as THREE.MeshLambertMaterial).vertexColors).toBe(true);
-    geometry.dispose();
   });
 });

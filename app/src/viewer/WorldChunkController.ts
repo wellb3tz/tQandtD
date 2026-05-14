@@ -30,6 +30,18 @@ export interface WorldChunkControllerOptions {
   onChunksChanged: () => void;
   addChunkToSceneFn?: (options: AddChunkToSceneOptions) => boolean;
   removeChunkFromSceneFn?: (options: RemoveChunkFromSceneOptions) => boolean;
+  maxBuildsPerFrame?: number;
+  maxBuildTimeMs?: number;
+  /** When true, builds chunks immediately instead of queuing. Useful for tests. */
+  immediateBuilds?: boolean;
+}
+
+interface PendingBuild {
+  chunkX: number;
+  chunkY: number;
+  data: ChunkData;
+  partial: boolean;
+  stage?: number;
 }
 
 export class WorldChunkController {
@@ -41,6 +53,10 @@ export class WorldChunkController {
   private readonly onChunksChanged: () => void;
   private readonly addChunkToSceneFn: (options: AddChunkToSceneOptions) => boolean;
   private readonly removeChunkFromSceneFn: (options: RemoveChunkFromSceneOptions) => boolean;
+  private readonly maxBuildsPerFrame: number;
+  private readonly maxBuildTimeMs: number;
+  private readonly immediateBuilds: boolean;
+  private readonly pendingBuilds: PendingBuild[];
 
   constructor(options: WorldChunkControllerOptions) {
     this.scene = options.scene;
@@ -51,15 +67,59 @@ export class WorldChunkController {
     this.onChunksChanged = options.onChunksChanged;
     this.addChunkToSceneFn = options.addChunkToSceneFn ?? addChunkToScene;
     this.removeChunkFromSceneFn = options.removeChunkFromSceneFn ?? removeChunkFromScene;
+    this.maxBuildsPerFrame = options.maxBuildsPerFrame ?? 2;
+    this.maxBuildTimeMs = options.maxBuildTimeMs ?? 10;
+    this.immediateBuilds = options.immediateBuilds ?? false;
+    this.pendingBuilds = [];
   }
 
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial = false, stage?: number): void {
-    const added = this.addChunkToSceneFn({
-      chunkX,
-      chunkY,
-      data,
-      partial,
-      stage,
+    if (this.immediateBuilds) {
+      this.processBuild({ chunkX, chunkY, data, partial, stage });
+      return;
+    }
+    // Queue the build instead of doing it synchronously to avoid frame drops
+    // when multiple chunks arrive at once (e.g. fast camera movement).
+    this.pendingBuilds.push({ chunkX, chunkY, data, partial, stage });
+  }
+
+  /**
+   * Process pending chunk builds with a per-frame time and count budget.
+   * Call this once per frame, ideally before rendering.
+   */
+  update(): void {
+    if (this.pendingBuilds.length === 0) {
+      return;
+    }
+
+    const startTime = performance.now();
+    let processed = 0;
+    let changed = false;
+
+    while (
+      this.pendingBuilds.length > 0 &&
+      processed < this.maxBuildsPerFrame &&
+      performance.now() - startTime < this.maxBuildTimeMs
+    ) {
+      const build = this.pendingBuilds.shift()!;
+      if (this.processBuild(build)) {
+        changed = true;
+      }
+      processed++;
+    }
+
+    if (changed) {
+      this.onChunksChanged();
+    }
+  }
+
+  private processBuild(build: PendingBuild): boolean {
+    return this.addChunkToSceneFn({
+      chunkX: build.chunkX,
+      chunkY: build.chunkY,
+      data: build.data,
+      partial: build.partial,
+      stage: build.stage,
       scene: this.scene,
       chunkMeshes: this.chunkMeshes,
       layerVisibility: this.viewSettings.getLayerVisibility(),
@@ -70,10 +130,6 @@ export class WorldChunkController {
       terrainTexturesEnabled: this.viewSettings.getTerrainTexturesEnabled(),
       wireframeMode: this.viewSettings.getWireframeMode(),
     });
-
-    if (added) {
-      this.onChunksChanged();
-    }
   }
 
   removeChunk(chunkX: number, chunkY: number, keepFogOfWar = false): void {

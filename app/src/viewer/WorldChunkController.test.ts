@@ -16,6 +16,7 @@ describe('WorldChunkController', () => {
     const data = createChunkData();
 
     context.controller.addChunk(1, 2, data, true, 3);
+    context.controller.update();
 
     expect(addChunkToSceneFn).toHaveBeenCalledWith(expect.objectContaining({
       chunkX: 1,
@@ -45,6 +46,7 @@ describe('WorldChunkController', () => {
     });
 
     context.controller.addChunk(0, 0, createChunkData());
+    context.controller.update();
     context.controller.removeChunk(0, 0);
 
     expect(onChunksChanged).not.toHaveBeenCalled();
@@ -93,6 +95,7 @@ describe('WorldChunkController', () => {
     const data = createChunkData();
 
     context.controller.updateChunk(2, 3, data);
+    context.controller.update();
 
     expect(updateWaterMeshes).toHaveBeenCalledWith('2,3', data, context.scene, context.waterConfig);
     expect(removeChunkFromSceneFn).toHaveBeenCalledWith(expect.objectContaining({ chunkX: 2, chunkY: 3 }));

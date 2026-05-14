@@ -137,6 +137,13 @@ describe('WorldViewer lifecycle', () => {
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // Chunk builds are now queued per-frame; flush them immediately in tests
+    // so assertions remain synchronous.
+    const originalAddChunk = WorldViewer.prototype.addChunk;
+    vi.spyOn(WorldViewer.prototype, 'addChunk').mockImplementation(function (this: WorldViewer, ...args) {
+      originalAddChunk.call(this, ...args);
+      this.flushPendingChunkBuilds();
+    });
   });
 
   afterEach(() => {

@@ -172,7 +172,9 @@ function createChunkMesh(
 
 function removeAndDisposeChunkMesh(scene: THREE.Scene, chunkMesh: ChunkMesh): void {
   scene.remove(chunkMesh.terrain);
-  disposeMesh(chunkMesh.terrain);
+  // NOTE: dispose geometry only — terrain material is shared across all
+  // chunks via getCachedTerrainMaterial() and must not be disposed here.
+  chunkMesh.terrain.geometry.dispose();
 
   if (chunkMesh.resources) {
     scene.remove(chunkMesh.resources);

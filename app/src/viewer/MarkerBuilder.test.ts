@@ -27,13 +27,18 @@ describe('MarkerBuilder', () => {
       ...createChunkData(),
       resources: [{ x: 1, y: 1, type: ResourceType.GOLD, amount: 2 }],
     });
-    const marker = group.children[0] as THREE.Mesh;
-    const material = marker.material as THREE.MeshBasicMaterial;
+    const mesh = group.children[0] as THREE.InstancedMesh;
+    const matrix = new THREE.Matrix4();
+    mesh.getMatrixAt(0, matrix);
+    const position = new THREE.Vector3();
+    position.setFromMatrixPosition(matrix);
+    const color = new THREE.Color();
+    mesh.getColorAt(0, color);
 
-    expect(marker.position.x).toBe(5);
-    expect(marker.position.z).toBe(7);
-    expect(marker.position.y).toBeCloseTo(0.7 * 50 + 1);
-    expect(material.color.getHex()).toBe(0xffd700);
+    expect(position.x).toBe(5);
+    expect(position.z).toBe(7);
+    expect(position.y).toBeCloseTo(0.7 * 50 + 1);
+    expect(color.getHex()).toBe(0xffd700);
   });
 
   it('creates structure-specific geometry and height offsets', () => {
@@ -41,11 +46,17 @@ describe('MarkerBuilder', () => {
       ...createChunkData(),
       structures: [{ x: 1, y: 1, type: StructureType.TOWER }],
     });
-    const marker = group.children[0] as THREE.Mesh;
+    const mesh = group.children[0] as THREE.InstancedMesh;
+    const matrix = new THREE.Matrix4();
+    mesh.getMatrixAt(0, matrix);
+    const position = new THREE.Vector3();
+    position.setFromMatrixPosition(matrix);
+    const color = new THREE.Color();
+    mesh.getColorAt(0, color);
 
-    expect(marker.geometry).toBeInstanceOf(THREE.BoxGeometry);
-    expect(marker.position.y).toBeCloseTo(0.7 * 50 + 2.5);
-    expect((marker.material as THREE.MeshLambertMaterial).color.getHex()).toBe(0xdaa520);
+    expect(mesh.geometry).toBeInstanceOf(THREE.BoxGeometry);
+    expect(position.y).toBeCloseTo(0.7 * 50 + 2.5);
+    expect(color.getHex()).toBe(0xdaa520);
   });
 });
 

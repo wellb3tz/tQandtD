@@ -3,11 +3,15 @@ import type { FoliagePlacement } from './FoliagePlacementPlanner';
 
 export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'shrub' | 'stump';
 
+const prototypeGeometryCache = new Map<FoliagePrototypeKind, THREE.BufferGeometry>();
+
+const defaultFoliageMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+
 export function createFoliageInstancedMesh(
   geometry: THREE.BufferGeometry,
   placements: FoliagePlacement[],
+  material: THREE.Material = defaultFoliageMaterial,
 ): THREE.InstancedMesh {
-  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
   const mesh = new THREE.InstancedMesh(geometry, material, placements.length);
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
@@ -29,40 +33,59 @@ export function createFoliageInstancedMesh(
 }
 
 export function createFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THREE.BufferGeometry {
+  const cached = prototypeGeometryCache.get(kind);
+  if (cached) return cached;
+
+  let geometry: THREE.BufferGeometry;
   switch (kind) {
     case 'spire':
-      return buildGeometry([
+      geometry = buildGeometry([
         ['prism', 0.12, -0.50, -0.10, 6, new THREE.Color(0.42, 0.24, 0.10)],
         ['cone', 0.58, -0.30, 0.28, 8, new THREE.Color(0.10, 0.34, 0.12)],
         ['cone', 0.45, 0.02, 0.58, 8, new THREE.Color(0.08, 0.40, 0.14)],
         ['cone', 0.30, 0.32, 0.90, 8, new THREE.Color(0.12, 0.48, 0.18)],
       ]);
+      break;
     case 'compact':
-      return buildGeometry([
+      geometry = buildGeometry([
         ['prism', 0.14, -0.50, -0.02, 6, new THREE.Color(0.40, 0.22, 0.10)],
         ['cone', 0.64, -0.22, 0.26, 8, new THREE.Color(0.11, 0.36, 0.13)],
         ['cone', 0.48, 0.02, 0.50, 8, new THREE.Color(0.10, 0.43, 0.16)],
         ['cone', 0.30, 0.22, 0.72, 8, new THREE.Color(0.15, 0.50, 0.20)],
       ]);
+      break;
     case 'broad':
-      return buildGeometry([
+      geometry = buildGeometry([
         ['prism', 0.16, -0.50, 0.10, 7, new THREE.Color(0.43, 0.25, 0.12)],
         ['cone', 0.76, -0.04, 0.38, 9, new THREE.Color(0.13, 0.38, 0.13)],
         ['cone', 0.62, 0.12, 0.58, 9, new THREE.Color(0.14, 0.48, 0.17)],
         ['cone', 0.42, 0.28, 0.78, 9, new THREE.Color(0.20, 0.56, 0.22)],
       ]);
+      break;
     case 'shrub':
-      return buildGeometry([
+      geometry = buildGeometry([
         ['cone', 0.54, -0.30, 0.18, 7, new THREE.Color(0.20, 0.43, 0.16)],
         ['cone', 0.42, -0.12, 0.34, 7, new THREE.Color(0.26, 0.52, 0.20)],
         ['cone', 0.24, 0.08, 0.46, 7, new THREE.Color(0.34, 0.58, 0.24)],
       ]);
+      break;
     case 'stump':
-      return buildGeometry([
+      geometry = buildGeometry([
         ['prism', 0.34, -0.50, 0.36, 7, new THREE.Color(0.40, 0.24, 0.12)],
         ['cone', 0.28, 0.28, 0.42, 7, new THREE.Color(0.55, 0.34, 0.17)],
       ]);
+      break;
   }
+
+  prototypeGeometryCache.set(kind, geometry);
+  return geometry;
+}
+
+export function clearFoliageGeometryCache(): void {
+  for (const geometry of prototypeGeometryCache.values()) {
+    geometry.dispose();
+  }
+  prototypeGeometryCache.clear();
 }
 
 type LayerSpec =

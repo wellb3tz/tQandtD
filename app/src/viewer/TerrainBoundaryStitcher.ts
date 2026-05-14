@@ -78,17 +78,16 @@ export function stitchLakeBoundaryPositions(chunkMeshes: ChunkMeshMap, chunkX: n
 
     if (changedB) {
       posB.needsUpdate = true;
-      geomB.computeVertexNormals();
-      geomB.computeBoundingBox();
-      geomB.computeBoundingSphere();
+      // NOTE: vertex normals and bounding volumes are intentionally NOT
+      // recomputed here. Boundary normals are fixed by stitchBoundaryNormals,
+      // and the bounding box computed at creation time is accurate enough
+      // for frustum culling even after small lake-boundary height stitches.
     }
   }
 
   if (changedA) {
     posA.needsUpdate = true;
-    geomA.computeVertexNormals();
-    geomA.computeBoundingBox();
-    geomA.computeBoundingSphere();
+    // See note above — skip expensive computeVertexNormals / computeBoundingBox.
   }
 }
 

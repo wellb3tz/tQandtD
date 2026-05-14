@@ -105,6 +105,14 @@ export class WorldViewer {
         },
       },
     });
+    this.chunkController = new WorldChunkController({
+      scene: this.scene,
+      chunkMeshes: this.chunkMeshes,
+      viewSettings: this.viewSettings,
+      waterLayerManager: this.waterLayerManager,
+      fogOfWarManager: this.fogOfWarManager,
+      onChunksChanged: () => this.invalidateRenderStatsCache(),
+    });
     this.renderLoop = new WorldRenderLoop({
       scene: this.scene,
       renderer: this.renderer,
@@ -115,6 +123,7 @@ export class WorldViewer {
       waterLayerManager: this.waterLayerManager,
       getWaterConfig: () => this.viewSettings.getWaterConfigReference(),
       beforeRender: activeCamera => this.atmosphereController?.updateSunAndShadowFocus(activeCamera),
+      chunkController: this.chunkController,
     });
     this.renderStatsCache = new ViewerRenderStatsCache(this.chunkMeshes.values());
     this.terrainRaycaster = new ViewerTerrainRaycaster({
@@ -124,15 +133,7 @@ export class WorldViewer {
       getChunks: () => this.chunkMeshes.values(),
       getContainer: () => this.container,
     });
-    this.chunkController = new WorldChunkController({
-      scene: this.scene,
-      chunkMeshes: this.chunkMeshes,
-      viewSettings: this.viewSettings,
-      waterLayerManager: this.waterLayerManager,
-      fogOfWarManager: this.fogOfWarManager,
-      onChunksChanged: () => this.invalidateRenderStatsCache(),
-    });
-    
+
     this.setupScene();
   }
 
@@ -171,6 +172,14 @@ export class WorldViewer {
    */
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial: boolean = false, stage?: number): void {
     this.chunkController.addChunk(chunkX, chunkY, data, partial, stage);
+  }
+
+  /**
+   * Flush any pending chunk builds synchronously.
+   * Useful in tests; in production the render loop calls update() each frame.
+   */
+  flushPendingChunkBuilds(): void {
+    this.chunkController.update();
   }
 
   /**
