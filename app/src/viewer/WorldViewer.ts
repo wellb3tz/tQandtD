@@ -175,11 +175,11 @@ export class WorldViewer {
   }
 
   /**
-   * Flush any pending chunk builds synchronously.
+   * Flush any pending chunk builds.
    * Useful in tests; in production the render loop calls update() each frame.
    */
-  flushPendingChunkBuilds(): void {
-    this.chunkController.update();
+  async flushPendingChunkBuilds(): Promise<void> {
+    await this.chunkController.update();
   }
 
   /**

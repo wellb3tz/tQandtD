@@ -20,7 +20,7 @@ describe('WorldRenderLoop', () => {
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
     const render = vi.fn();
     const beforeRender = vi.fn();
-    const cameraInputController = { updateMovement: vi.fn() } as unknown as CameraInputController;
+    const cameraInputController = { updateMovement: vi.fn(), updateFirstPersonPhysics: vi.fn() } as unknown as CameraInputController;
     const cameraViewController = createCameraViewController();
     const waterLayerManager = createWaterLayerManager();
 
@@ -63,7 +63,7 @@ describe('WorldRenderLoop', () => {
     const loop = new WorldRenderLoop({
       scene: new THREE.Scene(),
       renderer: { render: vi.fn() } as unknown as THREE.WebGLRenderer,
-      cameraInputController: { updateMovement: vi.fn() } as unknown as CameraInputController,
+      cameraInputController: { updateMovement: vi.fn(), updateFirstPersonPhysics: vi.fn() } as unknown as CameraInputController,
       cameraViewController: createCameraViewController(),
       chunkMeshes,
       layerVisibility: createLayerVisibility(),

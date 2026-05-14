@@ -51,7 +51,7 @@ export class WorldChunkController {
   private readonly waterLayerManager: WaterLayerManager;
   private readonly fogOfWarManager: FogOfWarManager;
   private readonly onChunksChanged: () => void;
-  private readonly addChunkToSceneFn: (options: AddChunkToSceneOptions) => boolean;
+  private readonly addChunkToSceneFn: (options: AddChunkToSceneOptions) => boolean | Promise<boolean>;
   private readonly removeChunkFromSceneFn: (options: RemoveChunkFromSceneOptions) => boolean;
   private readonly maxBuildsPerFrame: number;
   private readonly maxBuildTimeMs: number;
@@ -87,7 +87,7 @@ export class WorldChunkController {
    * Process pending chunk builds with a per-frame time and count budget.
    * Call this once per frame, ideally before rendering.
    */
-  update(): void {
+  async update(): Promise<void> {
     if (this.pendingBuilds.length === 0) {
       return;
     }
@@ -102,7 +102,7 @@ export class WorldChunkController {
       performance.now() - startTime < this.maxBuildTimeMs
     ) {
       const build = this.pendingBuilds.shift()!;
-      if (this.processBuild(build)) {
+      if (await this.processBuild(build)) {
         changed = true;
       }
       processed++;
@@ -113,7 +113,7 @@ export class WorldChunkController {
     }
   }
 
-  private processBuild(build: PendingBuild): boolean {
+  private async processBuild(build: PendingBuild): Promise<boolean> {
     return this.addChunkToSceneFn({
       chunkX: build.chunkX,
       chunkY: build.chunkY,

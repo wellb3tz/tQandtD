@@ -46,7 +46,7 @@ export interface RemoveChunkFromSceneOptions {
   fogOfWarManager: FogOfWarManager;
 }
 
-export function addChunkToScene(options: AddChunkToSceneOptions): boolean {
+export async function addChunkToScene(options: AddChunkToSceneOptions): Promise<boolean> {
   const {
     chunkX,
     chunkY,
@@ -69,7 +69,7 @@ export function addChunkToScene(options: AddChunkToSceneOptions): boolean {
     removeChunkFromScene({ ...options, keepFogOfWar: false });
   }
 
-  const chunkMesh = createChunkMesh(options, partial, stage);
+  const chunkMesh = await createChunkMesh(options, partial, stage);
   chunkMeshes.set(key, chunkMesh);
   stitchChunkAndNeighbours(chunkMeshes, options.waterLayerManager, chunkX, chunkY, data.size);
   return true;
@@ -94,11 +94,11 @@ export function removeChunkFromScene(options: RemoveChunkFromSceneOptions): bool
   return true;
 }
 
-function createChunkMesh(
+async function createChunkMesh(
   options: AddChunkToSceneOptions,
   partial: boolean,
   stage: number | undefined,
-): ChunkMesh {
+): Promise<ChunkMesh> {
   const {
     chunkX,
     chunkY,
@@ -113,7 +113,7 @@ function createChunkMesh(
   } = options;
   const key = getChunkKey(chunkX, chunkY);
   const chunkMesh: ChunkMesh = {
-    terrain: createTerrainMesh({
+    terrain: await createTerrainMesh({
       chunkX,
       chunkY,
       data,

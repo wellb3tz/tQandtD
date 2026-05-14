@@ -59,7 +59,9 @@ export class WorldRenderLoop {
   start(): void {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
-      this.chunkController?.update();
+      this.chunkController?.update().catch(() => {
+        // Silently ignore errors from chunk controller updates
+      });
       this.cameraInputController.updateMovement();
       this.cameraInputController.updateFirstPersonPhysics();
       this.cameraViewController.updateFollowTerrainMode();

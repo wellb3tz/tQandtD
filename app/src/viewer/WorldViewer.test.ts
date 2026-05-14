@@ -137,13 +137,6 @@ describe('WorldViewer lifecycle', () => {
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    // Chunk builds are now queued per-frame; flush them immediately in tests
-    // so assertions remain synchronous.
-    const originalAddChunk = WorldViewer.prototype.addChunk;
-    vi.spyOn(WorldViewer.prototype, 'addChunk').mockImplementation(function (this: WorldViewer, ...args) {
-      originalAddChunk.call(this, ...args);
-      this.flushPendingChunkBuilds();
-    });
   });
 
   afterEach(() => {
@@ -329,7 +322,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('adds terrain UVs and surface blend attributes so textures can blend inside a chunk', () => {
+  it('adds terrain UVs and surface blend attributes so textures can blend inside a chunk', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -351,6 +344,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const geometry = terrain.geometry as THREE.BufferGeometry;
@@ -397,7 +391,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('marks wet shoreline, snowy peak, and riverbed detail masks on terrain vertices', () => {
+  it('marks wet shoreline, snowy peak, and riverbed detail masks on terrain vertices', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -424,6 +418,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -440,7 +435,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('keeps a wider shoreline mask above sea level for visible sandy coast transitions', () => {
+  it('keeps a wider shoreline mask above sea level for visible sandy coast transitions', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -457,6 +452,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -467,7 +463,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('adds stronger cliff and snow detail masks to mountain terrain without extra geometry', () => {
+  it('adds stronger cliff and snow detail masks to mountain terrain without extra geometry', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -484,6 +480,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
@@ -494,7 +491,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('adds lightweight instanced foliage on forest biomes', () => {
+  it('adds lightweight instanced foliage on forest biomes', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -511,6 +508,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
@@ -526,7 +524,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('does not place foliage on lake tiles', () => {
+  it('does not place foliage on lake tiles', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -549,13 +547,14 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     expect(getFoliageGroup(viewer)).toBeUndefined();
 
     viewer.dispose();
   });
 
-  it('does not place foliage in river channels when river points are local to a nonzero chunk', () => {
+  it('does not place foliage in river channels when river points are local to a nonzero chunk', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -582,6 +581,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const canopy = foliage.children[0] as THREE.InstancedMesh;
@@ -603,7 +603,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('does not add shoreline shrub layers near riverbanks', () => {
+  it('does not add shoreline shrub layers near riverbanks', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -630,6 +630,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
     const shrubs = foliage.children.find(child => child.name === 'foliage-shrubs');
@@ -641,7 +642,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('uses multiple instanced low-poly tree silhouettes with trunk and crown colors', () => {
+  it('uses multiple instanced low-poly tree silhouettes with trunk and crown colors', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -658,6 +659,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -696,7 +698,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('jitters foliage across the whole tile to avoid visible grid rows', () => {
+  it('jitters foliage across the whole tile to avoid visible grid rows', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -713,6 +715,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -735,7 +738,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('uses sparse biome weights so blended forest chunks get foliage', () => {
+  it('uses sparse biome weights so blended forest chunks get foliage', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -761,6 +764,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer);
 
@@ -770,7 +774,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('does not leave the trailing rows empty when a dense chunk hits the foliage cap', () => {
+  it('does not leave the trailing rows empty when a dense chunk hits the foliage cap', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -787,6 +791,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -813,7 +818,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('cuts meadow-sized clearings out of dense forest chunks', () => {
+  it('cuts meadow-sized clearings out of dense forest chunks', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -830,6 +835,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
@@ -858,7 +864,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('adds sparse instanced stumps without bloating draw calls', () => {
+  it('adds sparse instanced stumps without bloating draw calls', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -875,6 +881,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const propMeshes = foliage.children.filter(child => child.name.startsWith('foliage-props')) as THREE.InstancedMesh[];
@@ -893,7 +900,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('skips foliage on non-vegetated and underwater terrain', () => {
+  it('skips foliage on non-vegetated and underwater terrain', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -910,6 +917,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
     viewer.addChunk(1, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9).fill(0.25),
@@ -917,6 +925,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     expect(getFoliageGroup(viewer)).toBeUndefined();
     expect(getFoliageGroup(viewer, '1,0')).toBeUndefined();
@@ -924,7 +933,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('keeps terrain UVs continuous across adjacent chunks', () => {
+  it('keeps terrain UVs continuous across adjacent chunks', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -943,7 +952,9 @@ describe('WorldViewer lifecycle', () => {
     });
 
     viewer.addChunk(0, 0, chunk);
+    await viewer.flushPendingChunkBuilds();
     viewer.addChunk(1, 0, chunk);
+    await viewer.flushPendingChunkBuilds();
 
     const leftTerrain = getTerrainMesh(viewer, '0,0');
     const rightTerrain = getTerrainMesh(viewer, '1,0');
@@ -957,7 +968,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('darkens terrain vertices along river trench bottoms', () => {
+  it('darkens terrain vertices along river trench bottoms', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -989,6 +1000,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const colors = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;
@@ -1002,7 +1014,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('switches existing terrain chunks between textured and biome-color-only materials', () => {
+  it('switches existing terrain chunks between textured and biome-color-only materials', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -1019,6 +1031,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const terrain = getTerrainMesh(viewer);
     const initialMaterial = terrain.material as THREE.MeshStandardMaterial;
@@ -1068,7 +1081,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('stitches terrain texture surface weights across chunk boundaries', () => {
+  it('stitches terrain texture surface weights across chunk boundaries', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -1085,6 +1098,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
     viewer.addChunk(1, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0, 0, 0, 0]),
@@ -1092,6 +1106,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const leftTerrain = getTerrainMesh(viewer, '0,0');
     const rightTerrain = getTerrainMesh(viewer, '1,0');
@@ -1123,7 +1138,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('stitches terrain detail masks across chunk boundaries', () => {
+  it('stitches terrain detail masks across chunk boundaries', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -1140,6 +1155,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
     viewer.addChunk(1, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.31, 0.31, 0.31, 0.31]),
@@ -1147,6 +1163,7 @@ describe('WorldViewer lifecycle', () => {
       resources: [],
       structures: [],
     }));
+    await viewer.flushPendingChunkBuilds();
 
     const leftTerrain = getTerrainMesh(viewer, '0,0');
     const rightTerrain = getTerrainMesh(viewer, '1,0');

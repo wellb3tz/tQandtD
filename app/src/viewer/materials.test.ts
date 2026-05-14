@@ -12,8 +12,8 @@ import {
   createTerrainBlendMaterial,
   createTerrainSurfaceTextureLibrary,
   createTerrainTextureSet,
-  selectTerrainSurfaceKey,
 } from './materials';
+import { selectTerrainSurfaceKey } from './terrain-geometry-types';
 
 describe('terrain texture materials', () => {
   it('loads terrain surface maps as repeatable textures', () => {

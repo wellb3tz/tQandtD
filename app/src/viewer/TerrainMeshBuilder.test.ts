@@ -6,10 +6,10 @@ import { createTerrainMesh } from './TerrainMeshBuilder';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 
 describe('TerrainMeshBuilder', () => {
-  it('creates indexed terrain geometry with surface and detail attributes', () => {
+  it('creates indexed terrain geometry with surface and detail attributes', async () => {
     const data = createChunkData();
 
-    const mesh = createTerrainMesh({
+    const mesh = await createTerrainMesh({
       chunkX: 2,
       chunkY: 3,
       data,
@@ -37,8 +37,8 @@ describe('TerrainMeshBuilder', () => {
     expect(mesh.userData.chunkData).toBe(data);
   });
 
-  it('marks early partial chunks as transparent preview meshes', () => {
-    const mesh = createTerrainMesh({
+  it('marks early partial chunks as transparent preview meshes', async () => {
+    const mesh = await createTerrainMesh({
       chunkX: 0,
       chunkY: 0,
       data: createChunkData(),

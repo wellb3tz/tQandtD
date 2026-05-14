@@ -9,14 +9,14 @@ import type { FogOfWarManager } from './FogOfWarManager';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 
 describe('WorldChunkController', () => {
-  it('passes current viewer settings when adding a chunk', () => {
+  it('passes current viewer settings when adding a chunk', async () => {
     const addChunkToSceneFn = vi.fn(() => true);
     const onChunksChanged = vi.fn();
     const context = createContext({ addChunkToSceneFn, onChunksChanged });
     const data = createChunkData();
 
     context.controller.addChunk(1, 2, data, true, 3);
-    context.controller.update();
+    await context.controller.update();
 
     expect(addChunkToSceneFn).toHaveBeenCalledWith(expect.objectContaining({
       chunkX: 1,
@@ -37,7 +37,7 @@ describe('WorldChunkController', () => {
     expect(onChunksChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('does not invalidate stats when add or remove reports no scene change', () => {
+  it('does not invalidate stats when add or remove reports no scene change', async () => {
     const onChunksChanged = vi.fn();
     const context = createContext({
       addChunkToSceneFn: vi.fn(() => false),
@@ -46,7 +46,7 @@ describe('WorldChunkController', () => {
     });
 
     context.controller.addChunk(0, 0, createChunkData());
-    context.controller.update();
+    await context.controller.update();
     context.controller.removeChunk(0, 0);
 
     expect(onChunksChanged).not.toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe('WorldChunkController', () => {
     expect(onChunksChanged).not.toHaveBeenCalled();
   });
 
-  it('updates water meshes before replacing an existing chunk', () => {
+  it('updates water meshes before replacing an existing chunk', async () => {
     const addChunkToSceneFn = vi.fn(() => true);
     const removeChunkFromSceneFn = vi.fn(() => true);
     const updateWaterMeshes = vi.fn();
@@ -95,7 +95,7 @@ describe('WorldChunkController', () => {
     const data = createChunkData();
 
     context.controller.updateChunk(2, 3, data);
-    context.controller.update();
+    await context.controller.update();
 
     expect(updateWaterMeshes).toHaveBeenCalledWith('2,3', data, context.scene, context.waterConfig);
     expect(removeChunkFromSceneFn).toHaveBeenCalledWith(expect.objectContaining({ chunkX: 2, chunkY: 3 }));

@@ -5,7 +5,7 @@ import {
   getRiverTrenchDarkening,
   type ChunkData,
 } from '@engine/index';
-import { selectTerrainSurfaceKey, type TerrainSurfaceKey } from './materials';
+import { selectTerrainSurfaceKey, type TerrainSurfaceKey } from './terrain-geometry-types';
 
 export { RIVER_TRENCH_DARKEN_STRENGTH, getRiverTrenchDarkening } from '@engine/index';
 

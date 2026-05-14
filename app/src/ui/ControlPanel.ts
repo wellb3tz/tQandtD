@@ -463,9 +463,9 @@ export class ControlPanel {
 
     const workerCheckbox = this.createCheckboxControl({
       id: 'enableWorkerPool',
-      label: 'Enable Worker Pool (Multi-threaded)',
+      label: 'Enable Additional Worker (World Generation)',
       defaultValue: false,
-      tooltip: 'Enable multi-threaded chunk generation using Web Workers for better performance. Uses 4 workers by default.'
+      tooltip: 'Offloads world generation (noise, biomes, rivers) to a background worker. The geometry worker is always active for smooth rendering.'
     }, (checked) => {
       this.updateWorkerPoolConfig('enabled', checked);
     });

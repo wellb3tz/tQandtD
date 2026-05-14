@@ -10,12 +10,12 @@ import { DEFAULT_WATER_CONFIG } from './water/config';
 import { WaterLayerManager } from './water/WaterLayerManager';
 
 describe('ChunkSceneLifecycle', () => {
-  it('adds and removes terrain chunk scene objects', () => {
+  it('adds and removes terrain chunk scene objects', async () => {
     const scene = new THREE.Scene();
     const chunkMeshes = new Map<string, ChunkMesh>();
     const options = createOptions(scene, chunkMeshes, createChunkData());
 
-    expect(addChunkToScene(options)).toBe(true);
+    expect(await addChunkToScene(options)).toBe(true);
     const chunkMesh = chunkMeshes.get('0,0');
 
     expect(chunkMesh).toBeDefined();
@@ -30,11 +30,11 @@ describe('ChunkSceneLifecycle', () => {
     expect(scene.children).not.toContain(chunkMesh.terrain);
   });
 
-  it('skips complete overlay layers for early partial chunks', () => {
+  it('skips complete overlay layers for early partial chunks', async () => {
     const scene = new THREE.Scene();
     const chunkMeshes = new Map<string, ChunkMesh>();
 
-    addChunkToScene({
+    await addChunkToScene({
       ...createOptions(scene, chunkMeshes, createChunkData()),
       partial: true,
       stage: 1,
