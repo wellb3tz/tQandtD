@@ -143,7 +143,7 @@ export function planFoliagePlacements(
       }
 
       const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
-      const bankTreeScale = 1 - waterInfluence.bank * 0.82;
+      const bankTreeScale = Math.max(0, 1 - waterInfluence.bank);
       const clearingTreeScale = 1 - clearingInfluence.strength;
       const treeDensity = profile.density * clusterDensity * slopeDensityScale * bankTreeScale * clearingTreeScale;
       if (chance <= treeDensity) {
@@ -264,7 +264,14 @@ function getLakeBankInfluence(data: ChunkData, localX: number, localZ: number): 
     for (const lakeTileIndex of lake.tiles) {
       const lakeTileX = lakeTileIndex % data.size;
       const lakeTileZ = Math.floor(lakeTileIndex / data.size);
-      const edgeDistance = Math.hypot(localX - (lakeTileX + 0.5), localZ - (lakeTileZ + 0.5)) - 0.72;
+      const dx = localX - lakeTileX;
+      const dz = localZ - lakeTileZ;
+      // Treat tiles directly adjacent to a lake tile (including diagonals) as full bank,
+      // preventing trees from spawning on the pit walls just like on the lake bottom.
+      if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) {
+        return 1;
+      }
+      const edgeDistance = Math.hypot(dx, dz) - 0.72;
       if (edgeDistance <= 0) continue;
       bank = Math.max(bank, 1 - edgeDistance / FOLIAGE_BANK_WIDTH);
     }
