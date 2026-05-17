@@ -59,6 +59,12 @@ export class GeometryWorkerManager {
 
   private handleMessage = (event: MessageEvent) => {
     const { type, id, buffers, message: errorMessage } = event.data;
+
+    // Init handshake response must not steal the pending build promise.
+    if (type === 'ready') {
+      return;
+    }
+
     const pending = this.pending.get(id);
     if (!pending) return;
 
