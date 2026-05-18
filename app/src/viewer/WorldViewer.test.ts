@@ -234,9 +234,8 @@ describe('WorldViewer lifecycle', () => {
     expect(directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
     expect(directionalLight.intensity).toBeLessThanOrEqual(1.16);
     expect(directionalLight.color.getHex()).toBe(0xffe2b8);
-    expect(directionalLight.position.x).toBeGreaterThan(0);
-    expect(directionalLight.position.y).toBeGreaterThanOrEqual(132);
-    expect(directionalLight.position.z).toBeGreaterThan(0);
+    expect(directionalLight.position.y).toBeGreaterThan(0);
+    expect(directionalLight.castShadow).toBe(true);
 
     viewer.dispose();
   });

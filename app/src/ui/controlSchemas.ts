@@ -162,8 +162,17 @@ export const SKY_VIEW_CONTROLS = {
     min: 0,
     max: 90,
     step: 1,
-    defaultValue: 5,
+    defaultValue: 45,
     tooltip: 'Height of the sun above the horizon in degrees',
+  },
+  azimuth: {
+    id: 'skyAzimuth',
+    label: 'Sun Azimuth',
+    min: 0,
+    max: 360,
+    step: 1,
+    defaultValue: 150,
+    tooltip: 'Horizontal direction of the sun in degrees (0 = North, 90 = East, 180 = South, 270 = West)',
   },
 } as const;
 

@@ -118,6 +118,7 @@ export interface SkyViewSettings {
   turbidity?: number;
   rayleigh?: number;
   elevation?: number;
+  azimuth?: number;
 }
 
 export interface ViewerSettings {

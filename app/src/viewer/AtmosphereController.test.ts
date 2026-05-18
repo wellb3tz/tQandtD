@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { AtmosphereController } from './AtmosphereController';
+import { AtmosphereController, SUN_DISTANCE } from './AtmosphereController';
 
 describe('AtmosphereController', () => {
   it('starts with Sky background, updates sun focus, and cleans up on dispose', () => {
@@ -23,11 +23,49 @@ describe('AtmosphereController', () => {
     camera.position.set(320, 80, -240);
     atmosphere.updateSunAndShadowFocus(camera);
 
+    // Target should be projected to ground at camera XZ
     expect(directionalLight.target.position.x).toBeCloseTo(320);
     expect(directionalLight.target.position.z).toBeCloseTo(-240);
-    expect(directionalLight.position.x - directionalLight.target.position.x).toBeCloseTo(90);
-    expect(directionalLight.position.y - directionalLight.target.position.y).toBeCloseTo(138);
-    expect(directionalLight.position.z - directionalLight.target.position.z).toBeCloseTo(56);
+
+    // Light position should be derived from default elevation (45°) and azimuth (150°)
+    const offset = new THREE.Vector3().subVectors(
+      directionalLight.position,
+      directionalLight.target.position
+    );
+    expect(offset.length()).toBeCloseTo(SUN_DISTANCE);
+
+    // Default elevation = 45° => sun is mid-high, Y offset is significant
+    expect(offset.y).toBeGreaterThan(100);
+    expect(offset.y).toBeLessThan(160);
+
+    // Default azimuth = 150° => sun is between East (90°) and South (180°)
+    expect(offset.x).toBeGreaterThan(0);
+    expect(offset.z).toBeLessThan(0);
+
+    atmosphere.dispose();
+  });
+
+  it('updates directional light position when sky params change', () => {
+    const scene = new THREE.Scene();
+    const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
+    const directionalLight = new THREE.DirectionalLight(0xffe2b8, 1.12);
+    scene.add(ambientLight);
+    scene.add(directionalLight);
+
+    const atmosphere = new AtmosphereController(scene, ambientLight, directionalLight);
+
+    // Move sun to zenith (elevation 90°)
+    atmosphere.setSkyParams({ elevation: 90 });
+
+    const offset = new THREE.Vector3().subVectors(
+      directionalLight.position,
+      directionalLight.target.position
+    );
+
+    // At zenith, sun should be almost directly above target
+    expect(offset.y).toBeCloseTo(SUN_DISTANCE, 0);
+    expect(Math.abs(offset.x)).toBeLessThan(1);
+    expect(Math.abs(offset.z)).toBeLessThan(1);
 
     atmosphere.dispose();
   });

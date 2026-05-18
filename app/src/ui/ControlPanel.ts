@@ -492,6 +492,11 @@ export class ControlPanel {
       this.updateSkyConfig('elevation', value);
     });
     atmosphereSection.appendChild(elevationControl);
+
+    const azimuthControl = this.createSliderControl(SKY_VIEW_CONTROLS.azimuth, (value) => {
+      this.updateSkyConfig('azimuth', value);
+    });
+    atmosphereSection.appendChild(azimuthControl);
   }
 
   /**

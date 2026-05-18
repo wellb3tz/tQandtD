@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {
   AtmosphereController,
-  SUN_LIGHT_OFFSET,
+  DEFAULT_SKY_PARAMS,
+  SUN_DISTANCE,
 } from './AtmosphereController';
 
 export interface WorldSceneObjects {
@@ -40,7 +41,17 @@ function configureRenderer(renderer: THREE.WebGLRenderer): void {
 
 function createSunLight(): THREE.DirectionalLight {
   const light = new THREE.DirectionalLight(0xffe2b8, 1.12);
-  light.position.set(SUN_LIGHT_OFFSET.x, SUN_LIGHT_OFFSET.y, SUN_LIGHT_OFFSET.z);
+
+  const phi = THREE.MathUtils.degToRad(90 - DEFAULT_SKY_PARAMS.elevation);
+  const theta = THREE.MathUtils.degToRad(DEFAULT_SKY_PARAMS.azimuth);
+  const sunDir = new THREE.Vector3();
+  sunDir.setFromSphericalCoords(1, phi, theta);
+  light.position.set(
+    sunDir.x * SUN_DISTANCE,
+    sunDir.y * SUN_DISTANCE,
+    sunDir.z * SUN_DISTANCE
+  );
+
   light.castShadow = true;
   light.shadow.camera.left = -200;
   light.shadow.camera.right = 200;

@@ -26,9 +26,8 @@ describe('WorldSceneSetup', () => {
     expect(objects.directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
     expect(objects.directionalLight.intensity).toBeLessThanOrEqual(1.16);
     expect(objects.directionalLight.color.getHex()).toBe(0xffe2b8);
-    expect(objects.directionalLight.position.x).toBeGreaterThan(0);
-    expect(objects.directionalLight.position.y).toBeGreaterThanOrEqual(132);
-    expect(objects.directionalLight.position.z).toBeGreaterThan(0);
+    expect(objects.directionalLight.position.y).toBeGreaterThan(0);
+    expect(objects.directionalLight.castShadow).toBe(true);
   });
 });
 

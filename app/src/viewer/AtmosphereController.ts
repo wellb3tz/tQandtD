@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 
 export const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
-export const SUN_LIGHT_OFFSET = { x: 90, y: 138, z: 56 } as const;
+export const SUN_DISTANCE = 200;
 
 export interface SkyParams {
   turbidity: number;
@@ -18,8 +18,8 @@ export const DEFAULT_SKY_PARAMS: SkyParams = {
   rayleigh: 0.5,
   mieCoefficient: 0.005,
   mieDirectionalG: 0.7,
-  elevation: 5,
-  azimuth: 180,
+  elevation: 45,
+  azimuth: 150,
 };
 
 export class AtmosphereController {
@@ -37,6 +37,22 @@ export class AtmosphereController {
     this.directionalLight = directionalLight;
     this.scene.add(this.directionalLight.target);
     this.initSky();
+    this.updateDirectionalLightPosition();
+  }
+
+  private updateDirectionalLightPosition(): void {
+    const phi = THREE.MathUtils.degToRad(90 - this.skyParams.elevation);
+    const theta = THREE.MathUtils.degToRad(this.skyParams.azimuth);
+
+    const sunDir = new THREE.Vector3();
+    sunDir.setFromSphericalCoords(1, phi, theta);
+
+    const target = this.directionalLight.target.position;
+    this.directionalLight.position.set(
+      target.x + sunDir.x * SUN_DISTANCE,
+      target.y + sunDir.y * SUN_DISTANCE,
+      target.z + sunDir.z * SUN_DISTANCE
+    );
   }
 
   private initSky(): void {
@@ -70,6 +86,7 @@ export class AtmosphereController {
     if (params.mieDirectionalG !== undefined) uniforms['mieDirectionalG'].value = params.mieDirectionalG;
     if (params.elevation !== undefined || params.azimuth !== undefined) {
       this.updateSkySunPosition();
+      this.updateDirectionalLightPosition();
     }
   }
 
@@ -87,12 +104,8 @@ export class AtmosphereController {
 
   updateSunAndShadowFocus(activeCamera: THREE.Camera): void {
     this.directionalLight.target.position.set(activeCamera.position.x, 0, activeCamera.position.z);
-    this.directionalLight.position.set(
-      activeCamera.position.x + SUN_LIGHT_OFFSET.x,
-      SUN_LIGHT_OFFSET.y,
-      activeCamera.position.z + SUN_LIGHT_OFFSET.z
-    );
     this.directionalLight.target.updateMatrixWorld();
+    this.updateDirectionalLightPosition();
     this.directionalLight.updateMatrixWorld();
   }
 
