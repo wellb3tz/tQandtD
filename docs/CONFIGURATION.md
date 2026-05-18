@@ -9,9 +9,11 @@ Detailed reference for all configuration options in Procedural World Engine.
 - [BiomeConfig](#biomeconfig)
 - [EnhancedBiomeConfig](#enhancedbiomeconfig)
 - [LakeConfig](#lakeconfig)
+- [RiverConfig](#riverconfig)
 - [ResourceConfig](#resourceconfig)
 - [StructureConfig](#structureconfig)
 - [WorkerPoolConfig](#workerpoolconfig)
+- [Noise3DConfig](#noise3dconfig)
 - [ErrorRecoveryOptions](#errorrecoveryoptions)
 - [Validation Rules](#validation-rules)
 
@@ -31,6 +33,7 @@ interface WorldConfig {
   resourceConfig?: ResourceConfig;
   structureConfig?: StructureConfig;
   lakeConfig?: LakeConfig;
+  riverConfig?: RiverConfig;
   maxCacheSize?: number;
   workerPoolConfig?: WorkerPoolConfig;
   errorRecovery?: ErrorRecoveryOptions;
@@ -70,8 +73,8 @@ Number of tiles per chunk side. Chunks are square.
 
 **Memory per chunk:**
 - 16x16: ~2 KB
-- 32x32: ~7 KB
-- 64x64: ~28 KB
+- 32x32: ~6.2 KB
+- 64x64: ~25 KB
 
 **Example:**
 ```typescript
@@ -86,7 +89,7 @@ chunkSize: 32
 
 Maximum number of chunks to keep in LRU cache.
 
-**Default:** 1000
+**Default:** 100 when using bare `ChunkManager`, 1000 when using `createDefaultWorldConfig()`.
 
 **Valid range:** 1 to 10000
 
@@ -97,9 +100,9 @@ Total memory = maxCacheSize x memory per chunk
 
 **Examples:**
 ```typescript
-maxCacheSize: 100   // ~700 KB (32x32 chunks)
-maxCacheSize: 500   // ~3.5 MB
-maxCacheSize: 1000  // ~7 MB
+maxCacheSize: 100   // ~620 KB (32x32 chunks)
+maxCacheSize: 500   // ~3.1 MB
+maxCacheSize: 1000  // ~6.2 MB
 ```
 
 ---
@@ -189,7 +192,7 @@ Number of noise layers to combine. More octaves = more detail.
 - `6` - High detail
 - `8+` - Very detailed, slower
 
-**Performance impact:** Each octave adds ~2-3ms per chunk
+**Performance impact:** Each octave adds a small amount of time, but terrain generation is very fast overall (~0.3ms for 32x32).
 
 **Example:**
 ```typescript
@@ -252,8 +255,6 @@ Domain warping intensity. Creates swirls and organic shapes.
 - `50` - Strong warping
 - `100` - Extreme warping
 
-**Performance impact:** +1-2ms per chunk
-
 **Example:**
 ```typescript
 warpStrength: 30
@@ -269,13 +270,13 @@ Final height scaling factor.
 
 **Recommended values:**
 - `0.5` - Flat world
-- `1.0` - Normal height (recommended)
-- `2.0` - Tall mountains
+- `1.0` - Normal height
+- `2.0` - Tall mountains (default in createDefaultWorldConfig)
 - `3.0+` - Extreme elevation
 
 **Example:**
 ```typescript
-heightMultiplier: 1.0
+heightMultiplier: 2.0
 ```
 
 ---
@@ -293,7 +294,7 @@ Use 3D volumetric noise instead of 2D.
 - Better overhangs and caves
 - Unique terrain slices
 
-**Performance impact:** +10-15ms per chunk
+**Performance impact:** Slight increase (~1-2ms per chunk)
 
 **Example:**
 ```typescript
@@ -349,13 +350,13 @@ continentalScale: 0.002
 
 Continental layer influence.
 
-**Default:** 0.6
+**Default:** 0.45
 
 **Valid range:** 0 to 1
 
 **Example:**
 ```typescript
-continentalStrength: 0.6
+continentalStrength: 0.45
 ```
 
 ---
@@ -380,11 +381,11 @@ Temperature noise frequency.
 
 **Valid range:** 0.0001 to 0.01
 
-**Default:** 0.005
+**Default:** 0.001
 
 **Example:**
 ```typescript
-temperatureScale: 0.005
+temperatureScale: 0.001
 ```
 
 ---
@@ -395,11 +396,11 @@ Moisture noise frequency.
 
 **Valid range:** 0.0001 to 0.01
 
-**Default:** 0.005
+**Default:** 0.001
 
 **Example:**
 ```typescript
-moistureScale: 0.005
+moistureScale: 0.001
 ```
 
 ---
@@ -410,11 +411,11 @@ Biome blending radius in tiles.
 
 **Valid range:** 0 to 20
 
-**Default:** 5
+**Default:** 0.5
 
 **Example:**
 ```typescript
-blendRadius: 5
+blendRadius: 0.5
 ```
 
 ---
@@ -452,15 +453,15 @@ enableTransitions: true
 
 #### `transitionWidth: number`
 
-Transition zone width in world units.
+Transition zone width in tiles.
 
 **Valid range:** 1 to 50
 
-**Default:** 10
+**Default:** 4
 
 **Example:**
 ```typescript
-transitionWidth: 10
+transitionWidth: 4
 ```
 
 ---
@@ -471,7 +472,7 @@ transitionWidth: 10
 
 Enable mountain elevation zones.
 
-**Default:** false
+**Default:** true
 
 **Elevation bands:**
 - FOOTHILLS (below tree line)
@@ -545,12 +546,12 @@ enableCompatibilityMatrix: true
 
 ## LakeConfig
 
-Configuration for lake generation using flood-fill algorithm.
+Configuration for lake generation using noise-guided flood-fill algorithm.
 
 ```typescript
 interface LakeConfig {
   enabled: boolean;
-  useMultiChunk: boolean;
+  useMultiChunk?: boolean;
   noiseScale: number;
   noiseThreshold: number;
   minElevation: number;
@@ -576,13 +577,11 @@ enabled: true
 
 ---
 
-#### `useMultiChunk: boolean`
+#### `useMultiChunk?: boolean`
 
 Allow lakes to span multiple chunks.
 
-**Default:** true
-
-**Performance impact:** +5-10ms per chunk with lakes
+**Default:** false
 
 **Example:**
 ```typescript
@@ -699,6 +698,211 @@ maxFillDepth: 0.06
 
 ---
 
+## RiverConfig
+
+Configuration for river generation using A* pathfinding.
+
+```typescript
+interface RiverConfig {
+  enabled: boolean;
+  sourceNoiseScale: number;
+  sourceThreshold: number;
+  minSourceElevation: number;
+  maxSourceElevation: number;
+  allowedSourceBiomes: BiomeType[];
+  maxLength: number;
+  maxUphillBudget: number;
+  minRiverLength: number;
+  maxRiversPerRegion: number;
+  maxTributaries: number;
+  baseWidth: number;
+}
+```
+
+### Fields
+
+#### `enabled: boolean`
+
+Enable river generation.
+
+**Default:** true
+
+**Performance impact:** +40-60ms per chunk (the most expensive optional feature)
+
+**Example:**
+```typescript
+enabled: true
+```
+
+---
+
+#### `sourceNoiseScale: number`
+
+Noise scale for river source candidates.
+
+**Valid range:** 0.001 to 0.1
+
+**Default:** 0.005
+
+**Example:**
+```typescript
+sourceNoiseScale: 0.005
+```
+
+---
+
+#### `sourceThreshold: number`
+
+Threshold for source placement. Higher = fewer rivers.
+
+**Valid range:** 0 to 1
+
+**Default:** 0.7
+
+**Example:**
+```typescript
+sourceThreshold: 0.7
+```
+
+---
+
+#### `minSourceElevation: number`
+
+Minimum elevation for river sources.
+
+**Valid range:** 0 to 1
+
+**Default:** 0.5
+
+**Example:**
+```typescript
+minSourceElevation: 0.5
+```
+
+---
+
+#### `maxSourceElevation: number`
+
+Maximum elevation for river sources.
+
+**Valid range:** 0 to 1
+
+**Default:** 0.95
+
+**Example:**
+```typescript
+maxSourceElevation: 0.95
+```
+
+---
+
+#### `allowedSourceBiomes: BiomeType[]`
+
+Biomes that can spawn river sources.
+
+**Default:** `[MOUNTAIN, TAIGA, FOREST]`
+
+**Example:**
+```typescript
+allowedSourceBiomes: [
+  BiomeType.MOUNTAIN,
+  BiomeType.TAIGA,
+  BiomeType.FOREST,
+]
+```
+
+---
+
+#### `maxLength: number`
+
+Maximum river length in tiles.
+
+**Valid range:** 10 to 1000
+
+**Default:** 200
+
+**Example:**
+```typescript
+maxLength: 200
+```
+
+---
+
+#### `maxUphillBudget: number`
+
+Maximum elevation the river can climb.
+
+**Valid range:** 0 to 1
+
+**Default:** 0.15
+
+**Example:**
+```typescript
+maxUphillBudget: 0.15
+```
+
+---
+
+#### `minRiverLength: number`
+
+Minimum river length.
+
+**Valid range:** 5 to 100
+
+**Default:** 20
+
+**Example:**
+```typescript
+minRiverLength: 20
+```
+
+---
+
+#### `maxRiversPerRegion: number`
+
+Maximum rivers per region.
+
+**Valid range:** 1 to 10
+
+**Default:** 3
+
+**Example:**
+```typescript
+maxRiversPerRegion: 3
+```
+
+---
+
+#### `maxTributaries: number`
+
+Maximum tributaries per river.
+
+**Valid range:** 0 to 5
+
+**Default:** 2
+
+**Example:**
+```typescript
+maxTributaries: 2
+```
+
+---
+
+#### `baseWidth: number`
+
+Base river width.
+
+**Valid range:** 1 to 10
+
+**Default:** 2.0
+
+**Example:**
+```typescript
+baseWidth: 2.0
+```
+
+---
+
 ## ResourceConfig
 
 Configuration for resource placement using noise clustering.
@@ -709,16 +913,7 @@ interface ResourceConfig {
   clusterScale: number;
   densityThreshold: number;
 }
-```
 
-### Fields
-
-#### `types: ResourceTypeConfig[]`
-
-Array of resource types to generate.
-
-**Type:**
-```typescript
 interface ResourceTypeConfig {
   type: ResourceType;
   rarity: number;
@@ -727,6 +922,12 @@ interface ResourceTypeConfig {
   maxAmount: number;
 }
 ```
+
+### Fields
+
+#### `types: ResourceTypeConfig[]`
+
+Array of resource types to generate.
 
 **Example:**
 ```typescript
@@ -790,16 +991,7 @@ interface StructureConfig {
   minDistance: number;
   maxAttempts: number;
 }
-```
 
-### Fields
-
-#### `types: StructureTypeConfig[]`
-
-Array of structure types to generate.
-
-**Type:**
-```typescript
 interface StructureTypeConfig {
   type: StructureType;
   rarity: number;
@@ -811,6 +1003,12 @@ interface PlacementRule {
   params: any;
 }
 ```
+
+### Fields
+
+#### `types: StructureTypeConfig[]`
+
+Array of structure types to generate.
 
 **Example:**
 ```typescript
@@ -834,11 +1032,11 @@ Minimum distance between structures.
 
 **Valid range:** 1 to 100
 
-**Default:** 10
+**Default:** 30
 
 **Example:**
 ```typescript
-minDistance: 10
+minDistance: 30
 ```
 
 ---
@@ -868,6 +1066,7 @@ interface WorkerPoolConfig {
   workerScriptUrl: string;
   taskTimeout: number;
   worldConfig?: any;
+  createWorker?: (workerScriptUrl: string) => Worker;
 }
 ```
 
@@ -910,6 +1109,49 @@ Task timeout in milliseconds.
 **Example:**
 ```typescript
 taskTimeout: 30000
+```
+
+---
+
+## Noise3DConfig
+
+Configuration for 3D noise generation. Usually derived automatically from `terrainConfig` via `deriveNoise3DConfig`.
+
+```typescript
+interface Noise3DConfig {
+  enable3D: boolean;
+  octaves: number;
+  persistence: number;
+  lacunarity: number;
+  scale: number;
+  zScale?: number;
+}
+```
+
+### Fields
+
+#### `enable3D: boolean`
+
+Enable 3D noise mode.
+
+**Default:** false
+
+**Example:**
+```typescript
+enable3D: true
+```
+
+---
+
+#### `zScale?: number`
+
+Z-axis scale factor for 3D noise.
+
+**Default:** 0.5
+
+**Example:**
+```typescript
+zScale: 0.5
 ```
 
 ---
@@ -1014,12 +1256,13 @@ try {
 | `terrainConfig.lacunarity` | 1 | 4 | - |
 | `terrainConfig.warpStrength` | 0 | 100 | - |
 | `terrainConfig.heightMultiplier` | 0.1 | 10 | - |
-| `biomeConfig.blendRadius` | 0 | 20 | 5 |
+| `biomeConfig.blendRadius` | 0 | 20 | 0.5 |
 | `lakeConfig.maxLakeTiles` | 10 | 500 | 80 |
 | `lakeConfig.maxFillDepth` | 0.01 | 0.2 | 0.06 |
+| `riverConfig.maxLength` | 10 | 1000 | 200 |
+| `riverConfig.maxRiversPerRegion` | 1 | 10 | 3 |
+| `riverConfig.maxTributaries` | 0 | 5 | 2 |
 
 ---
 
 **[Back to Documentation](README.md)**
-
-

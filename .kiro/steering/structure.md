@@ -27,7 +27,8 @@ Chunk orchestration and world-level systems:
 - `chunk-manager.ts`: Main API entry point, chunk generation orchestration, LRU caching
 - `biome.ts`: Base biome classification (13 biome types)
 - `enhanced-biome.ts`: Advanced biomes with transitions, micro-biomes, elevation bands
-- `lake-manager.ts`: Lake generation with flood-fill, LRU eviction, race condition prevention
+- `lake-manager.ts`: Lake generation with noise-guided fill-to-spill, LRU eviction, race condition prevention
+- `river-manager.ts`: River generation with A* pathfinding, tributaries, and terrain carving
 - `worker-pool.ts`: Multi-threaded chunk generation
 - `serialization.ts`: World persistence and modification tracking
 
@@ -36,6 +37,8 @@ Specialized generators for world features:
 - `terrain.ts`: Heightmap generation using 2D/3D noise
 - `resources.ts`: Resource cluster placement based on biomes
 - `structures.ts`: Structure placement using Poisson Disk Sampling
+- `lakes.ts`: Lake generation algorithms
+- `rivers.ts`: River pathfinding and corridor generation
 
 ### Utilities (`src/utils/`)
 - `poisson.ts`: Poisson Disk Sampling implementation
@@ -45,7 +48,11 @@ Specialized generators for world features:
 
 ### Entry Points
 - `index.ts`: Main library exports (public API)
+- `config/index.ts`: Default config creation, cloning, merging, and normalization
+- `runtime/index.ts`: Entity runtime, world session, scene state, input, movement, streaming, renderer sync
+- `rendering/index.ts`: Renderer-neutral geometry, overlays, foliage placement, render layers, render stats
 - `worker.ts`: Web Worker support for non-blocking generation
+- `adapters/three/index.ts`: Optional Three.js runtime adapter boundary
 
 ## Interactive App (`app/`)
 
@@ -73,14 +80,10 @@ app/
 ## Examples (`examples/`)
 
 Self-contained usage examples demonstrating specific features:
-- `basic-usage.ts`: Simple world generation
-- `3d-noise-usage.ts`: 3D noise configuration
-- `enhanced-biomes.ts`: Enhanced biome system
-- `web-worker-usage.ts`: Multi-threading
-- `lod-system.ts`: Level of detail
-- `incremental-generation.ts`: Progressive generation
-- `binary-serialization.ts`: World persistence
-- `modification-tracking.ts`: Change tracking
+- `basic-world.ts`: Simple world generation and biome weight inspection
+- `world-session.ts`: Manage loading and regeneration through `WorldSession`
+- `rendering-data.ts`: Build renderer-neutral terrain, water, foliage, and overlay data
+- `three-adapter.ts`: Connect runtime renderer calls to a Three.js-facing target
 
 ## Tests (`tests/`)
 
@@ -99,9 +102,9 @@ Self-contained usage examples demonstrating specific features:
 - Error handling tests: Validate graceful degradation and recovery
 
 ### Test Coverage
-- 151 tests total
+- 416 tests total
 - 100% pass rate
-- Covers all major systems: terrain, biomes, lakes, resources, structures, serialization
+- Covers all major systems: terrain, biomes, lakes, rivers, resources, structures, serialization, runtime, rendering
 - Performance benchmarks for 16×16, 32×32, and 64×64 chunks
 
 ## Architecture Patterns
@@ -118,7 +121,7 @@ All generators accept a seed parameter and produce identical output for the same
 ### Seamless Boundaries
 Heightmaps use `(chunkSize + 1) × (chunkSize + 1)` vertices where boundary vertices overlap with adjacent chunks, ensuring no gaps in rendering.
 
-### Sparse Biome Weights (v2.0)
+### Sparse Biome Weights
 Biome weights use sparse representation to reduce memory:
 - Three parallel arrays: `sparseBiomeTypes`, `sparseBiomeWeights`, `sparseBiomeOffsets`
 - Only non-zero weights are stored
@@ -142,7 +145,7 @@ All systems accept configuration interfaces (e.g., `TerrainConfig`, `BiomeConfig
 - Configurable via `configureLogger()`
 
 ### Optional Features
-Advanced features (3D noise, enhanced biomes, lakes, worker pool) are opt-in via configuration flags, maintaining backward compatibility.
+Advanced features (3D noise, enhanced biomes, lakes, rivers, worker pool) are opt-in via configuration flags, maintaining backward compatibility.
 
 ## Naming Conventions
 

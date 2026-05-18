@@ -21,30 +21,31 @@ Procedural World Engine is built around a **chunk-based architecture** with **de
 ### Key Components
 
 ```
-в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-в”‚                     ChunkManager                        в”‚
-в”‚  - Entry point for all generation                      в”‚
-в”‚  - LRU cache management                                 в”‚
-в”‚  - Orchestrates generation pipeline                     в”‚
-в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-                          в”‚
-        в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-        в–ј                 в–ј                 в–ј
-в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-в”‚   Terrain    в”‚  в”‚    Biomes    в”‚  в”‚    Lakes     в”‚
-в”‚  Generator   в”‚  в”‚  Classifier  в”‚  в”‚   Manager    в”‚
-в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-        в”‚                 в”‚                 в”‚
-        в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-                          в–ј
-                  в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-                  в”‚  ChunkData   в”‚
-                  в”‚  - heightmap в”‚
-                  в”‚  - biomeMap  в”‚
-                  в”‚  - resources в”‚
-                  в”‚  - structuresв”‚
-                  в”‚  - lakes     в”‚
-                  в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+┌─────────────────────────────────────────────────────────────┐
+│                     ChunkManager                            │
+│  - Entry point for all generation                           │
+│  - LRU cache management                                     │
+│  - Orchestrates generation pipeline                         │
+└─────────────────────────────────────────────────────────────┘
+                           │
+         ┌─────────────────┼─────────────────┐
+         ▼                 ▼                 ▼
+┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+│   Terrain      │  │    Biomes      │  │    Rivers      │
+│  Generator     │  │  Classifier    │  │   Manager      │
+└────────────────┘  └────────────────┘  └────────────────┘
+         │                 │                 │
+         └─────────────────┼─────────────────┘
+                           ▼
+                  ┌────────────────┐
+                  │  ChunkData     │
+                  │  - heightmap   │
+                  │  - biomeMap    │
+                  │  - resources   │
+                  │  - structures  │
+                  │  - lakes       │
+                  │  - rivers      │
+                  └────────────────┘
 ```
 
 ---
@@ -149,29 +150,31 @@ for (let i = 0; i < config.octaves; i++) {
 **Cache Strategy:**
 - LRU (Least Recently Used) eviction
 - O(1) access via Map
-- O(1) eviction via doubly-linked list
+- O(1) eviction via insertion-order tracking
 - Configurable size limit
 
 **Cache Implementation:**
 ```typescript
 class ChunkCache {
   private cache = new Map<string, ChunkData>();
-  private accessOrder = new Map<string, number>();
-  
+
   get(key: string): ChunkData | undefined {
-    if (this.cache.has(key)) {
-      this.accessOrder.set(key, Date.now());
-      return this.cache.get(key);
+    const entry = this.cache.get(key);
+    if (entry) {
+      // Move to end to mark as most-recently-used
+      this.cache.delete(key);
+      this.cache.set(key, entry);
+      return entry;
     }
     return undefined;
   }
-  
+
   set(key: string, chunk: ChunkData): void {
     if (this.cache.size >= this.maxSize) {
-      this.evictLRU();
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
     }
     this.cache.set(key, chunk);
-    this.accessOrder.set(key, Date.now());
   }
 }
 ```
@@ -182,42 +185,35 @@ class ChunkCache {
 
 **Location:** `src/world/lake-manager.ts`
 
-**Purpose:** Generate lakes using flood-fill algorithm.
+**Purpose:** Generate lakes using noise-guided flood-fill algorithm.
 
 **Algorithm:**
-1. Find seed tiles (depressions in allowed biomes)
-2. BFS flood-fill from seed
-3. Track water level and depth
-4. Stop at max tiles or max depth
-5. Cache results for multi-chunk lakes
-
-**Optimization: Circular Buffer**
-
-Instead of array shift/push (O(n)), use circular buffer (O(1)):
-
-```typescript
-class CircularBuffer {
-  private buffer: number[];
-  private head = 0;
-  private tail = 0;
-  
-  push(value: number): void {
-    this.buffer[this.tail] = value;
-    this.tail = (this.tail + 1) % this.buffer.length;
-  }
-  
-  shift(): number {
-    const value = this.buffer[this.head];
-    this.head = (this.head + 1) % this.buffer.length;
-    return value;
-  }
-}
-```
+1. Find candidate regions using low-frequency noise
+2. For each candidate, run fill-to-spill flood-fill
+3. Compute water level from the lowest escape point
+4. Cache results for multi-chunk lakes
 
 **Performance Impact:**
-- Before: ~150ms per chunk with lakes
-- After: ~115ms per chunk with lakes
-- Improvement: 23% faster
+- Modern implementation: ~3ms per chunk with lakes
+- Heavily optimized via grid-based lookups and deferred invalidation
+
+---
+
+### 5. River Manager
+
+**Location:** `src/world/river-manager.ts`
+
+**Purpose:** Generate river corridors with tributaries and terrain carving.
+
+**Algorithm:**
+1. Identify source points in suitable biomes and elevations
+2. Build downhill paths using A* with elevation constraints
+3. Smooth and widen paths into corridors
+4. Carve terrain depression into the heightmap
+
+**Performance Impact:**
+- River generation: ~40-60ms per 32x32 chunk when rivers are dense
+- The most expensive optional feature after biome blending
 
 ---
 
@@ -237,9 +233,9 @@ class CircularBuffer {
 5. Apply 3D noise slice (optional)
 6. Normalize to [0, 1]
 
-**Memory:** `(chunkSize + 1)ВІ x 4 bytes`
+**Memory:** `(chunkSize + 1)² x 4 bytes`
 
-**Time:** ~8-15ms (32x32 chunk)
+**Time:** ~0.3ms (32x32 chunk)
 
 ---
 
@@ -254,38 +250,55 @@ class CircularBuffer {
 2. Generate moisture noise
 3. Classify each tile based on height/temp/moisture
 4. Calculate blend weights for smooth transitions
-5. Apply biomes (optional)
+5. Convert to sparse representation
 
-6. Convert to sparse representation
+**Memory:**
+- Biome map: `chunkSize² x 1 byte`
+- Sparse weights: ~4.75 KB (32x32 chunk)
 
-**Memory:** 
-- Biome map: `chunkSizeВІ x 1 byte`
-- Sparse weights: ~4 KB (32x32 chunk)
-
-**Time:** ~5-8ms (32x32 chunk)
+**Time:** ~48ms (32x32 chunk); blending dominates (~90% of biome time)
 
 ---
 
-### Stage 3: Lake Generation
+### Stage 3: River Generation
+
+**Input:** Heightmap, biome map, river config, RNG
+
+**Output:** River data (RiverData[])
+
+**Process:**
+1. Find source points in allowed biomes
+2. Build downhill paths with A*
+3. Smooth and create corridor geometry
+4. Carve terrain depression
+5. Share boundary state with LakeManager
+
+**Memory:** ~0.5 KB per river path
+
+**Time:** ~0-60ms (32x32 chunk, varies by river density)
+
+---
+
+### Stage 4: Lake Generation
 
 **Input:** Heightmap, biome map, lake config, RNG
 
 **Output:** Lake data (LakeData[])
 
 **Process:**
-1. Find seed tiles (depressions in allowed biomes)
-2. For each seed, run flood-fill
-3. Track water level and tiles
+1. Find candidate regions using noise
+2. Run fill-to-spill flood-fill
+3. Compute water level from lowest escape point
 4. Cache multi-chunk lakes
-5. Defer cache invalidation to avoid race conditions
+5. Share boundary state with RiverManager
 
 **Memory:** ~1-2 KB per lake
 
-**Time:** ~80-100ms (32x32 chunk with lakes)
+**Time:** ~3ms (32x32 chunk with lakes)
 
 ---
 
-### Stage 4: Resource Placement
+### Stage 5: Resource Placement
 
 **Input:** Biome map, resource config, RNG
 
@@ -301,11 +314,11 @@ class CircularBuffer {
 
 **Memory:** ~1.5 KB (32x32 chunk)
 
-**Time:** ~2-3ms (32x32 chunk)
+**Time:** ~0.04ms (32x32 chunk)
 
 ---
 
-### Stage 5: Structure Placement
+### Stage 6: Structure Placement
 
 **Input:** Heightmap, biome map, structure config, RNG
 
@@ -320,7 +333,7 @@ class CircularBuffer {
 
 **Memory:** ~0.1 KB (32x32 chunk)
 
-**Time:** ~1-2ms (32x32 chunk)
+**Time:** ~0.1ms (32x32 chunk)
 
 ---
 
@@ -330,16 +343,16 @@ class CircularBuffer {
 
 | Component | Size | Percentage |
 |-----------|------|------------|
-| Heightmap | 1.13 KB | 16% |
+| Heightmap | 1.13 KB | 18% |
 | Biome map | 0.25 KB | 4% |
-| **Sparse biome weights** | **3.96 KB** | **56%** |
-| Resources | 1.59 KB | 23% |
+| **Sparse biome weights** | **4.75 KB** | **76%** |
+| Resources | ~0 KB | 0% |
 | Structures | 0.09 KB | 1% |
-| **Total** | **7.03 KB** | **100%** |
+| **Total** | **~6.2 KB** | **100%** |
 
 ### Sparse Biome Weights
 
-**Problem:** Dense biome weights used 13 KB per chunk (81% of total memory), but ~85% of values were zero.
+**Problem:** Dense biome weights used ~13 KB per chunk, but ~85% of values were zero.
 
 **Solution:** Sparse representation using three parallel arrays:
 
@@ -366,8 +379,10 @@ Tile 2: [FOREST: 0.5, MOUNTAIN: 0.5]
 ```typescript
 function getBiomeWeightsForTile(chunk: ChunkData, tileIndex: number) {
   const start = chunk.sparseBiomeOffsets[tileIndex];
-  const end = chunk.sparseBiomeOffsets[tileIndex + 1] || chunk.sparseBiomeTypes.length;
-  
+  const end = tileIndex < chunk.sparseBiomeOffsets.length - 1
+    ? chunk.sparseBiomeOffsets[tileIndex + 1]
+    : chunk.sparseBiomeTypes.length;
+
   const weights = new Map();
   for (let i = start; i < end; i++) {
     weights.set(chunk.sparseBiomeTypes[i], chunk.sparseBiomeWeights[i]);
@@ -377,17 +392,17 @@ function getBiomeWeightsForTile(chunk: ChunkData, tileIndex: number) {
 ```
 
 **Results:**
-- Memory: 13 KB -> 3.96 KB (70% reduction)
-- Access time: +13ns per tile (negligible)
-- Total chunk memory: 16 KB -> 7 KB (56% reduction)
+- Memory: ~13 KB -> ~4.75 KB for biome weights
+- Access time: negligible (+<1ms per chunk)
+- Total chunk memory: ~16 KB -> ~6.2 KB
 
 ---
 
 ### Cache Memory
 
 With LRU cache of 500 chunks (32x32):
-- Memory: 500 x 7 KB = 3.5 MB
-- Cache hit rate: 50-70%
+- Memory: 500 x 6.2 KB = ~3.1 MB
+- Cache hit rate: ~50%
 - Eviction time: <0.1ms
 
 ---
@@ -453,7 +468,7 @@ function hash(...values: number[]): number {
 ```typescript
 class TerrainGenerator {
   private noiseConfig: NoiseConfig;
-  
+
   constructor(config: TerrainConfig) {
     this.noiseConfig = {
       octaves: config.octaves,
@@ -462,7 +477,7 @@ class TerrainGenerator {
       scale: config.baseScale,
     };
   }
-  
+
   generate(x: number, y: number): number {
     // Reuse pre-allocated config
     return this.noise.fbm(x, y, this.noiseConfig);
@@ -470,17 +485,17 @@ class TerrainGenerator {
 }
 ```
 
-**Result:** Eliminated 1089 allocations per chunk
+**Result:** Eliminated 1000+ allocations per chunk
 
 ---
 
-### 2. Circular Buffer for Flood-Fill
+### 2. Grid-Based Fast Lookup for Biome Blending
 
-**Problem:** Array shift() is O(n), called thousands of times per lake.
+**Problem:** `getBiomeWeights` samples many floating-point positions; repeated string-key hashing in Maps was expensive.
 
-**Solution:** Circular buffer with O(1) operations.
+**Solution:** Pre-compute height and biome values on a dense grid and use O(1) array indexing instead of Map lookups.
 
-**Result:** 23% faster lake generation
+**Result:** Biome blending time reduced significantly; still the largest single cost but now manageable.
 
 ---
 
@@ -503,11 +518,11 @@ function removeRandom(array: any[], index: number): void {
 
 ### 4. Sparse Biome Weights
 
-**Problem:** 85% of biome weights were zero, wasting memory.
+**Problem:** ~85% of biome weights were zero, wasting memory.
 
 **Solution:** Store only non-zero weights.
 
-**Result:** 70% less memory for biome weights
+**Result:** ~65% less memory for biome weights
 
 ---
 
@@ -517,7 +532,17 @@ function removeRandom(array: any[], index: number): void {
 
 **Solution:** Cache recently used chunks.
 
-**Result:** 50-70% cache hit rate, <0.01ms for cached access
+**Result:** ~50% cache hit rate, <0.01ms for cached access
+
+---
+
+### 6. Boundary Height Reconciliation
+
+**Problem:** Lake and river carving can create height mismatches at chunk boundaries.
+
+**Solution:** When a chunk is cached, reconcile shared boundary vertices with already-cached neighbors (using `Math.min` so carved depressions win). Neighbors are lazily invalidated rather than mutated directly.
+
+**Result:** Seamless terrain without gaps or cliffs at chunk edges.
 
 ---
 
@@ -568,7 +593,7 @@ function removeRandom(array: any[], index: number): void {
 **Reasons:**
 - Spatial locality (nearby chunks accessed together)
 - Simple implementation
-- Good hit rate (50-70%)
+- Good hit rate (~50%)
 - O(1) operations
 
 ---
@@ -583,10 +608,10 @@ function removeRandom(array: any[], index: number): void {
 **Chosen:** Sparse representation
 
 **Reasons:**
-- 85% of weights are zero
+- ~85% of weights are zero
 - Simple access pattern
-- 70% memory savings
-- Minimal performance cost (+13ns per tile)
+- ~65% memory savings for biome weights
+- Minimal performance cost
 
 ---
 
@@ -597,13 +622,30 @@ function removeRandom(array: any[], index: number): void {
 2. Hydraulic erosion simulation
 3. Watershed analysis
 
-**Chosen:** Flood-fill
+**Chosen:** Noise-guided fill-to-spill flood-fill
 
 **Reasons:**
-- Physically correct water levels
+- Physically correct water levels (spill-point based)
 - Natural lake shapes
 - Deterministic
-- Reasonable performance (~100ms per chunk)
+- Reasonable performance (~3ms per chunk)
+
+---
+
+### Why A* for Rivers?
+
+**Alternatives considered:**
+1. Simple downhill walk
+2. Hydraulic erosion
+3. Pre-computed flow fields
+
+**Chosen:** A* pathfinding with elevation constraints
+
+**Reasons:**
+- Rivers find natural downhill routes
+- Respects elevation budgets (can flow around small hills)
+- Supports tributaries and branching
+- Deterministic and controllable
 
 ---
 
@@ -628,28 +670,18 @@ function removeRandom(array: any[], index: number): void {
 
 ### Potential Optimizations
 
-1. **WebAssembly for noise generation**
-   - 2-3x faster noise
-   - Requires WASM build pipeline
-
-2. **Incremental generation**
+1. **Incremental generation**
    - Generate chunks over multiple frames
    - Better for 60fps target
 
-3. **LOD (Level of Detail)**
-   - Lower detail for distant chunks
-   - Reduce memory and generation time
-
-4. **Chunk compression**
+2. **Chunk compression**
    - Compress cached chunks
    - Trade CPU for memory
 
-5. **GPU compute (WebGPU)**
+3. **GPU compute (WebGPU)**
    - Massively parallel generation
    - Requires WebGPU support
 
 ---
 
 **[Back to Documentation](README.md)**
-
-

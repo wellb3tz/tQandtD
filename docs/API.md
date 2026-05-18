@@ -55,7 +55,7 @@ Generates or retrieves a chunk from cache. Uses LRU caching for performance.
 **Returns:** `Promise<ChunkData>` - The generated or cached chunk
 
 **Performance:**
-- First access: ~30ms (generation)
+- First access: ~20ms (generation, 32x32)
 - Cached access: <0.01ms
 - Cache hit rate: typically 50%+
 
@@ -83,6 +83,7 @@ Synchronously generates a chunk without caching. Use for one-off generation.
 - `TerrainGenerationError` - If terrain stage fails
 - `BiomeGenerationError` - If biome stage fails
 - `LakeGenerationError` - If lake stage fails
+- `RiverGenerationError` - If river stage fails
 - `ResourceGenerationError` - If resource stage fails
 - `StructureGenerationError` - If structure stage fails
 
@@ -158,7 +159,7 @@ interface WorldConfig {
   // Required
   seed: number;                    // World seed (any number)
   chunkSize: number;               // Chunk size (4-256)
-  
+
   // Optional
   terrainConfig?: TerrainConfig;
   biomeConfig?: BiomeConfig;
@@ -166,7 +167,8 @@ interface WorldConfig {
   resourceConfig?: ResourceConfig;
   structureConfig?: StructureConfig;
   lakeConfig?: LakeConfig;
-  maxCacheSize?: number;           // Default: 100
+  riverConfig?: RiverConfig;
+  maxCacheSize?: number;           // Default: 100 (ChunkManager), 1000 (createDefaultWorldConfig)
   workerPoolConfig?: WorkerPoolConfig;
   errorRecovery?: ErrorRecoveryOptions;
   enablePerformanceMetrics?: boolean;
@@ -188,24 +190,12 @@ interface TerrainConfig {
   persistence: number;        // Amplitude decay (0-1, default: 0.5)
   lacunarity: number;         // Frequency multiplier (1-4, default: 2.0)
   warpStrength: number;       // Domain warping (0-100, default: 1)
-  heightMultiplier: number;   // Height scaling (0.1-10, default: 1.0)
-  enable3D?: boolean;         // Enable volumetric noise
+  heightMultiplier: number;   // Height scaling (0.1-10, default: 2.0)
+  enable3D?: boolean;         // Enable volumetric noise (default: false)
   zScale?: number;            // Z-axis scale for 3D (default: 0.5)
-  enableContinentalness?: boolean;  // Enable continental plates
-  continentalScale?: number;        // Continental noise scale
-  continentalStrength?: number;     // Continental effect strength
-}
-```
-
-**Example:**
-```typescript
-terrainConfig: {
-  baseScale: 0.01,        // Large features
-  octaves: 4,             // 4 layers of detail
-  persistence: 0.5,       // Each octave 50% amplitude
-  lacunarity: 2.0,        // Each octave 2x frequency
-  warpStrength: 30,       // Moderate warping
-  heightMultiplier: 2.0,  // 2x height range
+  enableContinentalness?: boolean;  // Enable continental plates (default: true)
+  continentalScale?: number;        // Continental noise scale (default: 0.002)
+  continentalStrength?: number;     // Continental effect strength (default: 0.45)
 }
 ```
 
@@ -217,13 +207,13 @@ Configuration for enhanced biome system with transitions and elevation bands.
 
 ```typescript
 interface EnhancedBiomeConfig extends BiomeConfig {
-  enableTransitions: boolean;           // Enable biome transitions
-  transitionWidth: number;              // Transition width (world units)
-  enableElevationBands: boolean;        // Enable mountain bands
-  snowLineElevation: number;            // Snow line (0-1)
-  treeLineElevation: number;            // Tree line (0-1)
-  enableClimateSystem?: boolean;        // Use climate system
-  enableCompatibilityMatrix?: boolean;  // Enforce biome compatibility
+  enableTransitions: boolean;           // Enable biome transitions (default: false)
+  transitionWidth: number;              // Transition width in tiles (default: 4)
+  enableElevationBands: boolean;        // Enable mountain bands (default: true)
+  snowLineElevation: number;            // Snow line (0-1, default: 0.8)
+  treeLineElevation: number;            // Tree line (0-1, default: 0.75)
+  enableClimateSystem?: boolean;        // Use climate system (default: false)
+  enableCompatibilityMatrix?: boolean;  // Enforce biome compatibility (default: false)
 }
 ```
 
@@ -235,30 +225,38 @@ Configuration for lake generation.
 
 ```typescript
 interface LakeConfig {
-  enabled: boolean;              // Enable lakes
-  useMultiChunk: boolean;        // Allow multi-chunk lakes
-  noiseScale: number;            // Noise scale for placement
-  noiseThreshold: number;        // Threshold for lake placement
-  minElevation: number;          // Min elevation for lakes
-  maxElevation: number;          // Max elevation for lakes
+  enabled: boolean;              // Enable lakes (default: true)
+  useMultiChunk?: boolean;       // Allow multi-chunk lakes (default: false)
+  noiseScale: number;            // Noise scale for placement (default: 0.01)
+  noiseThreshold: number;        // Threshold for lake placement (default: 0.62)
+  minElevation: number;          // Min elevation for lakes (default: 0.32)
+  maxElevation: number;          // Max elevation for lakes (default: 0.72)
   allowedBiomes: BiomeType[];    // Biomes that can have lakes
-  maxLakeTiles: number;          // Max tiles per lake
-  maxFillDepth: number;          // Max water depth
+  maxLakeTiles: number;          // Max tiles per lake (default: 80)
+  maxFillDepth: number;          // Max water depth (default: 0.06)
 }
 ```
 
-**Example:**
+---
+
+### RiverConfig
+
+Configuration for river generation.
+
 ```typescript
-lakeConfig: {
-  enabled: true,
-  useMultiChunk: true,
-  maxLakeTiles: 80,
-  maxFillDepth: 0.06,
-  allowedBiomes: [
-    BiomeType.PLAINS,
-    BiomeType.FOREST,
-    BiomeType.TAIGA,
-  ],
+interface RiverConfig {
+  enabled: boolean;                 // Enable rivers (default: true)
+  sourceNoiseScale: number;         // Noise scale for source candidates (default: 0.005)
+  sourceThreshold: number;          // Threshold for source placement (default: 0.7)
+  minSourceElevation: number;       // Minimum source elevation (default: 0.5)
+  maxSourceElevation: number;       // Maximum source elevation (default: 0.95)
+  allowedSourceBiomes: BiomeType[]; // Biomes that can spawn rivers
+  maxLength: number;                // Max river length in tiles (default: 200)
+  maxUphillBudget: number;          // Max elevation the river can climb (default: 0.15)
+  minRiverLength: number;           // Minimum river length (default: 20)
+  maxRiversPerRegion: number;       // Max rivers per region (default: 3)
+  maxTributaries: number;           // Max tributaries per river (default: 2)
+  baseWidth: number;                // Base river width (default: 2.0)
 }
 ```
 
@@ -284,43 +282,19 @@ interface ResourceTypeConfig {
 }
 ```
 
-**Example:**
-```typescript
-resourceConfig: {
-  types: [
-    {
-      type: ResourceType.IRON,
-      rarity: 0.3,
-      biomes: [BiomeType.MOUNTAIN, BiomeType.TUNDRA],
-      minAmount: 10,
-      maxAmount: 50,
-    },
-    {
-      type: ResourceType.GOLD,
-      rarity: 0.1,
-      biomes: [BiomeType.MOUNTAIN],
-      minAmount: 5,
-      maxAmount: 20,
-    },
-  ],
-  clusterScale: 20,
-  densityThreshold: 0.6,
-}
-```
-
 ---
 
 ### WorkerPoolConfig
 
-Configuration for multi-threaded generation.
+Configuration for multi-threaded chunk generation.
 
 ```typescript
 interface WorkerPoolConfig {
   maxWorkers: number;            // Max worker threads
   workerScriptUrl: string;       // Worker script URL
   taskTimeout: number;           // Task timeout (ms)
-  worldConfig?: any;             // Config to send to workers
-  createWorker?: (workerScriptUrl: string) => Worker;
+  worldConfig?: any;             // Internal: config forwarded to workers
+  createWorker?: (workerScriptUrl: string) => Worker; // Custom worker factory
 }
 ```
 
@@ -330,6 +304,23 @@ workerPoolConfig: {
   maxWorkers: navigator.hardwareConcurrency || 4,
   workerScriptUrl: '/worker.js',
   taskTimeout: 30000,
+}
+```
+
+---
+
+### Noise3DConfig
+
+Configuration for 3D noise generation (derived automatically from terrainConfig when `enable3D` is true).
+
+```typescript
+interface Noise3DConfig {
+  enable3D: boolean;      // Enable 3D mode
+  octaves: number;        // Noise octaves
+  persistence: number;    // Amplitude decay
+  lacunarity: number;     // Frequency multiplier
+  scale: number;          // Noise scale
+  zScale?: number;        // Z-coordinate scale (default: 0.5)
 }
 ```
 
@@ -347,11 +338,12 @@ interface ChunkData {
   y: number;                          // Chunk Y coordinate
   size: number;                       // Chunk size
   heightmap: Float32Array;            // (size+1)x(size+1) heights
-  biomeMap: Uint8Array;               // sizexsize biome IDs
+  biomeMap: Uint8Array;               // size*size biome IDs
   sparseBiomeTypes: Uint8Array;       // Sparse biome types
   sparseBiomeWeights: Float32Array;   // Sparse biome weights
   sparseBiomeOffsets: Uint16Array;    // Sparse offsets
-  lakes: LakeData[];                  // Lake bodies
+  lakes?: LakeData[];                 // Lake bodies
+  rivers?: RiverData[];               // River paths intersecting this chunk
   resources: Resource[];              // Resource instances
   structures: Structure[];            // Structure instances
 }
@@ -360,10 +352,10 @@ interface ChunkData {
 **Memory Usage (32x32 chunk):**
 - Heightmap: 1.13 KB
 - Biome map: 0.25 KB
-- Sparse biome weights: ~4 KB
-- Resources: ~1.5 KB
-- Structures: ~0.1 KB
-- **Total: ~7 KB**
+- Sparse biome weights: ~4.75 KB
+- Resources: ~0 KB
+- Structures: 0.09 KB
+- **Total: ~6.2 KB**
 
 ---
 
@@ -405,7 +397,34 @@ interface LakeData {
   waterLevel: number;         // Water surface elevation
   tiles: Set<number>;         // Tile indices in lake
   maxDepth: number;           // Maximum depth
-  minTerrainHeight: number;   // Minimum terrain height
+  minTerrainHeight?: number;  // Minimum terrain height
+}
+```
+
+---
+
+### RiverData
+
+River path data for a chunk.
+
+```typescript
+interface RiverData {
+  riverId: string;                              // Unique river identifier
+  pathId: string;                               // Path identifier
+  isTributary: boolean;                         // Whether this is a tributary
+  points: RiverPoint[];                         // Path points
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+}
+
+interface RiverPoint {
+  x: number;           // World X coordinate
+  y: number;           // World Y coordinate
+  height: number;      // Terrain height at this point
+  surfaceLevel: number; // Water surface level
+  width: number;       // River width
+  depth: number;       // River depth
+  flowX: number;       // Flow direction X
+  flowY: number;       // Flow direction Y
 }
 ```
 
@@ -473,6 +492,18 @@ Converts world coordinates to chunk coordinates.
 ```typescript
 const [chunkX, chunkY] = worldToChunk(100, 200, 32);
 // chunkX = 3, chunkY = 6
+```
+
+---
+
+#### `worldToLocal(worldX: number, worldY: number, chunkSize: number): [number, number]`
+
+Converts world coordinates to local tile coordinates within a chunk.
+
+**Example:**
+```typescript
+const [localX, localY] = worldToLocal(100, 200, 32);
+// localX = 4, localY = 8
 ```
 
 ---
@@ -638,6 +669,7 @@ enum LogLevel {
 enum LogCategory {
   CHUNK = 'Chunk',
   LAKE = 'Lake',
+  RIVER = 'River',
   WORKER = 'Worker',
   CACHE = 'Cache',
   PERFORMANCE = 'Performance',
@@ -648,5 +680,3 @@ enum LogCategory {
 ---
 
 **[Back to Documentation](README.md)**
-
-

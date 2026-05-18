@@ -56,14 +56,14 @@ console.log('Chunk generated:', {
 // Generate a 5x5 grid of chunks
 async function generateGrid(centerX: number, centerY: number, radius: number) {
   const chunks = [];
-  
+
   for (let y = centerY - radius; y <= centerY + radius; y++) {
     for (let x = centerX - radius; x <= centerX + radius; x++) {
       const chunk = await manager.getChunk(x, y);
       chunks.push(chunk);
     }
   }
-  
+
   return chunks;
 }
 
@@ -85,20 +85,20 @@ async function loadChunksAroundPlayer(
 ) {
   const chunkSize = 32;
   const [centerChunkX, centerChunkY] = worldToChunk(playerX, playerY, chunkSize);
-  
+
   const loadedChunks = new Map();
-  
+
   for (let dy = -viewDistance; dy <= viewDistance; dy++) {
     for (let dx = -viewDistance; dx <= viewDistance; dx++) {
       const chunkX = centerChunkX + dx;
       const chunkY = centerChunkY + dy;
       const key = `${chunkX},${chunkY}`;
-      
+
       const chunk = await manager.getChunk(chunkX, chunkY);
       loadedChunks.set(key, chunk);
     }
   }
-  
+
   return loadedChunks;
 }
 
@@ -203,17 +203,16 @@ const manager = new ChunkManager({
     temperatureScale: 0.001,
     moistureScale: 0.001,
     blendRadius: 0.5,
-    
+
     // Transitions
     enableTransitions: true,
     transitionWidth: 10,
-    
-    
+
     // Elevation bands
     enableElevationBands: true,
     snowLineElevation: 0.8,
     treeLineElevation: 0.75,
-    
+
     // Climate system
     enableClimateSystem: true,
     enableCompatibilityMatrix: true,
@@ -249,13 +248,13 @@ for (const [biome, weight] of weights) {
 ```typescript
 function findBiomeTiles(chunk: ChunkData, targetBiome: BiomeType): number[] {
   const tiles = [];
-  
+
   for (let i = 0; i < chunk.biomeMap.length; i++) {
     if (chunk.biomeMap[i] === targetBiome) {
       tiles.push(i);
     }
   }
-  
+
   return tiles;
 }
 
@@ -324,16 +323,16 @@ function findResourcesInArea(
   const chunkSize = 32;
   const [centerChunkX, centerChunkY] = worldToChunk(worldX, worldY, chunkSize);
   const chunkRadius = Math.ceil(radius / chunkSize);
-  
+
   const resources = [];
-  
+
   for (let dy = -chunkRadius; dy <= chunkRadius; dy++) {
     for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
       const chunk = manager.generateChunk(
         centerChunkX + dx,
         centerChunkY + dy
       );
-      
+
       for (const resource of chunk.resources) {
         if (resource.type === resourceType) {
           const worldResourceX = chunk.x * chunkSize + resource.x;
@@ -342,7 +341,7 @@ function findResourcesInArea(
             (worldResourceX - worldX) ** 2 +
             (worldResourceY - worldY) ** 2
           );
-          
+
           if (distance <= radius) {
             resources.push({
               ...resource,
@@ -354,7 +353,7 @@ function findResourcesInArea(
       }
     }
   }
-  
+
   return resources;
 }
 
@@ -395,7 +394,7 @@ const chunks = await Promise.all([
 
 ```typescript
 // worker.js
-import { installWorkerHandler } from 'procedural-world-engine';
+import { installWorkerHandler } from 'procedural-world-engine/worker';
 
 // Install message handler
 installWorkerHandler();
@@ -441,15 +440,8 @@ const data = serializer.serialize(manager, {
   compress: true,
 });
 
-// Convert to Blob for download
-const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-const url = URL.createObjectURL(blob);
-
-// Trigger download
-const a = document.createElement('a');
-a.href = url;
-a.download = 'world.json';
-a.click();
+// data is a base64-encoded string when using BINARY format
+localStorage.setItem('world', data as string);
 ```
 
 ---
@@ -461,16 +453,16 @@ a.click();
 const savedData = localStorage.getItem('world');
 if (savedData) {
   const data = JSON.parse(savedData);
-  
+
   // Create new manager with same seed
   const manager = new ChunkManager({
     seed: data.seed,
     chunkSize: data.chunkSize,
   });
-  
+
   // Deserialize
   serializer.deserialize(data, manager);
-  
+
   console.log('World loaded');
 }
 ```
@@ -527,9 +519,9 @@ async function getHeightAt(worldX: number, worldY: number): Promise<number> {
   const chunkSize = 32;
   const [chunkX, chunkY] = worldToChunk(worldX, worldY, chunkSize);
   const [localX, localY] = worldToLocal(worldX, worldY, chunkSize);
-  
+
   const chunk = await manager.getChunk(chunkX, chunkY);
-  
+
   // Heightmap is (size+1) x (size+1)
   const index = localY * (chunkSize + 1) + localX;
   return chunk.heightmap[index];
@@ -552,6 +544,9 @@ const manager = new ChunkManager({
   chunkSize: 16,  // Smaller chunks
   terrainConfig: {
     octaves: 2,   // Fewer octaves
+  },
+  riverConfig: {
+    enabled: false,  // Disable rivers
   },
   lakeConfig: {
     enabled: false,  // Disable lakes
@@ -581,12 +576,14 @@ const manager = new ChunkManager({
   },
   lakeConfig: {
     enabled: true,
-    useMultiChunk: true,
+  },
+  riverConfig: {
+    enabled: false,
   },
   maxCacheSize: 500,
 });
 
-// ~30ms per chunk
+// ~20ms per chunk
 ```
 
 ---
@@ -597,13 +594,13 @@ const manager = new ChunkManager({
 // Preload chunks in background
 async function preloadChunks(centerX: number, centerY: number, radius: number) {
   const promises = [];
-  
+
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       promises.push(manager.getChunk(centerX + dx, centerY + dy));
     }
   }
-  
+
   await Promise.all(promises);
   console.log(`Preloaded ${promises.length} chunks`);
 }
@@ -640,5 +637,3 @@ console.log(`Cache hit rate: ${(stats.hitRate * 100).toFixed(1)}%`);
 ---
 
 **[Back to Documentation](README.md)**
-
-

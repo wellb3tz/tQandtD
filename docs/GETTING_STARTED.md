@@ -64,33 +64,35 @@ console.log('Structures:', chunk.structures);
 
 // Lakes
 console.log('Lakes:', chunk.lakes);
+
+// Rivers
+console.log('Rivers:', chunk.rivers);
 ```
 
 ## Complete Example
 
 ```typescript
-import { 
-  ChunkManager, 
-  BiomeType, 
+import {
+  ChunkManager,
+  BiomeType,
   ResourceType,
-  getBiomeWeightsForTile 
+  getBiomeWeightsForTile
 } from 'procedural-world-engine';
 
 // Create world generator
 const manager = new ChunkManager({
   seed: 12345,
   chunkSize: 32,
-  
+
   terrainConfig: {
     baseScale: 0.01,
     octaves: 4,
     persistence: 0.5,
     heightMultiplier: 2.0,
   },
-  
+
   lakeConfig: {
     enabled: true,
-    useMultiChunk: true,
   },
 });
 
@@ -101,7 +103,8 @@ for (let y = -1; y <= 1; y++) {
     console.log(`Chunk (${x}, ${y}):`, {
       resources: chunk.resources.length,
       structures: chunk.structures.length,
-      lakes: chunk.lakes.length,
+      lakes: chunk.lakes?.length ?? 0,
+      rivers: chunk.rivers?.length ?? 0,
     });
   }
 }
@@ -141,7 +144,7 @@ async function loadChunksAround(worldX: number, worldY: number, radius: number) 
   const chunkSize = 32;
   const centerChunkX = Math.floor(worldX / chunkSize);
   const centerChunkY = Math.floor(worldY / chunkSize);
-  
+
   const chunks = [];
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -152,7 +155,7 @@ async function loadChunksAround(worldX: number, worldY: number, radius: number) 
       chunks.push(chunk);
     }
   }
-  
+
   return chunks;
 }
 
@@ -163,18 +166,21 @@ const chunks = await loadChunksAround(100, 200, 2);
 ### Converting Coordinates
 
 ```typescript
-import { worldToChunk, chunkToWorld, localToIndex } from 'procedural-world-engine';
+import { worldToChunk, worldToLocal, chunkToWorld, localToIndex } from 'procedural-world-engine';
 
 // World position -> Chunk coordinates
 const worldX = 100, worldY = 200;
 const [chunkX, chunkY] = worldToChunk(worldX, worldY, 32);
 console.log(`Position (${worldX}, ${worldY}) is in chunk (${chunkX}, ${chunkY})`);
 
+// World position -> Local coordinates within chunk
+const [localX, localY] = worldToLocal(worldX, worldY, 32);
+console.log(`Local coordinates: (${localX}, ${localY})`);
+
 // Chunk coordinates -> World position (top-left corner)
 const [wx, wy] = chunkToWorld(chunkX, chunkY, 32);
 
 // Local tile -> Array index
-const localX = 5, localY = 10;
 const index = localToIndex(localX, localY, 32);
 console.log(`Tile (${localX}, ${localY}) is at index ${index}`);
 ```
@@ -230,9 +236,10 @@ configureLogger({
 If chunk generation is slow:
 
 1. **Reduce chunk size**: Try 16 instead of 32
-2. **Disable features**: Turn off lakes, resources, or structures
-3. **Use Web Workers**: Enable `workerPoolConfig`
-4. **Reduce octaves**: Lower `terrainConfig.octaves` to 2-3
+2. **Disable rivers**: `riverConfig.enabled = false` (biggest impact)
+3. **Disable features**: Turn off lakes, resources, or structures
+4. **Use Web Workers**: Enable `workerPoolConfig`
+5. **Reduce octaves**: Lower `terrainConfig.octaves` to 2-3
 
 ```typescript
 const manager = new ChunkManager({
@@ -241,8 +248,8 @@ const manager = new ChunkManager({
   terrainConfig: {
     octaves: 3,   // Fewer octaves
   },
-  lakeConfig: {
-    enabled: false,  // Disable lakes
+  riverConfig: {
+    enabled: false,  // Disable rivers
   },
 });
 ```
@@ -303,5 +310,3 @@ Now that you have the basics, explore:
 ---
 
 **[Back to Documentation](README.md)**
-
-

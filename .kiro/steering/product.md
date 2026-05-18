@@ -26,15 +26,16 @@ A TypeScript-based procedural world generation engine for browser-based applicat
 
 ## Performance Targets
 
-- Chunk generation: <100ms per chunk (typically 30-50ms)
-- Memory per chunk: ~7KB for 32x32 chunks (56% reduction from v1.x)
-- Biome weights: Sparse representation with 70% memory savings
-- Responsive generation maintaining 60fps with incremental loading
+- Chunk generation: <100ms per chunk (typically 20ms without rivers, 60ms with rivers)
+- Memory per chunk: ~6.2 KB for 32x32 chunks
+- Biome weights: Sparse representation for memory efficiency
+- Responsive generation maintaining 60fps with worker pool preloading
 
-## Recent Optimizations (v2.0)
+## Key Optimizations
 
-- **Sparse Biome Weights**: 56% less memory per chunk (16KB → 7KB)
-- **Circular Buffer**: 75% faster lake generation via O(1) flood-fill operations
+- **Sparse Biome Weights**: Reduced biome weight memory via sparse arrays
+- **Grid-Based Biome Lookup**: Fast O(1) array indexing for blending samples
 - **Pre-allocated Configs**: Eliminated 1000+ allocations per chunk
 - **Swap-and-Pop**: O(1) removal for Poisson sampling
+- **Boundary Reconciliation**: Lazy invalidation keeps chunk edges seamless without side-effects
 - **Structured Logging**: Production-ready logging system with configurable levels

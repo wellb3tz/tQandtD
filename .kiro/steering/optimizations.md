@@ -9,9 +9,9 @@ This file documents all performance optimizations implemented in the project. Al
 
 ## Memory Optimizations
 
-### 1. Sparse Biome Weights (v2.0)
+### 1. Sparse Biome Weights
 
-**Problem**: Dense biome weight arrays used 13KB per chunk (81% of total memory), but ~85% of values were zero.
+**Problem**: Dense biome weight arrays used ~13KB per chunk, but ~85% of values were zero.
 
 **Solution**: Sparse representation using three parallel arrays.
 
@@ -25,9 +25,9 @@ interface ChunkData {
 ```
 
 **Results**:
-- Memory: 13KB → 3.96KB (70% reduction)
-- Total chunk memory: 16KB → 7KB (56% reduction)
-- Access time: +13ns per tile (negligible)
+- Memory: ~13KB → ~4.75KB for biome weights (~65% reduction)
+- Total chunk memory: ~16KB → ~6.2KB
+- Access time: negligible
 
 **Usage**:
 ```typescript
@@ -146,8 +146,8 @@ class CircularBuffer {
 ```
 
 **Results**:
-- Lake generation: 150ms → 115ms (23% faster)
-- O(1) operations instead of O(n)
+- O(1) operations instead of O(n) for flood-fill queues
+- Modern lake generation is very fast (~3ms per chunk)
 
 **When to use**: Use circular buffers for queue operations in hot loops.
 
@@ -183,55 +183,40 @@ function removeRandom(array: any[], index: number): void {
 
 ### 3. LRU Cache
 
-**Problem**: Regenerating chunks is expensive (~30-50ms per chunk).
+**Problem**: Regenerating chunks is expensive (~20-60ms per chunk depending on features).
 
-**Solution**: LRU cache with O(1) operations.
+**Solution**: LRU cache with O(1) operations using Map insertion order.
 
 **Implementation**:
 ```typescript
-class LRUCache<K, V> {
-  private cache = new Map<K, V>();
-  private accessOrder = new Map<K, number>();
-  
-  get(key: K): V | undefined {
-    if (this.cache.has(key)) {
-      this.accessOrder.set(key, Date.now());
-      return this.cache.get(key);
+class ChunkCache {
+  private cache = new Map<string, ChunkData>();
+
+  get(key: string): ChunkData | undefined {
+    const entry = this.cache.get(key);
+    if (entry) {
+      // Move to end to mark as most-recently-used
+      this.cache.delete(key);
+      this.cache.set(key, entry);
+      return entry;
     }
     return undefined;
   }
-  
-  set(key: K, value: V): void {
+
+  set(key: string, chunk: ChunkData): void {
     if (this.cache.size >= this.maxSize) {
-      this.evictLRU();
-    }
-    this.cache.set(key, value);
-    this.accessOrder.set(key, Date.now());
-  }
-  
-  private evictLRU(): void {
-    let oldestKey: K | undefined;
-    let oldestTime = Infinity;
-    
-    for (const [key, time] of this.accessOrder) {
-      if (time < oldestTime) {
-        oldestTime = time;
-        oldestKey = key;
-      }
-    }
-    
-    if (oldestKey !== undefined) {
+      const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
-      this.accessOrder.delete(oldestKey);
     }
+    this.cache.set(key, chunk);
   }
 }
 ```
 
 **Results**:
-- Cache hit rate: 50-70%
+- Cache hit rate: ~50%
 - Cached access: <0.01ms
-- Cache miss: ~30-50ms (regeneration)
+- Cache miss: ~20-60ms (regeneration)
 
 **When to use**: Cache expensive computations with spatial/temporal locality.
 
@@ -243,29 +228,29 @@ class LRUCache<K, V> {
 
 | Configuration | Time | Notes |
 |--------------|------|-------|
-| Minimal (no features) | ~8ms | Terrain only |
-| Terrain + biomes | ~15ms | No lakes/resources |
-| Full (no lakes) | ~20ms | All features except lakes |
-| Full (with lakes) | ~115ms | All features |
+| Minimal (no features) | ~5ms | Terrain only |
+| Terrain + biomes | ~20ms | No lakes/rivers |
+| Full (no rivers) | ~20ms | All features except rivers |
+| Full (with rivers) | ~60ms | All features |
 
 ### Memory Usage (32×32 chunk)
 
 | Component | Size | Percentage |
 |-----------|------|------------|
-| Heightmap | 1.13 KB | 16% |
+| Heightmap | 1.13 KB | 18% |
 | Biome map | 0.25 KB | 4% |
-| Sparse biome weights | 3.96 KB | 56% |
-| Resources | 1.59 KB | 23% |
+| Sparse biome weights | 4.75 KB | 76% |
+| Resources | ~0 KB | 0% |
 | Structures | 0.09 KB | 1% |
-| **Total** | **7.03 KB** | **100%** |
+| **Total** | **~6.2 KB** | **100%** |
 
 ### Cache Performance
 
 | Metric | Value |
 |--------|-------|
-| Hit rate | 50-70% |
+| Hit rate | ~50% |
 | Cached access | <0.01ms |
-| Cache miss | ~30-50ms |
+| Cache miss | ~20-60ms |
 | Eviction time | <0.1ms |
 
 ---
@@ -297,7 +282,7 @@ When optimizing code, follow this checklist:
 
 ### Testing
 - [ ] Add performance tests for critical paths
-- [ ] Set performance targets (<100ms per chunk)
+- [ ] Set performance targets (<100ms per 32x32 chunk)
 - [ ] Monitor memory usage in tests
 - [ ] Test with different chunk sizes
 - [ ] Test with different configurations
@@ -331,16 +316,12 @@ When optimizing code, follow this checklist:
 ## Future Optimization Ideas
 
 ### Potential Improvements
-1. **WebAssembly for noise generation** - 2-3x faster noise
-2. **Incremental generation** - Generate chunks over multiple frames
-3. **LOD (Level of Detail)** - Lower detail for distant chunks
-4. **Chunk compression** - Compress cached chunks
-5. **GPU compute (WebGPU)** - Massively parallel generation
+1. **Incremental generation** - Generate chunks over multiple frames
+2. **Chunk compression** - Compress cached chunks
+3. **GPU compute (WebGPU)** - Massively parallel generation
 
 ### Trade-offs
-- WebAssembly: Faster but requires build pipeline
 - Incremental: Smoother but more complex
-- LOD: Less memory but more complexity
 - Compression: Less memory but more CPU
 - GPU: Much faster but limited browser support
 

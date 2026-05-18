@@ -22,7 +22,7 @@ Documentation for the tQandtD procedural world engine and browser client.
 ### Guides
 
 - [Performance Guide](PERFORMANCE.md) - Optimization tips and benchmarks
-- [Migration Guide](MIGRATION_GUIDE.md) - Upgrading from older versions
+- [Migration Guide](MIGRATION_GUIDE.md) - Version migration notes
 - [FAQ](FAQ.md) - Frequently asked questions
 - [Release Checklist](RELEASE.md) - Package verification and release steps
 

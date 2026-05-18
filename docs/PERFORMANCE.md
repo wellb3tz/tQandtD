@@ -15,17 +15,19 @@ Optimization tips and benchmarks for Procedural World Engine.
 
 ## Benchmarks
 
+Measured on modern desktop hardware (Intel i7 class, Node.js / Vitest environment). Browser times may vary slightly.
+
 ### Generation Time
 
-Measured on modern hardware (Intel i7, 16GB RAM):
-
-| Chunk Size | No Lakes | With Lakes | 3D Noise |
-|------------|----------|------------|----------|
-| 16x16      | ~8ms     | ~12ms      | ~10ms    |
-| 32x32      | ~31ms    | ~115ms     | ~45ms    |
-| 64x64      | ~270ms   | ~800ms     | ~350ms   |
+| Chunk Size | No Lakes | With Lakes | With Rivers |
+|------------|----------|------------|-------------|
+| 16x16      | ~5ms     | ~5ms       | ~15ms       |
+| 32x32      | ~20ms    | ~20ms      | ~63ms       |
+| 64x64      | ~244ms   | ~250ms     | ~350ms      |
 
 **Target**: <100ms per 32x32 chunk
+
+> **Note**: Lake generation is heavily optimized and adds only a few milliseconds in most cases. The largest cost for feature-rich chunks comes from **river generation** and **biome blending**.
 
 ---
 
@@ -33,10 +35,9 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 | Metric | Value |
 |--------|-------|
-| Cache hit rate | 50-70% |
-| Cached access | <0.01ms |
-| Cache miss | ~31ms (regeneration) |
-| LRU eviction | <0.1ms |
+| Cache hit rate | ~50% |
+| Cached access | ~0.01ms |
+| Cache miss | ~20ms (regeneration, 32x32) |
 
 ---
 
@@ -46,24 +47,20 @@ Measured on modern hardware (Intel i7, 16GB RAM):
 
 | Component | Size | Percentage |
 |-----------|------|------------|
-| Heightmap | 1.13 KB | 16% |
+| Heightmap | 1.13 KB | 18% |
 | Biome map | 0.25 KB | 4% |
-| **Biome weights** | **3.96 KB** | **56%** |
-| Resources | 1.59 KB | 23% |
+| **Biome weights** | **4.75 KB** | **76%** |
+| Resources | ~0 KB | 0% |
 | Structures | 0.09 KB | 1% |
-| **Total** | **7.03 KB** | **100%** |
-
-**Improvement**: v1.x used 16.07 KB per chunk (56% reduction!)
-
----
+| **Total** | **~6.2 KB** | **100%** |
 
 #### Cache Memory
 
-| Cache Size | Memory (32x32) | Memory (64x64) |
-|------------|----------------|----------------|
-| 100 chunks | 703 KB | 2.8 MB |
-| 500 chunks | 3.5 MB | 14 MB |
-| 1000 chunks | 7 MB | 28 MB |
+| Cache Size | Memory (32x32) |
+|------------|----------------|
+| 100 chunks | ~620 KB |
+| 500 chunks | ~3.1 MB |
+| 1000 chunks | ~6.2 MB |
 
 ---
 
@@ -79,7 +76,7 @@ chunkSize: 16
 ```
 
 **Pros:**
-- Fast generation (~8ms)
+- Very fast generation (~5ms)
 - Low memory per chunk
 - Quick loading
 
@@ -98,7 +95,7 @@ chunkSize: 32
 ```
 
 **Pros:**
-- Balanced performance (~31ms)
+- Balanced performance (~20ms without rivers)
 - Good cache efficiency
 - Reasonable memory usage
 
@@ -120,7 +117,7 @@ chunkSize: 64
 - Fewer boundaries
 
 **Cons:**
-- Slow generation (~270ms)
+- Slow generation (~250ms)
 - High memory per chunk
 - Noticeable loading
 
@@ -136,25 +133,23 @@ Disable features you don't need:
 const manager = new ChunkManager({
   seed: 12345,
   chunkSize: 32,
-  
-  // Disable lakes (-7ms per chunk)
-  lakeConfig: {
+
+  // Disable rivers (-~40ms per chunk)
+  riverConfig: {
     enabled: false,
   },
-  
-  // Disable resources (-3ms per chunk)
+
+  // Disable resources (-<1ms per chunk)
   resourceConfig: {
     types: [],
   },
-  
-  // Disable structures (-2ms per chunk)
+
+  // Disable structures (-<1ms per chunk)
   structureConfig: {
     types: [],
   },
-  
-});
 
-// Result: ~31ms -> ~17ms per chunk
+});
 ```
 
 ---
@@ -166,15 +161,15 @@ Reduce terrain complexity:
 ```typescript
 terrainConfig: {
   baseScale: 0.01,
-  octaves: 2,        // Fewer octaves (-5ms per chunk)
+  octaves: 2,        // Fewer octaves
   persistence: 0.5,
   lacunarity: 2.0,
-  warpStrength: 0,   // Disable warping (-2ms per chunk)
+  warpStrength: 0,   // Disable warping
   heightMultiplier: 1.0,
 }
-
-// Result: ~31ms -> ~24ms per chunk
 ```
+
+> Terrain generation itself is very fast (~0.3ms). The main bottleneck is **biome blending**, not terrain octaves.
 
 ---
 
@@ -184,18 +179,18 @@ Optimize cache size for your use case:
 
 ```typescript
 // Small cache (low memory, more regenerations)
-maxCacheSize: 100  // ~700 KB
+maxCacheSize: 100  // ~620 KB
 
 // Medium cache (balanced)
-maxCacheSize: 500  // ~3.5 MB
+maxCacheSize: 500  // ~3.1 MB
 
 // Large cache (high memory, fewer regenerations)
-maxCacheSize: 1000 // ~7 MB
+maxCacheSize: 1000 // ~6.2 MB
 ```
 
 **Formula:**
 ```
-Memory = cacheSize x 7 KB (for 32x32 chunks)
+Memory = cacheSize x 6.2 KB (for 32x32 chunks)
 ```
 
 ---
@@ -222,8 +217,6 @@ const chunks = await Promise.all([
   manager.getChunk(0, 1),
   manager.getChunk(1, 1),
 ]);
-
-// 4 chunks in ~31ms instead of ~124ms
 ```
 
 ---
@@ -236,12 +229,12 @@ Preload chunks before they're needed:
 async function preloadChunksAhead(
   playerX: number,
   playerY: number,
-  direction: { x: number, y: number },
+  direction: { x: number; y: number },
   distance: number
 ) {
   const chunkSize = 32;
   const [chunkX, chunkY] = worldToChunk(playerX, playerY, chunkSize);
-  
+
   // Preload chunks in movement direction
   const promises = [];
   for (let i = 1; i <= distance; i++) {
@@ -249,7 +242,7 @@ async function preloadChunksAhead(
     const targetY = chunkY + direction.y * i;
     promises.push(manager.getChunk(targetX, targetY));
   }
-  
+
   await Promise.all(promises);
 }
 
@@ -276,11 +269,9 @@ const manager = new ChunkManager({
     heightMultiplier: 1.0,
   },
   lakeConfig: { enabled: false },
+  riverConfig: { enabled: false },
   resourceConfig: { types: [] },
   structureConfig: { types: [] },
-  enhancedBiomeConfig: {
-    enableTransitions: false,
-  },
   maxCacheSize: 100,
 });
 
@@ -303,17 +294,12 @@ const manager = new ChunkManager({
     warpStrength: 30,
     heightMultiplier: 2.0,
   },
-  lakeConfig: {
-    enabled: true,
-    useMultiChunk: true,
-  },
-  enhancedBiomeConfig: {
-    enableTransitions: true,
-  },
+  lakeConfig: { enabled: true },
+  riverConfig: { enabled: false },
   maxCacheSize: 500,
 });
 
-// Result: ~31ms per chunk (no lakes), ~115ms (with lakes)
+// Result: ~20ms per chunk
 ```
 
 ---
@@ -334,19 +320,16 @@ const manager = new ChunkManager({
     enable3D: true,
     zScale: 0.5,
   },
-  lakeConfig: {
-    enabled: true,
-    useMultiChunk: true,
-  },
+  lakeConfig: { enabled: true },
+  riverConfig: { enabled: true },
   enhancedBiomeConfig: {
     enableTransitions: true,
     enableElevationBands: true,
-    enableClimateSystem: true,
   },
   maxCacheSize: 1000,
 });
 
-// Result: ~50ms per chunk (no lakes), ~150ms (with lakes)
+// Result: ~60-100ms per chunk (depending on river density)
 ```
 
 ---
@@ -388,7 +371,7 @@ setInterval(() => {
   console.log('Cache stats:', {
     size: `${stats.size}/${stats.maxSize}`,
     hitRate: `${(stats.hitRate * 100).toFixed(1)}%`,
-    memory: `${(stats.size * 7).toFixed(1)} KB`,
+    memory: `${(stats.size * 6.2).toFixed(1)} KB`,
   });
 }, 5000);
 ```
@@ -419,10 +402,10 @@ console.profileEnd('Chunk Generation');
 ### 1. Use Async Generation
 
 ```typescript
-// OK Good - non-blocking
+// Good - non-blocking
 const chunk = await manager.getChunk(0, 0);
 
-// вќЊ Bad - blocks main thread
+// Bad - blocks main thread
 const chunk = manager.generateChunk(0, 0);
 ```
 
@@ -431,14 +414,14 @@ const chunk = manager.generateChunk(0, 0);
 ### 2. Batch Chunk Loading
 
 ```typescript
-// OK Good - parallel loading
+// Good - parallel loading
 const chunks = await Promise.all([
   manager.getChunk(0, 0),
   manager.getChunk(1, 0),
   manager.getChunk(0, 1),
 ]);
 
-// вќЊ Bad - sequential loading
+// Bad - sequential loading
 const chunk1 = await manager.getChunk(0, 0);
 const chunk2 = await manager.getChunk(1, 0);
 const chunk3 = await manager.getChunk(0, 1);
@@ -456,7 +439,7 @@ function unloadDistantChunks(
 ) {
   // Get all cached chunks
   const cacheSize = manager.getCacheSize();
-  
+
   if (cacheSize > maxDistance * maxDistance * 4) {
     // Cache is too large, clear it
     manager.clearCache();
@@ -475,12 +458,12 @@ setInterval(() => {
 ### 4. Reuse ChunkManager
 
 ```typescript
-// OK Good - reuse manager
+// Good - reuse manager
 const manager = new ChunkManager({ seed: 12345 });
 const chunk1 = await manager.getChunk(0, 0);
 const chunk2 = await manager.getChunk(1, 0);
 
-// вќЊ Bad - create new manager each time
+// Bad - create new manager each time
 const manager1 = new ChunkManager({ seed: 12345 });
 const chunk1 = await manager1.getChunk(0, 0);
 const manager2 = new ChunkManager({ seed: 12345 });
@@ -515,7 +498,7 @@ function animate() {
 Before deploying, check:
 
 - [ ] Chunk size appropriate for use case (16-32 recommended)
-- [ ] Unnecessary features disabled
+- [ ] Unnecessary features disabled (rivers are the most expensive)
 - [ ] Cache size tuned for memory budget
 - [ ] Worker pool enabled for parallel generation
 - [ ] Chunks preloaded in movement direction
@@ -534,7 +517,7 @@ Before deploying, check:
 
 **Solutions:**
 1. Reduce chunk size (32 -> 16)
-2. Disable lakes (`lakeConfig.enabled = false`)
+2. Disable rivers (`riverConfig.enabled = false`)
 3. Reduce octaves (`terrainConfig.octaves = 2`)
 4. Enable worker pool
 5. Disable 3D noise
@@ -566,5 +549,3 @@ Before deploying, check:
 ---
 
 **[Back to Documentation](README.md)**
-
-
