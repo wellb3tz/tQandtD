@@ -65,6 +65,14 @@ export interface ChunkPerformanceMetrics {
   terrainTime: number;
   /** Time spent on biome generation (ms) */
   biomeTime: number;
+  /** Time spent on biome classification per tile (ms) */
+  biomeClassificationTime: number;
+  /** Time spent on biome blending / weight sampling (ms) */
+  biomeBlendingTime: number;
+  /** Time spent on river generation (ms) */
+  riverTime: number;
+  /** Time spent on lake generation (ms) */
+  lakeTime: number;
   /** Time spent on resource generation (ms) */
   resourceTime: number;
   /** Time spent on structure generation (ms) */
@@ -356,7 +364,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    */
   generateChunk(chunkX: number, chunkY: number, retryCount = 0): ChunkData {
     try {
-      return this.generateChunkInternal(chunkX, chunkY);
+      return this.generateChunkInternal(chunkX, chunkY).chunk;
     } catch (error) {
       // Convert to ChunkGenerationError if not already
       const chunkError = error instanceof ChunkGenerationError
@@ -402,9 +410,23 @@ export class ChunkManager implements ChunkManagerSnapshot {
   }
 
   /**
+   * Generates a chunk and returns it together with per-stage timing metrics.
+   * Useful for profiling and benchmarking.
+   */
+  generateChunkWithMetrics(chunkX: number, chunkY: number): { chunk: ChunkData; metrics: ChunkPerformanceMetrics } {
+    const previousValue = this.config.enablePerformanceMetrics;
+    this.config.enablePerformanceMetrics = true;
+    try {
+      return this.generateChunkInternal(chunkX, chunkY);
+    } finally {
+      this.config.enablePerformanceMetrics = previousValue;
+    }
+  }
+
+  /**
    * Internal chunk generation with granular error handling
    */
-  private generateChunkInternal(chunkX: number, chunkY: number): ChunkData {
+  private generateChunkInternal(chunkX: number, chunkY: number): { chunk: ChunkData; metrics: ChunkPerformanceMetrics } {
     const startTime = this.config.enablePerformanceMetrics ? performance.now() : 0;
     const metrics: Partial<ChunkPerformanceMetrics> = {};
 
@@ -485,6 +507,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Step 3: Generate rivers using multi-chunk river manager
     try {
       this.config.onProgress?.('rivers', 0.55);
+      const riverStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
 
       if (this.riverManager) {
         const worldRivers = this.riverManager.getRiversForChunk(
@@ -498,6 +521,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
           this.carveTerrainForRivers(chunk.rivers, heightmap, this.config.chunkSize);
         }
       }
+
+      if (this.config.enablePerformanceMetrics) {
+        metrics.riverTime = performance.now() - riverStart;
+      }
     } catch (error) {
       logger.warn(LogCategory.RIVER, `River generation failed for chunk (${chunkX}, ${chunkY}), continuing without rivers`, error);
       chunk.rivers = [];
@@ -510,6 +537,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Step 4: Generate lakes using multi-chunk lake manager
     try {
       this.config.onProgress?.('lakes', 0.58);
+      const lakeStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
 
       if (this.lakeManager) {
         const worldLakes = this.lakeManager.getLakesForChunk(
@@ -530,6 +558,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
         if (worldLakes.length > 0) {
           this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
         }
+      }
+
+      if (this.config.enablePerformanceMetrics) {
+        metrics.lakeTime = performance.now() - lakeStart;
       }
     } catch (error) {
       // Lakes are optional - log error but continue
@@ -562,7 +594,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       }
     }
 
-    // Step 5: Generate structures using Poisson Disk Sampling
+    // Step 6: Generate structures using Poisson Disk Sampling
     try {
       this.config.onProgress?.('structures', 0.8);
       const structureStart = this.config.enablePerformanceMetrics ? performance.now() : 0;
@@ -592,7 +624,18 @@ export class ChunkManager implements ChunkManagerSnapshot {
       }
     }
 
-    return chunk;
+    return {
+      chunk,
+      metrics: {
+        totalTime: metrics.totalTime ?? 0,
+        terrainTime: metrics.terrainTime ?? 0,
+        biomeTime: metrics.biomeTime ?? 0,
+        riverTime: metrics.riverTime ?? 0,
+        lakeTime: metrics.lakeTime ?? 0,
+        resourceTime: metrics.resourceTime ?? 0,
+        structureTime: metrics.structureTime ?? 0,
+      },
+    };
   }
 
   /**
@@ -726,7 +769,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       // Convert world coordinates to chunk coordinates
       const targetChunkX = Math.floor(worldPosX / size);
       const targetChunkY = Math.floor(worldPosY / size);
-      
+
       // If sampling from current chunk, use heightmap directly
       if (targetChunkX === chunkX && targetChunkY === chunkY) {
         const localX = worldPosX - worldX;
@@ -736,9 +779,24 @@ export class ChunkManager implements ChunkManagerSnapshot {
           return heightmap[localY * vertexCount + localX];
         }
       }
-      
+
       // For neighboring chunks, generate height on-demand using terrain generator
       return this.terrainGenerator.getHeightAt(worldPosX, worldPosY, this.config.seed);
+    };
+
+    // Cached height and biome lookups — neighbours sample the same positions,
+    // so caching eliminates ~90% of redundant noise evaluations.
+    const heightCache = new Map<string, number>();
+    const biomeCache = new Map<string, number>(); // key -> BiomeType (number)
+
+    const getHeightCached = (worldPosX: number, worldPosY: number): number => {
+      const key = `${worldPosX},${worldPosY}`;
+      let h = heightCache.get(key);
+      if (h === undefined) {
+        h = getHeight(worldPosX, worldPosY);
+        heightCache.set(key, h);
+      }
+      return h;
     };
 
     for (let y = 0; y < size; y++) {
@@ -746,7 +804,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
         const index = y * size + x;
         // Sample height from heightmap (using vertex coordinates)
         const height = heightmap[y * vertexCount + x];
-        
+
         // Get world position for this tile
         const wx = worldX + x;
         const wy = worldY + y;
@@ -754,10 +812,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
         // Use EnhancedBiomeSystem if available (Requirement 2.1), otherwise use BiomeSystem
         if (this.enhancedBiomeSystem) {
           // Get enhanced biome data with transitions and elevation bands
-          const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeight);
+          const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeightCached);
           biomeMap[index] = enhancedData.biome;
-          
-          
+
           // Store weights for sparse conversion
           tileWeights.push(enhancedData.weights);
         } else {
@@ -765,9 +822,12 @@ export class ChunkManager implements ChunkManagerSnapshot {
           const biome = this.biomeSystem.getBiome(wx, wy, height);
           biomeMap[index] = biome;
 
-          // Get biome blend weights
-          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeight);
-          
+          // Cache the centre tile biome so getBiomeWeights doesn't recompute it
+          biomeCache.set(`${wx},${wy}`, biome);
+
+          // Get biome blend weights with cross-tile caching
+          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeightCached, biomeCache);
+
           // Store weights for sparse conversion
           tileWeights.push(weights);
         }

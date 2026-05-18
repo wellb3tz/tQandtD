@@ -263,16 +263,6 @@ export class NoiseEngine {
    * @throws {Error} If config parameters are invalid
    */
   fbm(x: number, y: number, config: NoiseConfig): number {
-    if (config.octaves < 1) {
-      throw new Error('Invalid config: octaves must be at least 1');
-    }
-    if (config.persistence <= 0) {
-      throw new Error('Invalid config: persistence must be greater than 0');
-    }
-    if (config.lacunarity <= 0) {
-      throw new Error('Invalid config: lacunarity must be greater than 0');
-    }
-
     let total = 0;
     let frequency = config.scale;
     let amplitude = 1;
@@ -280,7 +270,7 @@ export class NoiseEngine {
 
     for (let i = 0; i < config.octaves; i++) {
       total += this.noise2D(x * frequency, y * frequency) * amplitude;
-      
+
       maxValue += amplitude;
       amplitude *= config.persistence;
       frequency *= config.lacunarity;
@@ -301,16 +291,6 @@ export class NoiseEngine {
    * @throws {Error} If config parameters are invalid
    */
   fbm3D(x: number, y: number, z: number, config: NoiseConfig): number {
-    if (config.octaves < 1) {
-      throw new Error('Invalid config: octaves must be at least 1');
-    }
-    if (config.persistence <= 0) {
-      throw new Error('Invalid config: persistence must be greater than 0');
-    }
-    if (config.lacunarity <= 0) {
-      throw new Error('Invalid config: lacunarity must be greater than 0');
-    }
-
     let total = 0;
     let frequency = config.scale;
     let amplitude = 1;
@@ -335,10 +315,6 @@ export class NoiseEngine {
    * Result is in approximately [0, 1] range (higher = ridge peak).
    */
   ridgeFbm(x: number, y: number, config: NoiseConfig): number {
-    if (config.octaves < 1) throw new Error('Invalid config: octaves must be at least 1');
-    if (config.persistence <= 0) throw new Error('Invalid config: persistence must be greater than 0');
-    if (config.lacunarity <= 0) throw new Error('Invalid config: lacunarity must be greater than 0');
-
     let total = 0;
     let frequency = config.scale;
     let amplitude = 1;

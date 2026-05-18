@@ -156,8 +156,13 @@ export class BiomeSystem {
    * @param getHeight - Callback function to get height at any world position
    * @returns Map of biome types to their blend weights (sum to 1.0)
    */
-  getBiomeWeights(x: number, y: number, getHeight: (worldX: number, worldY: number) => number): Map<BiomeType, number> {
-    return this.getBiomeWeightsWithRadius(x, y, getHeight, this.config.blendRadius);
+  getBiomeWeights(
+    x: number,
+    y: number,
+    getHeight: (worldX: number, worldY: number) => number,
+    biomeCache?: Map<string, BiomeType>,
+  ): Map<BiomeType, number> {
+    return this.getBiomeWeightsWithRadius(x, y, getHeight, this.config.blendRadius, biomeCache);
   }
 
   /**
@@ -169,7 +174,13 @@ export class BiomeSystem {
    * @param radius - Custom blend radius
    * @returns Map of biome types to their blend weights (sum to 1.0)
    */
-  getBiomeWeightsWithRadius(x: number, y: number, getHeight: (worldX: number, worldY: number) => number, radius: number): Map<BiomeType, number> {
+  getBiomeWeightsWithRadius(
+    x: number,
+    y: number,
+    getHeight: (worldX: number, worldY: number) => number,
+    radius: number,
+    biomeCache?: Map<string, BiomeType>,
+  ): Map<BiomeType, number> {
     // Use a fixed-size Float64Array indexed by BiomeType (13 values, 0-12) to
     // accumulate weights without allocating a Map per sample point.
     // The final Map is built once at the end — one allocation per tile instead of
@@ -186,7 +197,12 @@ export class BiomeSystem {
         const sampleY = y + dy;
 
         const sampleHeight = getHeight(sampleX, sampleY);
-        const biome = this.getBiome(sampleX, sampleY, sampleHeight);
+        const cacheKey = `${sampleX},${sampleY}`;
+        let biome = biomeCache?.get(cacheKey);
+        if (biome === undefined) {
+          biome = this.getBiome(sampleX, sampleY, sampleHeight);
+          biomeCache?.set(cacheKey, biome);
+        }
 
         const distance = Math.sqrt(dx * dx + dy * dy);
         const normalizedDist = distance / radius;
