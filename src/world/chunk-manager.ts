@@ -478,6 +478,8 @@ export class ChunkManager implements ChunkManagerSnapshot {
       
       if (this.config.enablePerformanceMetrics) {
         metrics.biomeTime = performance.now() - biomeStart;
+        metrics.biomeClassificationTime = biomeData.metrics.classificationTime;
+        metrics.biomeBlendingTime = biomeData.metrics.blendingTime;
       }
 
       // Validate biome data
@@ -630,6 +632,8 @@ export class ChunkManager implements ChunkManagerSnapshot {
         totalTime: metrics.totalTime ?? 0,
         terrainTime: metrics.terrainTime ?? 0,
         biomeTime: metrics.biomeTime ?? 0,
+        biomeClassificationTime: metrics.biomeClassificationTime ?? 0,
+        biomeBlendingTime: metrics.biomeBlendingTime ?? 0,
         riverTime: metrics.riverTime ?? 0,
         lakeTime: metrics.lakeTime ?? 0,
         resourceTime: metrics.resourceTime ?? 0,
@@ -749,6 +753,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     sparseBiomeTypes: Uint8Array;
     sparseBiomeWeights: Float32Array;
     sparseBiomeOffsets: Uint16Array;
+    metrics: { classificationTime: number; blendingTime: number };
   } {
     const size = this.config.chunkSize;
     const biomeMap = new Uint8Array(size * size);
@@ -784,20 +789,61 @@ export class ChunkManager implements ChunkManagerSnapshot {
       return this.terrainGenerator.getHeightAt(worldPosX, worldPosY, this.config.seed);
     };
 
-    // Cached height and biome lookups — neighbours sample the same positions,
-    // so caching eliminates ~90% of redundant noise evaluations.
-    const heightCache = new Map<string, number>();
-    const biomeCache = new Map<string, number>(); // key -> BiomeType (number)
+    // ---- Grid-based fast lookup for blending samples ----
+    // All float coordinates sampled by getBiomeWeightsWithRadius have the form
+    //   worldX + tileX + k * blendRadius/3
+    // We pre-compute height and biome on a dense grid and use O(1) array indexing
+    // instead of expensive Map<string> hashing + string allocation.
+    const blendRadius = this.config.biomeConfig.blendRadius;
+    const step = blendRadius / 3;               // sampling step inside blending
+    const stepInv = 3 / blendRadius;            // 1/step
+    const pad = Math.ceil(blendRadius) + 1;
 
-    const getHeightCached = (worldPosX: number, worldPosY: number): number => {
-      const key = `${worldPosX},${worldPosY}`;
-      let h = heightCache.get(key);
-      if (h === undefined) {
-        h = getHeight(worldPosX, worldPosY);
-        heightCache.set(key, h);
-      }
+    const gridMinX = worldX - pad;
+    const gridMinY = worldY - pad;
+    const gridMaxX = worldX + size + pad;
+    const gridMaxY = worldY + size + pad;
+    const gridW = Math.ceil((gridMaxX - gridMinX) * stepInv) + 1;
+    const gridH = Math.ceil((gridMaxY - gridMinY) * stepInv) + 1;
+
+    const gridHeight = new Float32Array(gridW * gridH);
+    const gridBiome  = new Uint8Array(gridW * gridH);
+    const gridFilled = new Uint8Array(gridW * gridH);
+
+    const gridIndex = (gx: number, gy: number): number => {
+      const ix = Math.round((gx - gridMinX) * stepInv);
+      const iy = Math.round((gy - gridMinY) * stepInv);
+      return iy * gridW + ix;
+    };
+
+    const getHeightFast = (gx: number, gy: number): number => {
+      const idx = gridIndex(gx, gy);
+      if (gridFilled[idx]) return gridHeight[idx];
+      const h = getHeight(gx, gy);
+      gridHeight[idx] = h;
+      gridFilled[idx] = 1;
       return h;
     };
+
+    // Temperature / moisture caches shared across the whole chunk
+    const tempCache = new Map<string, number>();
+    const moistureCache = new Map<string, number>();
+
+    const getBiomeFast = (gx: number, gy: number, gh: number): number => {
+      const idx = gridIndex(gx, gy);
+      if (gridFilled[idx]) return gridBiome[idx];
+      const b = this.biomeSystem.getBiome(gx, gy, gh, tempCache, moistureCache);
+      gridBiome[idx] = b;
+      gridFilled[idx] = 1;
+      return b;
+    };
+
+    // Legacy biomeCache used only to satisfy the API; grid-based lookup is faster
+    const biomeCache = new Map<string, number>();
+
+    const enableTiming = this.config.enablePerformanceMetrics;
+    let classificationTime = 0;
+    let blendingTime = 0;
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -812,21 +858,29 @@ export class ChunkManager implements ChunkManagerSnapshot {
         // Use EnhancedBiomeSystem if available (Requirement 2.1), otherwise use BiomeSystem
         if (this.enhancedBiomeSystem) {
           // Get enhanced biome data with transitions and elevation bands
-          const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeightCached);
+          const t0 = enableTiming ? performance.now() : 0;
+          const enhancedData = this.enhancedBiomeSystem.getEnhancedBiome(wx, wy, getHeightFast);
+          if (enableTiming) blendingTime += performance.now() - t0;
+
           biomeMap[index] = enhancedData.biome;
 
           // Store weights for sparse conversion
           tileWeights.push(enhancedData.weights);
         } else {
           // Use base BiomeSystem (backward compatible)
-          const biome = this.biomeSystem.getBiome(wx, wy, height);
+          const tClass = enableTiming ? performance.now() : 0;
+          const biome = getBiomeFast(wx, wy, height);
+          if (enableTiming) classificationTime += performance.now() - tClass;
+
           biomeMap[index] = biome;
 
           // Cache the centre tile biome so getBiomeWeights doesn't recompute it
           biomeCache.set(`${wx},${wy}`, biome);
 
           // Get biome blend weights with cross-tile caching
-          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeightCached, biomeCache);
+          const tBlend = enableTiming ? performance.now() : 0;
+          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeightFast, biomeCache, getBiomeFast);
+          if (enableTiming) blendingTime += performance.now() - tBlend;
 
           // Store weights for sparse conversion
           tileWeights.push(weights);
@@ -859,6 +913,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes: new Uint8Array(types),
       sparseBiomeWeights: new Float32Array(weights),
       sparseBiomeOffsets: new Uint16Array(offsets),
+      metrics: { classificationTime, blendingTime },
     };
   }
 

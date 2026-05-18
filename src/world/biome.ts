@@ -79,7 +79,15 @@ export class BiomeSystem {
    * @param height - Height value at this position (0-1 range)
    * @returns The biome type at this position
    */
-  getBiome(x: number, y: number, height: number): BiomeType {
+  getBiome(
+    x: number,
+    y: number,
+    height: number,
+    tempCache?: Map<string, number>,
+    moistureCache?: Map<string, number>,
+  ): BiomeType {
+    const cacheKey = `${x},${y}`;
+
     // Height-based biomes (override temperature/moisture)
     if (height < 0.3) {
       return BiomeType.OCEAN;
@@ -92,7 +100,11 @@ export class BiomeSystem {
     }
     if (height > 0.7) {
       // High elevation — check temperature to decide mountain vs volcanic
-      const temperature = this.getTemperature(x, y);
+      let temperature = tempCache?.get(cacheKey);
+      if (temperature === undefined) {
+        temperature = this.getTemperature(x, y);
+        tempCache?.set(cacheKey, temperature);
+      }
       if (height > 0.85 && temperature > 0.2) {
         // Extreme peaks in warm regions = volcanic
         return BiomeType.VOLCANIC;
@@ -101,8 +113,17 @@ export class BiomeSystem {
     }
 
     // Temperature and moisture based biomes
-    const temperature = this.getTemperature(x, y);
-    const moisture = this.getMoisture(x, y);
+    let temperature = tempCache?.get(cacheKey);
+    if (temperature === undefined) {
+      temperature = this.getTemperature(x, y);
+      tempCache?.set(cacheKey, temperature);
+    }
+
+    let moisture = moistureCache?.get(cacheKey);
+    if (moisture === undefined) {
+      moisture = this.getMoisture(x, y);
+      moistureCache?.set(cacheKey, moisture);
+    }
 
     // Classify based on temperature and moisture
     // Temperature: -1 (cold) to 1 (hot)
@@ -180,6 +201,7 @@ export class BiomeSystem {
     getHeight: (worldX: number, worldY: number) => number,
     radius: number,
     biomeCache?: Map<string, BiomeType>,
+    biomeLookup?: (x: number, y: number, height: number) => BiomeType,
   ): Map<BiomeType, number> {
     // Use a fixed-size Float64Array indexed by BiomeType (13 values, 0-12) to
     // accumulate weights without allocating a Map per sample point.
@@ -191,6 +213,11 @@ export class BiomeSystem {
     const step = radius / Math.sqrt(9); // 3×3 grid
     let totalWeight = 0;
 
+    // Optional caches for temperature/moisture to avoid redundant fBM calls
+    const tempCache = new Map<string, number>();
+    const moistureCache = new Map<string, number>();
+    const getBiomeFn = biomeLookup ?? ((sx: number, sy: number, sh: number) => this.getBiome(sx, sy, sh, tempCache, moistureCache));
+
     for (let dy = -radius; dy <= radius; dy += step) {
       for (let dx = -radius; dx <= radius; dx += step) {
         const sampleX = x + dx;
@@ -200,7 +227,7 @@ export class BiomeSystem {
         const cacheKey = `${sampleX},${sampleY}`;
         let biome = biomeCache?.get(cacheKey);
         if (biome === undefined) {
-          biome = this.getBiome(sampleX, sampleY, sampleHeight);
+          biome = getBiomeFn(sampleX, sampleY, sampleHeight);
           biomeCache?.set(cacheKey, biome);
         }
 

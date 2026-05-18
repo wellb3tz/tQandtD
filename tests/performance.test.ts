@@ -293,6 +293,8 @@ describeBenchmarks('Performance Benchmarks', () => {
     const totals = allMetrics.map(m => m.totalTime);
     const terrains = allMetrics.map(m => m.terrainTime);
     const biomes = allMetrics.map(m => m.biomeTime);
+    const biomeClassifications = allMetrics.map(m => m.biomeClassificationTime);
+    const biomeBlendings = allMetrics.map(m => m.biomeBlendingTime);
     const rivers = allMetrics.map(m => m.riverTime);
     const lakes = allMetrics.map(m => m.lakeTime);
     const resources = allMetrics.map(m => m.resourceTime);
@@ -300,7 +302,7 @@ describeBenchmarks('Performance Benchmarks', () => {
 
     const reportStage = (name: string, arr: number[]) => {
       const pct = avg(totals) > 0 ? (avg(arr) / avg(totals)) * 100 : 0;
-      console.log(`    ${name.padEnd(12)} avg=${avg(arr).toFixed(2)}ms  med=${med(arr).toFixed(2)}ms  min=${min(arr).toFixed(2)}ms  max=${max(arr).toFixed(2)}ms  (${pct.toFixed(1)}% of total)`);
+      console.log(`    ${name.padEnd(18)} avg=${avg(arr).toFixed(2)}ms  med=${med(arr).toFixed(2)}ms  min=${min(arr).toFixed(2)}ms  max=${max(arr).toFixed(2)}ms  (${pct.toFixed(1)}% of total)`);
     };
 
     console.log(`\nDiagonal camera flight at shift speed (stage breakdown):`);
@@ -309,7 +311,9 @@ describeBenchmarks('Performance Benchmarks', () => {
     console.log(`  Chunks generated: ${allMetrics.length}`);
     console.log(`  Per-stage generation times:`);
     reportStage('Terrain', terrains);
-    reportStage('Biome', biomes);
+    reportStage('Biome (total)', biomes);
+    reportStage('  ├─ Classification', biomeClassifications);
+    reportStage('  └─ Blending', biomeBlendings);
     reportStage('Rivers', rivers);
     reportStage('Lakes', lakes);
     reportStage('Resources', resources);
@@ -395,13 +399,17 @@ describeBenchmarks('Performance Benchmarks', () => {
     const { metrics } = manager.generateChunkWithMetrics(0, 0);
 
     console.log(`\nBiome generation micro-benchmark (32x32 chunk):`);
-    console.log(`  Classification (getBiome × ${size * size}):     ${classificationTime.toFixed(2)}ms  (${(classificationTime / totalBiomeTime * 100).toFixed(1)}%)`);
-    console.log(`  Blending (getBiomeWeights × ${size * size}):    ${blendingTime.toFixed(2)}ms  (${(blendingTime / totalBiomeTime * 100).toFixed(1)}%)`);
-    console.log(`  Sparse conversion:                            ${sparseTime.toFixed(2)}ms  (${(sparseTime / totalBiomeTime * 100).toFixed(1)}%)`);
-    console.log(`  Total measured biome time:                    ${totalBiomeTime.toFixed(2)}ms`);
-    console.log(`  Full chunk biomeTime (from manager):          ${metrics.biomeTime.toFixed(2)}ms`);
-    console.log(`  Full chunk totalTime (from manager):          ${metrics.totalTime.toFixed(2)}ms`);
-    console.log(`  terrainTime (from manager):                   ${metrics.terrainTime.toFixed(2)}ms`);
+    console.log(`  Manual measurement:`);
+    console.log(`    Classification (getBiome × ${size * size}):     ${classificationTime.toFixed(2)}ms  (${(classificationTime / totalBiomeTime * 100).toFixed(1)}%)`);
+    console.log(`    Blending (getBiomeWeights × ${size * size}):    ${blendingTime.toFixed(2)}ms  (${(blendingTime / totalBiomeTime * 100).toFixed(1)}%)`);
+    console.log(`    Sparse conversion:                            ${sparseTime.toFixed(2)}ms  (${(sparseTime / totalBiomeTime * 100).toFixed(1)}%)`);
+    console.log(`    Total measured biome time:                    ${totalBiomeTime.toFixed(2)}ms`);
+    console.log(`  From ChunkManager.generateChunkWithMetrics:`);
+    console.log(`    biomeTime:          ${metrics.biomeTime.toFixed(2)}ms`);
+    console.log(`    biomeClassificationTime: ${metrics.biomeClassificationTime.toFixed(2)}ms`);
+    console.log(`    biomeBlendingTime:  ${metrics.biomeBlendingTime.toFixed(2)}ms`);
+    console.log(`    terrainTime:        ${metrics.terrainTime.toFixed(2)}ms`);
+    console.log(`    totalTime:          ${metrics.totalTime.toFixed(2)}ms`);
 
     expect(blendingTime).toBeGreaterThan(classificationTime);
     // Blending should dominate biome generation
