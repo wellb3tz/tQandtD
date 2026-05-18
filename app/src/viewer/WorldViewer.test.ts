@@ -125,13 +125,6 @@ function getFoliageGroup(viewer: WorldViewer, chunkKey = '0,0'): THREE.Group | u
   return viewer.getScene().getObjectByName(`foliage-${chunkKey}`) as THREE.Group | undefined;
 }
 
-function getBackgroundOceanMesh(viewer: WorldViewer): THREE.Mesh {
-  const mesh = viewer.getScene().getObjectByName('background-ocean') as THREE.Mesh | undefined;
-
-  expect(mesh).toBeDefined();
-  return mesh!;
-}
-
 describe('WorldViewer lifecycle', () => {
   beforeEach(() => {
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
@@ -248,46 +241,6 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('starts with the old blue sky and switches to a UI-matched atmospheric background when enabled', () => {
-    const viewer = new WorldViewer();
-    const scene = viewer.getScene();
-
-    const defaultBackground = scene.background as THREE.Color;
-    const defaultFog = scene.fog as THREE.FogExp2;
-    const bgOceanMesh = getBackgroundOceanMesh(viewer);
-    const bgOceanMaterial = bgOceanMesh.material as THREE.MeshPhongMaterial;
-
-    expect(defaultBackground).toBeInstanceOf(THREE.Color);
-    expect(defaultBackground.getHex()).toBe(0x87ceeb);
-    expect(defaultFog).toBeInstanceOf(THREE.FogExp2);
-    expect(defaultFog.color.getHex()).toBe(0x87ceeb);
-    expect(defaultFog.density).toBeCloseTo(0.0012);
-    expect(bgOceanMesh.visible).toBe(false);
-    expect(bgOceanMaterial.color.getHex()).toBe(0x87ceeb);
-
-    viewer.setBackgroundMode(true);
-
-    const skyBackground = scene.background as THREE.DataTexture;
-    expect(skyBackground).toBeInstanceOf(THREE.DataTexture);
-    expect(skyBackground.userData.backgroundMode).toBe('sky');
-    expect(skyBackground.image.width).toBeGreaterThan(1);
-    expect(skyBackground.image.height).toBeGreaterThan(32);
-    const centerOceanTone = getTexturePixelRgbAt(skyBackground, 48, 32);
-    expect(centerOceanTone[0]).toBeGreaterThanOrEqual(20);
-    expect(centerOceanTone[0]).toBeLessThanOrEqual(40);
-    expect(centerOceanTone[1]).toBeGreaterThanOrEqual(42);
-    expect(centerOceanTone[1]).toBeLessThanOrEqual(62);
-    expect(centerOceanTone[2]).toBeGreaterThanOrEqual(42);
-    expect(centerOceanTone[2]).toBeLessThanOrEqual(62);
-    expect(getTexturePixelHexAt(skyBackground, 23, 17)).not.toBe(getTexturePixelHexAt(skyBackground, 44, 17));
-    expect(getTexturePixelHexAt(skyBackground, 12, 9)).not.toBe(getTexturePixelHexAt(skyBackground, 12, 39));
-    expect(getMaxAdjacentRowLumaDelta(skyBackground)).toBeLessThan(1.0);
-    expect((scene.fog as THREE.FogExp2).color.getHex()).toBe(0x1d3433);
-    expect((scene.fog as THREE.FogExp2).density).toBeCloseTo(0.00105);
-
-    viewer.dispose();
-  });
-
   it('applies viewer settings and water view through a single viewer-side entrypoint', () => {
     const viewer = new WorldViewer();
 
@@ -301,7 +254,6 @@ describe('WorldViewer lifecycle', () => {
       showWireframe: false,
       terrainTexturesEnabled: true,
       fogOfWarEnabled: false,
-      skyBackground: false,
       waterView: {
         ocean: {
           color: 0x123456,

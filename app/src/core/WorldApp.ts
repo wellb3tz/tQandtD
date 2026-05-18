@@ -114,6 +114,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   viewDistance: 3,
 };
 
+export interface SkyViewSettings {
+  turbidity?: number;
+  rayleigh?: number;
+  elevation?: number;
+}
+
 export interface ViewerSettings {
   showTerrain: boolean;
   showBiomes: boolean;
@@ -124,8 +130,8 @@ export interface ViewerSettings {
   showWireframe: boolean;
   terrainTexturesEnabled: boolean;
   fogOfWarEnabled: boolean;
-  skyBackground: boolean;
   waterView?: WaterViewSettings;
+  sky?: SkyViewSettings;
 }
 
 export interface WaterViewSettings {
@@ -153,7 +159,6 @@ export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
   showWireframe: false,
   terrainTexturesEnabled: true,
   fogOfWarEnabled: false,
-  skyBackground: false,
 };
 
 /**
@@ -843,6 +848,7 @@ export class WorldApp {
     settingsPatch?: Partial<ViewerSettings>
   ): ViewerSettings {
     const waterViewPatch = settingsPatch?.waterView ?? {};
+    const skyPatch = settingsPatch?.sky ?? {};
 
     return {
       ...this.state.viewerSettings,
@@ -865,6 +871,12 @@ export class WorldApp {
             },
           }
         : this.state.viewerSettings.waterView,
+      sky: Object.keys(skyPatch).length > 0
+        ? {
+            ...this.state.viewerSettings.sky,
+            ...settingsPatch?.sky,
+          }
+        : this.state.viewerSettings.sky,
     };
   }
 

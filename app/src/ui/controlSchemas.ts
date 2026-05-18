@@ -137,6 +137,36 @@ export const WATER_VIEW_CONTROLS = {
   },
 } as const;
 
+export const SKY_VIEW_CONTROLS = {
+  turbidity: {
+    id: 'skyTurbidity',
+    label: 'Turbidity',
+    min: 1,
+    max: 20,
+    step: 0.5,
+    defaultValue: 2,
+    tooltip: 'Haziness of the sky (1 = clear, 20 = very hazy)',
+  },
+  rayleigh: {
+    id: 'skyRayleigh',
+    label: 'Rayleigh',
+    min: 0,
+    max: 4,
+    step: 0.1,
+    defaultValue: 0.5,
+    tooltip: 'Atmospheric scattering strength (higher = bluer sky)',
+  },
+  elevation: {
+    id: 'skyElevation',
+    label: 'Sun Elevation',
+    min: 0,
+    max: 90,
+    step: 1,
+    defaultValue: 5,
+    tooltip: 'Height of the sun above the horizon in degrees',
+  },
+} as const;
+
 export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
   { id: 'showTerrain', label: 'Terrain Layer', defaultValue: true },
   { id: 'showBiomes', label: 'Biome Colors', defaultValue: true },
@@ -147,5 +177,4 @@ export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
   { id: 'showWireframe', label: 'Wireframe View', defaultValue: false },
   { id: 'terrainTexturesEnabled', label: 'Surface Textures', defaultValue: true, tooltip: 'Toggle terrain texture maps while keeping the underlying colors' },
   { id: 'fogOfWarEnabled', label: 'Exploration Mask', defaultValue: false },
-  { id: 'skyBackground', label: 'Atmospheric Sky', defaultValue: false, tooltip: 'Switch between the hazy world backdrop and the legacy blue sky' },
 ];

@@ -4,6 +4,7 @@ import { BiomeType } from '@engine/index';
 import {
   TERRAIN_ALBEDO_TEXTURE_URL,
   TERRAIN_ALBEDO_ATLAS_TEXTURE_URL,
+  TERRAIN_NORMAL_ATLAS_TEXTURE_URL,
   TERRAIN_SURFACE_TEXTURE_URLS,
   TERRAIN_NORMAL_TEXTURE_URL,
   TERRAIN_ROUGHNESS_TEXTURE_URL,
@@ -70,6 +71,7 @@ describe('terrain texture materials', () => {
       'ice',
       'riverbed',
       'albedoAtlas',
+      'normalAtlas',
     ]);
     expect(loadedUrls).toContain(TERRAIN_SURFACE_TEXTURE_URLS.desert.albedo);
     expect(loadedUrls).toContain(TERRAIN_SURFACE_TEXTURE_URLS.beach.normal);
@@ -79,12 +81,18 @@ describe('terrain texture materials', () => {
     expect(loadedUrls).toContain(TERRAIN_SURFACE_TEXTURE_URLS.volcanicRock.normal);
     expect(loadedUrls).toContain(TERRAIN_SURFACE_TEXTURE_URLS.riverbed.roughness);
     expect(loadedUrls).toContain(TERRAIN_ALBEDO_ATLAS_TEXTURE_URL);
+    expect(loadedUrls).toContain(TERRAIN_NORMAL_ATLAS_TEXTURE_URL);
     expect(library.albedoAtlas.wrapS).toBe(THREE.ClampToEdgeWrapping);
     expect(library.albedoAtlas.wrapT).toBe(THREE.ClampToEdgeWrapping);
     expect(library.albedoAtlas.colorSpace).toBe(THREE.SRGBColorSpace);
     expect(library.albedoAtlas.minFilter).toBe(THREE.NearestFilter);
     expect(library.albedoAtlas.magFilter).toBe(THREE.NearestFilter);
     expect(library.albedoAtlas.version).toBe(0);
+    expect(library.normalAtlas.wrapS).toBe(THREE.ClampToEdgeWrapping);
+    expect(library.normalAtlas.wrapT).toBe(THREE.ClampToEdgeWrapping);
+    expect(library.normalAtlas.colorSpace).toBe(THREE.NoColorSpace);
+    expect(library.normalAtlas.minFilter).toBe(THREE.NearestFilter);
+    expect(library.normalAtlas.magFilter).toBe(THREE.NearestFilter);
     expect(library.desert.albedo.wrapS).toBe(THREE.MirroredRepeatWrapping);
     expect(library.ice.roughness.colorSpace).toBe(THREE.NoColorSpace);
     expect(library.desert.albedo.version).toBe(0);
@@ -159,17 +167,19 @@ describe('terrain texture materials', () => {
       ice: { albedo: new THREE.Texture(), normal: new THREE.Texture(), roughness: new THREE.Texture() },
       riverbed: { albedo: new THREE.Texture(), normal: new THREE.Texture(), roughness: new THREE.Texture() },
       albedoAtlas: new THREE.Texture(),
+      normalAtlas: new THREE.Texture(),
     };
     const material = createTerrainBlendMaterial(library, false);
     const shader = {
       uniforms: {},
       vertexShader: '#include <common>\n#include <uv_vertex>',
-      fragmentShader: '#include <common>\n#include <map_fragment>\n#include <roughnessmap_fragment>',
+      fragmentShader: '#include <common>\n#include <map_fragment>\n#include <normal_fragment_maps>\n#include <roughnessmap_fragment>',
     } as unknown as THREE.Shader;
 
     material.onBeforeCompile(shader);
 
     expect(shader.uniforms.terrainAlbedoAtlas.value).toBe(library.albedoAtlas);
+    expect(shader.uniforms.terrainNormalAtlas.value).toBe(library.normalAtlas);
     expect(shader.uniforms.terrainAlbedoPlains).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoSnow).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoForestFloor).toBeUndefined();
@@ -180,7 +190,9 @@ describe('terrain texture materials', () => {
     expect(shader.vertexShader).toContain('attribute vec4 terrainDetailBlend');
     expect(shader.vertexShader).toContain('varying vec4 vSurfaceBlendA');
     expect(shader.fragmentShader).toContain('terrainAlbedoAtlas');
+    expect(shader.fragmentShader).toContain('terrainNormalAtlas');
     expect(shader.fragmentShader).toContain('sampleTerrainAtlasTile');
+    expect(shader.fragmentShader).toContain('sampleTerrainNormalAtlasTile');
     expect(shader.fragmentShader).toContain('mirrorTerrainAtlasUv');
     expect(shader.fragmentShader).not.toContain('fract(uv)');
     expect(shader.fragmentShader).toContain('considerTerrainAtlasTile');
@@ -208,6 +220,7 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('dryGrassPatchTint');
     expect(shader.fragmentShader).toContain('wornGroundTint');
     expect(shader.fragmentShader).toContain('wetLowlandTint');
+    expect(shader.fragmentShader).toContain('blendedTerrainNormal');
     expect(shader.fragmentShader).not.toContain('forestCanopyTexture');
     expect(shader.fragmentShader).not.toContain('smoothstep(0.46, 0.08');
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend.w');
@@ -216,7 +229,7 @@ describe('terrain texture materials', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.userData.terrainTexturesEnabled).toBe(true);
     const samplerCount = (shader.fragmentShader.match(/uniform sampler2D/g) ?? []).length;
-    expect(samplerCount).toBeLessThanOrEqual(4);
+    expect(samplerCount).toBeLessThanOrEqual(5);
     const atlasSampleCallCount = (shader.fragmentShader.match(/sampleTerrainAtlasTile\(/g) ?? []).length - 1;
     expect(atlasSampleCallCount).toBeLessThanOrEqual(3);
   });

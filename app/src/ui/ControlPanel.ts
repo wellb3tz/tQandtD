@@ -5,7 +5,7 @@
  * parameters. Supports real-time updates and collapsible sections.
  */
 
-import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings } from '../core/WorldApp';
+import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings, type SkyViewSettings } from '../core/WorldApp';
 import { DEFAULT_RIVER_CONFIG, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
@@ -16,6 +16,7 @@ import {
   RESOURCE_TYPE_BY_CONTROL_ID,
   STRUCTURE_TYPE_TOGGLES,
   STRUCTURE_TYPE_BY_CONTROL_ID,
+  SKY_VIEW_CONTROLS,
   TERRAIN_SLIDERS,
   VIEW_DISTANCE_SLIDER,
   VISIBILITY_TOGGLES,
@@ -470,6 +471,27 @@ export class ControlPanel {
       this.updateWorkerPoolConfig('enabled', checked);
     });
     advancedContainer.appendChild(workerCheckbox);
+
+    // Atmosphere section
+    const atmosphereSection = document.createElement('div');
+    atmosphereSection.style.marginTop = '20px';
+    atmosphereSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Atmosphere</h4>';
+    advancedContainer.appendChild(atmosphereSection);
+
+    const turbidityControl = this.createSliderControl(SKY_VIEW_CONTROLS.turbidity, (value) => {
+      this.updateSkyConfig('turbidity', value);
+    });
+    atmosphereSection.appendChild(turbidityControl);
+
+    const rayleighControl = this.createSliderControl(SKY_VIEW_CONTROLS.rayleigh, (value) => {
+      this.updateSkyConfig('rayleigh', value);
+    });
+    atmosphereSection.appendChild(rayleighControl);
+
+    const elevationControl = this.createSliderControl(SKY_VIEW_CONTROLS.elevation, (value) => {
+      this.updateSkyConfig('elevation', value);
+    });
+    atmosphereSection.appendChild(elevationControl);
   }
 
   /**
@@ -785,6 +807,17 @@ export class ControlPanel {
   }
 
   /**
+   * Update sky/atmosphere settings.
+   */
+  private updateSkyConfig(property: keyof SkyViewSettings, value: number): void {
+    this.app?.updateViewerSettings({
+      sky: {
+        [property]: value,
+      },
+    });
+  }
+
+  /**
    * Update lake configuration
    */
   private updateLakeConfig(property: string, value: boolean): void {
@@ -819,8 +852,17 @@ export class ControlPanel {
    */
   private updateFromState(state: AppState): void {
     this.currentConfig = state.config;
-    // Update UI elements to reflect current state
-    // This would sync slider values if state changes externally
+    // Sync visibility toggles to current app state
+    const vs = state.viewerSettings;
+    this.updateCheckboxValue('showTerrain', vs.showTerrain);
+    this.updateCheckboxValue('showBiomes', vs.showBiomes);
+    this.updateCheckboxValue('showWater', vs.showWater);
+    this.updateCheckboxValue('showResources', vs.showResources);
+    this.updateCheckboxValue('showStructures', vs.showStructures);
+    this.updateCheckboxValue('showChunkBoundaries', vs.showChunkBoundaries);
+    this.updateCheckboxValue('showWireframe', vs.showWireframe);
+    this.updateCheckboxValue('terrainTexturesEnabled', vs.terrainTexturesEnabled);
+    this.updateCheckboxValue('fogOfWarEnabled', vs.fogOfWarEnabled);
   }
 
   /**

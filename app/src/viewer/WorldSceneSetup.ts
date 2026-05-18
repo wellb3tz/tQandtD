@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 import {
   AtmosphereController,
-  ATMOSPHERIC_OCEAN_PLANE_COLOR,
-  ATMOSPHERIC_OCEAN_PLANE_SPECULAR,
-  LEGACY_SKY_BACKGROUND_COLOR,
   SUN_LIGHT_OFFSET,
 } from './AtmosphereController';
 
@@ -11,7 +8,6 @@ export interface WorldSceneObjects {
   ambientLight: THREE.AmbientLight;
   directionalLight: THREE.DirectionalLight;
   atmosphereController: AtmosphereController;
-  backgroundOceanMesh: THREE.Mesh;
 }
 
 export function setupWorldScene(
@@ -19,9 +15,6 @@ export function setupWorldScene(
   renderer: THREE.WebGLRenderer,
 ): WorldSceneObjects {
   configureRenderer(renderer);
-
-  const backgroundOceanMesh = createBackgroundOceanMesh();
-  scene.add(backgroundOceanMesh);
 
   const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
   scene.add(ambientLight);
@@ -35,17 +28,7 @@ export function setupWorldScene(
   fillLight.position.set(-60, 40, -40);
   scene.add(fillLight);
 
-  return { ambientLight, directionalLight, atmosphereController, backgroundOceanMesh };
-}
-
-export function setBackgroundOceanMode(backgroundOceanMesh: THREE.Mesh | null, skyMode: boolean): void {
-  if (!backgroundOceanMesh) return;
-
-  backgroundOceanMesh.visible = false;
-  const material = backgroundOceanMesh.material as THREE.MeshPhongMaterial;
-  material.color.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_COLOR : LEGACY_SKY_BACKGROUND_COLOR);
-  material.specular.set(skyMode ? ATMOSPHERIC_OCEAN_PLANE_SPECULAR : LEGACY_SKY_BACKGROUND_COLOR);
-  material.shininess = skyMode ? 18 : 22;
+  return { ambientLight, directionalLight, atmosphereController };
 }
 
 function configureRenderer(renderer: THREE.WebGLRenderer): void {
@@ -53,23 +36,6 @@ function configureRenderer(renderer: THREE.WebGLRenderer): void {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.81;
-}
-
-function createBackgroundOceanMesh(): THREE.Mesh {
-  const geometry = new THREE.PlaneGeometry(20000, 20000);
-  geometry.rotateX(-Math.PI / 2);
-  const material = new THREE.MeshPhongMaterial({
-    color: ATMOSPHERIC_OCEAN_PLANE_COLOR,
-    transparent: false,
-    shininess: 40,
-    specular: new THREE.Color(ATMOSPHERIC_OCEAN_PLANE_SPECULAR),
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'background-ocean';
-  mesh.position.set(0, -200, 0);
-  mesh.renderOrder = 0;
-  mesh.visible = false;
-  return mesh;
 }
 
 function createSunLight(): THREE.DirectionalLight {

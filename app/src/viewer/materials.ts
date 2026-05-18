@@ -19,6 +19,7 @@ export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
 export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v2.png';
+export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v1.png';
 const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 2.08;
 
 export interface TerrainTextureSet {
@@ -29,6 +30,7 @@ export interface TerrainTextureSet {
 
 export type TerrainSurfaceTextureLibrary = Record<TerrainSurfaceKey, TerrainTextureSet> & {
   albedoAtlas: THREE.Texture;
+  normalAtlas: THREE.Texture;
 };
 
 export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainTextureSetUrls> = {
@@ -245,6 +247,17 @@ function configureTerrainAtlasTexture(texture: THREE.Texture): THREE.Texture {
   return texture;
 }
 
+function configureTerrainNormalAtlasTexture(texture: THREE.Texture): THREE.Texture {
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 4;
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  return texture;
+}
+
 export function createTerrainTextureSet(
   loader: THREE.TextureLoader = new THREE.TextureLoader(),
 ): TerrainTextureSet {
@@ -278,6 +291,7 @@ export function createTerrainSurfaceTextureLibrary(
     ice: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.ice, loader),
     riverbed: createTerrainTextureSetFromUrls(TERRAIN_SURFACE_TEXTURE_URLS.riverbed, loader),
     albedoAtlas: configureTerrainAtlasTexture(loader.load(TERRAIN_ALBEDO_ATLAS_TEXTURE_URL)),
+    normalAtlas: configureTerrainNormalAtlasTexture(loader.load(TERRAIN_NORMAL_ATLAS_TEXTURE_URL)),
   };
 }
 
@@ -378,6 +392,7 @@ export function createTerrainBlendMaterial(
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.terrainAlbedoAtlas = { value: textures.albedoAtlas };
+    shader.uniforms.terrainNormalAtlas = { value: textures.normalAtlas };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -405,10 +420,12 @@ vTerrainDetailBlend = terrainDetailBlend;`,
         '#include <common>',
         `#include <common>
 uniform sampler2D terrainAlbedoAtlas;
+uniform sampler2D terrainNormalAtlas;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
 varying vec4 vTerrainDetailBlend;
+vec3 blendedTerrainNormal;
 
 vec2 mirrorTerrainAtlasUv(vec2 uv) {
   vec2 wrappedUv = mod(uv, vec2(2.0));
@@ -421,6 +438,14 @@ vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
   vec2 tile = vec2(mod(tileIndex, atlasGrid.x), floor(tileIndex / atlasGrid.x));
   vec2 paddedUv = (mirrorTerrainAtlasUv(uv) * (atlasTilePixels - vec2(2.0)) + vec2(1.0)) / atlasTilePixels;
   return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
+}
+
+vec4 sampleTerrainNormalAtlasTile(float tileIndex, vec2 uv) {
+  const vec2 atlasGrid = vec2(4.0, 3.0);
+  const vec2 atlasTilePixels = vec2(256.0, 256.0);
+  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), floor(tileIndex / atlasGrid.x));
+  vec2 paddedUv = (mirrorTerrainAtlasUv(uv) * (atlasTilePixels - vec2(2.0)) + vec2(1.0)) / atlasTilePixels;
+  return texture2D(terrainNormalAtlas, (tile + paddedUv) / atlasGrid);
 }
 
 vec2 terrainSurfaceUv(vec2 uv) {
@@ -505,6 +530,12 @@ vec4 blendedTerrainMap = (
 vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.53)) * 2.85 + vec3(0.72), vec3(0.28), vec3(1.55));
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * terrainDetailContrast, 0.98);
 diffuseColor.a *= blendedTerrainMap.a;
+vec3 blendedTerrainNormalRaw = (
+  sampleTerrainNormalAtlasTile(primarySurfaceTile, terrainSurfaceUv(vMapUv)).rgb * primaryTerrainWeight +
+  sampleTerrainNormalAtlasTile(secondarySurfaceTile, terrainSurfaceUv(vMapUv)).rgb * secondaryTerrainWeight +
+  sampleTerrainNormalAtlasTile(tertiarySurfaceTile, terrainSurfaceUv(vMapUv)).rgb * tertiaryTerrainWeight
+) / terrainSurfaceWeightSum;
+blendedTerrainNormal = blendedTerrainNormalRaw * 2.0 - 1.0;
 float forestFloorWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
 vec3 forestFloorTint = vec3(0.86, 0.96, 0.76);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestFloorTint, forestFloorWeight * 0.16);
@@ -538,6 +569,12 @@ diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAcce
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.62);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.54);`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `vec3 mapN = blendedTerrainNormal;
+mapN.xy *= normalScale;
+normal = normalize( tbn * mapN );`,
       )
       .replace(
         '#include <roughnessmap_fragment>',

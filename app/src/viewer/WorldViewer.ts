@@ -21,7 +21,7 @@ import { type RenderStats } from './RenderStatsCalculator';
 import { FogOfWarManager } from './FogOfWarManager';
 import { CameraInputController } from './CameraInputController';
 import type { ChunkMesh } from './ChunkMesh';
-import { setBackgroundOceanMode, setupWorldScene } from './WorldSceneSetup';
+import { setupWorldScene } from './WorldSceneSetup';
 import { CameraViewController } from './CameraViewController';
 import { WorldRenderLoop } from './WorldRenderLoop';
 import { WorldViewSettings } from './WorldViewSettings';
@@ -61,9 +61,6 @@ export class WorldViewer {
   private container: HTMLElement | null;
   
   private waterLayerManager: WaterLayerManager;
-
-  // Background ocean plane (kept hidden while the atmospheric UI-matched backdrop is active)
-  private bgOceanMesh: THREE.Mesh | null = null;
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -144,10 +141,8 @@ export class WorldViewer {
     this.camera.position.set(50, 100, 50);
     this.cameraInputController.resetRotation();
 
-    const { atmosphereController, backgroundOceanMesh } = setupWorldScene(this.scene, this.renderer);
+    const { atmosphereController } = setupWorldScene(this.scene, this.renderer);
     this.atmosphereController = atmosphereController;
-    this.bgOceanMesh = backgroundOceanMesh;
-    this.setBackgroundMode(false);
     this.updateSunAndShadowFocus();
   }
   
@@ -225,7 +220,6 @@ export class WorldViewer {
     this.setWireframeMode(settings.showWireframe);
     this.setTerrainTexturesEnabled(settings.terrainTexturesEnabled);
     this.setFogOfWarVisibility(settings.fogOfWarEnabled);
-    this.setBackgroundMode(settings.skyBackground);
 
     if (settings.waterView) {
       const currentWaterConfig = this.getWaterConfig();
@@ -248,6 +242,10 @@ export class WorldViewer {
       if (loadedChunks) {
         this.refreshLoadedChunks(loadedChunks);
       }
+    }
+
+    if (settings.sky && this.atmosphereController) {
+      this.atmosphereController.setSkyParams(settings.sky);
     }
   }
 
@@ -280,15 +278,6 @@ export class WorldViewer {
    */
   setWaterVisibility(visible: boolean): void {
     this.viewSettings.setWaterVisibility(visible);
-  }
-
-  /**
-   * Switch between the UI-matched atmospheric backdrop and the legacy blue sky.
-   * @param skyMode - true = UI-matched haze, false = legacy blue sky
-   */
-  setBackgroundMode(skyMode: boolean): void {
-    this.atmosphereController?.setBackgroundMode(skyMode);
-    setBackgroundOceanMode(this.bgOceanMesh, skyMode);
   }
 
   /**
