@@ -879,7 +879,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
           // Get biome blend weights with cross-tile caching
           const tBlend = enableTiming ? performance.now() : 0;
-          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeightFast, biomeCache, getBiomeFast);
+          const weights = this.biomeSystem.getBiomeWeights(wx, wy, getHeightFast, biomeCache);
           if (enableTiming) blendingTime += performance.now() - tBlend;
 
           // Store weights for sparse conversion

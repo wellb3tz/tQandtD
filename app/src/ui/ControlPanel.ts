@@ -55,6 +55,8 @@ const ENHANCED_BIOME_FEATURES = new Set([
   'enableElevationBands',
   'snowLineElevation',
   'treeLineElevation',
+  'worldTemperatureOffset',
+  'worldMoistureOffset',
 ]);
 
 /**
@@ -709,6 +711,24 @@ export class ControlPanel {
           [key]: value
         }
       });
+    } else if (key === 'temperatureScale' || key === 'moistureScale') {
+      // Update base biomeConfig (for backward compatibility)
+      this.patchBiomeConfig({ [key]: value });
+
+      // When ClimateSystem is active, scale parameters live inside climateConfig
+      if (this.currentConfig.enhancedBiomeConfig) {
+        const currentEnhanced = this.currentConfig.enhancedBiomeConfig;
+        const climateConfigKey = key === 'temperatureScale' ? 'climateScale' : 'detailScale';
+        this.applyEngineConfigChange({
+          enhancedBiomeConfig: {
+            ...currentEnhanced,
+            climateConfig: {
+              ...currentEnhanced.climateConfig,
+              [climateConfigKey]: value,
+            },
+          },
+        });
+      }
     } else {
       this.patchBiomeConfig({ [key]: value });
     }
@@ -1069,6 +1089,12 @@ export class ControlPanel {
     // Sync enhanced biome controls
     if (config.enhancedBiomeConfig) {
       const ebc = config.enhancedBiomeConfig;
+      if (ebc.worldTemperatureOffset !== undefined) {
+        this.updateSliderValue('worldTemperatureOffset', ebc.worldTemperatureOffset);
+      }
+      if (ebc.worldMoistureOffset !== undefined) {
+        this.updateSliderValue('worldMoistureOffset', ebc.worldMoistureOffset);
+      }
       if (ebc.enableTransitions !== undefined) {
         this.updateCheckboxValue('enableTransitions', ebc.enableTransitions);
       }

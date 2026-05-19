@@ -854,6 +854,18 @@ export class WorldManager {
         }
       }
 
+      // Parse enhanced biome config
+      if (config.enhancedBiomeConfig) {
+        if (params.has('worldTemperatureOffset')) {
+          const value = parseFloat(params.get('worldTemperatureOffset')!);
+          if (!isNaN(value)) config.enhancedBiomeConfig.worldTemperatureOffset = value;
+        }
+        if (params.has('worldMoistureOffset')) {
+          const value = parseFloat(params.get('worldMoistureOffset')!);
+          if (!isNaN(value)) config.enhancedBiomeConfig.worldMoistureOffset = value;
+        }
+      }
+
       // Apply the parsed configuration
       this.app.applyWorldConfig(config);
 
@@ -946,6 +958,12 @@ export class WorldManager {
       params.set('tempScale', config.biomeConfig.temperatureScale.toString());
       params.set('moistScale', config.biomeConfig.moistureScale.toString());
       params.set('blendRadius', config.biomeConfig.blendRadius.toString());
+    }
+
+    // Add enhanced biome config
+    if (config.enhancedBiomeConfig) {
+      params.set('worldTemperatureOffset', config.enhancedBiomeConfig.worldTemperatureOffset?.toString() ?? '0');
+      params.set('worldMoistureOffset', config.enhancedBiomeConfig.worldMoistureOffset?.toString() ?? '0');
     }
 
     return `${window.location.origin}${window.location.pathname}?${params.toString()}`;

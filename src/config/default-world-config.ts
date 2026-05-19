@@ -191,14 +191,16 @@ function createBaseWorldConfig(): WorldConfig {
       blendRadius: 0.5,
     },
     enhancedBiomeConfig: {
-      temperatureScale: 0.001,
-      moistureScale: 0.001,
+      temperatureScale: 0.005,
+      moistureScale: 0.005,
       blendRadius: 0.5,
       enableTransitions: false,
       transitionWidth: 4,
       enableElevationBands: true,
       snowLineElevation: 0.8,
       treeLineElevation: 0.75,
+      worldTemperatureOffset: 0,
+      worldMoistureOffset: 0,
     },
     resourceConfig: {
       types: [

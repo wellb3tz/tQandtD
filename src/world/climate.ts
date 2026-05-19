@@ -23,6 +23,14 @@ export interface ClimateConfig {
   valleyGradientThreshold: number;
   /** Maximum moisture bonus in flat/valley areas [0–1], default 0.3 */
   valleyMoistureBonus: number;
+
+  /** Global temperature offset [-1–1], default 0.
+   *  Shifts all temperatures up (positive) or down (negative). */
+  worldTemperatureOffset: number;
+
+  /** Global moisture offset [-1–1], default 0.
+   *  Shifts all moisture values up (positive) or down (negative). */
+  worldMoistureOffset: number;
 }
 
 /**
@@ -37,6 +45,8 @@ export const DEFAULT_CLIMATE_CONFIG: ClimateConfig = {
   altitudeCoolingRate: 1.0,
   valleyGradientThreshold: 0.05,
   valleyMoistureBonus: 0.3,
+  worldTemperatureOffset: 0,
+  worldMoistureOffset: 0,
 };
 
 /**
@@ -119,7 +129,7 @@ export class ClimateSystem {
       ? (height - cfg.altitudeCoolingThreshold) * cfg.altitudeCoolingRate
       : 0;
 
-    return ClimateSystem.clamp(rawTemp - altitudeDelta, -1, 1);
+    return ClimateSystem.clamp(rawTemp - altitudeDelta + cfg.worldTemperatureOffset, -1, 1);
   }
 
   /**
@@ -158,7 +168,7 @@ export class ClimateSystem {
       ? (cfg.valleyGradientThreshold - gradient) / cfg.valleyGradientThreshold * cfg.valleyMoistureBonus
       : 0;
 
-    return ClimateSystem.clamp(blendedNoise + valleyBonus, -1, 1);
+    return ClimateSystem.clamp(blendedNoise + valleyBonus + cfg.worldMoistureOffset, -1, 1);
   }
 
   /**
@@ -227,6 +237,16 @@ export class ClimateSystem {
     if (cfg.valleyMoistureBonus < 0 || cfg.valleyMoistureBonus > 1) {
       throw new Error(
         `ClimateConfig: valleyMoistureBonus must be in [0, 1], got ${cfg.valleyMoistureBonus}`,
+      );
+    }
+    if (cfg.worldTemperatureOffset < -1 || cfg.worldTemperatureOffset > 1) {
+      throw new Error(
+        `ClimateConfig: worldTemperatureOffset must be in [-1, 1], got ${cfg.worldTemperatureOffset}`,
+      );
+    }
+    if (cfg.worldMoistureOffset < -1 || cfg.worldMoistureOffset > 1) {
+      throw new Error(
+        `ClimateConfig: worldMoistureOffset must be in [-1, 1], got ${cfg.worldMoistureOffset}`,
       );
     }
     if (cfg.climateScale <= 0) {

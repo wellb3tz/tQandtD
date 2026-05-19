@@ -45,6 +45,11 @@ export interface EnhancedBiomeConfig extends BiomeConfig {
    */
   climateConfig?: ClimateConfig;
 
+  /** Global temperature offset applied by ClimateSystem [-1, 1]. Default 0. */
+  worldTemperatureOffset?: number;
+  /** Global moisture offset applied by ClimateSystem [-1, 1]. Default 0. */
+  worldMoistureOffset?: number;
+
 }
 
 
@@ -97,9 +102,17 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     super(seed, config);
     this.enhancedConfig = config;
 
+    // Build ClimateConfig, merging optional offsets into defaults.
+    const climateCfg: ClimateConfig = {
+      ...DEFAULT_CLIMATE_CONFIG,
+      ...config.climateConfig,
+      worldTemperatureOffset: config.worldTemperatureOffset ?? config.climateConfig?.worldTemperatureOffset ?? DEFAULT_CLIMATE_CONFIG.worldTemperatureOffset,
+      worldMoistureOffset: config.worldMoistureOffset ?? config.climateConfig?.worldMoistureOffset ?? DEFAULT_CLIMATE_CONFIG.worldMoistureOffset,
+    };
+
     // Instantiate ClimateSystem when opted in (default: true)
     this.climateSystem = config.enableClimateSystem !== false
-      ? new ClimateSystem(seed, config.climateConfig ?? DEFAULT_CLIMATE_CONFIG)
+      ? new ClimateSystem(seed, climateCfg)
       : null;
 
     // Instantiate BiomeCompatibilityMatrix when opted in (default: true)
