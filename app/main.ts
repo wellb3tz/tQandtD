@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const viewerContainer = document.getElementById('viewer');
     if (viewerContainer) {
       worldViewer = new WorldViewer();
-      worldViewer.initialize(viewerContainer);
+      worldViewer.initialize(viewerContainer, app!.getSeed());
       worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
       app.setRenderer(worldRenderer);
       
@@ -197,11 +197,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, uiUpdateInterval);
       
       // 2. Adaptive chunk loading — faster when moving, slower when idle.
+      // Paused while in orbit / transition to avoid loading chunks for space positions.
       const scheduleChunkLoad = (delay = 100) => {
         chunkLoadTimer = setTimeout(() => {
           let nextInterval = 100;
 
           if (worldViewer && app) {
+            // Skip chunk loading while in orbit or transitioning
+            if (worldViewer.isOrbitalOrTransitioning()) {
+              scheduleChunkLoad(200);
+              return;
+            }
+
             const cameraPos = worldViewer.getCameraPosition();
 
             // Determine how fast the camera is moving
@@ -390,6 +397,38 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Update status bar seed
       if (statusSeed) statusSeed.textContent = data.seed.toString();
       errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
+    });
+
+    // Listen for planet clicked event from WorldViewer orbit mode
+    window.addEventListener('planet-clicked', async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { lat: number; lon: number };
+      if (!app || !worldViewer) return;
+
+      // Start dive transition back to terrain first
+      worldViewer.startLandingTransition(detail.lat, detail.lon);
+
+      errorHandler.showSuccessToast('Landing on new world...');
+      const planetLoading = document.getElementById('loading-indicator');
+      if (planetLoading) planetLoading.classList.remove('hidden');
+
+      try {
+        await app.landOnPlanet(detail.lat, detail.lon);
+        errorHandler.showSuccessToast(`Landed on new world! Seed: ${app.getSeed()}`);
+      } catch (error) {
+        console.error('Planet landing failed:', error);
+        errorHandler.showErrorToast('Failed to land on planet. Please try again.');
+      } finally {
+        if (planetLoading) planetLoading.classList.add('hidden');
+      }
+    });
+
+    app.on(AppEvent.PLANET_LANDED, (data) => {
+      if (worldViewer) {
+        worldViewer.clearChunks();
+        worldViewer.clearFogOfWar();
+      }
+      if (statusSeed) statusSeed.textContent = data.seed.toString();
+      errorHandler.showSuccessToast(`New world from lat ${data.lat.toFixed(2)}, lon ${data.lon.toFixed(2)}`);
     });
     
     app.on(AppEvent.CHUNK_LOADED, (data) => {

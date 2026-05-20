@@ -29,9 +29,16 @@ import { ViewerRenderStatsCache } from './ViewerRenderStatsCache';
 import { ViewerTerrainRaycaster } from './ViewerTerrainRaycaster';
 import { ViewerCanvasHost } from './ViewerCanvasHost';
 import { WorldChunkController } from './WorldChunkController';
+import { PlanetRenderer } from './planet/PlanetRenderer';
+import { SpaceViewManager } from './planet/SpaceViewManager';
+import {
+  OrbitalTransitionController,
+  OrbitalState,
+} from './planet/OrbitalTransitionController';
 
 export { RenderLayer } from './RenderLayerVisibility';
 export type { ChunkCoord, RaycastHit, Vector3 } from '../utils/coordinates';
+export { OrbitalState } from './planet/OrbitalTransitionController';
 
 /**
  * WorldViewer - Manages 3D visualization of the procedural world
@@ -50,16 +57,19 @@ export class WorldViewer {
   private chunkController: WorldChunkController;
   
   private atmosphereController: AtmosphereController | null = null;
-  
+  private planetRenderer: PlanetRenderer | null = null;
+  private spaceViewManager: SpaceViewManager | null = null;
+  private orbitalTransitionController: OrbitalTransitionController | null = null;
+
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
-  
+
   // Fog of war - explored chunks shown as gray planes
   private fogOfWarManager: FogOfWarManager;
-  
+
   // Container element
   private container: HTMLElement | null;
-  
+
   private waterLayerManager: WaterLayerManager;
 
   constructor() {
@@ -144,16 +154,73 @@ export class WorldViewer {
     const { atmosphereController } = setupWorldScene(this.scene, this.renderer);
     this.atmosphereController = atmosphereController;
     this.updateSunAndShadowFocus();
+
+    // Initialize space view elements
+    this.spaceViewManager = new SpaceViewManager({ scene: this.scene });
+    this.spaceViewManager.initialize();
   }
   
   /**
    * Initialize the viewer with a container element
    */
-  initialize(container: HTMLElement): void {
+  initialize(container: HTMLElement, seed: number = 12345): void {
     this.container = container;
     this.canvasHost.attachToContainer(container);
     this.cameraInputController.attach();
+
+    // Planet renderer (lazy-initialized, hidden by default)
+    this.planetRenderer = new PlanetRenderer({
+      scene: this.scene,
+      seed,
+      position: new THREE.Vector3(0, 0, 0),
+    });
+
+    // Orbital transition controller
+    this.orbitalTransitionController = new OrbitalTransitionController({
+      cameraViewController: this.cameraViewController,
+      cameraInputController: this.cameraInputController,
+      planetRenderer: this.planetRenderer,
+      spaceViewManager: this.spaceViewManager!,
+      chunkController: this.chunkController,
+      atmosphereController: this.atmosphereController,
+      waterLayerManager: this.waterLayerManager,
+      getChunkMeshes: () => this.chunkMeshes.values(),
+      onPlanetClicked: (lat, lon) => {
+        this.handlePlanetClicked(lat, lon);
+      },
+      canvas: this.renderer.domElement,
+    });
+
+    // Wire orbit input callback
+    this.cameraInputController.setOrbitInputCallback((dx, dy, scroll) => {
+      this.orbitalTransitionController?.processOrbitInput(dx, dy, scroll);
+    });
+
+    this.renderLoop.setOrbitalTransitionController(this.orbitalTransitionController);
+
+    // Click handler for orbit mode planet raycasting
+    container.addEventListener('click', (e) => {
+      if (this.orbitalTransitionController?.getState() === OrbitalState.ORBIT) {
+        this.orbitalTransitionController.handleClick(e.clientX, e.clientY);
+      }
+    });
+
     this.renderLoop.start();
+  }
+
+  /**
+   * Begin the dive transition from orbit to a specific point on the planet.
+   */
+  startLandingTransition(lat: number, lon: number): void {
+    this.orbitalTransitionController?.startTransitionToSurface(lat, lon);
+  }
+
+  private handlePlanetClicked(lat: number, lon: number): void {
+    // Emit event for main.ts to pick up
+    const event = new CustomEvent('planet-clicked', {
+      detail: { lat, lon },
+    });
+    window.dispatchEvent(event);
   }
   
   private updateSunAndShadowFocus(): void {
@@ -312,6 +379,14 @@ export class WorldViewer {
   }
 
   /**
+   * Whether the viewer is currently in orbit mode or transitioning.
+   */
+  isOrbitalOrTransitioning(): boolean {
+    if (!this.orbitalTransitionController) return false;
+    return this.orbitalTransitionController.isOrbital() || this.orbitalTransitionController.isTransitioning();
+  }
+
+  /**
    * Set camera position
    */
   setCameraPosition(position: Vector3): void {
@@ -466,7 +541,13 @@ export class WorldViewer {
 
     this.atmosphereController?.dispose();
     this.atmosphereController = null;
-    
+
+    this.planetRenderer?.dispose();
+    this.planetRenderer = null;
+
+    this.spaceViewManager?.dispose();
+    this.spaceViewManager = null;
+
     // Dispose renderer
     this.renderer.dispose();
     

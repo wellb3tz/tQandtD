@@ -12,6 +12,7 @@ import type { FogOfWarManager } from './FogOfWarManager';
 import type { RenderLayer } from './RenderLayerVisibility';
 import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
+import { disposeGroup, disposeMesh } from './ThreeDisposal';
 
 export interface WorldChunkViewSettings {
   getLayerVisibility(): Map<RenderLayer, boolean>;
@@ -199,7 +200,31 @@ export class WorldChunkController {
       removedAny ||= removed;
     }
 
-    if (removedAny) {
+    // Also clear pending builds so old backlog does not interfere after world switch
+    this.pendingBuilds.length = 0;
+
+    // Safety: remove any lingering foliage/resources/structures that were left in the scene
+    const lingering: THREE.Object3D[] = [];
+    this.scene.traverse((object) => {
+      if (
+        object.name &&
+        (object.name.startsWith('foliage-') ||
+          object.name.startsWith('resources-') ||
+          object.name.startsWith('structures-'))
+      ) {
+        lingering.push(object);
+      }
+    });
+    for (const obj of lingering) {
+      this.scene.remove(obj);
+      if (obj instanceof THREE.Group) {
+        disposeGroup(obj);
+      } else if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
+        disposeMesh(obj);
+      }
+    }
+
+    if (removedAny || lingering.length > 0) {
       this.onChunksChanged();
     }
   }

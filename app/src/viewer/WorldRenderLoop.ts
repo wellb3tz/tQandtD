@@ -11,6 +11,7 @@ import type { RenderLayer } from './RenderLayerVisibility';
 import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
 import type { WorldChunkController } from './WorldChunkController';
+import type { OrbitalTransitionController } from './planet/OrbitalTransitionController';
 
 export interface WorldRenderLoopOptions {
   scene: THREE.Scene;
@@ -23,6 +24,7 @@ export interface WorldRenderLoopOptions {
   getWaterConfig: () => WaterConfig;
   beforeRender: (activeCamera: THREE.Camera) => void;
   chunkController?: WorldChunkController;
+  orbitalTransitionController?: OrbitalTransitionController;
 }
 
 export class WorldRenderLoop {
@@ -36,6 +38,7 @@ export class WorldRenderLoop {
   private readonly getWaterConfig: () => WaterConfig;
   private readonly beforeRender: (activeCamera: THREE.Camera) => void;
   private readonly chunkController: WorldChunkController | undefined;
+  private orbitalTransitionController: OrbitalTransitionController | undefined;
   private readonly frustum = new THREE.Frustum();
   private readonly frustumMatrix = new THREE.Matrix4();
   private animationFrameId: number | null = null;
@@ -54,32 +57,50 @@ export class WorldRenderLoop {
     this.getWaterConfig = options.getWaterConfig;
     this.beforeRender = options.beforeRender;
     this.chunkController = options.chunkController;
+    this.orbitalTransitionController = options.orbitalTransitionController;
   }
 
   start(): void {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
       const activeCamera = this.cameraViewController.getActiveCamera();
-      this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
-      this.chunkController?.update().catch(() => {
-        // Silently ignore errors from chunk controller updates
-      });
-      this.cameraInputController.updateMovement();
-      this.cameraInputController.updateFirstPersonPhysics();
-      this.cameraViewController.updateFollowTerrainMode();
+
+      const isOrbital = this.orbitalTransitionController?.isOrbital() ?? false;
+      const isTransitioning = this.orbitalTransitionController?.isTransitioning() ?? false;
+
+      if (!isOrbital && !isTransitioning) {
+        this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
+        this.chunkController?.update().catch(() => {
+          // Silently ignore errors from chunk controller updates
+        });
+      }
+
+      if (!isOrbital) {
+        this.cameraInputController.updateMovement();
+        this.cameraInputController.updateFirstPersonPhysics();
+        this.cameraViewController.updateFollowTerrainMode();
+      }
 
       const now = performance.now();
       const elapsedSeconds = now / 1000;
       const waterConfig = this.getWaterConfig();
-      this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
-      this.waterLayerManager.updateRiverFlows(elapsedSeconds);
 
-      if (this.enableFrustumCulling && now - this.lastCullingCheck > this.cullingCheckInterval) {
+      if (!isOrbital) {
+        this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
+        this.waterLayerManager.updateRiverFlows(elapsedSeconds);
+      }
+
+      if (this.enableFrustumCulling && !isOrbital && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();
         this.lastCullingCheck = now;
         if (waterConfig.performance.enableFrustumCulling) {
           this.waterLayerManager.applyFrustumCulling(this.cameraViewController.getActiveCamera(), waterConfig);
         }
+      }
+
+      // Orbital transition controller update (must run after camera positioning)
+      if (this.orbitalTransitionController) {
+        this.orbitalTransitionController.update(1 / 60);
       }
 
       this.beforeRender(activeCamera);
@@ -94,6 +115,10 @@ export class WorldRenderLoop {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+  }
+
+  setOrbitalTransitionController(controller: OrbitalTransitionController | undefined): void {
+    this.orbitalTransitionController = controller;
   }
 
   setFrustumCulling(enabled: boolean): void {

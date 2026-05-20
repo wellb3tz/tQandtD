@@ -28,6 +28,8 @@ export class AtmosphereController {
   private sky: Sky | null = null;
   private skyParams: SkyParams = { ...DEFAULT_SKY_PARAMS };
 
+  private originalBackground: THREE.Color | null = null;
+
   constructor(
     scene: THREE.Scene,
     _ambientLight: THREE.AmbientLight,
@@ -107,6 +109,27 @@ export class AtmosphereController {
     this.directionalLight.target.updateMatrixWorld();
     this.updateDirectionalLightPosition();
     this.directionalLight.updateMatrixWorld();
+  }
+
+  /**
+   * Toggle space mode: hide sky dome and darken background.
+   */
+  setSpaceMode(enabled: boolean): void {
+    if (enabled) {
+      if (this.sky) this.sky.visible = false;
+      if (this.scene.fog instanceof THREE.FogExp2) {
+        this.originalBackground = this.scene.background instanceof THREE.Color
+          ? this.scene.background.clone()
+          : null;
+      }
+      this.scene.fog = null;
+    } else {
+      if (this.sky) this.sky.visible = true;
+      if (this.originalBackground) {
+        this.scene.background = this.originalBackground;
+      }
+      this.scene.fog = new THREE.FogExp2(0x050810, 0.0012);
+    }
   }
 
   dispose(): void {

@@ -618,4 +618,13 @@ export class WaterLayerManager {
       waterLayer.group.visible = isVisible;
     }
   }
+
+  /**
+   * Globally show or hide all water layers.
+   */
+  setVisible(visible: boolean): void {
+    for (const waterLayer of this.waterLayers.values()) {
+      waterLayer.group.visible = visible;
+    }
+  }
 }

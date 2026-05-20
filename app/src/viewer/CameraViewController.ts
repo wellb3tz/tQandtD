@@ -14,6 +14,7 @@ export class CameraViewController {
   private readonly followTerrainHeight = 50;
   private orthographicCamera: THREE.OrthographicCamera | null = null;
   private isOrthographicMode = false;
+  private isOrbitMode = false;
   private readonly cameraTarget = new THREE.Vector3(0, 0, 0);
 
   constructor(camera: THREE.PerspectiveCamera, getChunkMeshes: () => Iterable<ChunkMesh>) {
@@ -127,5 +128,17 @@ export class CameraViewController {
       y: this.cameraTarget.y,
       z: this.cameraTarget.z,
     };
+  }
+
+  /**
+   * Set whether the camera is in orbit (space) mode.
+   * In orbit mode the standard terrain camera update is bypassed.
+   */
+  setOrbitMode(enabled: boolean): void {
+    this.isOrbitMode = enabled;
+  }
+
+  isOrbital(): boolean {
+    return this.isOrbitMode;
   }
 }
