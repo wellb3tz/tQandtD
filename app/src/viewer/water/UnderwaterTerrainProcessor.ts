@@ -112,8 +112,8 @@ export function applyDepthGradient(
   // Normalise depth to 0-1 range
   const normalizedDepth = Math.min(depth / seaLevel, 1);
 
-  // Quadratic curve — shallow areas stay relatively bright,
-  // deep areas get much darker (up to 2× the base factor)
+  // Quadratic curve - shallow areas stay relatively bright,
+  // deep areas get much darker (up to 2x the base factor)
   const depthMultiplier = 1 + normalizedDepth * normalizedDepth * 1.5;
 
   return Math.min(baseDarkenFactor * depthMultiplier, 0.92);
@@ -154,8 +154,8 @@ export function adjustUnderwaterColor(
   // Desaturate
   adjustedColor = desaturateColor(adjustedColor, config.desaturationFactor);
 
-  // Blue tint — deeper = stronger shift towards dark ocean blue
-  // Shallow (t≈0): subtle tint; deep (t≈1): moderate navy overlay
+  // Blue tint - deeper = stronger shift towards dark ocean blue
+  // Shallow (t~=0): subtle tint; deep (t~=1): moderate navy overlay
   const t = Math.min(depth / config.seaLevel, 1.0);
   const tintStrength = t * t * 0.30; // quadratic, max 30% tint at full depth
 

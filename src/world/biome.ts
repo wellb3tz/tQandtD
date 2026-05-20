@@ -22,7 +22,7 @@ export class BiomeSystem {
   private moistureNoise: NoiseEngine;
   private config: BiomeConfig;
 
-  /** Pre-allocated noise configs — avoids per-call object creation in hot paths. */
+  /** Pre-allocated noise configs - avoids per-call object creation in hot paths. */
   private readonly temperatureNoiseConfig: NoiseConfig;
   private readonly moistureNoiseConfig: NoiseConfig;
 
@@ -37,7 +37,7 @@ export class BiomeSystem {
     this.moistureNoise = new NoiseEngine(seed + 1000);
     this.config = config;
 
-    // Pre-allocate configs once — reused on every getTemperature/getMoisture call.
+    // Pre-allocate configs once - reused on every getTemperature/getMoisture call.
     this.temperatureNoiseConfig = {
       octaves: 4,
       persistence: 0.5,
@@ -93,13 +93,13 @@ export class BiomeSystem {
       return BiomeType.OCEAN;
     }
     if (height < 0.42) {
-      // Coastal zone — BEACH only if actually near water.
+      // Coastal zone - BEACH only if actually near water.
       // Without a getHeight callback here we use a wider band as approximation;
       // the enhanced system overrides this with a proper proximity check.
       return BiomeType.BEACH;
     }
     if (height > 0.7) {
-      // High elevation — check temperature to decide mountain vs volcanic
+      // High elevation - check temperature to decide mountain vs volcanic
       let temperature = tempCache?.get(cacheKey);
       if (temperature === undefined) {
         temperature = this.getTemperature(x, y);
@@ -205,12 +205,12 @@ export class BiomeSystem {
   ): Map<BiomeType, number> {
     // Use a fixed-size Float64Array indexed by BiomeType (13 values, 0-12) to
     // accumulate weights without allocating a Map per sample point.
-    // The final Map is built once at the end — one allocation per tile instead of
-    // one per sample (was 9 Map.get/set calls × 1024 tiles = 9 216 ops per chunk).
+    // The final Map is built once at the end - one allocation per tile instead of
+    // one per sample (was 9 Map.get/set calls x 1024 tiles = 9 216 ops per chunk).
     const NUM_BIOMES = 13;
     const accumulator = new Float64Array(NUM_BIOMES);
 
-    const step = radius / Math.sqrt(9); // 3×3 grid
+    const step = radius / Math.sqrt(9); // 3x3 grid
     let totalWeight = 0;
 
     // Optional caches for temperature/moisture to avoid redundant fBM calls
@@ -240,7 +240,7 @@ export class BiomeSystem {
       }
     }
 
-    // Build the result Map — only include non-zero entries.
+    // Build the result Map - only include non-zero entries.
     const weights = new Map<BiomeType, number>();
     if (totalWeight > 0) {
       const inv = 1.0 / totalWeight;

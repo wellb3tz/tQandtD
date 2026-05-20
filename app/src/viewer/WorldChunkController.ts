@@ -113,7 +113,7 @@ export class WorldChunkController {
     });
 
     // Adaptive budgeting: increase throughput when a large backlog accumulates
-    // (e.g. fast camera movement) to avoid visible “pop-in” stagger.
+    // (e.g. fast camera movement) to avoid visible "pop-in" stagger.
     const backlog = this.pendingBuilds.length;
     const adaptiveMaxBuilds = backlog > 10
       ? this.maxBuildsPerFrame * 4

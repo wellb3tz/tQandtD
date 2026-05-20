@@ -146,7 +146,7 @@ export class TerrainTooltip {
     const key   = `${hit.chunkX},${hit.chunkY}`;
     const chunk = (hit.chunkData ?? state.loadedChunks.get(key)) as ChunkData | undefined;
 
-    // Chunk may not be loaded yet (e.g. right after world regeneration) — hide and wait
+    // Chunk may not be loaded yet (e.g. right after world regeneration) - hide and wait
     if (!chunk) { this.hide(); return; }
 
     const tileIndex  = hit.localY * chunk.size + hit.localX;

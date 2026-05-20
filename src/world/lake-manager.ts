@@ -26,7 +26,7 @@ export interface WorldLakeData {
    * Each tile is in world coordinates, not chunk-local.
    */
   tiles: Set<string>;
-  /** Maximum depth of the lake (waterLevel − min terrain height inside lake) */
+  /** Maximum depth of the lake (waterLevel - min terrain height inside lake) */
   maxDepth: number;
   /** Minimum terrain height inside the lake (for consistent water positioning) */
   minTerrainHeight: number;
@@ -63,7 +63,7 @@ export class LakeManager {
   /** Map of chunk key to last access timestamp for LRU eviction */
   private chunkAccessTime: Map<string, number>;
   /**
-   * Global tile → lake-ID index for O(1) membership checks.
+   * Global tile -> lake-ID index for O(1) membership checks.
    * Replaces the previous O(lakes) linear scan in isTileInAnyLake().
    */
   private tileToLakeId: Map<string, string>;
@@ -226,7 +226,7 @@ export class LakeManager {
 
     // Collect all lakes that intersect this chunk (or whose boundary vertices touch it).
     // We expand the check by +1 on the max side so that a lake whose rightmost/bottom
-    // tile sits in the adjacent chunk still gets included here — its boundary vertex
+    // tile sits in the adjacent chunk still gets included here - its boundary vertex
     // (tile+1) lands exactly on this chunk's left/top edge and must be carved/rendered.
     const result: WorldLakeData[] = [];
     const chunkWorldX = chunkX * chunkSize;
@@ -441,7 +441,7 @@ export class LakeManager {
    * Flood-fill in world space, can cross chunk boundaries.
    * Returns null if the lake is too large or open (no natural spill point found).
    *
-   * Uses a plain array as a queue — push/shift is avoided by tracking a head
+   * Uses a plain array as a queue - push/shift is avoided by tracking a head
    * index, giving O(1) dequeue without a fixed-size pre-allocation.
    *
    * @param startX     - Starting world X coordinate
@@ -458,7 +458,7 @@ export class LakeManager {
   ): Set<string> | null {
     const visited = new Set<string>();
 
-    // Dynamic arrays — grow as needed, no fixed upper bound.
+    // Dynamic arrays - grow as needed, no fixed upper bound.
     const queueX: number[] = [];
     const queueY: number[] = [];
     let queueHead = 0;
@@ -478,7 +478,7 @@ export class LakeManager {
     const dx = [0, 0, -1, 1];
     const dy = [-1, 1, 0, 0];
 
-    // Use provided maxSize or fall back to config default (×2 for world-space lakes).
+    // Use provided maxSize or fall back to config default (x2 for world-space lakes).
     const maxLakeTiles = maxSize ?? (this.config.maxLakeTiles * 2);
 
     while (queueHead < queueX.length) {
@@ -492,18 +492,18 @@ export class LakeManager {
         const nKey = this.encodeTile(nx, ny);
 
         if (visited.has(nKey)) continue;
-        if (this.tileToLakeId.has(nKey)) continue; // O(1) — replaces isTileInAnyLake
+        if (this.tileToLakeId.has(nKey)) continue; // O(1) - replaces isTileInAnyLake
 
         const nh = getHeight(nx, ny);
         if (nh < waterLevel) {
           if (this.isRiverTile?.(nx, ny)) {
-            return null; // River drains the basin — treat as open
+            return null; // River drains the basin - treat as open
           }
 
           visited.add(nKey);
 
           if (visited.size > maxLakeTiles) {
-            return null; // Lake too large — treat as open basin
+            return null; // Lake too large - treat as open basin
           }
 
           queueX.push(nx);
@@ -533,7 +533,7 @@ export class LakeManager {
     const newTileSet = lake.tiles;
 
     for (const existing of this.lakes.values()) {
-      // Quick bounding-box pre-check (±1 for adjacency)
+      // Quick bounding-box pre-check (+/-1 for adjacency)
       if (
         existing.bounds.maxX + 1 < lake.bounds.minX ||
         existing.bounds.minX - 1 > lake.bounds.maxX ||
@@ -560,7 +560,7 @@ export class LakeManager {
     }
 
     if (toMerge.length === 0) {
-      // No overlap — just register the new lake as-is.
+      // No overlap - just register the new lake as-is.
       this.lakes.set(lake.id, lake);
       this._indexTiles(lake);
       this._registerChunks(lake, chunkSize);
@@ -740,7 +740,7 @@ export class LakeManager {
   }
 
   /**
-   * Add all tiles of a lake to the global tile → lake-ID index.
+   * Add all tiles of a lake to the global tile -> lake-ID index.
    * Must be called whenever a lake is stored in `this.lakes`.
    */
   private _indexTiles(lake: WorldLakeData): void {
@@ -750,7 +750,7 @@ export class LakeManager {
   }
 
   /**
-   * Remove all tiles of a lake from the global tile → lake-ID index.
+   * Remove all tiles of a lake from the global tile -> lake-ID index.
    * Must be called before a lake is removed from `this.lakes`.
    */
   private _unindexTiles(lake: WorldLakeData): void {

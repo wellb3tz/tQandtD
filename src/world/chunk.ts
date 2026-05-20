@@ -107,9 +107,9 @@ export interface ChunkData {
   lakes?: LakeData[];
   /** River paths intersecting this chunk (may be empty) */
   rivers?: RiverData[];
-  /** Dynamic snow-line elevation for this chunk's climate [0–1] */
+  /** Dynamic snow-line elevation for this chunk's climate [0-1] */
   climateSnowLine?: number;
-  /** Dynamic tree-line elevation for this chunk's climate [0–1] */
+  /** Dynamic tree-line elevation for this chunk's climate [0-1] */
   climateTreeLine?: number;
   /** Global temperature offset used when this chunk was generated [-1, 1] */
   worldTemperatureOffset?: number;

@@ -1,6 +1,6 @@
 /**
  * PerformanceMonitor - Real-time performance metrics display.
- * Binds to existing HTML elements by ID — does NOT create any markup.
+ * Binds to existing HTML elements by ID - does NOT create any markup.
  */
 
 export interface GenerationBreakdown {
@@ -50,7 +50,7 @@ export class PerformanceMonitor {
     this.disposed = false;
     this.container = container;
 
-    // Bind to existing HTML elements — no innerHTML modification
+    // Bind to existing HTML elements - no innerHTML modification
     this.fpsElement            = document.getElementById('fps-value');
     this.totalChunksElement    = document.getElementById('total-chunks-value');
     this.avgGenTimeElement     = document.getElementById('gen-time-value');

@@ -111,7 +111,7 @@ describe('RiverMeshGenerator', () => {
     const geometry = buildRiverGeometry([river(points)], 0, 0, 16)!;
     const positions = geometry.getAttribute('position').array;
 
-    // Check centre vertex (index 2 out of 5 cross-section offsets) — flat surface
+    // Check centre vertex (index 2 out of 5 cross-section offsets) - flat surface
     expect(positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 0.6, 5);
   });
 

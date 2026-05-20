@@ -153,10 +153,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
   private riverManager: RiverManager | null;
   /** @internal exposed for WorkerPool shutdown in WorldApp */ workerPool: WorkerPool | null;
   private worldSerializer: WorldSerializer;
-  /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
+  /** Satisfies ChunkManagerSnapshot - readable by WorldSerializer */ readonly cache: Map<string, CacheEntry>;
   private maxCacheSize: number;
-  /** Satisfies ChunkManagerSnapshot — mutated by WorldSerializer.addChunkToCache */ accessCounter: number;
-  /** Satisfies ChunkManagerSnapshot — readable by WorldSerializer */ readonly modifications: Map<string, ChunkModification>;
+  /** Satisfies ChunkManagerSnapshot - mutated by WorldSerializer.addChunkToCache */ accessCounter: number;
+  /** Satisfies ChunkManagerSnapshot - readable by WorldSerializer */ readonly modifications: Map<string, ChunkModification>;
   private cacheHits: number;
   private cacheMisses: number;
   private inFlightRequests: Map<string, Promise<ChunkData>>;
@@ -293,7 +293,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       return inFlight;
     }
 
-    // Cache miss — start generation
+    // Cache miss - start generation
     this.cacheMisses++;
 
     // Decide generation strategy based on worker pool availability
@@ -1148,7 +1148,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       this.config.onChunkInvalidated?.(cx, cy);
     }
 
-    // Boundary heights may have dropped below sea level — reclassify affected biomes.
+    // Boundary heights may have dropped below sea level - reclassify affected biomes.
     this.fixBiomesAfterHeightChange(chunk);
   }
 

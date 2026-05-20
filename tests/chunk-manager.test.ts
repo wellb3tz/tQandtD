@@ -2,7 +2,7 @@
  * ChunkManager tests
  *
  * Covers caching behaviour, coordinate utilities, and biome/lake data integrity.
- * Keeps the surface small — one test per meaningful invariant.
+ * Keeps the surface small - one test per meaningful invariant.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -15,7 +15,7 @@ import { DEFAULT_RIVER_CONFIG, type WorldRiverData } from '../src/gen/rivers';
 import { LakeManager } from '../src/world/lake-manager';
 import { makeMinimalConfig } from './helpers';
 
-// ─── Coordinate utilities ─────────────────────────────────────────────────────
+// --- Coordinate utilities -----------------------------------------------------
 
 describe('Coordinate utilities', () => {
   it('worldToChunk rounds toward negative infinity', () => {
@@ -46,7 +46,7 @@ describe('Coordinate utilities', () => {
   });
 });
 
-// ─── ChunkManager cache ───────────────────────────────────────────────────────
+// --- ChunkManager cache -------------------------------------------------------
 
 describe('ChunkManager cache', () => {
   it('returns the same object on second call (cache hit)', async () => {
@@ -88,10 +88,10 @@ describe('ChunkManager cache', () => {
   });
 });
 
-// ─── ChunkData integrity ──────────────────────────────────────────────────────
+// --- ChunkData integrity ------------------------------------------------------
 
 describe('ChunkData integrity', () => {
-  it('biomeMap has size² entries', async () => {
+  it('biomeMap has size^2 entries', async () => {
     const manager = new ChunkManager(makeMinimalConfig(1));
     const chunk = await manager.getChunk(0, 0);
     expect(chunk.biomeMap.length).toBe(chunk.size * chunk.size);

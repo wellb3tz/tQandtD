@@ -1,11 +1,11 @@
-/* tQandtD project — Industrial Machine Control UI */
+/* tQandtD project - Industrial Machine Control UI */
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* ══════════════════════════════════════════
-   TOKENS — Heavy Machinery Palette
-   ══════════════════════════════════════════ */
+/* ==========================================
+   TOKENS - Heavy Machinery Palette
+   ========================================== */
 :root {
   --machine-bg:       #09090b;
   --machine-panel:    #18181b;
@@ -42,14 +42,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    UTILITIES
-   ══════════════════════════════════════════ */
+   ========================================== */
 .hidden { display: none !important; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    APP SHELL
-   ══════════════════════════════════════════ */
+   ========================================== */
 #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
 
 .viewer {
@@ -58,9 +58,9 @@ body {
   z-index: 0;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    GLASS HELPER
-   ══════════════════════════════════════════ */
+   ========================================== */
 .glass {
   background: rgba(10, 14, 20, 0.82);
   border: 1px solid rgba(180,83,9,0.12);
@@ -69,9 +69,9 @@ body {
   box-shadow: 0 6px 24px rgba(0,0,0,0.55);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    GLASS PANEL MIXIN (applied via selectors)
-   ══════════════════════════════════════════ */
+   ========================================== */
 .app-header,
 .control-panel,
 .top-toolbar .toolbar-group,
@@ -93,9 +93,9 @@ body {
   box-shadow: 0 6px 24px rgba(0,0,0,0.55);
 }
 
-/* ══════════════════════════════════════════
-   TOP HEADER BAR — Control Module
-   ══════════════════════════════════════════ */
+/* ==========================================
+   TOP HEADER BAR - Control Module
+   ========================================== */
 .app-header {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -152,9 +152,9 @@ body {
 
 .header-actions { display: flex; gap: 4px; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    ICON BUTTONS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .icon-btn {
   width: 32px; height: 32px;
   background: transparent;
@@ -195,9 +195,9 @@ body {
   box-shadow: 0 0 3px var(--accent-glow);
 }
 
-/* ══════════════════════════════════════════
-   LEFT CONTROL PANEL — Side Module
-   ══════════════════════════════════════════ */
+/* ==========================================
+   LEFT CONTROL PANEL - Side Module
+   ========================================== */
 .control-panel {
   position: absolute;
   top: var(--header-h);
@@ -221,9 +221,9 @@ body {
   border-radius: 0;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    PANEL SECTIONS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .panel-section {
   border-bottom: 1px solid rgba(180,83,9,0.07);
 }
@@ -268,9 +268,9 @@ body {
 .section-content { padding: 12px 14px; }
 .panel-section.collapsed .section-content { display: none; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    FORM CONTROLS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .control-group { margin-bottom: 12px; }
 .control-group label {
   display: block;
@@ -337,9 +337,9 @@ body {
   font-family: 'Share Tech Mono', monospace;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    BUTTONS
-   ══════════════════════════════════════════ */
+   ========================================== */
 button {
   cursor: pointer;
   border: none;
@@ -411,9 +411,9 @@ button {
 
 .button-group-vertical { display: flex; flex-direction: column; gap: 6px; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    TOP-CENTER TOOLBAR
-   ══════════════════════════════════════════ */
+   ========================================== */
 .top-toolbar {
   position: absolute;
   top: calc(var(--header-h) + 14px);
@@ -455,9 +455,9 @@ button {
   box-shadow: inset 0 0 8px rgba(180,83,9,0.08);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    CAMERA POSITION (now inside right panel)
-   ══════════════════════════════════════════ */
+   ========================================== */
 .position-header {
   font-size: 9px;
   font-weight: 700;
@@ -486,9 +486,9 @@ button {
 
 }
 
-/* ══════════════════════════════════════════
-   RIGHT PANEL — Unified Performance + Stats
-   ══════════════════════════════════════════ */
+/* ==========================================
+   RIGHT PANEL - Unified Performance + Stats
+   ========================================== */
 .right-panel {
   position: absolute;
   top: var(--header-h);
@@ -589,9 +589,9 @@ button {
   border-color: rgba(220,38,38,0.3);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    MONITOR SECTIONS (shared inside right panel)
-   ══════════════════════════════════════════ */
+   ========================================== */
 .monitor-section { padding: 12px 14px; border-bottom: 1px solid rgba(180,83,9,0.06); }
 .monitor-section:last-child { border-bottom: none; }
 .monitor-section h4 {
@@ -623,9 +623,9 @@ button {
 }
 .metric-unit { font-size: 11px; color: var(--text-3); font-weight: 500; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    PERFORMANCE GRAPH
-   ══════════════════════════════════════════ */
+   ========================================== */
 .performance-graph {
   position: absolute;
   bottom: calc(var(--status-h) + 14px);
@@ -645,9 +645,9 @@ button {
   text-transform: uppercase;
 }
 
-/* ══════════════════════════════════════════
-   STATUS BAR — Footer Strip
-   ══════════════════════════════════════════ */
+/* ==========================================
+   STATUS BAR - Footer Strip
+   ========================================== */
 .status-bar {
   position: absolute;
   bottom: 0; left: 0; right: 0;
@@ -689,9 +689,9 @@ button {
   font-family: 'Share Tech Mono', monospace;
 }
 
-/* ══════════════════════════════════════════
-   LOADING INDICATOR — System Boot
-   ══════════════════════════════════════════ */
+/* ==========================================
+   LOADING INDICATOR - System Boot
+   ========================================== */
 .loading-indicator {
   position: absolute;
   top: 50%; left: 50%;
@@ -715,9 +715,9 @@ button {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ══════════════════════════════════════════
-   TOASTS — Alert Messages
-   ══════════════════════════════════════════ */
+/* ==========================================
+   TOASTS - Alert Messages
+   ========================================== */
 .toast-container {
   position: fixed;
   top: calc(var(--header-h) + 14px);
@@ -760,9 +760,9 @@ button {
   to   { transform: translateX(0); opacity: 1; }
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    FULLSCREEN MODE
-   ══════════════════════════════════════════ */
+   ========================================== */
 body.fullscreen-mode .app-header,
 body.fullscreen-mode .control-panel,
 body.fullscreen-mode .right-panel,
@@ -773,17 +773,17 @@ body.fullscreen-mode .minimap-container,
 body.fullscreen-mode .performance-graph,
 body.fullscreen-mode .status-bar { display: none !important; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    VALIDATION
-   ══════════════════════════════════════════ */
+   ========================================== */
 input.validation-error {
   border-color: var(--accent-err) !important;
   box-shadow: 0 0 0 2px rgba(220,38,38,0.2), inset 0 0 6px rgba(220,38,38,0.1) !important;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    MODAL DIALOGS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .modal-dialog {
   position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.75);
@@ -884,9 +884,9 @@ input.validation-error {
   border-color: rgba(180,83,9,0.35);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    FORM ELEMENTS IN MODALS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .form-group { margin-bottom: 14px; }
 .form-group label {
   display: block;
@@ -943,9 +943,9 @@ input.validation-error {
 .info-value { font-size: 11px; font-weight: 600; color: var(--text-1); }
 .info-value code { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--accent); }
 
-/* ══════════════════════════════════════════
-   PROGRESS BAR — Load Sequence
-   ══════════════════════════════════════════ */
+/* ==========================================
+   PROGRESS BAR - Load Sequence
+   ========================================== */
 .progress-container {
   position: fixed;
   bottom: calc(var(--status-h) + 14px);
@@ -987,9 +987,9 @@ input.validation-error {
 }
 .progress-percentage { font-size: 10px; color: var(--text-3); text-align: right; font-family: 'Share Tech Mono', monospace; }
 
-/* ══════════════════════════════════════════
-   ERROR DIALOG — Fault Screen
-   ══════════════════════════════════════════ */
+/* ==========================================
+   ERROR DIALOG - Fault Screen
+   ========================================== */
 .error-dialog-container { position: fixed; inset: 0; z-index: 300; pointer-events: none; }
 .error-dialog { pointer-events: auto; opacity: 0; transition: opacity 0.2s; }
 .error-dialog.show { opacity: 1; }
@@ -1046,9 +1046,9 @@ input.validation-error {
 }
 .error-dialog-btn.secondary:hover { background: rgba(180,83,9,0.08); color: var(--text-1); }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    WEBGL WARNING
-   ══════════════════════════════════════════ */
+   ========================================== */
 .webgl-warning {
   position: fixed;
   top: var(--header-h); left: 0; right: 0;
@@ -1073,9 +1073,9 @@ input.validation-error {
   cursor: pointer;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    CROSSHAIR
-   ══════════════════════════════════════════ */
+   ========================================== */
 .crosshair-overlay {
   position: fixed;
   top: 50%; left: 50%;
@@ -1099,9 +1099,9 @@ body.fullscreen-mode.first-person-active .crosshair-overlay { display: block !im
   box-shadow: 0 0 6px rgba(0,0,0,0.8), 0 0 2px rgba(255,255,255,0.5);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    COMPASS
-   ══════════════════════════════════════════ */
+   ========================================== */
 .compass-container {
   position: absolute;
   top: calc(var(--header-h) + 66px);
@@ -1145,9 +1145,9 @@ body.fullscreen-mode.first-person-active .crosshair-overlay { display: block !im
 .compass-s { bottom: 7px; left: 50%; transform: translateX(-50%); }
 .compass-w { left: 10px; top: 50%; transform: translateY(-50%); }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    CAMERA POSITION
-   ══════════════════════════════════════════ */
+   ========================================== */
 .camera-position-display {
   position: absolute;
   top: calc(var(--header-h) + 156px);
@@ -1160,9 +1160,9 @@ body.fullscreen-mode.first-person-active .crosshair-overlay { display: block !im
   border-left: 3px solid var(--accent);
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    MINIMAP
-   ══════════════════════════════════════════ */
+   ========================================== */
 .minimap-container {
   position: absolute;
   bottom: calc(var(--status-h) + 14px);
@@ -1198,9 +1198,9 @@ body.fullscreen-mode.first-person-active .crosshair-overlay { display: block !im
 
 body.fullscreen-mode .minimap-container { display: none !important; }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    COLLAPSED PANEL OFFSETS
-   ══════════════════════════════════════════ */
+   ========================================== */
 #control-panel.collapsed ~ .top-toolbar,
 #control-panel.collapsed ~ .compass-container,
 #control-panel.collapsed ~ .camera-position-display,
@@ -1208,9 +1208,9 @@ body.fullscreen-mode .minimap-container { display: none !important; }
   left: 14px;
 }
 
-/* ══════════════════════════════════════════
+/* ==========================================
    RESPONSIVE
-   ══════════════════════════════════════════ */
+   ========================================== */
 @media (max-width: 1024px) {
   :root {
     --panel-w: 220px;

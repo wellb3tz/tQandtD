@@ -44,7 +44,7 @@ export function createWaterNormalTexture(
  * Create ocean water material with depth-based vertex colors.
  *
  * Uses vertexColors so the depth gradient baked into the geometry is visible.
- * The base `color` tints the vertex colors multiplicatively — keep it white
+ * The base `color` tints the vertex colors multiplicatively - keep it white
  * (0xffffff) to show the gradient as-is, or tint for a stylised look.
  *
  * @param config - Ocean water configuration
@@ -66,7 +66,7 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     opacity: config.opacity,
     shininess: config.shininess,
     side: THREE.DoubleSide,
-    // Slight specular highlight — gives water a wet look
+    // Slight specular highlight - gives water a wet look
     specular: new THREE.Color(0xa8e6ff),
   });
 

@@ -5,30 +5,30 @@ import { NoiseEngine } from '../core/noise';
  * All fields have safe defaults via DEFAULT_CLIMATE_CONFIG.
  */
 export interface ClimateConfig {
-  /** Latitude gradient strength [0–1], default 0.5.
+  /** Latitude gradient strength [0-1], default 0.5.
    *  Controls how strongly world Y (latitude) influences temperature. */
   latitudeGradientStrength: number;
   /** Large-scale climate noise scale, default 0.001 */
   climateScale: number;
   /** Small-scale detail noise scale, default 0.005 */
   detailScale: number;
-  /** Detail layer blend weight [0–1], default 0.3.
+  /** Detail layer blend weight [0-1], default 0.3.
    *  Detail layer contributes this fraction; climate layer contributes (1 - blend). */
   climateDetailBlend: number;
-  /** Height threshold above which altitude cooling begins [0–1], default 0.6 */
+  /** Height threshold above which altitude cooling begins [0-1], default 0.6 */
   altitudeCoolingThreshold: number;
-  /** Temperature reduction rate above threshold [0–2], default 1.0 */
+  /** Temperature reduction rate above threshold [0-2], default 1.0 */
   altitudeCoolingRate: number;
-  /** Gradient magnitude below which valley moisture bonus applies [0–1], default 0.05 */
+  /** Gradient magnitude below which valley moisture bonus applies [0-1], default 0.05 */
   valleyGradientThreshold: number;
-  /** Maximum moisture bonus in flat/valley areas [0–1], default 0.3 */
+  /** Maximum moisture bonus in flat/valley areas [0-1], default 0.3 */
   valleyMoistureBonus: number;
 
-  /** Global temperature offset [-1–1], default 0.
+  /** Global temperature offset [-1-1], default 0.
    *  Shifts all temperatures up (positive) or down (negative). */
   worldTemperatureOffset: number;
 
-  /** Global moisture offset [-1–1], default 0.
+  /** Global moisture offset [-1-1], default 0.
    *  Shifts all moisture values up (positive) or down (negative). */
   worldMoistureOffset: number;
 }
@@ -81,7 +81,7 @@ export class ClimateSystem {
 
     this.config = config;
 
-    // Seed offsets 3000–3003 avoid collision with BiomeSystem (0, +1000) and
+    // Seed offsets 3000-3003 avoid collision with BiomeSystem (0, +1000) and
     // EnhancedBiomeSystem (+2000).
     this.tempClimate  = new NoiseEngine(seed + 3000);
     this.tempDetail   = new NoiseEngine(seed + 3001);
@@ -96,7 +96,7 @@ export class ClimateSystem {
   /**
    * Returns the dynamic snow-line elevation for the current climate config.
    *
-   * Formula: 0.76 + worldTemperatureOffset × 0.15, clamped to [0.4, 1.0].
+   * Formula: 0.76 + worldTemperatureOffset x 0.15, clamped to [0.4, 1.0].
    * When the world is hotter the snow line rises (fewer snowy peaks);
    * when colder it drops (snow covers lower elevations).
    */
@@ -111,7 +111,7 @@ export class ClimateSystem {
   /**
    * Returns the dynamic tree-line elevation for the current climate config.
    *
-   * Formula: 0.75 + worldTemperatureOffset × 0.12, clamped to [0.35, 0.95].
+   * Formula: 0.75 + worldTemperatureOffset x 0.12, clamped to [0.35, 0.95].
    */
   getDynamicTreeLine(): number {
     return ClimateSystem.clamp(
@@ -122,22 +122,22 @@ export class ClimateSystem {
   }
 
   /**
-   * Returns temperature ∈ [−1, 1] at the given world position.
+   * Returns temperature in [-1, 1] at the given world position.
    *
    * Incorporates:
-   * - Latitudinal gradient (higher Y → colder)
+   * - Latitudinal gradient (higher Y -> colder)
    * - Multi-scale noise blend (climate + detail layers)
    * - Altitude cooling above `altitudeCoolingThreshold`
    *
    * @param x      - World X coordinate.
    * @param y      - World Y coordinate.
    * @param height - Terrain height at (x, y) in [0, 1].
-   * @returns Temperature clamped to [−1, 1].
+   * @returns Temperature clamped to [-1, 1].
    */
   getTemperature(x: number, y: number, height: number): number {
     const cfg = this.config;
 
-    // Latitude base: higher Y → more negative (colder)
+    // Latitude base: higher Y -> more negative (colder)
     const latitudeBase = -y * cfg.latitudeGradientStrength / WORLD_HALF_HEIGHT;
 
     // Multi-scale noise blend
@@ -161,7 +161,7 @@ export class ClimateSystem {
   }
 
   /**
-   * Returns moisture ∈ [−1, 1] at the given world position.
+   * Returns moisture in [-1, 1] at the given world position.
    *
    * Incorporates:
    * - Multi-scale noise blend (climate + detail layers)
@@ -171,7 +171,7 @@ export class ClimateSystem {
    * @param y         - World Y coordinate.
    * @param height    - Terrain height at (x, y) in [0, 1].
    * @param getHeight - Callback to sample terrain height at neighbouring positions.
-   * @returns Moisture clamped to [−1, 1].
+   * @returns Moisture clamped to [-1, 1].
    */
   getMoisture(
     x: number,
@@ -207,7 +207,7 @@ export class ClimateSystem {
    * @param y         - World Y coordinate.
    * @param getHeight - Callback to sample terrain height at neighbouring positions.
    * @param step      - Sampling distance in world units (default 1).
-   * @returns Gradient magnitude ≥ 0.
+   * @returns Gradient magnitude >= 0.
    */
   computeGradient(
     x: number,

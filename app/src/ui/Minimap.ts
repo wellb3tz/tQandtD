@@ -117,7 +117,7 @@ export class Minimap {
 
       // Heading arrow
       const heading = this.getHeading ? this.getHeading() : 0;
-      const rad     = (heading - 90) * Math.PI / 180; // rotate so 0° = up
+      const rad     = (heading - 90) * Math.PI / 180; // rotate so 0 deg = up
       const arrowLen = 8;
 
       ctx.save();
@@ -184,7 +184,7 @@ export class Minimap {
   /** Returns biome name at canvas pixel (for tooltip on minimap hover) */
   getBiomeAtPixel(px: number, py: number): string | null {
     if (!this.app) return null;
-    // Reverse-map pixel to chunk — simplified, just return null for now
+    // Reverse-map pixel to chunk - simplified, just return null for now
     return null;
   }
 }

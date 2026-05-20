@@ -172,7 +172,7 @@ async function createChunkMesh(
 
 function removeAndDisposeChunkMesh(scene: THREE.Scene, chunkMesh: ChunkMesh): void {
   scene.remove(chunkMesh.terrain);
-  // NOTE: dispose geometry only — terrain material is shared across all
+  // NOTE: dispose geometry only - terrain material is shared across all
   // chunks via getCachedTerrainMaterial() and must not be disposed here.
   chunkMesh.terrain.geometry.dispose();
 

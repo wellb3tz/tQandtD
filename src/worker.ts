@@ -146,7 +146,7 @@ export interface SerializedChunkData {
   climateTreeLine?: number;
   worldTemperatureOffset?: number;
   temperatureMap?: ArrayBuffer | ArrayLike<number>;
-  /** Serialized lake bodies — tiles stored as plain number arrays */
+  /** Serialized lake bodies - tiles stored as plain number arrays */
   lakes: Array<{
     waterLevel: number;
     tiles: number[];

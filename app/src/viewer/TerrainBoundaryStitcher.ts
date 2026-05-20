@@ -87,7 +87,7 @@ export function stitchLakeBoundaryPositions(chunkMeshes: ChunkMeshMap, chunkX: n
 
   if (changedA) {
     posA.needsUpdate = true;
-    // See note above — skip expensive computeVertexNormals / computeBoundingBox.
+    // See note above - skip expensive computeVertexNormals / computeBoundingBox.
   }
 }
 

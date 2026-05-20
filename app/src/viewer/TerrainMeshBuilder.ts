@@ -66,7 +66,7 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
   const { partialOpacity } = getPartialGenerationStyle(partial, stage);
 
   const material = createTerrainMaterial({ terrainTextures, terrainTexturesEnabled, wireframeMode });
-  // Reset shared material opacity — it may have been left transparent by orbit transition
+  // Reset shared material opacity - it may have been left transparent by orbit transition
   material.transparent = false;
   material.opacity = 1.0;
   material.visible = true;

@@ -1,6 +1,6 @@
 /**
  * StatisticsDisplay - Binds to existing HTML elements and updates values.
- * Does NOT create or clear any markup — all structure is in index.html.
+ * Does NOT create or clear any markup - all structure is in index.html.
  */
 
 import { WorldApp, AppState } from '../core/WorldApp';
@@ -60,7 +60,7 @@ export class StatisticsDisplay {
   initialize(container: HTMLElement): void {
     this.container = container;
 
-    // Bind to existing HTML elements by ID — no innerHTML modification
+    // Bind to existing HTML elements by ID - no innerHTML modification
     this.chunkCountElement      = document.getElementById('stat-chunk-count');
     this.avgHeightElement       = document.getElementById('stat-height-avg');
     this.minHeightElement       = document.getElementById('stat-height-min');

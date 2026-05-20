@@ -1,7 +1,7 @@
 /**
  * Shared test helpers
  *
- * makeMinimalConfig — returns a valid WorldConfig with sensible defaults.
+ * makeMinimalConfig - returns a valid WorldConfig with sensible defaults.
  * Keeps individual test files free of boilerplate.
  */
 
@@ -19,7 +19,7 @@ export function makeMinimalConfig(seed: number): WorldConfig {
       lacunarity: 2.0,
       warpStrength: 10,
       heightMultiplier: 1.0,
-      enableContinentalness: false, // off by default — faster, simpler
+      enableContinentalness: false, // off by default - faster, simpler
     },
     biomeConfig: {
       temperatureScale: 0.005,

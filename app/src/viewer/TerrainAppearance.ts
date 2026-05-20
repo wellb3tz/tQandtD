@@ -152,7 +152,7 @@ export function replaceTerrainMaterial(mesh: THREE.Mesh, nextMaterial: THREE.Mes
   if (!Array.isArray(previousMaterial)) {
     nextMaterial.transparent = previousMaterial.transparent;
     nextMaterial.opacity = previousMaterial.opacity;
-    // NOTE: do NOT dispose previousMaterial — terrain materials are
+    // NOTE: do NOT dispose previousMaterial - terrain materials are
     // shared across all chunks via getCachedTerrainMaterial().
   }
 

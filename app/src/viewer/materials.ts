@@ -111,7 +111,7 @@ export interface BiomeColor {
  * Colors are chosen to be visually distinct and represent the biome characteristics
  */
 export const BIOME_COLORS: Record<BiomeType, BiomeColor> = {
-  // Base biomes — refined for better visual realism
+  // Base biomes - refined for better visual realism
   [BiomeType.OCEAN]:      { r: 0.094, g: 0.314, b: 0.588 },  // Deep ocean blue (#185090)
   [BiomeType.BEACH]:      { r: 0.918, g: 0.855, b: 0.647 },  // Warm sand (#EAD9A5)
   [BiomeType.DESERT]:     { r: 0.871, g: 0.722, b: 0.353 },  // Warm golden sand (#DEA85A)

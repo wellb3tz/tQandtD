@@ -643,7 +643,7 @@ export class WorldApp {
         });
       }
     } catch (error) {
-      // Swallow expected abort errors — they’re not real failures.
+      // Swallow expected abort errors - they're not real failures.
       if (error instanceof Error && error.message.includes('aborted')) {
         return;
       }

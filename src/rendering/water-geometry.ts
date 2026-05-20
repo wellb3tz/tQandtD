@@ -265,7 +265,7 @@ export function buildRiverGeometryData(
           const [r, g, b] = riverSurfaceColor(river, point, edgeAmount);
           const x = worldX + normalX * halfWidth * lateral;
           const z = worldZ + normalY * halfWidth * lateral;
-          // Flat water surface — no edge lift so the mesh sits flush with the channel bed
+          // Flat water surface - no edge lift so the mesh sits flush with the channel bed
           const y = baseY;
 
           data.positions.push(x, y, z);
@@ -312,7 +312,7 @@ function getRiverWaterSurfaceHalfWidth(
   heightScale: number,
 ): number {
   const rawChannelRadius = Math.max(getRiverChannelWidth(point) * 0.5, 0);
-  // No hard minimum for surface width — let narrow source streams stay narrow
+  // No hard minimum for surface width - let narrow source streams stay narrow
   const channelRadius = rawChannelRadius;
   const valleyRadius = Math.max(getRiverValleyWidth(point) * 0.5, channelRadius);
   const channelDepth = Math.max(getRiverChannelDepth(point), 0);

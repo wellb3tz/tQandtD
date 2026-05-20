@@ -135,7 +135,7 @@ describe('Biome / height mismatch regression', () => {
       treeLineElevation: 0.75,
     });
 
-    // Flat terrain below sea level — must be pure ocean regardless of neighbours.
+    // Flat terrain below sea level - must be pure ocean regardless of neighbours.
     const data = system.getEnhancedBiome(0, 0, () => 0.25);
 
     expect(data.biome).toBe(BiomeType.OCEAN);

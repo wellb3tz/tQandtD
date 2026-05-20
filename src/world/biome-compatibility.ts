@@ -1,26 +1,26 @@
 import { BiomeType } from './chunk';
 
 /** Total number of BiomeType values. */
-const NUM_BIOMES = 13; // OCEAN=0 … GLACIER=12
+const NUM_BIOMES = 13; // OCEAN=0 ... GLACIER=12
 
 /**
  * Plain JSON-safe serialisation of a BiomeCompatibilityMatrix.
  */
 export interface SerializedCompatibilityMatrix {
-  /** Schema version — always 1 for this implementation. */
+  /** Schema version - always 1 for this implementation. */
   version: 1;
   /**
-   * Flat array of length NUM_BIOMES² encoding compatibility.
+   * Flat array of length NUM_BIOMES^2 encoding compatibility.
    * 1 = compatible, 0 = incompatible.
    * Index: a * NUM_BIOMES + b
-   * NUM_BIOMES = 13 (OCEAN=0 … GLACIER=12)
+   * NUM_BIOMES = 13 (OCEAN=0 ... GLACIER=12)
    */
   compatible: number[];
   /**
-   * Flat array of length NUM_BIOMES² encoding the intermediate biome index.
+   * Flat array of length NUM_BIOMES^2 encoding the intermediate biome index.
    * -1 means no intermediate (pair is compatible).
    * Index: a * NUM_BIOMES + b
-   * NUM_BIOMES = 13 (OCEAN=0 … GLACIER=12)
+   * NUM_BIOMES = 13 (OCEAN=0 ... GLACIER=12)
    */
   intermediate: number[];
 }
@@ -33,17 +33,17 @@ export interface SerializedCompatibilityMatrix {
  * `a * NUM_BIOMES + b`.
  *
  * Built-in incompatible pairs (symmetric):
- * - DESERT ↔ TAIGA      → intermediate: PLAINS
- * - DESERT ↔ TUNDRA     → intermediate: PLAINS
- * - DESERT ↔ FOREST     → intermediate: PLAINS
- * - DESERT ↔ GLACIER    → intermediate: TUNDRA
- * - OCEAN  ↔ MOUNTAIN   → intermediate: BEACH
- * - OCEAN  ↔ VOLCANIC   → intermediate: BEACH
- * - GLACIER ↔ RAINFOREST → intermediate: FOREST
- * - GLACIER ↔ SWAMP     → intermediate: PLAINS
- * - SAVANNA ↔ TAIGA     → intermediate: PLAINS
- * - SAVANNA ↔ TUNDRA    → intermediate: PLAINS
- * - SAVANNA ↔ GLACIER   → intermediate: TUNDRA
+ * - DESERT <-> TAIGA      -> intermediate: PLAINS
+ * - DESERT <-> TUNDRA     -> intermediate: PLAINS
+ * - DESERT <-> FOREST     -> intermediate: PLAINS
+ * - DESERT <-> GLACIER    -> intermediate: TUNDRA
+ * - OCEAN  <-> MOUNTAIN   -> intermediate: BEACH
+ * - OCEAN  <-> VOLCANIC   -> intermediate: BEACH
+ * - GLACIER <-> RAINFOREST -> intermediate: FOREST
+ * - GLACIER <-> SWAMP     -> intermediate: PLAINS
+ * - SAVANNA <-> TAIGA     -> intermediate: PLAINS
+ * - SAVANNA <-> TUNDRA    -> intermediate: PLAINS
+ * - SAVANNA <-> GLACIER   -> intermediate: TUNDRA
  */
 export class BiomeCompatibilityMatrix {
   /** Flat array: 1 = compatible, 0 = incompatible. */

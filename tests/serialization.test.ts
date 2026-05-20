@@ -58,7 +58,7 @@ function restore(serialized: ReturnType<WorldSerializer['serialize']>, seed: num
   return fresh;
 }
 
-// ─── tests ───────────────────────────────────────────────────────────────────
+// --- tests -------------------------------------------------------------------
 
 describe('Serialization round-trip', () => {
   it('types serialized river points with optional corridor fields', () => {
@@ -275,14 +275,14 @@ describe('Serialization round-trip', () => {
   });
 });
 
-describe('Serialization — sparse biome weights round-trip', () => {
+describe('Serialization - sparse biome weights round-trip', () => {
   for (const [label, format, compress] of [
     ['JSON uncompressed',   SerializationFormat.JSON,   false],
     ['JSON compressed',     SerializationFormat.JSON,   true],
     ['Binary uncompressed', SerializationFormat.BINARY, false],
     ['Binary compressed',   SerializationFormat.BINARY, true],
   ] as const) {
-    it(`preserves sparseBiomeTypes/Weights/Offsets — ${label}`, async () => {
+    it(`preserves sparseBiomeTypes/Weights/Offsets - ${label}`, async () => {
       const manager = await buildManager(99);
       const ser = new WorldSerializer();
       const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });

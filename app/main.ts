@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }, uiUpdateInterval);
       
-      // 2. Adaptive chunk loading — faster when moving, slower when idle.
+      // 2. Adaptive chunk loading - faster when moving, slower when idle.
       // Paused while in orbit / transition to avoid loading chunks for space positions.
       const scheduleChunkLoad = (delay = 100) => {
         chunkLoadTimer = setTimeout(() => {
@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             lastChunkLoadCameraPos = { x: cameraPos.x, z: cameraPos.z };
 
-            // Adaptive interval: fast movement → 50ms, walking → 100ms, idle → 300ms
+            // Adaptive interval: fast movement -> 50ms, walking -> 100ms, idle -> 300ms
             if (distance > 0.15) {
               nextInterval = 50;   // Running
             } else if (distance > 0.03) {

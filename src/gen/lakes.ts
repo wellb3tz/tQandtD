@@ -9,13 +9,13 @@
  *     as the height of the lowest escape point (spill point).
  *  3. The result is a list of LakeData objects stored on ChunkData.
  *
- * The algorithm is fully deterministic: same seed + same heightmap → same lakes.
+ * The algorithm is fully deterministic: same seed + same heightmap -> same lakes.
  */
 
 import { NoiseEngine } from '../core/noise';
 import { BiomeType } from '../world/chunk';
 
-// ─── Public types ────────────────────────────────────────────────────────────
+// --- Public types ------------------------------------------------------------
 
 export type LakeState = 'filled' | 'dry';
 
@@ -26,11 +26,11 @@ export interface LakeData {
   /** Water surface elevation in [0, 1] heightmap space */
   waterLevel: number;
   /**
-   * Set of tile indices (row-major, size × size) that are covered by this lake.
+   * Set of tile indices (row-major, size x size) that are covered by this lake.
    * A tile is covered when its average corner height is below waterLevel.
    */
   tiles: Set<number>;
-  /** Maximum depth of the lake (waterLevel − min terrain height inside lake) */
+  /** Maximum depth of the lake (waterLevel - min terrain height inside lake) */
   maxDepth: number;
   /** Minimum terrain height inside the lake (for consistent water positioning across chunks) */
   minTerrainHeight?: number;
@@ -57,7 +57,7 @@ export interface LakeConfig {
   /**
    * Noise scale for the lake-candidate mask.
    * Lower = larger lake regions, higher = smaller scattered pockets.
-   * Typical range: 0.005 – 0.02.  Default: 0.01.
+   * Typical range: 0.005 - 0.02.  Default: 0.01.
    */
   noiseScale: number;
 
@@ -123,7 +123,7 @@ export const DEFAULT_LAKE_CONFIG: LakeConfig = {
   maxFillDepth: 0.06,
 };
 
-// ─── LakeGenerator ───────────────────────────────────────────────────────────
+// --- LakeGenerator -----------------------------------------------------------
 
 /**
  * Generates lake bodies for a single chunk.
@@ -150,8 +150,8 @@ export class LakeGenerator {
    * @param chunkX    - Chunk X coordinate
    * @param chunkY    - Chunk Y coordinate
    * @param chunkSize - Chunk size (tiles per side)
-   * @param heightmap - (chunkSize+1)² vertex heights in [0,1]
-   * @param biomeMap  - chunkSize² biome types (Uint8Array)
+   * @param heightmap - (chunkSize+1)^2 vertex heights in [0,1]
+   * @param biomeMap  - chunkSize^2 biome types (Uint8Array)
    * @returns Array of detected lake bodies (may be empty)
    */
   generateLakes(
@@ -167,7 +167,7 @@ export class LakeGenerator {
     const vertexSize = size + 1;
     const seaLevel = 0.3; // must match terrain generator constant
 
-    // ── Helper: average height of the four corners of tile (tx, ty) ──────────
+    // -- Helper: average height of the four corners of tile (tx, ty) ----------
     const tileHeight = (tx: number, ty: number): number => {
       const v00 = heightmap[ty * vertexSize + tx];
       const v10 = heightmap[ty * vertexSize + (tx + 1)];
@@ -176,11 +176,11 @@ export class LakeGenerator {
       return (v00 + v10 + v01 + v11) * 0.25;
     };
 
-    // ── Step 1: collect candidate seed tiles ─────────────────────────────────
+    // -- Step 1: collect candidate seed tiles ---------------------------------
     // A tile is a candidate when:
-    //   • its biome is in allowedBiomes
-    //   • its height is in [minElevation, maxElevation]
-    //   • the lake noise at its world position exceeds noiseThreshold
+    //   - its biome is in allowedBiomes
+    //   - its height is in [minElevation, maxElevation]
+    //   - the lake noise at its world position exceeds noiseThreshold
 
     const allowedSet = new Set<number>(this.config.allowedBiomes);
     const candidates: number[] = []; // tile indices
@@ -215,13 +215,13 @@ export class LakeGenerator {
 
     if (candidates.length === 0) return [];
 
-    // ── Step 2: flood-fill from each candidate seed ───────────────────────────
+    // -- Step 2: flood-fill from each candidate seed ---------------------------
     // We use a simple BFS fill-to-spill:
-    //   • Start from the seed tile.
-    //   • Expand to 4-connected neighbours whose height ≤ current water level.
-    //   • If we hit the chunk boundary we consider the lake "open" (drains out)
-    //     and abort — no lake forms from this seed.
-    //   • The water level starts at the seed height and rises by small increments
+    //   - Start from the seed tile.
+    //   - Expand to 4-connected neighbours whose height <= current water level.
+    //   - If we hit the chunk boundary we consider the lake "open" (drains out)
+    //     and abort - no lake forms from this seed.
+    //   - The water level starts at the seed height and rises by small increments
     //     until either the fill is closed or maxFillDepth is exceeded.
     //
     // To avoid redundant work, tiles already assigned to a lake are skipped.
@@ -253,7 +253,7 @@ export class LakeGenerator {
         );
 
         if (result !== null) {
-          // Closed basin found — compute max depth
+          // Closed basin found - compute max depth
           let minH = waterLevel;
           for (const tileIdx of result) {
             const tx = tileIdx % size;
@@ -280,7 +280,7 @@ export class LakeGenerator {
       }
     }
 
-    // ── Step 3: merge overlapping / adjacent lakes ────────────────────────────
+    // -- Step 3: merge overlapping / adjacent lakes ----------------------------
     // Multiple seed tiles inside the same physical depression can produce
     // separate LakeData objects with slightly different waterLevels.
     // We union any two lakes whose tile sets share at least one tile, keeping
@@ -324,7 +324,7 @@ export class LakeGenerator {
       if (ra !== rb) parent[ra] = rb;
     };
 
-    // Build map: tileIndex → lake index (for overlap detection)
+    // Build map: tileIndex -> lake index (for overlap detection)
     const tileOwner = new Map<number, number>();
     for (let i = 0; i < lakes.length; i++) {
       for (const tileIdx of lakes[i].tiles) {
@@ -463,7 +463,7 @@ export class LakeGenerator {
         const nx = cx + dx[d];
         const ny = cy + dy[d];
 
-        // Touching chunk boundary → open basin, abort
+        // Touching chunk boundary -> open basin, abort
         if (nx < 0 || ny < 0 || nx >= size || ny >= size) {
           return null;
         }
@@ -483,7 +483,7 @@ export class LakeGenerator {
 
           queue.push([nx, ny]);
         }
-        // Tiles at or above waterLevel form the basin wall — don't expand there
+        // Tiles at or above waterLevel form the basin wall - don't expand there
       }
     }
 

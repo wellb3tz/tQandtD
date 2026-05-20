@@ -187,7 +187,7 @@ export class WorkerPool {
       task.signal.addEventListener('abort', onAbort, { once: true });
     }
 
-    // Insert into queue maintaining priority order (binary insertion — O(n) shift
+    // Insert into queue maintaining priority order (binary insertion - O(n) shift
     // but avoids a full O(n log n) sort on every submit).
     let lo = 0;
     let hi = this.taskQueue.length;

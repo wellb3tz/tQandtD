@@ -75,9 +75,9 @@ export interface EnhancedBiomeData {
   elevationBand?: ElevationBand;
   /** Transition factor (0 = pure biome, 1 = full transition) */
   transitionFactor: number;
-  /** Dynamic snow-line used for this tile [0–1] */
+  /** Dynamic snow-line used for this tile [0-1] */
   dynamicSnowLine: number;
-  /** Dynamic tree-line used for this tile [0–1] */
+  /** Dynamic tree-line used for this tile [0-1] */
   dynamicTreeLine: number;
 }
 
@@ -132,7 +132,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       ? new BiomeCompatibilityMatrix()
       : null;
 
-    // Volcano activity noise — seed offset 4000 avoids collision with other systems.
+    // Volcano activity noise - seed offset 4000 avoids collision with other systems.
     this.volcanoActivityNoise = new NoiseEngine(seed + 4000);
     this.volcanoNoiseConfig = {
       octaves: 3,
@@ -168,7 +168,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   }
 
   /**
-   * Returns the dynamic snow-line for the current global climate [0–1].
+   * Returns the dynamic snow-line for the current global climate [0-1].
    * Falls back to config value when ClimateSystem is disabled.
    */
   getClimateSnowLine(): number {
@@ -178,7 +178,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   }
 
   /**
-   * Returns the dynamic tree-line for the current global climate [0–1].
+   * Returns the dynamic tree-line for the current global climate [0-1].
    * Falls back to config value when ClimateSystem is disabled.
    */
   getClimateTreeLine(): number {
@@ -203,7 +203,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     // Sample height at center position for primary biome classification
     const height = getHeight(x, y);
 
-    // Compute temperature and moisture — use ClimateSystem when enabled,
+    // Compute temperature and moisture - use ClimateSystem when enabled,
     // otherwise fall through to the parent BiomeSystem noise-only path via getBiome.
     let biome: BiomeType;
     if (this.climateSystem !== null) {
@@ -214,7 +214,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       biome = this.getBiome(x, y, height);
     }
 
-    // Ocean is absolute — never blend land biomes into it.
+    // Ocean is absolute - never blend land biomes into it.
     if (biome === BiomeType.OCEAN) {
       return {
         biome: BiomeType.OCEAN,
@@ -349,21 +349,21 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       return BiomeType.MOUNTAIN;
     }
 
-    // Coastal zone: height 0.30–0.42.
+    // Coastal zone: height 0.30-0.42.
     // Only assign BEACH if ocean water is reachable within a short radius.
     // This prevents inland "beaches" on plateaus at the same height.
     if (height < 0.42) {
       if (this.isNearWater(x, y, getHeight, 24)) {
-        // Steep coastal cliffs → rocky shore instead of sand
+        // Steep coastal cliffs -> rocky shore instead of sand
         const dx1 = getHeight(x + 2, y) - height;
         const dx2 = getHeight(x - 2, y) - height;
         const dy1 = getHeight(x, y + 2) - height;
         const dy2 = getHeight(x, y - 2) - height;
         const gradient = Math.sqrt((dx1*dx1 + dx2*dx2 + dy1*dy1 + dy2*dy2) / 4);
-        // Very steep coast → mountain/rock biome, gentle coast → beach
+        // Very steep coast -> mountain/rock biome, gentle coast -> beach
         return gradient > 0.08 ? BiomeType.MOUNTAIN : BiomeType.BEACH;
       }
-      // Not near water — fall through to climate-based classification
+      // Not near water - fall through to climate-based classification
     }
 
     if (temperature < -0.5) {

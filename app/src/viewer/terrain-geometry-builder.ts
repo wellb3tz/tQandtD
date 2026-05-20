@@ -44,7 +44,7 @@ export interface TerrainGeometryOptions {
   underwaterDarkenFactor: number;
   underwaterDesaturationFactor: number;
   enableDepthGradient: boolean;
-  /** Dynamic snow-line elevation from the chunk's climate [0–1]. Defaults to 0.76. */
+  /** Dynamic snow-line elevation from the chunk's climate [0-1]. Defaults to 0.76. */
   climateSnowLine?: number;
   partial?: boolean;
   stage?: number;

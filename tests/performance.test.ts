@@ -312,8 +312,8 @@ describeBenchmarks('Performance Benchmarks', () => {
     console.log(`  Per-stage generation times:`);
     reportStage('Terrain', terrains);
     reportStage('Biome (total)', biomes);
-    reportStage('  ├─ Classification', biomeClassifications);
-    reportStage('  └─ Blending', biomeBlendings);
+    reportStage('  +- Classification', biomeClassifications);
+    reportStage('  +- Blending', biomeBlendings);
     reportStage('Rivers', rivers);
     reportStage('Lakes', lakes);
     reportStage('Resources', resources);
@@ -400,8 +400,8 @@ describeBenchmarks('Performance Benchmarks', () => {
 
     console.log(`\nBiome generation micro-benchmark (32x32 chunk):`);
     console.log(`  Manual measurement:`);
-    console.log(`    Classification (getBiome × ${size * size}):     ${classificationTime.toFixed(2)}ms  (${(classificationTime / totalBiomeTime * 100).toFixed(1)}%)`);
-    console.log(`    Blending (getBiomeWeights × ${size * size}):    ${blendingTime.toFixed(2)}ms  (${(blendingTime / totalBiomeTime * 100).toFixed(1)}%)`);
+    console.log(`    Classification (getBiome x ${size * size}):     ${classificationTime.toFixed(2)}ms  (${(classificationTime / totalBiomeTime * 100).toFixed(1)}%)`);
+    console.log(`    Blending (getBiomeWeights x ${size * size}):    ${blendingTime.toFixed(2)}ms  (${(blendingTime / totalBiomeTime * 100).toFixed(1)}%)`);
     console.log(`    Sparse conversion:                            ${sparseTime.toFixed(2)}ms  (${(sparseTime / totalBiomeTime * 100).toFixed(1)}%)`);
     console.log(`    Total measured biome time:                    ${totalBiomeTime.toFixed(2)}ms`);
     console.log(`  From ChunkManager.generateChunkWithMetrics:`);

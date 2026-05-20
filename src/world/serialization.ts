@@ -28,7 +28,7 @@ declare const Buffer: {
 export interface ChunkManagerSnapshot {
   /** World seed */
   readonly config: WorldConfig;
-  /** LRU cache: key → { chunk, lastAccessed } */
+  /** LRU cache: key -> { chunk, lastAccessed } */
   readonly cache: ReadonlyMap<string, { chunk: ChunkData; lastAccessed: number }>;
   /** Modification records keyed by "chunkX,chunkY" */
   readonly modifications: ReadonlyMap<string, ChunkModification>;
@@ -135,7 +135,7 @@ export interface SerializedWorld {
 }
 
 /**
- * Serialized lake data — plain JSON-safe representation of LakeData.
+ * Serialized lake data - plain JSON-safe representation of LakeData.
  * `Set<number>` is stored as a plain number array.
  */
 export interface SerializedLake {
@@ -191,7 +191,7 @@ export interface SerializedChunk {
   biomeMap: ArrayBuffer | string;
 
   /**
-   * Sparse biome weight arrays — serialized alongside biomeMap so that
+   * Sparse biome weight arrays - serialized alongside biomeMap so that
    * biome-blend rendering is preserved after a save/load cycle.
    *
    * All three arrays are stored as base64 strings (JSON) or ArrayBuffers (binary).

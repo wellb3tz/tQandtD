@@ -1,7 +1,7 @@
 /**
  * Determinism tests
  *
- * Core guarantee: same seed → same world, always.
+ * Core guarantee: same seed -> same world, always.
  * These tests catch any accidental introduction of non-deterministic state
  * (Date.now(), Math.random(), uninitialized memory, etc.).
  */

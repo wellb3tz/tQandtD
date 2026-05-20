@@ -39,14 +39,14 @@ export const DEFAULT_OCEAN_CONFIG = {
  */
 export const DEFAULT_LAKE_RENDER_CONFIG = {
   enabled: true,
-  color: 0x4fc3d4,  // light cyan-teal — freshwater, distinct from ocean navy
+  color: 0x4fc3d4,  // light cyan-teal - freshwater, distinct from ocean navy
   opacity: 0.80,
   shininess: 60,
 };
 
 export const DEFAULT_RIVER_RENDER_CONFIG = {
   enabled: true,
-  color: 0x5ab5c8, // freshwater turquoise — distinct from ocean navy and lake cyan
+  color: 0x5ab5c8, // freshwater turquoise - distinct from ocean navy and lake cyan
   opacity: 0.82,
   shininess: 75,
 };

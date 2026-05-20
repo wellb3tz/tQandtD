@@ -453,7 +453,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.initialize(container);
     disableWater(viewer);
 
-    // Same high mountain but with hot local temperature — snow should be suppressed
+    // Same high mountain but with hot local temperature - snow should be suppressed
     viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
       heightmap: new Float32Array([0.36, 0.92, 0.38, 0.84]),

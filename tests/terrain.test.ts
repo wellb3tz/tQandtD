@@ -2,7 +2,7 @@
  * Terrain generation tests
  *
  * Validates heightmap correctness, value ranges, and the seamless boundary
- * property — the most important structural guarantee of the chunk system.
+ * property - the most important structural guarantee of the chunk system.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -12,7 +12,7 @@ import { makeMinimalConfig } from './helpers';
 
 describe('Terrain', () => {
   describe('heightmap shape', () => {
-    it('has (size+1)² vertices for seamless boundaries', async () => {
+    it('has (size+1)^2 vertices for seamless boundaries', async () => {
       const manager = new ChunkManager(makeMinimalConfig(1));
       const chunk = await manager.getChunk(0, 0);
       const expected = (chunk.size + 1) * (chunk.size + 1);

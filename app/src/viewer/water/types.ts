@@ -141,10 +141,10 @@ export interface OceanTile extends WaterSurfaceTile {
 }
 
 /**
- * Lake tile data — same shape as OceanTile but waterElevation > seaLevel.
+ * Lake tile data - same shape as OceanTile but waterElevation > seaLevel.
  */
 export interface LakeTile extends WaterSurfaceTile {
-  /** Flat tile index (row-major, size × size) */
+  /** Flat tile index (row-major, size x size) */
   index: number;
   /** Average terrain height of the tile's four corners */
   terrainHeight: number;
@@ -160,7 +160,7 @@ export interface LakeTile extends WaterSurfaceTile {
 export interface LakeRenderConfig {
   /** Enable lake rendering (default: true) */
   enabled: boolean;
-  /** Lake water color as hex (default: 0x00ff88 — vivid green for testing) */
+  /** Lake water color as hex (default: 0x00ff88 - vivid green for testing) */
   color: number;
   /** Lake water opacity (default: 0.80) */
   opacity: number;

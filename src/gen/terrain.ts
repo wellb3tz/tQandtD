@@ -29,7 +29,7 @@ export interface TerrainConfig {
   /**
    * Scale of the continental noise (default: 0.002).
    * Lower values = larger continents and ocean basins.
-   * Typical range: 0.001 (huge continents) – 0.005 (smaller islands).
+   * Typical range: 0.001 (huge continents) - 0.005 (smaller islands).
    */
   continentalScale?: number;
   /**
@@ -55,7 +55,7 @@ export class TerrainGenerator {
   private ridgeNoise: NoiseEngine | null = null;
   /**
    * Cached primary noise engine keyed by world seed.
-   * Avoids allocating a new NoiseEngine on every getHeightAt() call —
+   * Avoids allocating a new NoiseEngine on every getHeightAt() call -
    * the hot path during biome generation for neighbouring chunks.
    */
   private cachedNoise: NoiseEngine | null = null;
@@ -188,7 +188,7 @@ export class TerrainGenerator {
    * @returns Height value in [0, 1] range
    */
   getHeightAt(worldX: number, worldY: number, seed: number): number {
-    // Reuse cached NoiseEngine for the same seed — avoids per-call allocation
+    // Reuse cached NoiseEngine for the same seed - avoids per-call allocation
     // which is critical when getHeightAt is called ~32 000 times per chunk
     // during biome generation for neighbouring positions.
     if (this.cachedNoiseSeed !== seed) {
