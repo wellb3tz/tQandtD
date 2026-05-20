@@ -213,6 +213,7 @@ export class WorldViewer {
   applyViewerSettings(settings: ViewerSettings, loadedChunks?: Map<string, ChunkData>): void {
     this.setVisibility(RenderLayer.TERRAIN, settings.showTerrain);
     this.setVisibility(RenderLayer.BIOMES, settings.showBiomes);
+    this.setVisibility(RenderLayer.TEMPERATURE, settings.showTemperature);
     this.setWaterVisibility(settings.showWater);
     this.setVisibility(RenderLayer.RESOURCES, settings.showResources);
     this.setVisibility(RenderLayer.STRUCTURES, settings.showStructures);

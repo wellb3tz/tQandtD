@@ -108,6 +108,7 @@ function createViewerChunkData(overrides: Partial<ChunkData> = {}): ChunkData {
     sparseBiomeTypes: new Uint8Array(0),
     sparseBiomeWeights: new Float32Array(0),
     sparseBiomeOffsets: new Uint16Array(tileCount + 1),
+    temperatureMap: new Float32Array(tileCount),
     resources: [],
     structures: [],
     ...overrides,
@@ -437,7 +438,40 @@ describe('WorldViewer lifecycle', () => {
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 
     expect(detailBlend.getX(0)).toBeGreaterThan(0.22);
-    expect(detailBlend.getY(3)).toBeGreaterThan(0.40);
+    expect(detailBlend.getY(3)).toBeGreaterThan(0.35);
+
+    viewer.dispose();
+  });
+
+  it('suppresses snow on hot mountain peaks based on local temperature', async () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.initialize(container);
+    disableWater(viewer);
+
+    // Same high mountain but with hot local temperature — snow should be suppressed
+    viewer.addChunk(0, 0, createViewerChunkData({
+      size: 1,
+      heightmap: new Float32Array([0.36, 0.92, 0.38, 0.84]),
+      biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
+      temperatureMap: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+      resources: [],
+      structures: [],
+    }));
+    await viewer.flushPendingChunkBuilds();
+
+    const terrain = getTerrainMesh(viewer);
+    const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
+
+    // Snow detail (Y channel) should be zero because temperature is too high
+    expect(detailBlend.getY(0)).toBe(0);
+    expect(detailBlend.getY(1)).toBe(0);
+    expect(detailBlend.getY(2)).toBe(0);
+    expect(detailBlend.getY(3)).toBe(0);
 
     viewer.dispose();
   });

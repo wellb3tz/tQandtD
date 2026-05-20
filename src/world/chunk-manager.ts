@@ -1,4 +1,4 @@
-import { ChunkData, Structure } from './chunk';
+import { BiomeType, ChunkData, Structure } from './chunk';
 import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
@@ -193,9 +193,26 @@ export class ChunkManager implements ChunkManagerSnapshot {
     
     // Initialize LakeManager if lakes are enabled (multi-chunk lakes are now the only option)
     const lakeConfig = config.lakeConfig ?? DEFAULT_LAKE_CONFIG;
+    // Adjust lake-permitted biomes based on global temperature offset
+    const temperatureOffset = config.enhancedBiomeConfig?.worldTemperatureOffset ?? 0;
+    const climateLakeBiomes = new Set<BiomeType>(lakeConfig.allowedBiomes);
+    if (temperatureOffset > 0.4) {
+      // Hot world: tundra and taiga lakes dry out
+      climateLakeBiomes.delete(BiomeType.TUNDRA);
+      climateLakeBiomes.delete(BiomeType.TAIGA);
+    }
+    if (temperatureOffset < -0.4) {
+      // Cold world: deserts and savannas lose lakes entirely
+      climateLakeBiomes.delete(BiomeType.DESERT);
+      climateLakeBiomes.delete(BiomeType.SAVANNA);
+    }
+    const adjustedLakeConfig: LakeConfig = {
+      ...lakeConfig,
+      allowedBiomes: Array.from(climateLakeBiomes),
+    };
     this.lakeManager = lakeConfig.enabled ? new LakeManager(
       config.seed,
-      lakeConfig,
+      adjustedLakeConfig,
       (worldX: number, worldY: number) => this.terrainGenerator.getHeightAt(worldX, worldY, config.seed),
       (worldX: number, worldY: number) => {
         const height = this.terrainGenerator.getHeightAt(worldX, worldY, config.seed);
@@ -465,6 +482,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     let sparseBiomeTypes: Uint8Array;
     let sparseBiomeWeights: Float32Array;
     let sparseBiomeOffsets: Uint16Array;
+    let temperatureMap: Float32Array;
     
     try {
       this.config.onProgress?.('biomes', 0.4);
@@ -475,6 +493,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes = biomeData.sparseBiomeTypes;
       sparseBiomeWeights = biomeData.sparseBiomeWeights;
       sparseBiomeOffsets = biomeData.sparseBiomeOffsets;
+      temperatureMap = biomeData.temperatureMap;
       
       if (this.config.enablePerformanceMetrics) {
         metrics.biomeTime = performance.now() - biomeStart;
@@ -490,6 +509,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
       throw new BiomeGenerationError(chunkX, chunkY, error instanceof Error ? error : undefined);
     }
 
+    // Compute dynamic climate thresholds (uniform across the world because the
+    // offset is global, but we store them per-chunk so the renderer sees them)
+    let climateSnowLine: number | undefined;
+    let climateTreeLine: number | undefined;
+    let worldTemperatureOffset: number | undefined;
+    if (this.enhancedBiomeSystem) {
+      climateSnowLine = this.enhancedBiomeSystem.getClimateSnowLine();
+      climateTreeLine = this.enhancedBiomeSystem.getClimateTreeLine();
+      worldTemperatureOffset = this.enhancedBiomeSystem.getWorldTemperatureOffset();
+    }
+
     // Initialize chunk data with terrain and biomes
     const chunk: ChunkData = {
       x: chunkX,
@@ -500,6 +530,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes,
       sparseBiomeWeights,
       sparseBiomeOffsets,
+      climateSnowLine,
+      climateTreeLine,
+      worldTemperatureOffset,
+      temperatureMap,
       lakes: [],
       rivers: [],
       resources: [],
@@ -517,7 +551,12 @@ export class ChunkManager implements ChunkManagerSnapshot {
           chunkY,
           this.config.chunkSize
         );
-        chunk.rivers = this.convertWorldRiversToChunkRivers(worldRivers, chunkX, chunkY, this.config.chunkSize);
+        // Compute per-river climate states once per chunk
+        const riverStateMap = new Map<string, 'flowing' | 'frozen' | 'dry'>();
+        for (const river of worldRivers) {
+          riverStateMap.set(river.id, this.determineRiverState(river));
+        }
+        chunk.rivers = this.convertWorldRiversToChunkRivers(worldRivers, chunkX, chunkY, this.config.chunkSize, riverStateMap);
 
         if (chunk.rivers.length > 0) {
           this.carveTerrainForRivers(chunk.rivers, heightmap, this.config.chunkSize);
@@ -753,10 +792,12 @@ export class ChunkManager implements ChunkManagerSnapshot {
     sparseBiomeTypes: Uint8Array;
     sparseBiomeWeights: Float32Array;
     sparseBiomeOffsets: Uint16Array;
+    temperatureMap: Float32Array;
     metrics: { classificationTime: number; blendingTime: number };
   } {
     const size = this.config.chunkSize;
     const biomeMap = new Uint8Array(size * size);
+    const temperatureMap = new Float32Array(size * size);
 
 
     // Collect weight maps for all tiles (will convert to sparse at the end)
@@ -866,6 +907,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
           // Store weights for sparse conversion
           tileWeights.push(enhancedData.weights);
+
+          // Sample local temperature for snow calculations
+          const climate = this.enhancedBiomeSystem.sampleClimate(wx, wy, height, getHeightFast);
+          temperatureMap[index] = climate ? climate.temperature : 0;
         } else {
           // Use base BiomeSystem (backward compatible)
           const tClass = enableTiming ? performance.now() : 0;
@@ -884,6 +929,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
           // Store weights for sparse conversion
           tileWeights.push(weights);
+
+          // Sample local temperature for snow calculations
+          temperatureMap[index] = this.biomeSystem.getTemperature(wx, wy);
         }
       }
     }
@@ -913,6 +961,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
       sparseBiomeTypes: new Uint8Array(types),
       sparseBiomeWeights: new Float32Array(weights),
       sparseBiomeOffsets: new Uint16Array(offsets),
+      temperatureMap,
       metrics: { classificationTime, blendingTime },
     };
   }
@@ -1339,11 +1388,15 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
       // Only include lake if it has tiles in this chunk
       if (chunkTiles.size > 0) {
-        const lakeData = {
+        // Determine lake state based on climate
+        const lakeState = this.determineLakeState(worldLake);
+        
+        const lakeData: LakeData = {
           waterLevel: worldLake.waterLevel,
           tiles: chunkTiles,
           maxDepth: worldLake.maxDepth,
           minTerrainHeight: worldLake.minTerrainHeight,
+          state: lakeState,
         };
         
         logger.debug(LogCategory.LAKE, `Converting world lake to chunk (${chunkX}, ${chunkY})`, {
@@ -1415,11 +1468,90 @@ export class ChunkManager implements ChunkManagerSnapshot {
     }
   }
 
+  /**
+   * Determines the climate-driven state of a river based on average temperature
+   * and moisture along its main path. Requires EnhancedBiomeSystem with ClimateSystem.
+   */
+  private determineRiverState(river: WorldRiverData): 'flowing' | 'frozen' | 'dry' {
+    if (!this.enhancedBiomeSystem) return 'flowing';
+
+    // Sample climate along the main path to get average conditions
+    const points = river.mainPath;
+    const sampleCount = Math.min(points.length, 12);
+    const step = Math.max(1, Math.floor(points.length / sampleCount));
+    
+    let totalTemp = 0;
+    let totalMoisture = 0;
+    let sampled = 0;
+
+    for (let i = 0; i < points.length && sampled < sampleCount; i += step) {
+      const point = points[i];
+      const climate = this.enhancedBiomeSystem.sampleClimate(
+        point.x,
+        point.y,
+        point.height,
+        (wx, wy) => this.terrainGenerator.getHeightAt(wx, wy, this.config.seed),
+      );
+      if (climate) {
+        totalTemp += climate.temperature;
+        totalMoisture += climate.moisture;
+        sampled++;
+      }
+    }
+
+    if (sampled === 0) return 'flowing';
+    
+    const avgTemp = totalTemp / sampled;
+    const avgMoisture = totalMoisture / sampled;
+
+    if (avgTemp < -0.4) return 'frozen';
+    if (avgTemp > 0.4 && avgMoisture < -0.2) return 'dry';
+    return 'flowing';
+  }
+
+  /**
+   * Determines the climate-driven state of a lake based on average temperature
+   * across its tiles. Requires EnhancedBiomeSystem with ClimateSystem.
+   */
+  private determineLakeState(lake: WorldLakeData): 'filled' | 'dry' {
+    if (!this.enhancedBiomeSystem) return 'filled';
+
+    // Sample temperature at multiple points across the lake
+    const sampleCount = Math.min(lake.tiles.size, 9);
+    const tileArray = Array.from(lake.tiles);
+    let totalTemp = 0;
+    let sampled = 0;
+
+    const step = Math.max(1, Math.floor(tileArray.length / sampleCount));
+    for (let i = 0; i < tileArray.length && sampled < sampleCount; i += step) {
+      const [wx, wy] = tileArray[i].split(',').map(Number);
+      const height = this.terrainGenerator.getHeightAt(wx, wy, this.config.seed);
+      const climate = this.enhancedBiomeSystem.sampleClimate(
+        wx,
+        wy,
+        height,
+        (x, y) => this.terrainGenerator.getHeightAt(x, y, this.config.seed),
+      );
+      if (climate) {
+        totalTemp += climate.temperature;
+        sampled++;
+      }
+    }
+
+    if (sampled === 0) return 'filled';
+    const avgTemp = totalTemp / sampled;
+
+    // Lake dries out in hot, dry climates
+    if (avgTemp > 0.4) return 'dry';
+    return 'filled';
+  }
+
   private convertWorldRiversToChunkRivers(
     worldRivers: WorldRiverData[],
     chunkX: number,
     chunkY: number,
-    chunkSize: number
+    chunkSize: number,
+    stateMap?: Map<string, 'flowing' | 'frozen' | 'dry'>,
   ): RiverData[] {
     const chunkWorldX = chunkX * chunkSize;
     const chunkWorldY = chunkY * chunkSize;
@@ -1485,6 +1617,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
           pathId: localRuns.length === 1 ? pathId : `${pathId}:span${index}`,
           isTributary,
           points: local,
+          state: stateMap?.get(riverId),
           bounds: {
             minX: Math.min(...xs),
             maxX: Math.max(...xs),

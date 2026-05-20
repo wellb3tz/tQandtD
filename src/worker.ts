@@ -219,6 +219,7 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+      state: lake.state,
     })),
     rivers: (chunk.rivers ?? []).map(river => ({
       riverId: river.riverId,
@@ -283,6 +284,7 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
       tiles: new Set(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+      state: lake.state,
     })),
     rivers: (serialized.rivers ?? []).map(river => ({
       riverId: river.riverId,

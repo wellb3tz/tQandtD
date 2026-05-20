@@ -2,6 +2,7 @@ import { BiomeConfig, BiomeSystem } from './biome';
 import { BiomeType } from './chunk';
 import { ClimateSystem, ClimateConfig, DEFAULT_CLIMATE_CONFIG } from './climate';
 import { BiomeCompatibilityMatrix } from './biome-compatibility';
+import { NoiseEngine, type NoiseConfig } from '../core/noise';
 
 /**
  * Enhanced biome configuration extending base BiomeConfig
@@ -74,6 +75,10 @@ export interface EnhancedBiomeData {
   elevationBand?: ElevationBand;
   /** Transition factor (0 = pure biome, 1 = full transition) */
   transitionFactor: number;
+  /** Dynamic snow-line used for this tile [0–1] */
+  dynamicSnowLine: number;
+  /** Dynamic tree-line used for this tile [0–1] */
+  dynamicTreeLine: number;
 }
 
 /**
@@ -87,11 +92,16 @@ export interface EnhancedBiomeData {
 export class EnhancedBiomeSystem extends BiomeSystem {
   private enhancedConfig: EnhancedBiomeConfig;
 
+  /** Cached global temperature offset for fast access. */
+  private readonly worldTemperatureOffset: number;
   /** ClimateSystem instance, or null when enableClimateSystem is false. */
   private climateSystem: ClimateSystem | null;
   /** BiomeCompatibilityMatrix instance, or null when enableCompatibilityMatrix is false. */
   private compatibilityMatrix: BiomeCompatibilityMatrix | null;
-
+  /** Noise source for volcanic activity (active vs dormant peaks). */
+  private readonly volcanoActivityNoise: NoiseEngine;
+  /** Re-used noise config to avoid per-call allocations. */
+  private readonly volcanoNoiseConfig: NoiseConfig;
 
   /**
    * Creates a new EnhancedBiomeSystem with the given seed and configuration.
@@ -115,10 +125,66 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       ? new ClimateSystem(seed, climateCfg)
       : null;
 
+    this.worldTemperatureOffset = climateCfg.worldTemperatureOffset;
+
     // Instantiate BiomeCompatibilityMatrix when opted in (default: true)
     this.compatibilityMatrix = config.enableCompatibilityMatrix !== false
       ? new BiomeCompatibilityMatrix()
       : null;
+
+    // Volcano activity noise — seed offset 4000 avoids collision with other systems.
+    this.volcanoActivityNoise = new NoiseEngine(seed + 4000);
+    this.volcanoNoiseConfig = {
+      octaves: 3,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: 0.002,
+    };
+  }
+
+  /**
+   * Samples temperature and moisture at a world position using the active
+   * ClimateSystem. Returns null when ClimateSystem is disabled.
+   */
+  sampleClimate(
+    x: number,
+    y: number,
+    height: number,
+    getHeight: (wx: number, wy: number) => number,
+  ): { temperature: number; moisture: number } | null {
+    if (this.climateSystem === null) return null;
+    return {
+      temperature: this.climateSystem.getTemperature(x, y, height),
+      moisture: this.climateSystem.getMoisture(x, y, height, getHeight),
+    };
+  }
+
+  /**
+   * Returns the global temperature offset used by the climate system.
+   * Returns 0 when ClimateSystem is disabled.
+   */
+  getWorldTemperatureOffset(): number {
+    return this.worldTemperatureOffset;
+  }
+
+  /**
+   * Returns the dynamic snow-line for the current global climate [0–1].
+   * Falls back to config value when ClimateSystem is disabled.
+   */
+  getClimateSnowLine(): number {
+    return this.climateSystem !== null
+      ? this.climateSystem.getDynamicSnowLine()
+      : this.enhancedConfig.snowLineElevation;
+  }
+
+  /**
+   * Returns the dynamic tree-line for the current global climate [0–1].
+   * Falls back to config value when ClimateSystem is disabled.
+   */
+  getClimateTreeLine(): number {
+    return this.climateSystem !== null
+      ? this.climateSystem.getDynamicTreeLine()
+      : this.enhancedConfig.treeLineElevation;
   }
 
   /**
@@ -194,9 +260,17 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     }
 
 
+    // Compute dynamic elevation thresholds from climate when available
+    const dynamicSnowLine = this.climateSystem !== null
+      ? this.climateSystem.getDynamicSnowLine()
+      : this.enhancedConfig.snowLineElevation;
+    const dynamicTreeLine = this.climateSystem !== null
+      ? this.climateSystem.getDynamicTreeLine()
+      : this.enhancedConfig.treeLineElevation;
+
     // Determine elevation band for mountains
     const elevationBand = this.enhancedConfig.enableElevationBands && biome === BiomeType.MOUNTAIN
-      ? this.getElevationBand(height)
+      ? this.getElevationBand(height, dynamicSnowLine, dynamicTreeLine)
       : undefined;
 
     return {
@@ -204,6 +278,8 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       weights,
       elevationBand,
       transitionFactor,
+      dynamicSnowLine,
+      dynamicTreeLine,
     };
   }
 
@@ -233,7 +309,14 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   ): BiomeType {
     if (height < 0.3)  return BiomeType.OCEAN;
     if (height > 0.7) {
-      if (height > 0.85 && temperature > 0.2) return BiomeType.VOLCANIC;
+      if (height > 0.85) {
+        // Active volcanoes stay volcanic regardless of temperature (magma heat);
+        // dormant ones only classify as volcanic when it's warm enough.
+        const isActive = this.isActiveVolcano(x, y);
+        if (isActive || temperature > 0.2) {
+          return BiomeType.VOLCANIC;
+        }
+      }
       return BiomeType.MOUNTAIN;
     }
 
@@ -272,6 +355,17 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       if (moisture > 0.2)  return BiomeType.FOREST;
       return BiomeType.PLAINS;
     }
+  }
+
+  /**
+   * Returns true when the peak at (x, y) is an active volcano.
+   * Active volcanoes (~20 % of qualifying peaks) remain volcanic even in
+   * cold climates because subsurface magma keeps the summit warm.
+   */
+  private isActiveVolcano(x: number, y: number): boolean {
+    const raw = this.volcanoActivityNoise.fbm(x, y, this.volcanoNoiseConfig);
+    const activity = (raw + 1) * 0.5; // map to [0, 1]
+    return activity > 0.8; // top 20 % are active
   }
 
   /**
@@ -342,14 +436,16 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   }
 
   /**
-   * Determines elevation band for mountain terrain.
-   * @param height - Height value (0-1 range).
+   * Determines elevation band for mountain terrain using dynamic thresholds.
+   * @param height      - Height value (0-1 range).
+   * @param snowLine    - Dynamic snow-line elevation.
+   * @param treeLine    - Dynamic tree-line elevation.
    * @returns Elevation band type.
    */
-  private getElevationBand(height: number): ElevationBand {
-    if (height >= this.enhancedConfig.snowLineElevation) {
+  private getElevationBand(height: number, snowLine: number, treeLine: number): ElevationBand {
+    if (height >= snowLine) {
       return ElevationBand.PEAKS;
-    } else if (height >= this.enhancedConfig.treeLineElevation) {
+    } else if (height >= treeLine) {
       return ElevationBand.SLOPES;
     } else {
       return ElevationBand.FOOTHILLS;

@@ -122,69 +122,77 @@ export class WaterLayerManager {
 
     // Generate lake meshes
     if (config.lake.enabled && chunkData.lakes && chunkData.lakes.length > 0) {
-      console.log(`[Lakes] chunk ${chunkKey}: ${chunkData.lakes.length} lake(s)`, 
-        chunkData.lakes.map(l => ({ tiles: l.tiles.size, waterLevel: l.waterLevel.toFixed(4), maxDepth: l.maxDepth.toFixed(4) }))
-      );
-      const lakeTiles = identifyLakeTiles(chunkData, chunkData.lakes);
-      if (lakeTiles.length > 0) {
-        const lakeGeometry = buildLakeGeometry(lakeTiles, chunkData.lakes, chunkData);
-        if (lakeGeometry) {
-          const lakeMaterial = createLakeMaterial(config.lake);
-          const lakeMesh = new THREE.Mesh(lakeGeometry, lakeMaterial);
-          lakeMesh.renderOrder = 1;
-          lakeMesh.visible = true;
+      // Filter out dry lakes
+      const filledLakes = chunkData.lakes.filter(l => l.state !== 'dry');
+      if (filledLakes.length > 0) {
+        console.log(`[Lakes] chunk ${chunkKey}: ${filledLakes.length} filled lake(s) out of ${chunkData.lakes.length} total`, 
+          filledLakes.map(l => ({ tiles: l.tiles.size, waterLevel: l.waterLevel.toFixed(4), maxDepth: l.maxDepth.toFixed(4) }))
+        );
+        const lakeTiles = identifyLakeTiles(chunkData, filledLakes);
+        if (lakeTiles.length > 0) {
+          const lakeGeometry = buildLakeGeometry(lakeTiles, filledLakes, chunkData);
+          if (lakeGeometry) {
+            const lakeMaterial = createLakeMaterial(config.lake);
+            const lakeMesh = new THREE.Mesh(lakeGeometry, lakeMaterial);
+            lakeMesh.renderOrder = 1;
+            lakeMesh.visible = true;
 
-          const boundingBox = new THREE.Box3();
-          if (lakeGeometry.boundingBox) {
-            boundingBox.copy(lakeGeometry.boundingBox);
-          } else {
-            lakeGeometry.computeBoundingBox();
+            const boundingBox = new THREE.Box3();
             if (lakeGeometry.boundingBox) {
               boundingBox.copy(lakeGeometry.boundingBox);
+            } else {
+              lakeGeometry.computeBoundingBox();
+              if (lakeGeometry.boundingBox) {
+                boundingBox.copy(lakeGeometry.boundingBox);
+              }
             }
+
+            const lakeMeshData: WaterMesh = {
+              type: 'lake',
+              mesh: lakeMesh,
+              material: lakeMaterial,
+              boundingBox,
+            };
+
+            waterLayer.lake.push(lakeMeshData);
+            waterLayer.group.add(lakeMesh);
           }
-
-          const lakeMeshData: WaterMesh = {
-            type: 'lake',
-            mesh: lakeMesh,
-            material: lakeMaterial,
-            boundingBox,
-          };
-
-          waterLayer.lake.push(lakeMeshData);
-          waterLayer.group.add(lakeMesh);
         }
       }
     }
 
     // Generate river meshes
     if (config.river.enabled && chunkData.rivers && chunkData.rivers.length > 0) {
-      const riverGeometry = buildRiverGeometry(chunkData.rivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
-      if (riverGeometry) {
-        const riverMaterial = createRiverMaterial(config.river);
-        const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);
-        riverMesh.renderOrder = 2;
-        riverMesh.visible = true;
+      // Filter out dry rivers (keep frozen rivers for ice rendering)
+      const flowingRivers = chunkData.rivers.filter(r => r.state !== 'dry');
+      if (flowingRivers.length > 0) {
+        const riverGeometry = buildRiverGeometry(flowingRivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
+        if (riverGeometry) {
+          const riverMaterial = createRiverMaterial(config.river);
+          const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);
+          riverMesh.renderOrder = 2;
+          riverMesh.visible = true;
 
-        const boundingBox = new THREE.Box3();
-        if (riverGeometry.boundingBox) {
-          boundingBox.copy(riverGeometry.boundingBox);
-        } else {
-          riverGeometry.computeBoundingBox();
+          const boundingBox = new THREE.Box3();
           if (riverGeometry.boundingBox) {
             boundingBox.copy(riverGeometry.boundingBox);
+          } else {
+            riverGeometry.computeBoundingBox();
+            if (riverGeometry.boundingBox) {
+              boundingBox.copy(riverGeometry.boundingBox);
+            }
           }
+
+          const riverMeshData: WaterMesh = {
+            type: 'river',
+            mesh: riverMesh,
+            material: riverMaterial,
+            boundingBox,
+          };
+
+          waterLayer.river.push(riverMeshData);
+          waterLayer.group.add(riverMesh);
         }
-
-        const riverMeshData: WaterMesh = {
-          type: 'river',
-          mesh: riverMesh,
-          material: riverMaterial,
-          boundingBox,
-        };
-
-        waterLayer.river.push(riverMeshData);
-        waterLayer.group.add(riverMesh);
       }
     }
 

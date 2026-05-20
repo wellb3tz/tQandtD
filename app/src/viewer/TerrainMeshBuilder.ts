@@ -40,6 +40,7 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
     underwaterDarkenFactor: waterConfig.rendering.underwaterDarkenFactor,
     underwaterDesaturationFactor: waterConfig.rendering.underwaterDesaturationFactor,
     enableDepthGradient: waterConfig.rendering.enableDepthGradient,
+    climateSnowLine: options.data.climateSnowLine,
     partial,
     stage,
   });

@@ -18,10 +18,11 @@ export function selectTerrainSurfaceKey(
   elevation: number,
   slope: number,
   moisture: number = 0,
+  temperature: number = 0,
 ): TerrainSurfaceKey {
   const wetness = clamp01(moisture);
 
-  if ((biome === BiomeType.MOUNTAIN || biome === BiomeType.GLACIER) && elevation >= 0.78 && slope < 0.55) {
+  if ((biome === BiomeType.MOUNTAIN || biome === BiomeType.GLACIER) && elevation >= 0.78 && slope < 0.55 && temperature < 0.3) {
     return 'snow';
   }
 

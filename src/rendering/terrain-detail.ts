@@ -12,6 +12,31 @@ export function calculateRiverTrenchInfluence(data: ChunkData, x: number, y: num
 
   let strongest = 0;
   for (const river of rivers) {
+    // Dry rivers leave a carved depression but no water effects
+    if (river.state === 'dry') continue;
+    const points = river.points;
+    if (points.length < 2) continue;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const sample = closestRiverRenderSample(x, y, points[i], points[i + 1]);
+      const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+      if (channelRadius <= 0 || sample.distance > channelRadius) continue;
+
+      const centerWeight = 1 - sample.distance / channelRadius;
+      strongest = Math.max(strongest, centerWeight * centerWeight);
+    }
+  }
+
+  return strongest;
+}
+
+export function calculateFrozenRiverInfluence(data: ChunkData, x: number, y: number): number {
+  const rivers = data.rivers ?? [];
+  if (rivers.length === 0) return 0;
+
+  let strongest = 0;
+  for (const river of rivers) {
+    if (river.state !== 'frozen') continue;
     const points = river.points;
     if (points.length < 2) continue;
 

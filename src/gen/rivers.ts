@@ -37,12 +37,16 @@ export interface WorldRiverData {
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
+export type RiverState = 'flowing' | 'frozen' | 'dry';
+
 export interface RiverData {
   riverId: string;
   pathId: string;
   isTributary: boolean;
   points: RiverPoint[];
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  /** Climate-driven river state; undefined when climate system is disabled. */
+  state?: RiverState;
 }
 
 export interface RiverConfig {

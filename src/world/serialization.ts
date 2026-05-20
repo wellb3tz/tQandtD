@@ -141,6 +141,7 @@ export interface SerializedLake {
   tiles: number[];
   maxDepth: number;
   minTerrainHeight?: number;
+  state?: 'filled' | 'dry';
 }
 
 export interface SerializedRiverPoint {
@@ -321,6 +322,7 @@ export class WorldSerializer {
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+      state: lake.state,
     }));
     const rivers: SerializedRiver[] = (chunk.rivers ?? []).map(river => ({
       riverId: river.riverId,
@@ -587,6 +589,7 @@ export class WorldSerializer {
       tiles: Array.from(lake.tiles),
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
+      state: lake.state,
     }));
     const rivers: SerializedRiver[] = (chunk.rivers ?? []).map(river => ({
       riverId: river.riverId,
@@ -833,6 +836,7 @@ export class WorldSerializer {
       tiles: new Set(sl.tiles),
       maxDepth: sl.maxDepth,
       minTerrainHeight: sl.minTerrainHeight,
+      state: sl.state,
     }));
     const rivers: RiverData[] = (serializedChunk.rivers ?? []).map(sr => ({
       riverId: sr.riverId,
@@ -868,40 +872,16 @@ export class WorldSerializer {
   private deserializeChunkBinary(serializedChunk: SerializedChunk, chunkSize: number): ChunkData {
     const heightmap = this.deserializeFloat32ArrayBinary(serializedChunk.heightmap as ArrayBuffer);
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
-
-    // Restore sparse biome weights if present; fall back to legacy reconstruction.
-    let sparseBiomeTypes: Uint8Array;
-    let sparseBiomeWeights: Float32Array;
-    let sparseBiomeOffsets: Uint16Array;
-
-    if (
-      serializedChunk.sparseBiomeTypes !== undefined &&
-      serializedChunk.sparseBiomeWeights !== undefined &&
-      serializedChunk.sparseBiomeOffsets !== undefined
-    ) {
-      sparseBiomeTypes   = this.deserializeUint8ArrayBinary(serializedChunk.sparseBiomeTypes as ArrayBuffer);
-      sparseBiomeWeights = this.deserializeFloat32ArrayBinary(serializedChunk.sparseBiomeWeights as ArrayBuffer);
-      sparseBiomeOffsets = this.deserializeUint16ArrayBinary(serializedChunk.sparseBiomeOffsets as ArrayBuffer);
-    } else {
-      // Legacy fallback
-      const types: number[] = [];
-      const weights: number[] = [];
-      const offsets: number[] = [];
-      for (let i = 0; i < biomeMap.length; i++) {
-        offsets.push(types.length);
-        types.push(biomeMap[i]);
-        weights.push(1.0);
-      }
-      sparseBiomeTypes   = new Uint8Array(types);
-      sparseBiomeWeights = new Float32Array(weights);
-      sparseBiomeOffsets = new Uint16Array(offsets);
-    }
+    const sparseBiomeTypes = this.deserializeUint8ArrayBinary(serializedChunk.sparseBiomeTypes as ArrayBuffer);
+    const sparseBiomeWeights = this.deserializeFloat32ArrayBinary(serializedChunk.sparseBiomeWeights as ArrayBuffer);
+    const sparseBiomeOffsets = this.deserializeUint16ArrayBinary(serializedChunk.sparseBiomeOffsets as ArrayBuffer);
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
       waterLevel: sl.waterLevel,
       tiles: new Set(sl.tiles),
       maxDepth: sl.maxDepth,
       minTerrainHeight: sl.minTerrainHeight,
+      state: sl.state,
     }));
     const rivers: RiverData[] = (serializedChunk.rivers ?? []).map(sr => ({
       riverId: sr.riverId,

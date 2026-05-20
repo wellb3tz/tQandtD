@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import type { ChunkData } from '@engine/index';
 import type { WaterLayerData } from './water/types';
 
 export interface ChunkMesh {
   terrain: THREE.Mesh;
+  data?: ChunkData;
   water?: WaterLayerData;
   foliage?: THREE.Group;
   resources?: THREE.Group;

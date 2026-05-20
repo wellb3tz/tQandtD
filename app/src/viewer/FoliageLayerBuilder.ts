@@ -18,7 +18,7 @@ export function createFoliageLayer(
   data: ChunkData,
   seaLevel: number,
 ): THREE.Group | undefined {
-  const plan = planFoliagePlacements(chunkX, chunkY, data, seaLevel);
+  const plan = planFoliagePlacements(chunkX, chunkY, data, seaLevel, data.worldTemperatureOffset);
   if (!plan) return undefined;
 
   const { treePlacements, shrubPlacements, terrainPropPlacements, clearingCount, clearingSample } = plan;

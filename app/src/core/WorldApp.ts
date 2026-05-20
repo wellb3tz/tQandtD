@@ -124,6 +124,7 @@ export interface SkyViewSettings {
 export interface ViewerSettings {
   showTerrain: boolean;
   showBiomes: boolean;
+  showTemperature: boolean;
   showWater: boolean;
   showResources: boolean;
   showStructures: boolean;
@@ -153,6 +154,7 @@ export interface WaterSurfaceViewSettings {
 export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
   showTerrain: true,
   showBiomes: true,
+  showTemperature: false,
   showWater: true,
   showResources: false,
   showStructures: false,

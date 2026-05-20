@@ -414,6 +414,7 @@ export class WorkerPool {
         tiles: new Set<number>(lake.tiles),
         maxDepth: lake.maxDepth,
         minTerrainHeight: lake.minTerrainHeight,
+        state: lake.state,
       })),
       rivers: (serialized.rivers ?? []).map(river => ({
         riverId: river.riverId,

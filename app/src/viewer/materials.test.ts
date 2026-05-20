@@ -103,6 +103,8 @@ describe('terrain texture materials', () => {
     expect(selectTerrainSurfaceKey(BiomeType.BEACH, 0.32, 0.1)).toBe('beach');
     expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.72, 0.2)).toBe('mountainRock');
     expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.82, 0.2)).toBe('snow');
+    expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.82, 0.2, 0, 0.5)).toBe('mountainRock');
+    expect(selectTerrainSurfaceKey(BiomeType.MOUNTAIN, 0.82, 0.2, 0, 1.0)).toBe('mountainRock');
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.45, 0.7)).toBe('mountainRock');
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.45, 0.2)).toBe('forestFloor');
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.42, 0.2, 0.84)).toBe('swampMud');

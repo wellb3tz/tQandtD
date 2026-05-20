@@ -94,6 +94,34 @@ export class ClimateSystem {
   // ---------------------------------------------------------------------------
 
   /**
+   * Returns the dynamic snow-line elevation for the current climate config.
+   *
+   * Formula: 0.76 + worldTemperatureOffset × 0.15, clamped to [0.4, 1.0].
+   * When the world is hotter the snow line rises (fewer snowy peaks);
+   * when colder it drops (snow covers lower elevations).
+   */
+  getDynamicSnowLine(): number {
+    return ClimateSystem.clamp(
+      0.76 + this.config.worldTemperatureOffset * 0.15,
+      0.4,
+      1.0,
+    );
+  }
+
+  /**
+   * Returns the dynamic tree-line elevation for the current climate config.
+   *
+   * Formula: 0.75 + worldTemperatureOffset × 0.12, clamped to [0.35, 0.95].
+   */
+  getDynamicTreeLine(): number {
+    return ClimateSystem.clamp(
+      0.75 + this.config.worldTemperatureOffset * 0.12,
+      0.35,
+      0.95,
+    );
+  }
+
+  /**
    * Returns temperature ∈ [−1, 1] at the given world position.
    *
    * Incorporates:

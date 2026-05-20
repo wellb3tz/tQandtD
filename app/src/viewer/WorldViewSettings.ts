@@ -4,6 +4,7 @@ import {
   replaceTerrainMaterial,
   setTerrainWireframe,
   updateTerrainBiomeColors,
+  updateTerrainTemperatureColors,
 } from './TerrainAppearance';
 import {
   applyRenderLayerVisibility,
@@ -64,6 +65,8 @@ export class WorldViewSettings {
     for (const chunkMesh of this.chunkMeshes.values()) {
       if (layer === RenderLayer.BIOMES) {
         updateTerrainBiomeColors(chunkMesh.terrain, visible);
+      } else if (layer === RenderLayer.TEMPERATURE) {
+        updateTerrainTemperatureColors(chunkMesh.terrain, visible, chunkMesh.data);
       } else {
         applyRenderLayerVisibility(chunkMesh, layer, this.layerVisibility);
       }

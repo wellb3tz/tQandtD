@@ -1,6 +1,7 @@
 export enum RenderLayer {
   TERRAIN = 'terrain',
   BIOMES = 'biomes',
+  TEMPERATURE = 'temperature',
   RESOURCES = 'resources',
   STRUCTURES = 'structures',
   CHUNK_BOUNDARIES = 'chunkBoundaries',

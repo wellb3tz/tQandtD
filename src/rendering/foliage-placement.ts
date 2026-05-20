@@ -61,7 +61,8 @@ export function planFoliagePlacements(
   chunkX: number,
   chunkY: number,
   data: ChunkData,
-  seaLevel: number
+  seaLevel: number,
+  worldTemperatureOffset?: number,
 ): FoliagePlacementPlan | undefined {
   if (!data.biomeMap || !data.heightmap) return undefined;
 
@@ -157,7 +158,7 @@ export function planFoliagePlacements(
           radius: treeRadius,
           height: treeHeight,
           rotation: deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
-          color: profile.color,
+          color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
           rank: deterministic01(worldTileX, worldTileZ, 101),
           variant: selectTreeVariant(profile, worldTileX, worldTileZ),
         });
@@ -410,6 +411,38 @@ function getClearingInfluence(worldX: number, worldZ: number): FoliageClearingIn
   }
 
   return strongest;
+}
+
+function modulateFoliageColor(baseColor: number, offset: number): number {
+  if (Math.abs(offset) < 0.3) return baseColor;
+
+  const r = ((baseColor >> 16) & 0xff) / 255;
+  const g = ((baseColor >> 8) & 0xff) / 255;
+  const b = (baseColor & 0xff) / 255;
+
+  if (offset > 0.3) {
+    // Hot / dry: yellow-brown shift
+    const t = Math.min(1, (offset - 0.3) / 0.7);
+    const nr = r + (0.55 - r) * t * 0.35;
+    const ng = g + (0.50 - g) * t * 0.25;
+    const nb = b + (0.18 - b) * t * 0.15;
+    return (
+      (Math.round(Math.min(1, nr) * 255) << 16) |
+      (Math.round(Math.min(1, ng) * 255) << 8) |
+      Math.round(Math.min(1, nb) * 255)
+    );
+  } else {
+    // Cold: darker blue-green shift
+    const t = Math.min(1, (-offset - 0.3) / 0.7);
+    const nr = r + (0.12 - r) * t * 0.20;
+    const ng = g + (0.25 - g) * t * 0.15;
+    const nb = b + (0.18 - b) * t * 0.10;
+    return (
+      (Math.round(Math.min(1, nr) * 255) << 16) |
+      (Math.round(Math.min(1, ng) * 255) << 8) |
+      Math.round(Math.min(1, nb) * 255)
+    );
+  }
 }
 
 function deterministic01(x: number, y: number, salt: number): number {

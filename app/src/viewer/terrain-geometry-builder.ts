@@ -1,6 +1,7 @@
 import {
   BiomeType,
   getRiverTrenchDarkening,
+  calculateFrozenRiverInfluence,
   RIVER_TRENCH_DARKEN_STRENGTH,
   type ChunkData,
 } from '@engine/index';
@@ -42,6 +43,8 @@ export interface TerrainGeometryOptions {
   underwaterDarkenFactor: number;
   underwaterDesaturationFactor: number;
   enableDepthGradient: boolean;
+  /** Dynamic snow-line elevation from the chunk's climate [0–1]. Defaults to 0.76. */
+  climateSnowLine?: number;
   partial?: boolean;
   stage?: number;
 }
@@ -139,6 +142,7 @@ export function buildTerrainGeometryBuffers(
     worldZBase,
     seaLevel,
     heightScale,
+    climateSnowLine: options.climateSnowLine,
   }));
 
   return {
@@ -287,6 +291,7 @@ interface DetailModulationOptions {
   worldZBase: number;
   seaLevel: number;
   heightScale: number;
+  climateSnowLine?: number;
 }
 
 function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOptions): Float32Array {
@@ -300,7 +305,9 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     worldZBase,
     seaLevel,
     heightScale,
+    climateSnowLine: rawSnowLine,
   } = options;
+  const snowLine = rawSnowLine ?? 0.76;
   const count = normals.length / 3;
   const terrainDetailBlend = new Float32Array(count * 4);
 
@@ -346,9 +353,18 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const riverWetness = clamp01(
       (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
+    const frozenBand = clamp01(calculateFrozenRiverInfluence(data, bvX, bvY));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
+
+    // Local temperature suppresses snow on hot mountain peaks.
+    // At or below 0 (neutral/cold) snow is full; above 0.5 (hot desert climate) snow vanishes.
+    const tileTemperature = data.temperatureMap && bmIdx < data.temperatureMap.length
+      ? data.temperatureMap[bmIdx]
+      : 0;
+    const temperatureFactor = Math.max(0, Math.min(1, 1 - tileTemperature / 0.5));
+
     const snowDetail = (isMountain || isGlacier)
-      ? Math.min(1, Math.max(0, (rawHeight - 0.73) / 0.14) * (1.0 - steepness * 0.35))
+      ? Math.min(1, Math.max(0, (rawHeight - snowLine) / 0.14) * (1.0 - steepness * 0.35)) * temperatureFactor
       : 0;
     const riverbedDetail = riverWetness;
 
@@ -382,8 +398,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       g = blend(g, rock.g, steepness);
       b = blend(b, rock.b, steepness);
 
-      if ((isMountain || isGlacier) && rawHeight > 0.76) {
-        const snowFactor = Math.min(1.0, (rawHeight - 0.76) / 0.10) * (1.0 - steepness * 0.7);
+      if ((isMountain || isGlacier) && rawHeight > snowLine) {
+        const snowFactor = Math.min(1.0, (rawHeight - snowLine) / 0.10) * (1.0 - steepness * 0.7) * temperatureFactor;
         if (snowFactor > 0) {
           r = blend(r, snow.r, snowFactor);
           g = blend(g, snow.g, snowFactor);
@@ -398,6 +414,16 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       r = Math.min(1.0, r * wetShade * (1.0 - wetBand * 0.03));
       g = Math.min(1.0, g * wetShade * wetSaturation);
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
+    }
+
+    if (frozenBand > 0) {
+      // Icy blue tint for frozen river beds
+      const iceR = 0.72;
+      const iceG = 0.82;
+      const iceB = 0.92;
+      r = blend(r, iceR, frozenBand * 0.45);
+      g = blend(g, iceG, frozenBand * 0.35);
+      b = blend(b, iceB, frozenBand * 0.25);
     }
 
     colors[i * 3] = Math.min(1.0, r * altitudeBrightness);
@@ -415,6 +441,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
 function collectLakeTileIndices(data: ChunkData): Set<number> {
   const tiles = new Set<number>();
   for (const lake of data.lakes ?? []) {
+    // Skip dry lakes
+    if (lake.state === 'dry') continue;
     for (const tileIndex of lake.tiles) {
       tiles.add(tileIndex);
     }

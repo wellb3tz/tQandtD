@@ -5,6 +5,7 @@ import {
   type BiomeColor,
   type TerrainSurfaceTextureLibrary,
 } from './materials';
+import type { ChunkData } from '@engine/index';
 
 type WireframeMaterial = THREE.Material & { wireframe: boolean };
 
@@ -53,6 +54,84 @@ export function updateTerrainBiomeColors(mesh: THREE.Mesh, showBiomes: boolean):
   }
 
   colors.needsUpdate = true;
+}
+
+export function updateTerrainTemperatureColors(mesh: THREE.Mesh, showTemperature: boolean, chunkData: ChunkData | null): void {
+  const geometry = mesh.geometry;
+  const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+  if (!colors) return;
+
+  const colorArray = colors.array as Float32Array;
+
+  if (showTemperature && chunkData?.temperatureMap) {
+    if (!mesh.userData.originalColors) {
+      mesh.userData.originalColors = new Float32Array(colorArray);
+    }
+
+    const temperatureMap = chunkData.temperatureMap;
+    const chunkSize = chunkData.size;
+    const verticesPerSide = chunkSize + 1;
+
+    for (let vy = 0; vy <= chunkSize; vy++) {
+      for (let vx = 0; vx <= chunkSize; vx++) {
+        const vertexIndex = vy * verticesPerSide + vx;
+        const colorIndex = vertexIndex * 3;
+
+        const tileX = Math.min(vx, chunkSize - 1);
+        const tileY = Math.min(vy, chunkSize - 1);
+        const tileIndex = tileY * chunkSize + tileX;
+
+        const temperature = tileIndex < temperatureMap.length ? temperatureMap[tileIndex] : 0;
+        const tempColor = temperatureToColor(temperature);
+
+        colorArray[colorIndex] = tempColor.r;
+        colorArray[colorIndex + 1] = tempColor.g;
+        colorArray[colorIndex + 2] = tempColor.b;
+      }
+    }
+  } else {
+    if (mesh.userData.originalColors) {
+      for (let i = 0; i < colorArray.length; i++) {
+        colorArray[i] = mesh.userData.originalColors[i];
+      }
+    }
+  }
+
+  colors.needsUpdate = true;
+}
+
+function temperatureToColor(temperature: number): BiomeColor {
+  const t = (temperature + 1) * 0.5;
+
+  if (t < 0.25) {
+    const s = t / 0.25;
+    return {
+      r: 0.1 + s * 0.1,
+      g: 0.1 + s * 0.2,
+      b: 0.6 - s * 0.2,
+    };
+  } else if (t < 0.5) {
+    const s = (t - 0.25) / 0.25;
+    return {
+      r: 0.2 + s * 0.1,
+      g: 0.3 + s * 0.4,
+      b: 0.4 - s * 0.1,
+    };
+  } else if (t < 0.75) {
+    const s = (t - 0.5) / 0.25;
+    return {
+      r: 0.3 + s * 0.5,
+      g: 0.7 - s * 0.1,
+      b: 0.3 - s * 0.2,
+    };
+  } else {
+    const s = (t - 0.75) / 0.25;
+    return {
+      r: 0.8 + s * 0.2,
+      g: 0.6 - s * 0.4,
+      b: 0.1 - s * 0.1,
+    };
+  }
 }
 
 export function setTerrainWireframe(mesh: THREE.Mesh, enabled: boolean): void {

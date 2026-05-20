@@ -19,6 +19,7 @@ export {
 } from './terrain-geometry';
 export {
   RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateFrozenRiverInfluence,
   calculateRiverTrenchInfluence,
   getRiverTrenchDarkening,
 } from './terrain-detail';

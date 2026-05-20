@@ -881,6 +881,7 @@ export class ControlPanel {
     const vs = state.viewerSettings;
     this.updateCheckboxValue('showTerrain', vs.showTerrain);
     this.updateCheckboxValue('showBiomes', vs.showBiomes);
+    this.updateCheckboxValue('showTemperature', vs.showTemperature);
     this.updateCheckboxValue('showWater', vs.showWater);
     this.updateCheckboxValue('showResources', vs.showResources);
     this.updateCheckboxValue('showStructures', vs.showStructures);

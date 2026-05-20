@@ -124,6 +124,7 @@ async function createChunkMesh(
       terrainTexturesEnabled,
       wireframeMode,
     }),
+    data,
     visible: true,
   };
 

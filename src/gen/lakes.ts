@@ -17,6 +17,8 @@ import { BiomeType } from '../world/chunk';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
+export type LakeState = 'filled' | 'dry';
+
 /**
  * A single lake body detected inside a chunk.
  */
@@ -32,6 +34,8 @@ export interface LakeData {
   maxDepth: number;
   /** Minimum terrain height inside the lake (for consistent water positioning across chunks) */
   minTerrainHeight?: number;
+  /** Climate-driven lake state; undefined when climate system is disabled. */
+  state?: LakeState;
 }
 
 /**

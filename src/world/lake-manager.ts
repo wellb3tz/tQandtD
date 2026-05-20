@@ -10,6 +10,8 @@ import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
 import { logger, LogCategory } from '../utils/logger';
 
+export type LakeState = 'filled' | 'dry';
+
 /**
  * A lake body that can span multiple chunks.
  * Uses world-space coordinates instead of chunk-local coordinates.
@@ -35,6 +37,8 @@ export interface WorldLakeData {
     minY: number;
     maxY: number;
   };
+  /** Climate-driven lake state; undefined when climate system is disabled. */
+  state?: LakeState;
 }
 
 /**
