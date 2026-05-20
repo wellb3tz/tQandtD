@@ -136,7 +136,7 @@ export class PerformanceMonitor {
 
     // 60 FPS reference line
     const refY = H - (this.TARGET_FPS / maxFPS) * H;
-    ctx.strokeStyle = 'rgba(74,222,128,0.2)';
+    ctx.strokeStyle = 'rgba(180,83,9,0.2)';
     ctx.lineWidth   = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
@@ -146,15 +146,15 @@ export class PerformanceMonitor {
     ctx.setLineDash([]);
 
     // "60" label
-    ctx.fillStyle = 'rgba(74,222,128,0.35)';
+    ctx.fillStyle = 'rgba(180,83,9,0.35)';
     ctx.font      = '8px Inter, sans-serif';
     ctx.fillText('60', 3, refY - 2);
 
     // Gradient fill under graph
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
-    gradient.addColorStop(0,   'rgba(74,222,128,0.4)');
-    gradient.addColorStop(0.5, 'rgba(74,222,128,0.15)');
-    gradient.addColorStop(1,   'rgba(74,222,128,0.02)');
+    gradient.addColorStop(0,   'rgba(180,83,9,0.4)');
+    gradient.addColorStop(0.5, 'rgba(180,83,9,0.15)');
+    gradient.addColorStop(1,   'rgba(180,83,9,0.02)');
 
     const stepX = W / (this.MAX_SAMPLES - 1);
 
@@ -184,7 +184,7 @@ export class PerformanceMonitor {
 
     // Color line based on current avg FPS
     const avg = samples[samples.length - 1];
-    ctx.strokeStyle = avg >= 55 ? '#4ade80' : avg >= 30 ? '#f59e0b' : '#ef4444';
+    ctx.strokeStyle = avg >= 55 ? '#b45309' : avg >= 30 ? '#b45309' : '#ef4444';
     ctx.lineWidth   = 1.5;
     ctx.stroke();
 
@@ -201,7 +201,7 @@ export class PerformanceMonitor {
     if (!this.fpsElement) return;
     this.fpsElement.textContent = fps.toString();
     // Color the big number based on performance
-    if (fps >= 55)      this.fpsElement.style.color = '#4ade80'; // green
+    if (fps >= 55)      this.fpsElement.style.color = '#b45309'; // ok
     else if (fps >= 30) this.fpsElement.style.color = '#f59e0b'; // yellow
     else                this.fpsElement.style.color = '#ef4444'; // red
   }

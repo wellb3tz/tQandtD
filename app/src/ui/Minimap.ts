@@ -67,7 +67,7 @@ export class Minimap {
     const chunks = state.loadedChunks;
     this.lastDrawnChunks = chunks;
     if (chunks.size === 0) {
-      ctx.fillStyle = 'rgba(74,222,128,0.3)';
+      ctx.fillStyle = 'rgba(180,83,9,0.35)';
       ctx.font = '10px Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('No world generated', size / 2, size / 2);
@@ -125,7 +125,7 @@ export class Minimap {
       ctx.rotate(rad);
 
       // Arrow body
-      ctx.strokeStyle = '#4ade80';
+      ctx.strokeStyle = '#b45309';
       ctx.lineWidth   = 1.5;
       ctx.beginPath();
       ctx.moveTo(0, arrowLen);
@@ -133,7 +133,7 @@ export class Minimap {
       ctx.stroke();
 
       // Arrowhead
-      ctx.fillStyle = '#4ade80';
+      ctx.fillStyle = '#b45309';
       ctx.beginPath();
       ctx.moveTo(0, -arrowLen);
       ctx.lineTo(-3, -arrowLen + 5);
@@ -151,7 +151,7 @@ export class Minimap {
     }
 
     // Border
-    ctx.strokeStyle = 'rgba(74,222,128,0.25)';
+    ctx.strokeStyle = 'rgba(180,83,9,0.25)';
     ctx.lineWidth   = 1;
     ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
   }

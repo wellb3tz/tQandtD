@@ -69,7 +69,7 @@ export class TerrainTooltip {
       pointer-events: none;
       display: none;
       background: rgba(10,14,20,0.5);
-      border: 1px solid rgba(74,222,128,0.18);
+      border: 1px solid rgba(180,83,9,0.18);
       border-radius: 6px;
       padding: 8px 12px;
       font-family: 'Inter', sans-serif;
@@ -171,9 +171,9 @@ export class TerrainTooltip {
       : '';
 
     this.el!.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;border-bottom:1px solid rgba(74,222,128,0.15);padding-bottom:5px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;border-bottom:1px solid rgba(180,83,9,0.15);padding-bottom:5px">
         <span style="width:10px;height:10px;border-radius:50%;background:${biomeColor};flex-shrink:0;display:inline-block"></span>
-        <span style="font-weight:700;color:#4ade80;letter-spacing:0.5px;text-transform:uppercase;font-size:10px">${biomeName}</span>
+        <span style="font-weight:700;color:#b45309;letter-spacing:0.5px;text-transform:uppercase;font-size:10px">${biomeName}</span>
       </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;color:#9ca3af">
         <span>Height</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${height}</span>

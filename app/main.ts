@@ -71,14 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const seedInput = document.getElementById('seed-input') as HTMLInputElement;
   const toggleControlsBtn = document.getElementById('toggle-controls-btn');
   const toggleMonitorBtn = document.getElementById('toggle-monitor-btn');
-  const toggleStatisticsBtn = document.getElementById('toggle-statistics-btn');
-  const hideMonitorBtn = document.getElementById('hide-monitor-btn');
-  const hideStatisticsBtn = document.getElementById('hide-statistics-btn');
   const helpBtn = document.getElementById('help-btn');
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
-  const performanceMonitorElement = document.getElementById('performance-monitor');
-  const worldStatisticsElement = document.getElementById('world-statistics');
+  const rightPanel = document.getElementById('right-panel');
   const appHeader = document.querySelector('.app-header') as HTMLElement;
 
   // Camera control buttons
@@ -319,12 +315,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // World statistics panel is always visible (part of overlay layout)
     
-    // Initialize PerformanceMonitor
-    const perfMonitorContainer = document.getElementById('performance-monitor');
-    if (perfMonitorContainer) {
-      performanceMonitor = new PerformanceMonitor();
-      performanceMonitor.initialize(perfMonitorContainer);
-    }
+    // Initialize PerformanceMonitor (binds to existing elements by ID)
+    performanceMonitor = new PerformanceMonitor();
+    performanceMonitor.initialize(document.body);
     
     // Initialize StatisticsDisplay
     const statisticsContainer = document.getElementById('statistics-display');
@@ -486,21 +479,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
   
-  // Toggle performance monitor
+  // Toggle right panel (unified performance + statistics)
   toggleMonitorBtn?.addEventListener('click', () => {
-    performanceMonitorElement?.classList.toggle('hidden');
-  });
-
-  hideMonitorBtn?.addEventListener('click', () => {
-    performanceMonitorElement?.classList.add('hidden');
-  });
-
-  toggleStatisticsBtn?.addEventListener('click', () => {
-    worldStatisticsElement?.classList.toggle('hidden');
-  });
-
-  hideStatisticsBtn?.addEventListener('click', () => {
-    worldStatisticsElement?.classList.add('hidden');
+    rightPanel?.classList.toggle('collapsed');
   });
   
   // Help button
@@ -531,7 +512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   
-  // Auto-collapse control panel and performance monitor on narrow screens (requirement 17.5)
+  // Auto-collapse side panels on narrow screens (requirement 17.5)
   const handleResponsiveLayout = () => {
     const width = window.innerWidth;
     const narrowScreenThreshold = 768; // pixels
@@ -539,8 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (width < narrowScreenThreshold) {
       // Auto-collapse on narrow screens
       controlPanel?.classList.add('collapsed');
-      performanceMonitorElement?.classList.add('hidden');
-      worldStatisticsElement?.classList.add('hidden');
+      rightPanel?.classList.add('collapsed');
     } else if (width >= 1200) {
       // Auto-expand the primary control rail on wide screens.
       controlPanel?.classList.remove('collapsed');
