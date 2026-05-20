@@ -4,15 +4,7 @@
  */
 
 import { WorldApp } from '../core/WorldApp';
-import { BIOME_COLORS } from '../viewer/materials';
-import { BiomeType } from '@engine/index';
-
-const BIOME_NAMES: Record<number, string> = {
-  0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
-  4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
-  8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
-  12: 'Glacier'
-};
+import { getBiomeCssColor } from './biomeDisplay';
 
 export class Minimap {
   private canvas: HTMLCanvasElement | null = null;
@@ -56,10 +48,8 @@ export class Minimap {
     const size = this.SIZE_PX;
     const cell = this.CELL_PX;
 
-    // Clear
     ctx.clearRect(0, 0, size, size);
 
-    // Background
     ctx.fillStyle = 'rgba(10,14,20,0.4)';
     ctx.fillRect(0, 0, size, size);
 
@@ -74,7 +64,6 @@ export class Minimap {
       return;
     }
 
-    // Find bounds of loaded chunks
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
     for (const chunk of chunks.values()) {
@@ -85,7 +74,6 @@ export class Minimap {
     const spanX = maxX - minX + 1;
     const spanY = maxY - minY + 1;
 
-    // Scale so all chunks fit in canvas with padding
     const padding = 10;
     const availW  = size - padding * 2;
     const availH  = size - padding * 2;
@@ -97,7 +85,6 @@ export class Minimap {
     const offX    = padding + (availW - totalW) / 2;
     const offY    = padding + (availH - totalH) / 2;
 
-    // Draw chunks
     for (const chunk of chunks.values()) {
       const px = offX + (chunk.x - minX) * cellS;
       const py = offY + (chunk.y - minY) * cellS;
@@ -106,7 +93,6 @@ export class Minimap {
       ctx.fillRect(px, py, cellS - 1, cellS - 1);
     }
 
-    // Camera position marker
     if (this.getCamPos) {
       const cam = this.getCamPos();
       const camChunkX = Math.floor(cam.x / this.CHUNK_SIZE);
@@ -115,7 +101,6 @@ export class Minimap {
       const cx = offX + (camChunkX - minX) * cellS + cellS / 2;
       const cy = offY + (camChunkY - minY) * cellS + cellS / 2;
 
-      // Heading arrow
       const heading = this.getHeading ? this.getHeading() : 0;
       const rad     = (heading - 90) * Math.PI / 180; // rotate so 0 deg = up
       const arrowLen = 8;
@@ -124,7 +109,6 @@ export class Minimap {
       ctx.translate(cx, cy);
       ctx.rotate(rad);
 
-      // Arrow body
       ctx.strokeStyle = '#b45309';
       ctx.lineWidth   = 1.5;
       ctx.beginPath();
@@ -132,7 +116,6 @@ export class Minimap {
       ctx.lineTo(0, -arrowLen);
       ctx.stroke();
 
-      // Arrowhead
       ctx.fillStyle = '#b45309';
       ctx.beginPath();
       ctx.moveTo(0, -arrowLen);
@@ -143,14 +126,12 @@ export class Minimap {
 
       ctx.restore();
 
-      // Dot at camera position
       ctx.fillStyle = '#fff';
       ctx.beginPath();
       ctx.arc(cx, cy, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Border
     ctx.strokeStyle = 'rgba(180,83,9,0.25)';
     ctx.lineWidth   = 1;
     ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
@@ -175,8 +156,7 @@ export class Minimap {
       }
     });
 
-    const color = BIOME_COLORS[dominant as BiomeType] ?? { r: 0.5, g: 0.5, b: 0.5 };
-    const cssColor = `rgb(${Math.round(color.r * 255)},${Math.round(color.g * 255)},${Math.round(color.b * 255)})`;
+    const cssColor = getBiomeCssColor(dominant);
     this.chunkColorCache.set(chunk, cssColor);
     return cssColor;
   }
@@ -184,7 +164,6 @@ export class Minimap {
   /** Returns biome name at canvas pixel (for tooltip on minimap hover) */
   getBiomeAtPixel(px: number, py: number): string | null {
     if (!this.app) return null;
-    // Reverse-map pixel to chunk - simplified, just return null for now
     return null;
   }
 }

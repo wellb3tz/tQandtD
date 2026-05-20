@@ -9,6 +9,7 @@
 import { WorldApp } from '@core/WorldApp';
 import { WorldSerializer, SerializationFormat, type SerializationOptions, type WorldConfig } from '@engine/index';
 import { errorHandler } from '../utils/ErrorHandler';
+import { getBiomeRgb255 } from './biomeDisplay';
 
 /**
  * Export format for images
@@ -39,15 +40,12 @@ export class WorldManager {
   initialize(app: WorldApp): void {
     this.app = app;
     
-    // Create dialogs
     this.createSaveDialog();
     this.createLoadDialog();
     this.createExportDialog();
     
-    // Set up event listeners for buttons
     this.setupEventListeners();
     
-    // Parse URL parameters on page load
     this.parseURLConfiguration();
     
   }
@@ -223,7 +221,6 @@ export class WorldManager {
    * Set up event listeners for buttons and dialogs
    */
   private setupEventListeners(): void {
-    // Save button
     const saveJsonBtn = document.getElementById('save-json-btn');
     if (saveJsonBtn) {
       saveJsonBtn.addEventListener('click', () => {
@@ -238,7 +235,6 @@ export class WorldManager {
       });
     }
 
-    // Load button
     const loadBtn = document.getElementById('load-btn');
     if (loadBtn) {
       loadBtn.addEventListener('click', () => {
@@ -246,7 +242,6 @@ export class WorldManager {
       });
     }
 
-    // Export buttons
     const exportHeightmapBtn = document.getElementById('export-heightmap-btn');
     if (exportHeightmapBtn) {
       exportHeightmapBtn.addEventListener('click', () => {
@@ -268,7 +263,6 @@ export class WorldManager {
       });
     }
 
-    // Sharing buttons
     const copySeedBtn = document.getElementById('copy-seed-btn');
     if (copySeedBtn) {
       copySeedBtn.addEventListener('click', () => {
@@ -283,7 +277,6 @@ export class WorldManager {
       });
     }
 
-    // Dialog close buttons
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       if (target.hasAttribute('data-close')) {
@@ -292,7 +285,6 @@ export class WorldManager {
       }
     });
 
-    // Confirm save button
     const confirmSaveBtn = document.getElementById('confirm-save-btn');
     if (confirmSaveBtn) {
       confirmSaveBtn.addEventListener('click', () => {
@@ -300,7 +292,6 @@ export class WorldManager {
       });
     }
 
-    // Confirm load button
     const confirmLoadBtn = document.getElementById('confirm-load-btn');
     if (confirmLoadBtn) {
       confirmLoadBtn.addEventListener('click', () => {
@@ -308,7 +299,6 @@ export class WorldManager {
       });
     }
 
-    // Confirm export button
     const confirmExportBtn = document.getElementById('confirm-export-btn');
     if (confirmExportBtn) {
       confirmExportBtn.addEventListener('click', () => {
@@ -316,7 +306,6 @@ export class WorldManager {
       });
     }
 
-    // File input change
     const loadFileInput = document.getElementById('load-file-input') as HTMLInputElement;
     if (loadFileInput) {
       loadFileInput.addEventListener('change', () => {
@@ -331,7 +320,6 @@ export class WorldManager {
   showSaveDialog(format?: SerializationFormat): void {
     if (!this.saveDialog) return;
 
-    // Set format if provided
     if (format) {
       const formatRadio = this.saveDialog.querySelector(
         `input[name="save-format"][value="${format}"]`
@@ -341,7 +329,6 @@ export class WorldManager {
       }
     }
 
-    // Show dialog
     this.saveDialog.classList.remove('hidden');
   }
 
@@ -351,25 +338,21 @@ export class WorldManager {
   showLoadDialog(): void {
     if (!this.loadDialog) return;
 
-    // Reset file input
     const fileInput = document.getElementById('load-file-input') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
     }
 
-    // Hide info display
     const infoDisplay = document.getElementById('load-info-display');
     if (infoDisplay) {
       infoDisplay.classList.add('hidden');
     }
 
-    // Disable load button
     const confirmBtn = document.getElementById('confirm-load-btn') as HTMLButtonElement;
     if (confirmBtn) {
       confirmBtn.disabled = true;
     }
 
-    // Show dialog
     this.loadDialog.classList.remove('hidden');
   }
 
@@ -379,7 +362,6 @@ export class WorldManager {
   showExportDialog(type: 'heightmap' | 'biomemap'): void {
     if (!this.exportDialog) return;
 
-    // Set export type
     const typeRadio = this.exportDialog.querySelector(
       `input[name="export-type"][value="${type}"]`
     ) as HTMLInputElement;
@@ -387,7 +369,6 @@ export class WorldManager {
       typeRadio.checked = true;
     }
 
-    // Show dialog
     this.exportDialog.classList.remove('hidden');
   }
 
@@ -408,7 +389,6 @@ export class WorldManager {
     if (!this.app || !this.saveDialog) return;
 
     try {
-      // Get save options from dialog
       const formatRadio = this.saveDialog.querySelector(
         'input[name="save-format"]:checked'
       ) as HTMLInputElement;
@@ -420,7 +400,6 @@ export class WorldManager {
       const filenameInput = document.getElementById('save-filename') as HTMLInputElement;
       const filename = filenameInput.value || 'world';
 
-      // Create serialization options
       const options: SerializationOptions = {
         format,
         compress
@@ -436,14 +415,11 @@ export class WorldManager {
         checksumDisplay.classList.remove('hidden');
       }
 
-      // Download file
       const extension = format === SerializationFormat.JSON ? 'json' : 'bin';
       this.downloadFile(exportData, `${filename}.${extension}`);
 
-      // Show success toast
       this.showToast('World saved successfully!', 'success');
 
-      // Close dialog after a short delay
       setTimeout(() => {
         this.closeDialog('save-dialog');
       }, 1500);
@@ -466,15 +442,12 @@ export class WorldManager {
     const file = fileInput.files[0];
 
     try {
-      // Determine format from file extension
       const format = file.name.endsWith('.json') 
         ? SerializationFormat.JSON 
         : SerializationFormat.BINARY;
 
-      // Import and validate file
       const serializedWorld = await this.serializer.import(file, format);
 
-      // Display world information
       const seedValue = document.getElementById('load-seed-value');
       const chunksValue = document.getElementById('load-chunks-value');
       const checksumValue = document.getElementById('load-checksum-value');
@@ -488,13 +461,11 @@ export class WorldManager {
         statusValue.style.color = 'var(--success-color, green)';
       }
 
-      // Show info display
       const infoDisplay = document.getElementById('load-info-display');
       if (infoDisplay) {
         infoDisplay.classList.remove('hidden');
       }
 
-      // Enable load button
       const confirmBtn = document.getElementById('confirm-load-btn') as HTMLButtonElement;
       if (confirmBtn) {
         confirmBtn.disabled = false;
@@ -503,7 +474,6 @@ export class WorldManager {
     } catch (error) {
       console.error('Failed to validate file:', error);
       
-      // Show error status
       const statusValue = document.getElementById('load-status-value');
       if (statusValue) {
         statusValue.textContent = 'Invalid';
@@ -528,20 +498,16 @@ export class WorldManager {
     const file = fileInput.files[0];
 
     try {
-      // Determine format from file extension
       const format = file.name.endsWith('.json') 
         ? SerializationFormat.JSON 
         : SerializationFormat.BINARY;
 
-      // Import world data
       const serializedWorld = await this.serializer.import(file, format);
 
       this.app.loadSerializedWorld(serializedWorld);
 
-      // Show success toast
       this.showToast('World loaded successfully!', 'success');
 
-      // Close dialog
       this.closeDialog('load-dialog');
 
     } catch (error) {
@@ -557,7 +523,6 @@ export class WorldManager {
     if (!this.app || !this.exportDialog) return;
 
     try {
-      // Get export options from dialog
       const typeRadio = this.exportDialog.querySelector(
         'input[name="export-type"]:checked'
       ) as HTMLInputElement;
@@ -577,7 +542,6 @@ export class WorldManager {
       }
       const chunkSize = this.app.getConfigSnapshot().chunkSize;
 
-      // Export map based on type
       let blob: Blob;
       if (exportType === 'heightmap') {
         blob = await this.exportHeightmap(loadedChunks, imageFormat, chunkSize);
@@ -585,14 +549,11 @@ export class WorldManager {
         blob = await this.exportBiomeMap(loadedChunks, imageFormat, chunkSize);
       }
 
-      // Download file
       const extension = imageFormat === ImageFormat.PNG ? 'png' : 'jpg';
       this.downloadFile(blob, `${filename}.${extension}`);
 
-      // Show success toast
       this.showToast(`${exportType === 'heightmap' ? 'Heightmap' : 'Biome map'} exported successfully!`, 'success');
 
-      // Close dialog
       this.closeDialog('export-dialog');
 
     } catch (error) {
@@ -605,13 +566,11 @@ export class WorldManager {
    * Export heightmap as image
    */
   private async exportHeightmap(chunks: Map<string, any>, format: ImageFormat, chunkSize: number): Promise<Blob> {
-    // Find bounds of loaded chunks
     const bounds = this.calculateChunkBounds(chunks);
     
     const width = (bounds.maxX - bounds.minX + 1) * chunkSize;
     const height = (bounds.maxY - bounds.minY + 1) * chunkSize;
 
-    // Create canvas
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -620,10 +579,8 @@ export class WorldManager {
       throw new Error('Failed to get canvas context');
     }
 
-    // Create image data
     const imageData = ctx.createImageData(width, height);
 
-    // Fill image data from chunks
     for (const [, chunk] of chunks) {
       const offsetX = (chunk.x - bounds.minX) * chunkSize;
       const offsetY = (chunk.y - bounds.minY) * chunkSize;
@@ -633,7 +590,6 @@ export class WorldManager {
           const chunkIndex = y * chunkSize + x;
           const height = chunk.heightmap[chunkIndex];
           
-          // Normalize height to 0-255 range
           const value = Math.floor(height * 255);
           
           const imgX = offsetX + x;
@@ -648,10 +604,8 @@ export class WorldManager {
       }
     }
 
-    // Put image data on canvas
     ctx.putImageData(imageData, 0, 0);
 
-    // Convert to blob
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (blob) {
@@ -667,25 +621,11 @@ export class WorldManager {
    * Export biome map as image
    */
   private async exportBiomeMap(chunks: Map<string, any>, format: ImageFormat, chunkSize: number): Promise<Blob> {
-    // Biome colors (matching typical biome visualization)
-    const biomeColors: Record<number, [number, number, number]> = {
-      0: [34, 139, 34],    // FOREST - Forest Green
-      1: [255, 228, 181],  // DESERT - Moccasin
-      2: [173, 216, 230],  // TUNDRA - Light Blue
-      3: [144, 238, 144],  // GRASSLAND - Light Green
-      4: [139, 69, 19],    // MOUNTAIN - Saddle Brown
-      5: [30, 144, 255],   // OCEAN - Dodger Blue
-      6: [255, 250, 205],  // BEACH - Lemon Chiffon
-      7: [34, 139, 34]     // SWAMP - Dark Green
-    };
-
-    // Find bounds of loaded chunks
     const bounds = this.calculateChunkBounds(chunks);
     
     const width = (bounds.maxX - bounds.minX + 1) * chunkSize;
     const height = (bounds.maxY - bounds.minY + 1) * chunkSize;
 
-    // Create canvas
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -694,10 +634,8 @@ export class WorldManager {
       throw new Error('Failed to get canvas context');
     }
 
-    // Create image data
     const imageData = ctx.createImageData(width, height);
 
-    // Fill image data from chunks
     for (const [, chunk] of chunks) {
       const offsetX = (chunk.x - bounds.minX) * chunkSize;
       const offsetY = (chunk.y - bounds.minY) * chunkSize;
@@ -707,8 +645,7 @@ export class WorldManager {
           const chunkIndex = y * chunkSize + x;
           const biome = chunk.biomeMap[chunkIndex];
           
-          // Get biome color
-          const color = biomeColors[biome] || [128, 128, 128];
+          const color = getBiomeRgb255(biome);
           
           const imgX = offsetX + x;
           const imgY = offsetY + y;
@@ -722,10 +659,8 @@ export class WorldManager {
       }
     }
 
-    // Put image data on canvas
     ctx.putImageData(imageData, 0, 0);
 
-    // Convert to blob
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
         if (blob) {
@@ -768,7 +703,6 @@ export class WorldManager {
     link.download = filename;
     link.click();
     
-    // Clean up
     setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
@@ -794,7 +728,6 @@ export class WorldManager {
     try {
       const params = new URLSearchParams(window.location.search);
       
-      // Check if there are any configuration parameters
       if (params.toString().length === 0) {
         return;
       }
@@ -811,7 +744,6 @@ export class WorldManager {
         return;
       }
 
-      // Parse seed
       if (params.has('seed')) {
         const seed = parseInt(params.get('seed')!);
         if (!isNaN(seed)) {
@@ -819,7 +751,6 @@ export class WorldManager {
         }
       }
 
-      // Parse terrain config
       if (config.terrainConfig) {
         if (params.has('baseScale')) {
           const value = parseFloat(params.get('baseScale')!);
@@ -847,7 +778,6 @@ export class WorldManager {
         }
       }
 
-      // Parse biome config
       if (config.biomeConfig) {
         if (params.has('tempScale')) {
           const value = parseFloat(params.get('tempScale')!);
@@ -863,7 +793,6 @@ export class WorldManager {
         }
       }
 
-      // Parse enhanced biome config
       if (config.enhancedBiomeConfig) {
         if (params.has('worldTemperatureOffset')) {
           const value = parseFloat(params.get('worldTemperatureOffset')!);
@@ -875,15 +804,12 @@ export class WorldManager {
         }
       }
 
-      // Apply the parsed configuration
       this.app.applyWorldConfig(config);
 
-      // Show notification that configuration was loaded from URL
       this.showToast('Configuration loaded from URL', 'info');
 
     } catch (error) {
       console.error('Failed to parse URL configuration:', error);
-      // Don't show error toast for URL parsing failures - just log it
     }
   }
 
@@ -896,13 +822,10 @@ export class WorldManager {
     try {
       const config = this.app.getConfigSnapshot();
 
-      // Convert to JSON string with formatting
       const jsonString = JSON.stringify(this.createShareableConfig(config), null, 2);
 
-      // Download file
       this.downloadFile(jsonString, 'world-config.json');
 
-      // Show success toast
       this.showToast('Configuration exported successfully!', 'success');
 
     } catch (error) {
@@ -918,7 +841,6 @@ export class WorldManager {
     try {
       const url = this.generateShareableURL();
       
-      // Copy to clipboard
       await navigator.clipboard.writeText(url);
       
       this.showToast('Shareable URL copied to clipboard!', 'success');
@@ -936,12 +858,10 @@ export class WorldManager {
 
     const config = this.app.getConfigSnapshot();
 
-    // Encode configuration as URL parameters
     const params = new URLSearchParams();
     params.set('seed', config.seed.toString());
     params.set('config', JSON.stringify(this.createShareableConfig(config)));
     
-    // Add terrain config
     if (config.terrainConfig) {
       params.set('baseScale', config.terrainConfig.baseScale.toString());
       params.set('octaves', config.terrainConfig.octaves.toString());
@@ -951,14 +871,12 @@ export class WorldManager {
       params.set('heightMultiplier', config.terrainConfig.heightMultiplier.toString());
     }
 
-    // Add biome config
     if (config.biomeConfig) {
       params.set('tempScale', config.biomeConfig.temperatureScale.toString());
       params.set('moistScale', config.biomeConfig.moistureScale.toString());
       params.set('blendRadius', config.biomeConfig.blendRadius.toString());
     }
 
-    // Add enhanced biome config
     if (config.enhancedBiomeConfig) {
       params.set('worldTemperatureOffset', config.enhancedBiomeConfig.worldTemperatureOffset?.toString() ?? '0');
       params.set('worldMoistureOffset', config.enhancedBiomeConfig.worldMoistureOffset?.toString() ?? '0');
@@ -1014,7 +932,6 @@ export class WorldManager {
    * Clean up resources
    */
   dispose(): void {
-    // Remove dialogs from DOM
     if (this.saveDialog) {
       document.body.removeChild(this.saveDialog);
       this.saveDialog = null;

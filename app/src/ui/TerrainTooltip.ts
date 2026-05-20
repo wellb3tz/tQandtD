@@ -5,22 +5,8 @@
 
 import { WorldApp } from '../core/WorldApp';
 import type { ChunkData } from '@engine/index';
+import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
 
-const BIOME_NAMES: Record<number, string> = {
-  0: 'Ocean',      1: 'Beach',      2: 'Desert',     3: 'Plains',
-  4: 'Forest',     5: 'Taiga',      6: 'Tundra',     7: 'Mountain',
-  8: 'Savanna',    9: 'Swamp',      10: 'Rainforest', 11: 'Volcanic',
-  12: 'Glacier'
-};
-
-const BIOME_COLORS: Record<number, string> = {
-  0:  '#185090', 1:  '#EAD9A5', 2:  '#DEA85A', 3:  '#87BC41',
-  4:  '#1E6E1E', 5:  '#285F46', 6:  '#B7C5B7', 7:  '#808080',
-  8:  '#CDB750', 9:  '#3C5A32', 10: '#0A5018', 11: '#500A0A',
-  12: '#D6EAF4'
-};
-
-/** Lake pseudo-biome display values */
 const LAKE_NAME  = 'Lake';
 const LAKE_COLOR = '#4fc3d4'; // matches DEFAULT_LAKE_RENDER_CONFIG shallow color
 
@@ -63,7 +49,6 @@ export class TerrainTooltip {
     this.app    = app;
     this.viewer = viewer;
 
-    // Create tooltip element
     this.el = document.createElement('div');
     this.el.id = 'terrain-tooltip';
     this.el.style.cssText = `
@@ -86,14 +71,12 @@ export class TerrainTooltip {
     `;
     document.body.appendChild(this.el);
 
-    // Attach mouse events to the viewer canvas
     this.viewerEl = document.getElementById('viewer');
     if (this.viewerEl) {
       this.viewerEl.addEventListener('mousemove', this.handleMouseMove);
       this.viewerEl.addEventListener('mouseleave', this.handleMouseLeave);
     }
 
-    // Render loop for tooltip updates
     this.startLoop();
   }
 
@@ -141,7 +124,6 @@ export class TerrainTooltip {
     const hit = this.viewer.raycastTerrain(canvasX, canvasY);
     if (!hit) { this.hide(); return; }
 
-    // Look up chunk data
     const state = this.app.getState();
     const key   = `${hit.chunkX},${hit.chunkY}`;
     const chunk = (hit.chunkData ?? state.loadedChunks.get(key)) as ChunkData | undefined;
@@ -154,16 +136,15 @@ export class TerrainTooltip {
 
     const biomeName  = lakeLevel !== null
       ? LAKE_NAME
-      : (BIOME_NAMES[chunk.biomeMap[tileIndex]] ?? 'Unknown');
+      : getBiomeDisplayName(chunk.biomeMap[tileIndex]);
     const biomeColor = lakeLevel !== null
       ? LAKE_COLOR
-      : (BIOME_COLORS[chunk.biomeMap[tileIndex]] ?? '#9ca3af');
+      : getBiomeCssColor(chunk.biomeMap[tileIndex]);
 
     const height = hit.height.toFixed(2);
     const wx     = hit.point.x.toFixed(1);
     const wy     = hit.point.z.toFixed(1);
 
-    // Extra row shown only for lakes: water level and depth
     const extraRow = lakeLevel !== null && chunk
       ? (() => {
           const terrainH = chunk.heightmap[hit.localY * (chunk.size + 1) + hit.localX];
@@ -186,7 +167,6 @@ export class TerrainTooltip {
       </div>
     `;
 
-    // Position tooltip near cursor, avoid screen edges
     const margin = 16;
     const tw = 180, th = 100;
     let tx = clientX + margin;

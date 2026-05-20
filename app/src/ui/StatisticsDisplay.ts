@@ -5,12 +5,12 @@
 
 import { WorldApp, AppState } from '../core/WorldApp';
 import { BiomeType, ResourceType, StructureType } from '@engine/index';
+import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
 
 export class StatisticsDisplay {
   private container: HTMLElement | null = null;
   private app: WorldApp | null = null;
 
-  // Bound elements
   private chunkCountElement:    HTMLElement | null = null;
   private avgHeightElement:     HTMLElement | null = null;
   private minHeightElement:     HTMLElement | null = null;
@@ -24,20 +24,6 @@ export class StatisticsDisplay {
   private lastAvgHeight: number | null = null;
   private lastMinHeight: number | null = null;
   private lastMaxHeight: number | null = null;
-
-  private readonly biomeNames: Record<number, string> = {
-    [0]: 'Ocean',      [1]: 'Beach',      [2]: 'Desert',     [3]: 'Plains',
-    [4]: 'Forest',     [5]: 'Taiga',      [6]: 'Tundra',     [7]: 'Mountain',
-    [8]: 'Savanna',    [9]: 'Swamp',      [10]: 'Rainforest', [11]: 'Volcanic',
-    [12]: 'Glacier'
-  };
-
-  private readonly biomeColors: Record<number, string> = {
-    [0]:  '#185090', [1]:  '#EAD9A5', [2]:  '#DEA85A', [3]:  '#87BC41',
-    [4]:  '#1E6E1E', [5]:  '#285F46', [6]:  '#B7C5B7', [7]:  '#808080',
-    [8]:  '#CDB750', [9]:  '#3C5A32', [10]: '#0A5018', [11]: '#500A0A',
-    [12]: '#D6EAF4'
-  };
 
   private readonly resourceNames: Record<number, string> = {
     [ResourceType.IRON]: 'Iron', [ResourceType.GOLD]: 'Gold',
@@ -60,7 +46,6 @@ export class StatisticsDisplay {
   initialize(container: HTMLElement): void {
     this.container = container;
 
-    // Bind to existing HTML elements by ID - no innerHTML modification
     this.chunkCountElement      = document.getElementById('stat-chunk-count');
     this.avgHeightElement       = document.getElementById('stat-height-avg');
     this.minHeightElement       = document.getElementById('stat-height-min');
@@ -98,14 +83,14 @@ export class StatisticsDisplay {
       row.className = 'metric';
 
       const dot = document.createElement('span');
-      dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${this.biomeColors[biome]};margin-right:6px;flex-shrink:0`;
+      dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${getBiomeCssColor(biome)};margin-right:6px;flex-shrink:0`;
 
       const lbl = document.createElement('span');
       lbl.className = 'metric-label';
       lbl.style.display = 'flex';
       lbl.style.alignItems = 'center';
       lbl.appendChild(dot);
-      lbl.appendChild(document.createTextNode(this.biomeNames[biome]));
+      lbl.appendChild(document.createTextNode(getBiomeDisplayName(biome)));
 
       const val = document.createElement('span');
       val.className = 'metric-value';
@@ -168,7 +153,6 @@ export class StatisticsDisplay {
     const section = document.getElementById('stat-structure-section');
     if (!section) return;
 
-    // Remove everything except the h4 heading
     const children = Array.from(section.childNodes);
     for (const child of children) {
       if ((child as HTMLElement).tagName !== 'H4') {

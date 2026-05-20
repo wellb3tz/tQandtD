@@ -10,10 +10,10 @@ import {
   WorldSession,
   configureLogger,
   LogLevel,
+  BiomeType,
   type ChunkManager,
   type WorldConfig,
   type ChunkData,
-  type BiomeType,
   type ResourceType,
   type StructureType,
   type SerializationOptions,
@@ -43,20 +43,16 @@ export interface Vector3 {
  * Application state interface
  */
 export interface AppState {
-  // Engine state
   loadedChunks: Map<string, ChunkData>;
   config: WorldConfig;
   
-  // UI state
   cameraPosition: Vector3;
   cameraTarget: Vector3;
   appSettings: AppSettings;
   viewerSettings: ViewerSettings;
   
-  // Chunk tracking
-  exploredChunks: Set<string>; // Chunks that have been visited
+  exploredChunks: Set<string>;
   
-  // Performance metrics
   fps: number;
   avgGenerationTime: number;
   memoryUsage: number;
@@ -64,14 +60,12 @@ export interface AppState {
   loadedChunkCount: number;
   renderedVertexCount: number;
   
-  // Worker pool statistics
   workerPoolEnabled: boolean;
   activeWorkers: number;
   queuedTasks: number;
   completedTasks: number;
   avgWorkerTime: number;
   
-  // Statistics
   biomeDistribution: Map<BiomeType, number>;
   resourceCounts: Map<ResourceType, number>;
   structureCounts: Map<StructureType, number>;
@@ -215,7 +209,6 @@ export class WorldApp {
     this.worldSessionUnsubscribers = [];
     this.loadChunksAbortController = null;
     
-    // Initialize state with defaults
     this.state = {
       loadedChunks: new Map(),
       config: createDefaultWorldConfig(),
@@ -260,16 +253,12 @@ export class WorldApp {
     }
 
     try {
-      // Configure logger based on environment
-      // In development: show INFO and above
-      // In production: show WARN and above (default)
       const isDevelopment = import.meta.env?.DEV ?? false;
       configureLogger({
         level: isDevelopment ? LogLevel.INFO : LogLevel.WARN,
         timestamps: isDevelopment,
       });
       
-      // Create the engine session with default configuration.
       const initConfig = prepareWorldConfig(this.state.config, {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
@@ -289,7 +278,6 @@ export class WorldApp {
       
       this.initialized = true;
       
-      // Notify subscribers of initial state
       this.notifySubscribers();
     } catch (error) {
       console.error('Failed to initialize WorldApp:', error);
@@ -356,32 +344,28 @@ export class WorldApp {
       return null;
     }
 
-    const biomeNames: Record<number, string> = {
-      0: 'Ocean',
-      1: 'Beach',
-      2: 'Desert',
-      3: 'Plains',
-      4: 'Forest',
-      5: 'Taiga',
-      6: 'Tundra',
-      7: 'Mountain',
-      8: 'Savanna',
-      9: 'Swamp',
-      10: 'Rainforest',
-      11: 'Volcanic',
-      12: 'Glacier',
-    };
-
     let maxCount = 0;
     let dominantBiome: string | null = null;
     stats.biomeDistribution.forEach((count, biome) => {
       if (count > maxCount) {
         maxCount = count;
-        dominantBiome = biomeNames[biome] ?? null;
+        dominantBiome = this.getBiomeDisplayName(biome);
       }
     });
 
     return dominantBiome;
+  }
+
+  private getBiomeDisplayName(biome: BiomeType): string | null {
+    const enumName = BiomeType[biome];
+    if (!enumName) {
+      return null;
+    }
+
+    return enumName
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
   getViewDistance(): number {
@@ -410,7 +394,6 @@ export class WorldApp {
       ...appSettingsPatch,
     };
     
-    // Merge partial state into current state
     this.state = {
       ...this.state,
       ...rest,
@@ -418,11 +401,9 @@ export class WorldApp {
       viewerSettings: nextViewerSettings,
     };
     
-    // Notify all subscribers of state change
     this.notifySubscribers();
     this.emit(AppEvent.STATE_CHANGED, this.state);
     
-    // Emit visibility change event if visibility settings changed
     if (visibilityChanged) {
       this.emit(AppEvent.VISIBILITY_CHANGED, this.getViewerSettings());
     }
@@ -443,10 +424,8 @@ export class WorldApp {
   subscribeToState(callback: StateChangeCallback): Unsubscribe {
     this.subscribers.add(callback);
     
-    // Immediately call with current state
     callback(this.state);
     
-    // Return unsubscribe function
     return () => {
       this.subscribers.delete(callback);
     };
@@ -501,7 +480,6 @@ export class WorldApp {
    */
   async generateWorld(seed: number): Promise<void> {
     try {
-      // Update configuration with new seed
       const newConfig = prepareWorldConfig(this.state.config, {
         seed,
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
@@ -509,24 +487,19 @@ export class WorldApp {
       
       const newManager = this.requireWorldSession().regenerate({ config: newConfig, seed });
       
-      // Clear existing chunks and explored chunks
       this.state.loadedChunks.clear();
       this.state.exploredChunks.clear();
       
-      // Update state
       this.updateState({
         config: newManager.config,
         loadedChunks: new Map(),
         exploredChunks: new Set()
       });
       
-      // Emit event to clear fog of war in viewer
       this.emit(AppEvent.WORLD_GENERATED, { seed });
       
-      // Load initial chunks around origin (3x3 grid)
       await this.loadChunksAround(0, 0, 1);
       
-      // Update statistics
       this.updateStatistics();
       
     } catch (error) {
@@ -541,14 +514,12 @@ export class WorldApp {
    * Derives a deterministic seed from lat/lon and generates the world.
    */
   async landOnPlanet(lat: number, lon: number): Promise<void> {
-    // Derive seed from coordinates + random salt so every landing is unique
     const latDeg = Math.round((lat * 180) / Math.PI);
     const lonDeg = Math.round((lon * 180) / Math.PI);
     const baseSeed = Math.abs(latDeg * 1000 + lonDeg);
     const randomSalt = Math.floor(Math.random() * 10000);
     const newSeed = baseSeed + randomSalt;
 
-    // Temperature offset based on latitude (poles are cold, equator hot)
     const normalizedLat = Math.abs(lat) / (Math.PI / 2); // 0 at equator, 1 at pole
     const temperatureOffset = (normalizedLat * 2) - 1; // -1 at equator, +1 at poles
 
@@ -558,7 +529,6 @@ export class WorldApp {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
 
-      // Apply temperature offset via enhanced biome config if present
       if (newConfig.enhancedBiomeConfig) {
         newConfig.enhancedBiomeConfig.climateConfig = {
           ...DEFAULT_CLIMATE_CONFIG,
@@ -631,7 +601,6 @@ export class WorldApp {
       chunksLoaded = result.loaded.length;
       this.syncLoadedChunksFromSession();
 
-      // Update performance metrics
       const endTime = performance.now();
       const avgTime = chunksLoaded > 0 ? (endTime - startTime) / chunksLoaded : 0;
 
@@ -721,7 +690,6 @@ export class WorldApp {
    * Update Worker Pool configuration
    */
   updateEngineConfig(config: WorldConfigOverrides): void {
-    // Prevent recursive calls
     if (this.isUpdatingConfig) {
       console.warn('[WorldApp] Ignoring recursive updateEngineConfig call');
       return;
@@ -737,14 +705,12 @@ export class WorldApp {
 
       const shouldRecreateWorld = requiresWorldRebuild(config);
       
-      // If not recreating manager, just update config and return
       if (!shouldRecreateWorld) {
         this.updateState({ config: newConfig });
         this.emit(AppEvent.CONFIG_CHANGED, newConfig);
         return;
       }
       
-      // Handle worker pool configuration
       let workerPoolEnabled = !!newConfig.workerPoolConfig;
       const result = this.requireWorldSession().updateConfig(newConfig, {
         fallbackOnWorkerPoolError: 'workerPoolConfig' in config && !!config.workerPoolConfig,
@@ -795,7 +761,6 @@ export class WorldApp {
       };
     }
     
-    // Calculate average worker time (simplified - in real implementation would track timing)
     const avgWorkerTime = stats.completedTasks > 0 
       ? this.state.avgGenerationTime 
       : 0;
