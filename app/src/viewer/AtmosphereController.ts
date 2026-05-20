@@ -14,12 +14,12 @@ export interface SkyParams {
 }
 
 export const DEFAULT_SKY_PARAMS: SkyParams = {
-  turbidity: 2,
-  rayleigh: 0.5,
+  turbidity: 1.0,
+  rayleigh: 0.1,
   mieCoefficient: 0.005,
   mieDirectionalG: 0.7,
-  elevation: 45,
-  azimuth: 150,
+  elevation: 30,
+  azimuth: 0,
 };
 
 export class AtmosphereController {

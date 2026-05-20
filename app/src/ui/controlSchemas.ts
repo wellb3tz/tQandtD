@@ -146,7 +146,7 @@ export const SKY_VIEW_CONTROLS = {
     min: 1,
     max: 20,
     step: 0.5,
-    defaultValue: 2,
+    defaultValue: 1.0,
     tooltip: 'Haziness of the sky (1 = clear, 20 = very hazy)',
   },
   rayleigh: {
@@ -155,7 +155,7 @@ export const SKY_VIEW_CONTROLS = {
     min: 0,
     max: 4,
     step: 0.1,
-    defaultValue: 0.5,
+    defaultValue: 0.1,
     tooltip: 'Atmospheric scattering strength (higher = bluer sky)',
   },
   elevation: {
@@ -164,7 +164,7 @@ export const SKY_VIEW_CONTROLS = {
     min: 0,
     max: 90,
     step: 1,
-    defaultValue: 45,
+    defaultValue: 30,
     tooltip: 'Height of the sun above the horizon in degrees',
   },
   azimuth: {
@@ -173,7 +173,7 @@ export const SKY_VIEW_CONTROLS = {
     min: 0,
     max: 360,
     step: 1,
-    defaultValue: 150,
+    defaultValue: 0,
     tooltip: 'Horizontal direction of the sun in degrees (0 = North, 90 = East, 180 = South, 270 = West)',
   },
 } as const;
