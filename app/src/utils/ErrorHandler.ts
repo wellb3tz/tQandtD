@@ -180,10 +180,17 @@ export class ErrorHandler {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    
-    // Add icon based on type
-    const icon = this.getToastIcon(type);
-    toast.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-message">${message}</span>`;
+
+    const icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.textContent = this.getToastIcon(type);
+
+    const text = document.createElement('span');
+    text.className = 'toast-message';
+    text.textContent = message;
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
 
     this.toastContainer.appendChild(toast);
 
@@ -226,32 +233,40 @@ export class ErrorHandler {
 
     const dialog = document.createElement('div');
     dialog.className = 'error-dialog';
-    dialog.innerHTML = `
-      <div class="error-dialog-overlay"></div>
-      <div class="error-dialog-content">
-        <div class="error-dialog-header">
-          <h3>${title}</h3>
-        </div>
-        <div class="error-dialog-body">
-          <p>${message}</p>
-        </div>
-        <div class="error-dialog-footer">
-          ${actions.map((action, index) => `
-            <button class="error-dialog-btn ${action.primary ? 'primary' : 'secondary'}" data-action="${index}">
-              ${action.label}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-    `;
 
-    // Add event listeners for action buttons
-    dialog.querySelectorAll('[data-action]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const actionIndex = parseInt(btn.getAttribute('data-action') || '0');
-        actions[actionIndex].callback();
-      });
+    const overlay = document.createElement('div');
+    overlay.className = 'error-dialog-overlay';
+
+    const content = document.createElement('div');
+    content.className = 'error-dialog-content';
+
+    const header = document.createElement('div');
+    header.className = 'error-dialog-header';
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    header.appendChild(heading);
+
+    const body = document.createElement('div');
+    body.className = 'error-dialog-body';
+    const bodyText = document.createElement('p');
+    bodyText.textContent = message;
+    body.appendChild(bodyText);
+
+    const footer = document.createElement('div');
+    footer.className = 'error-dialog-footer';
+    actions.forEach((action) => {
+      const button = document.createElement('button');
+      button.className = `error-dialog-btn ${action.primary ? 'primary' : 'secondary'}`;
+      button.textContent = action.label;
+      button.addEventListener('click', action.callback);
+      footer.appendChild(button);
     });
+
+    content.appendChild(header);
+    content.appendChild(body);
+    content.appendChild(footer);
+    dialog.appendChild(overlay);
+    dialog.appendChild(content);
 
     this.dialogContainer.appendChild(dialog);
     
@@ -286,13 +301,26 @@ export class ErrorHandler {
     const progressBar = document.createElement('div');
     progressBar.id = progressId;
     progressBar.className = 'progress-bar';
-    progressBar.innerHTML = `
-      <div class="progress-message">${message}</div>
-      <div class="progress-track">
-        <div class="progress-fill" style="width: ${progress}%"></div>
-      </div>
-      <div class="progress-percentage">${progress}%</div>
-    `;
+
+    const messageEl = document.createElement('div');
+    messageEl.className = 'progress-message';
+    messageEl.textContent = message;
+
+    const track = document.createElement('div');
+    track.className = 'progress-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill';
+    fill.style.width = `${progress}%`;
+
+    const percentage = document.createElement('div');
+    percentage.className = 'progress-percentage';
+    percentage.textContent = `${progress}%`;
+
+    track.appendChild(fill);
+    progressBar.appendChild(messageEl);
+    progressBar.appendChild(track);
+    progressBar.appendChild(percentage);
 
     this.progressContainer.appendChild(progressBar);
     

@@ -55,6 +55,9 @@ export class TerrainTooltip {
   private lastX = 0;
   private lastY = 0;
   private dirty = false;
+  private viewerEl: HTMLElement | null = null;
+  private readonly handleMouseMove = (e: MouseEvent) => this.onMouseMove(e);
+  private readonly handleMouseLeave = () => this.onMouseLeave();
 
   initialize(app: WorldApp, viewer: any): void {
     this.app    = app;
@@ -84,10 +87,10 @@ export class TerrainTooltip {
     document.body.appendChild(this.el);
 
     // Attach mouse events to the viewer canvas
-    const viewerEl = document.getElementById('viewer');
-    if (viewerEl) {
-      viewerEl.addEventListener('mousemove', this.onMouseMove.bind(this));
-      viewerEl.addEventListener('mouseleave', this.onMouseLeave.bind(this));
+    this.viewerEl = document.getElementById('viewer');
+    if (this.viewerEl) {
+      this.viewerEl.addEventListener('mousemove', this.handleMouseMove);
+      this.viewerEl.addEventListener('mouseleave', this.handleMouseLeave);
     }
 
     // Render loop for tooltip updates
@@ -204,6 +207,14 @@ export class TerrainTooltip {
 
   dispose(): void {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    if (this.viewerEl) {
+      this.viewerEl.removeEventListener('mousemove', this.handleMouseMove);
+      this.viewerEl.removeEventListener('mouseleave', this.handleMouseLeave);
+      this.viewerEl = null;
+    }
     this.el?.remove();
+    this.el = null;
+    this.app = null;
+    this.viewer = null;
   }
 }

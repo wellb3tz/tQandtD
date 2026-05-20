@@ -7,6 +7,21 @@
 export class HelpModal {
   private modal: HTMLElement | null = null;
   private isVisible: boolean = false;
+  private readonly handleEscapeKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this.isVisible) {
+      this.hide();
+    }
+  };
+  private readonly handleShortcutKey = (e: KeyboardEvent) => {
+    if ((e.key === '?' || e.key === '/') && !this.isVisible) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+      e.preventDefault();
+      this.show();
+    }
+  };
 
   initialize(): void {
     this.createModal();
@@ -168,22 +183,8 @@ export class HelpModal {
       }
     });
 
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isVisible) {
-        this.hide();
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if ((e.key === '?' || e.key === '/') && !this.isVisible) {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-          return;
-        }
-        e.preventDefault();
-        this.show();
-      }
-    });
+    document.addEventListener('keydown', this.handleEscapeKey);
+    document.addEventListener('keydown', this.handleShortcutKey);
   }
 
   show(): void {
@@ -213,5 +214,13 @@ export class HelpModal {
 
   isOpen(): boolean {
     return this.isVisible;
+  }
+
+  dispose(): void {
+    document.removeEventListener('keydown', this.handleEscapeKey);
+    document.removeEventListener('keydown', this.handleShortcutKey);
+    this.modal?.remove();
+    this.modal = null;
+    this.isVisible = false;
   }
 }

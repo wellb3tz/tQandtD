@@ -290,6 +290,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
         if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
         if (performanceTimer !== null) clearInterval(performanceTimer);
+        if (terrainTooltip) terrainTooltip.dispose();
+        if (performanceMonitor) performanceMonitor.dispose();
+        if (helpModal) helpModal.dispose();
         if (worldViewer) worldViewer.dispose();
         if (app) app.destroy();
       });
@@ -639,10 +642,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       generateBtn.textContent = 'Generating...';
     }
     
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
+
     try {
       // Simulate progress updates
       let progress = 0;
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         progress = Math.min(progress + 10, 90);
         errorHandler.updateProgress(progressId, progress);
       }, 200);
@@ -652,6 +657,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Complete progress
       clearInterval(progressInterval);
+      progressInterval = null;
       errorHandler.updateProgress(progressId, 100, 'World generated!');
       
       setTimeout(() => {
@@ -670,6 +676,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         error instanceof Error ? error : undefined
       ));
     } finally {
+      if (progressInterval !== null) {
+        clearInterval(progressInterval);
+      }
+
       // Hide loading indicator
       if (loadingIndicator) {
         loadingIndicator.classList.add('hidden');

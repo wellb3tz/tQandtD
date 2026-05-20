@@ -43,8 +43,11 @@ export class PerformanceMonitor {
 
   private lastFrameTime: number = performance.now();
   private updateInterval: number | null = null;
+  private rafId: number | null = null;
+  private disposed = false;
 
   initialize(container: HTMLElement): void {
+    this.disposed = false;
     this.container = container;
 
     // Bind to existing HTML elements — no innerHTML modification
@@ -80,14 +83,15 @@ export class PerformanceMonitor {
 
   private startFPSTracking(): void {
     const track = () => {
+      if (this.disposed) return;
       const now = performance.now();
       const fps = 1000 / (now - this.lastFrameTime);
       this.lastFrameTime = now;
       this.fpsHistory.push(Math.min(fps, 120)); // cap at 120 for graph scale
       if (this.fpsHistory.length > this.MAX_SAMPLES) this.fpsHistory.shift();
-      requestAnimationFrame(track);
+      this.rafId = requestAnimationFrame(track);
     };
-    requestAnimationFrame(track);
+    this.rafId = requestAnimationFrame(track);
   }
 
   private startPeriodicUpdates(): void {
@@ -256,6 +260,11 @@ export class PerformanceMonitor {
   toggle(): void { this.container?.classList.toggle('hidden'); }
 
   dispose(): void {
+    this.disposed = true;
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
     if (this.updateInterval !== null) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
