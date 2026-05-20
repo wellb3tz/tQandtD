@@ -1,4 +1,4 @@
-import { BiomeType, ChunkData, Structure } from './chunk';
+import { BiomeType, ChunkData, Structure, getBiomeWeightsForTile, createSparseBiomeWeights } from './chunk';
 import { BiomeSystem, BiomeConfig } from './biome';
 import { TerrainGenerator, TerrainConfig } from '../gen/terrain';
 import { ResourceGenerator, ResourceConfig } from '../gen/resources';
@@ -562,6 +562,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
         if (chunk.rivers.length > 0) {
           this.carveTerrainForRivers(chunk.rivers, heightmap, this.config.chunkSize);
+          this.fixBiomesAfterHeightChange(chunk);
         }
       }
 
@@ -600,6 +601,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
 
         if (worldLakes.length > 0) {
           this.carveTerrainForWorldLakes(worldLakes, chunkX, chunkY, this.config.chunkSize, heightmap);
+          this.fixBiomesAfterHeightChange(chunk);
         }
       }
 
@@ -681,6 +683,54 @@ export class ChunkManager implements ChunkManagerSnapshot {
         structureTime: metrics.structureTime ?? 0,
       },
     };
+  }
+
+  /**
+   * Re-evaluates biome classification for tiles whose height has changed
+   * after river / lake carving or boundary reconciliation.
+   * Any tile whose average corner height is below sea level is forced to OCEAN.
+   */
+  private fixBiomesAfterHeightChange(chunk: ChunkData): void {
+    const size = chunk.size;
+    const vertexCount = size + 1;
+    const seaLevel = SEA_LEVEL;
+    let changed = false;
+
+    // Reconstruct per-tile weight maps from the sparse arrays.
+    const tileWeights: Map<BiomeType, number>[] = [];
+    const tileCount = size * size;
+    for (let i = 0; i < tileCount; i++) {
+      tileWeights.push(getBiomeWeightsForTile(chunk, i));
+    }
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const tileIdx = y * size + x;
+        const h00 = chunk.heightmap[y * vertexCount + x];
+        const h10 = chunk.heightmap[y * vertexCount + (x + 1)];
+        const h01 = chunk.heightmap[(y + 1) * vertexCount + x];
+        const h11 = chunk.heightmap[(y + 1) * vertexCount + (x + 1)];
+        const avgHeight = (h00 + h10 + h01 + h11) / 4;
+
+        const currentBiome = chunk.biomeMap[tileIdx];
+
+        if (avgHeight < seaLevel && currentBiome !== BiomeType.OCEAN) {
+          chunk.biomeMap[tileIdx] = BiomeType.OCEAN;
+          tileWeights[tileIdx] = new Map([[BiomeType.OCEAN, 1.0]]);
+          if (chunk.temperatureMap) {
+            chunk.temperatureMap[tileIdx] = 0;
+          }
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      const sparse = createSparseBiomeWeights(tileWeights, tileCount);
+      chunk.sparseBiomeTypes = sparse.types;
+      chunk.sparseBiomeWeights = sparse.weights;
+      chunk.sparseBiomeOffsets = sparse.offsets;
+    }
   }
 
   /**
@@ -1097,6 +1147,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       const [cx, cy] = key.split(',').map(Number);
       this.config.onChunkInvalidated?.(cx, cy);
     }
+
+    // Boundary heights may have dropped below sea level — reclassify affected biomes.
+    this.fixBiomesAfterHeightChange(chunk);
   }
 
   /**

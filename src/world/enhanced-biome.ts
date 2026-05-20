@@ -214,6 +214,22 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       biome = this.getBiome(x, y, height);
     }
 
+    // Ocean is absolute — never blend land biomes into it.
+    if (biome === BiomeType.OCEAN) {
+      return {
+        biome: BiomeType.OCEAN,
+        weights: new Map([[BiomeType.OCEAN, 1.0]]),
+        elevationBand: undefined,
+        transitionFactor: 0,
+        dynamicSnowLine: this.climateSystem !== null
+          ? this.climateSystem.getDynamicSnowLine()
+          : this.enhancedConfig.snowLineElevation,
+        dynamicTreeLine: this.climateSystem !== null
+          ? this.climateSystem.getDynamicTreeLine()
+          : this.enhancedConfig.treeLineElevation,
+      };
+    }
+
     // Calculate transition factor first (needed for adaptive blending)
     const transitionFactor = this.enhancedConfig.enableTransitions
       ? this.calculateTransitionFactor(x, y, getHeight)
@@ -229,7 +245,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       // Transitions enabled: blend on boundaries while preserving center
       // Calculate how much to blend based on distance to boundary
       const blendAmount = transitionFactor * Math.min(this.enhancedConfig.transitionWidth / 10, 1.0);
-      
+
       if (blendAmount < 0.1) {
         // Very low blend: keep pure color
         weights = new Map([[biome, 1.0]]);
@@ -237,13 +253,26 @@ export class EnhancedBiomeSystem extends BiomeSystem {
         // Blend with neighbors, but keep strong center bias
         // Use small radius to only sample immediate neighbors
         const sampleRadius = 2.0 + blendAmount * 3.0; // 2-5 units
-        const neighborWeights = this.getBiomeWeightsWithRadius(x, y, getHeight, sampleRadius);
-        
+
+        // Use the same climate-aware classifier for neighbour samples so that
+        // blending never mixes in biomes computed with the legacy noise path.
+        const biomeLookup = this.climateSystem !== null
+          ? (sx: number, sy: number, sh: number): BiomeType => {
+              const t = this.climateSystem!.getTemperature(sx, sy, sh);
+              const m = this.climateSystem!.getMoisture(sx, sy, sh, getHeight);
+              return this.classifyBiomeFromClimate(sh, t, m, sx, sy, getHeight);
+            }
+          : undefined;
+
+        const neighborWeights = this.getBiomeWeightsWithRadius(
+          x, y, getHeight, sampleRadius, undefined, biomeLookup,
+        );
+
         // Boost center biome weight to preserve it
         const centerBoost = 1.0 - blendAmount * 0.5; // 0.5-1.0
         const centerWeight = neighborWeights.get(biome) || 0;
         neighborWeights.set(biome, centerWeight + centerBoost);
-        
+
         // Renormalize
         let total = 0;
         for (const w of neighborWeights.values()) total += w;

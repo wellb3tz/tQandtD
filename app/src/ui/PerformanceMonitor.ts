@@ -184,7 +184,7 @@ export class PerformanceMonitor {
 
     // Color line based on current avg FPS
     const avg = samples[samples.length - 1];
-    ctx.strokeStyle = avg >= 55 ? '#b45309' : avg >= 30 ? '#b45309' : '#ef4444';
+    ctx.strokeStyle = avg >= 55 ? '#22c55e' : avg >= 30 ? '#f59e0b' : '#ef4444';
     ctx.lineWidth   = 1.5;
     ctx.stroke();
 
@@ -201,7 +201,7 @@ export class PerformanceMonitor {
     if (!this.fpsElement) return;
     this.fpsElement.textContent = fps.toString();
     // Color the big number based on performance
-    if (fps >= 55)      this.fpsElement.style.color = '#b45309'; // ok
+    if (fps >= 55)      this.fpsElement.style.color = '#22c55e'; // good (green)
     else if (fps >= 30) this.fpsElement.style.color = '#f59e0b'; // yellow
     else                this.fpsElement.style.color = '#ef4444'; // red
   }

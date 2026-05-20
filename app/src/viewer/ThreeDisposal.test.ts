@@ -46,4 +46,19 @@ describe('ThreeDisposal', () => {
     expect(line.geometry.dispose).toHaveBeenCalledOnce();
     expect((line.material as THREE.Material).dispose).toHaveBeenCalledOnce();
   });
+
+  it('does not dispose shared foliage geometry or materials when removing one mesh', () => {
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.InstancedMesh(geometry, material, 1);
+    geometry.userData.sharedFoliageResource = true;
+    material.userData.sharedFoliageResource = true;
+    geometry.dispose = vi.fn();
+    material.dispose = vi.fn();
+
+    disposeMesh(mesh);
+
+    expect(geometry.dispose).not.toHaveBeenCalled();
+    expect(material.dispose).not.toHaveBeenCalled();
+  });
 });

@@ -6,6 +6,7 @@ export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'shrub' | 'st
 const prototypeGeometryCache = new Map<FoliagePrototypeKind, THREE.BufferGeometry>();
 
 const defaultFoliageMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+defaultFoliageMaterial.userData.sharedFoliageResource = true;
 
 export function createFoliageInstancedMesh(
   geometry: THREE.BufferGeometry,
@@ -29,6 +30,8 @@ export function createFoliageInstancedMesh(
   });
 
   mesh.instanceMatrix.needsUpdate = true;
+  mesh.computeBoundingBox();
+  mesh.computeBoundingSphere();
   return mesh;
 }
 
@@ -78,6 +81,7 @@ export function createFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THRE
   }
 
   prototypeGeometryCache.set(kind, geometry);
+  geometry.userData.sharedFoliageResource = true;
   return geometry;
 }
 

@@ -19,6 +19,15 @@ describe('FoliageLayerBuilder', () => {
     expect(layer?.children.every(child => child instanceof THREE.InstancedMesh)).toBe(true);
     expect(layer?.children.some(child => child.name.startsWith('foliage-trees-'))).toBe(true);
   });
+
+  it('keeps tree instances shadow-enabled', () => {
+    const layer = createFoliageLayer(0, 0, createForestChunk(), 0.3);
+    const treeMeshes = layer?.children.filter(child => child.name.startsWith('foliage-trees-')) ?? [];
+
+    expect(treeMeshes.length).toBeGreaterThan(0);
+    expect(treeMeshes.every(mesh => mesh.castShadow === true)).toBe(true);
+    expect(treeMeshes.every(mesh => mesh.receiveShadow === true)).toBe(true);
+  });
 });
 
 function createForestChunk(): ChunkData {
