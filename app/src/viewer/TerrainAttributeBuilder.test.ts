@@ -4,6 +4,7 @@ import { BiomeType, type ChunkData } from '@engine/index';
 import {
   applyTerrainDetailAndColorModulation,
   calculateVertexSurfaceWeights,
+  getRiverbedDarkening,
   getRiverTrenchDarkening,
 } from './TerrainAttributeBuilder';
 
@@ -36,6 +37,26 @@ describe('TerrainAttributeBuilder', () => {
     const data = createRiverChunk();
 
     expect(getRiverTrenchDarkening(data, 0, 0)).toBeLessThan(1);
+    expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
+  });
+
+  it('keeps dry riverbeds visible without treating them as wet water channels', () => {
+    const data = createRiverChunk({
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        state: 'dry',
+        points: [
+          { x: 0, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+          { x: 1, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 1, minY: 0, maxY: 0 },
+      }],
+    });
+
+    expect(getRiverTrenchDarkening(data, 0, 0)).toBe(1);
+    expect(getRiverbedDarkening(data, 0, 0)).toBeLessThan(1);
     expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
   });
 
@@ -105,6 +126,39 @@ describe('TerrainAttributeBuilder', () => {
     expect(detailBlend[1 * 4 + 1]).toBeGreaterThan(0);
     expect(detailBlend[0 * 4 + 2]).toBeGreaterThan(0);
     expect(detailBlend[0 * 4 + 3]).toBeGreaterThan(0);
+  });
+
+  it('uses climate snow line and local temperature in the legacy detail helper', () => {
+    const data = createRiverChunk({
+      heightmap: new Float32Array([0.9, 0.9, 0.9, 0.9]),
+      biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
+      climateSnowLine: 0.95,
+      temperatureMap: new Float32Array([0.5]),
+    });
+    const geometry = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+      0, 45, 0,
+      1, 45, 0,
+      0, 45, 1,
+      1, 45, 1,
+    ]);
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(12).fill(0.4), 3));
+    geometry.setIndex([0, 2, 1, 1, 2, 3]);
+    geometry.computeVertexNormals();
+
+    const detailBlend = applyTerrainDetailAndColorModulation({
+      geometry,
+      vertices,
+      data,
+      chunkSize: 1,
+      worldXBase: 0,
+      worldZBase: 0,
+      seaLevel: 0.3,
+      heightScale: 50,
+    });
+
+    expect(detailBlend[1]).toBe(0);
   });
 });
 

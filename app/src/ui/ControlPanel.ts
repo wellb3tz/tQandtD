@@ -6,7 +6,7 @@
  */
 
 import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings, type SkyViewSettings } from '../core/WorldApp';
-import { DEFAULT_RIVER_CONFIG, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
+import { DEFAULT_CLIMATE_CONFIG, DEFAULT_RIVER_CONFIG, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
   BIOME_SLIDERS,
@@ -723,6 +723,7 @@ export class ControlPanel {
           enhancedBiomeConfig: {
             ...currentEnhanced,
             climateConfig: {
+              ...DEFAULT_CLIMATE_CONFIG,
               ...currentEnhanced.climateConfig,
               [climateConfigKey]: value,
             },

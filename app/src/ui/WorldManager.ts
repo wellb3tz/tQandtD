@@ -7,7 +7,7 @@
  */
 
 import { WorldApp } from '@core/WorldApp';
-import { WorldSerializer, SerializationFormat, type SerializationOptions } from '@engine/index';
+import { WorldSerializer, SerializationFormat, type SerializationOptions, type WorldConfig } from '@engine/index';
 import { errorHandler } from '../utils/ErrorHandler';
 
 /**
@@ -50,7 +50,6 @@ export class WorldManager {
     // Parse URL parameters on page load
     this.parseURLConfiguration();
     
-    console.log('WorldManager initialized');
   }
 
   /**
@@ -802,6 +801,16 @@ export class WorldManager {
 
       const config = this.app.getConfigSnapshot();
 
+      if (params.has('config')) {
+        const sharedConfig = JSON.parse(params.get('config')!) as Partial<WorldConfig>;
+        this.app.applyWorldConfig({
+          ...config,
+          ...sharedConfig,
+        });
+        this.showToast('Configuration loaded from URL', 'info');
+        return;
+      }
+
       // Parse seed
       if (params.has('seed')) {
         const seed = parseInt(params.get('seed')!);
@@ -872,8 +881,6 @@ export class WorldManager {
       // Show notification that configuration was loaded from URL
       this.showToast('Configuration loaded from URL', 'info');
 
-      console.log('URL configuration parsed and applied:', config);
-
     } catch (error) {
       console.error('Failed to parse URL configuration:', error);
       // Don't show error toast for URL parsing failures - just log it
@@ -889,18 +896,8 @@ export class WorldManager {
     try {
       const config = this.app.getConfigSnapshot();
 
-      // Create a clean configuration object
-      const exportConfig = {
-        seed: config.seed,
-        terrainConfig: config.terrainConfig,
-        biomeConfig: config.biomeConfig,
-        resourceConfig: config.resourceConfig,
-        structureConfig: config.structureConfig,
-        workerPoolConfig: config.workerPoolConfig,
-      };
-
       // Convert to JSON string with formatting
-      const jsonString = JSON.stringify(exportConfig, null, 2);
+      const jsonString = JSON.stringify(this.createShareableConfig(config), null, 2);
 
       // Download file
       this.downloadFile(jsonString, 'world-config.json');
@@ -942,6 +939,7 @@ export class WorldManager {
     // Encode configuration as URL parameters
     const params = new URLSearchParams();
     params.set('seed', config.seed.toString());
+    params.set('config', JSON.stringify(this.createShareableConfig(config)));
     
     // Add terrain config
     if (config.terrainConfig) {
@@ -967,6 +965,25 @@ export class WorldManager {
     }
 
     return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  }
+
+  private createShareableConfig(config: WorldConfig): Partial<WorldConfig> {
+    return {
+      seed: config.seed,
+      chunkSize: config.chunkSize,
+      terrainConfig: config.terrainConfig,
+      biomeConfig: config.biomeConfig,
+      enhancedBiomeConfig: config.enhancedBiomeConfig,
+      lakeConfig: config.lakeConfig,
+      riverConfig: config.riverConfig,
+      noise3DConfig: config.noise3DConfig,
+      resourceConfig: config.resourceConfig,
+      structureConfig: config.structureConfig,
+      workerPoolConfig: config.workerPoolConfig,
+      maxCacheSize: config.maxCacheSize,
+      enablePerformanceMetrics: config.enablePerformanceMetrics,
+      errorRecovery: config.errorRecovery,
+    };
   }
 
   /**
@@ -1012,6 +1029,5 @@ export class WorldManager {
     }
 
     this.app = null;
-    console.log('WorldManager disposed');
   }
 }

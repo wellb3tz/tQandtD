@@ -76,8 +76,6 @@ export class PerformanceMonitor {
 
     this.startFPSTracking();
     this.startPeriodicUpdates();
-
-    console.log('PerformanceMonitor initialized');
   }
 
   private startFPSTracking(): void {
@@ -264,6 +262,5 @@ export class PerformanceMonitor {
     }
     this.fpsHistory = [];
     this.container = null;
-    console.log('PerformanceMonitor disposed');
   }
 }

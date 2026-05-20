@@ -1,5 +1,6 @@
 import {
   BiomeType,
+  getRiverbedDarkening,
   getRiverTrenchDarkening,
   calculateFrozenRiverInfluence,
   RIVER_TRENCH_DARKEN_STRENGTH,
@@ -353,6 +354,9 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const riverWetness = clamp01(
       (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
+    const riverbedInfluence = clamp01(
+      (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
+    );
     const frozenBand = clamp01(calculateFrozenRiverInfluence(data, bvX, bvY));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
 
@@ -366,7 +370,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const snowDetail = (isMountain || isGlacier)
       ? Math.min(1, Math.max(0, (rawHeight - snowLine) / 0.14) * (1.0 - steepness * 0.35)) * temperatureFactor
       : 0;
-    const riverbedDetail = riverWetness;
+    const riverbedDetail = riverbedInfluence;
 
     if (isOcean) {
       // Ocean floor keeps the biome color and only receives altitude brightness.

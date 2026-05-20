@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { WaterLayerManager } from './WaterLayerManager';
 import { DEFAULT_WATER_CONFIG } from './config';
-import { BiomeType, type ChunkData } from '@engine/index';
+import { BiomeType, type ChunkData, type RiverData } from '@engine/index';
 
 /**
  * Create a mock ChunkData with ocean tiles for testing
@@ -78,6 +78,26 @@ function createMockChunkWithoutWater(): ChunkData {
     biomeWeights,
     resources: [],
     structures: [],
+  };
+}
+
+function createMockChunkWithRivers(rivers: RiverData[]): ChunkData {
+  const chunk = createMockChunkWithoutWater();
+  chunk.rivers = rivers;
+  return chunk;
+}
+
+function createMockRiver(state?: RiverData['state'], y = 1): RiverData {
+  return {
+    riverId: `river_${state ?? 'flowing'}_${y}`,
+    pathId: `river_${state ?? 'flowing'}_${y}:main`,
+    isTributary: false,
+    state,
+    points: [
+      { x: 0, y, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1.4, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y, height: 0.42, surfaceLevel: 0.43, width: 1, depth: 0.03, channelWidth: 1.4, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ],
+    bounds: { minX: 0, maxX: 4, minY: y, maxY: y },
   };
 }
 
@@ -211,6 +231,42 @@ describe('WaterLayerManager - Integration Tests', () => {
       expect(shader.uniforms.uOceanWaveTime.value).toBe(3.25);
       expect(shader.uniforms.uOceanWaveHeight.value).toBe(0.45);
       expect(shader.uniforms.uOceanWaveSpeed.value).toBe(1.2);
+    });
+
+    it('renders frozen rivers separately and does not animate their flow normals', () => {
+      const normalMap = new THREE.Texture();
+      normalMap.offset.set(0, 0);
+      const frozenNormalMap = normalMap.clone();
+      const config = {
+        ...DEFAULT_WATER_CONFIG,
+        river: {
+          ...DEFAULT_WATER_CONFIG.river,
+          normalMap,
+        },
+      };
+      const chunkData = createMockChunkWithRivers([
+        createMockRiver(undefined, 1),
+        createMockRiver('frozen', 3),
+        createMockRiver('dry', 5),
+      ]);
+
+      manager.addWaterToChunk('0,0', chunkData, scene, config);
+
+      const waterLayer = manager.getWaterLayer('0,0');
+      expect(waterLayer!.river).toHaveLength(2);
+      const flowing = waterLayer!.river.find(mesh => mesh.material.userData.riverState === 'flowing');
+      const frozen = waterLayer!.river.find(mesh => mesh.material.userData.riverState === 'frozen');
+      expect(flowing).toBeDefined();
+      expect(frozen).toBeDefined();
+      expect(frozen!.material.normalMap).toBeNull();
+      expect((frozen!.mesh.geometry.getAttribute('color') as THREE.BufferAttribute).getZ(0)).toBeGreaterThan(0.9);
+
+      frozen!.material.normalMap = frozenNormalMap;
+      manager.updateRiverFlows(10);
+
+      expect(flowing!.material.normalMap!.offset.x).not.toBe(0);
+      expect(frozenNormalMap.offset.x).toBe(0);
+      expect(frozenNormalMap.offset.y).toBe(0);
     });
   });
 

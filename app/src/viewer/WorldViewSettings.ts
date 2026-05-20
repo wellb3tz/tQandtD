@@ -66,7 +66,7 @@ export class WorldViewSettings {
       if (layer === RenderLayer.BIOMES) {
         updateTerrainBiomeColors(chunkMesh.terrain, visible);
       } else if (layer === RenderLayer.TEMPERATURE) {
-        updateTerrainTemperatureColors(chunkMesh.terrain, visible, chunkMesh.data);
+        updateTerrainTemperatureColors(chunkMesh.terrain, visible, chunkMesh.data ?? null);
       } else {
         applyRenderLayerVisibility(chunkMesh, layer, this.layerVisibility);
       }

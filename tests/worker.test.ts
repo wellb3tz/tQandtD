@@ -21,11 +21,16 @@ function makeChunk(): ChunkData {
     sparseBiomeTypes: new Uint8Array([BiomeType.PLAINS, BiomeType.FOREST]),
     sparseBiomeWeights: new Float32Array([0.75, 0.25]),
     sparseBiomeOffsets: new Uint16Array([0, 1, 1, 2, 2]),
+    climateSnowLine: 0.83,
+    climateTreeLine: 0.62,
+    worldTemperatureOffset: -0.2,
+    temperatureMap: new Float32Array([-0.4, -0.3, -0.2, -0.1]),
     lakes: [{ waterLevel: 0.42, tiles: new Set([0, 3]), maxDepth: 0.12, minTerrainHeight: 0.3 }],
     rivers: [{
       riverId: 'river_1',
       pathId: 'river_1:main',
       isTributary: false,
+      state: 'frozen',
       points: [{
         x: 0,
         y: 0,
@@ -59,8 +64,13 @@ describe('worker serialization', () => {
     expect(Array.from(restored.sparseBiomeTypes)).toEqual(Array.from(chunk.sparseBiomeTypes));
     expect(Array.from(restored.sparseBiomeWeights)).toEqual(Array.from(chunk.sparseBiomeWeights));
     expect(Array.from(restored.sparseBiomeOffsets)).toEqual(Array.from(chunk.sparseBiomeOffsets));
+    expect(restored.climateSnowLine).toBe(chunk.climateSnowLine);
+    expect(restored.climateTreeLine).toBe(chunk.climateTreeLine);
+    expect(restored.worldTemperatureOffset).toBe(chunk.worldTemperatureOffset);
+    expect(Array.from(restored.temperatureMap ?? [])).toEqual(Array.from(chunk.temperatureMap ?? []));
     expect(restored.lakes?.[0].tiles).toEqual(new Set([0, 3]));
     expect(restored.rivers?.[0].riverId).toBe('river_1');
+    expect(restored.rivers?.[0].state).toBe('frozen');
     expect(restored.rivers?.[0].points[0].surfaceLevel).toBe(0.61);
   });
 

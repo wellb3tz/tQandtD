@@ -29,10 +29,15 @@ async function buildManager(seed: number) {
     manager.getChunk(0, 1),
   ]);
   const chunk = await manager.getChunk(0, 0);
+  chunk.climateSnowLine = 0.82;
+  chunk.climateTreeLine = 0.64;
+  chunk.worldTemperatureOffset = -0.18;
+  chunk.temperatureMap = new Float32Array(chunk.size * chunk.size).fill(-0.35);
   chunk.rivers = [{
     riverId: 'river_test',
     pathId: 'river_test:main',
     isTributary: false,
+    state: 'frozen',
     points: [
       { x: 1, y: 1, height: 0.6, surfaceLevel: 0.61, width: 1.5, depth: 0.03, flow: 0.25, channelWidth: 1.2, valleyWidth: 3.8, channelDepth: 0.04, valleyDepth: 0.02, flowX: 1, flowY: 0 },
       { x: 4, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1.5, depth: 0.03, flow: 0.75, channelWidth: 1.9, valleyWidth: 4.6, channelDepth: 0.07, valleyDepth: 0.04, flowX: 1, flowY: 0 },
@@ -139,10 +144,26 @@ describe('Serialization round-trip', () => {
             riverId: r.riverId,
             pathId: r.pathId,
             isTributary: r.isTributary,
+            state: r.state,
             points: r.points.map(p => [p.x, p.y, Number(p.surfaceLevel.toFixed(4))]),
           }));
 
         expect(normalize(fresh)).toEqual(normalize(orig));
+      });
+
+      it('restores climate render fields and temperature map', async () => {
+        const manager = await buildManager(42);
+        const ser = new WorldSerializer();
+        const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });
+        const loaded = restore(saved, 42);
+
+        const orig = await manager.getChunk(0, 0);
+        const fresh = await loaded.getChunk(0, 0);
+
+        expect(fresh.climateSnowLine).toBe(orig.climateSnowLine);
+        expect(fresh.climateTreeLine).toBe(orig.climateTreeLine);
+        expect(fresh.worldTemperatureOffset).toBe(orig.worldTemperatureOffset);
+        expect(Array.from(fresh.temperatureMap ?? [])).toEqual(Array.from(orig.temperatureMap ?? []));
       });
 
       it('restores river corridor fields on path points', async () => {
@@ -228,6 +249,29 @@ describe('Serialization round-trip', () => {
     expect(saved.chunks).toHaveLength(1);
     expect(saved.chunks[0].x).toBe(1);
     expect(saved.chunks[0].y).toBe(0);
+  });
+
+  it('file binary export/import preserves climate fields and river state', async () => {
+    const manager = await buildManager(42);
+    const ser = new WorldSerializer();
+    const exported = ser.export(manager, {
+      format: SerializationFormat.BINARY,
+      compress: false,
+      modifiedOnly: false,
+    });
+
+    expect(exported).toBeInstanceOf(Blob);
+
+    const imported = await ser.import(exported as Blob, SerializationFormat.BINARY);
+    const restored = restore(imported, 42);
+    const restoredChunk = await restored.getChunk(0, 0);
+    const sourceChunk = manager.cache.get('0,0')?.chunk;
+
+    expect(restoredChunk.climateSnowLine).toBe(0.82);
+    expect(restoredChunk.climateTreeLine).toBe(0.64);
+    expect(restoredChunk.worldTemperatureOffset).toBe(-0.18);
+    expect(restoredChunk.rivers?.[0].state).toBe('frozen');
+    expect(Array.from(restoredChunk.temperatureMap ?? [])).toEqual(Array.from(sourceChunk?.temperatureMap ?? []));
   });
 });
 

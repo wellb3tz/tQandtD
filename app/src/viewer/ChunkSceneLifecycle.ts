@@ -60,7 +60,6 @@ export async function addChunkToScene(options: AddChunkToSceneOptions): Promise<
   const key = getChunkKey(chunkX, chunkY);
 
   if (!data.heightmap) {
-    console.log(`Skipping chunk (${chunkX}, ${chunkY}) - heightmap not yet generated`);
     return false;
   }
 

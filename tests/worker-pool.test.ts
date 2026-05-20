@@ -27,7 +27,19 @@ class FakeWorker {
           sparseBiomeTypes: new Uint8Array([0]).buffer,
           sparseBiomeWeights: new Float32Array([1]).buffer,
           sparseBiomeOffsets: new Uint16Array([0, 1]).buffer,
+          climateSnowLine: 0.84,
+          climateTreeLine: 0.61,
+          worldTemperatureOffset: -0.25,
+          temperatureMap: new Float32Array([-0.45]).buffer,
           lakes: [],
+          rivers: [{
+            riverId: 'river_1',
+            pathId: 'river_1:main',
+            isTributary: false,
+            state: 'frozen',
+            points: [],
+            bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+          }],
           resources: [],
           structures: [],
         },
@@ -68,7 +80,12 @@ class ManualWorker {
           sparseBiomeTypes: new Uint8Array([0]).buffer,
           sparseBiomeWeights: new Float32Array([1]).buffer,
           sparseBiomeOffsets: new Uint16Array([0, 1]).buffer,
+          climateSnowLine: 0.84,
+          climateTreeLine: 0.61,
+          worldTemperatureOffset: -0.25,
+          temperatureMap: new Float32Array([-0.45]).buffer,
           lakes: [],
+          rivers: [],
           resources: [],
           structures: [],
         },
@@ -117,6 +134,13 @@ describe('WorkerPool', () => {
     });
 
     expect(chunk).toMatchObject({ x: 2, y: 3, size: 1 });
+    expect(chunk).toMatchObject({
+      climateSnowLine: 0.84,
+      climateTreeLine: 0.61,
+      worldTemperatureOffset: -0.25,
+    });
+    expect((chunk as any).temperatureMap[0]).toBeCloseTo(-0.45);
+    expect((chunk as any).rivers[0].state).toBe('frozen');
     expect(pool.getStats().completedTasks).toBe(1);
 
     pool.shutdown();

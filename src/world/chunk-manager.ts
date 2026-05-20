@@ -194,7 +194,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
     // Initialize LakeManager if lakes are enabled (multi-chunk lakes are now the only option)
     const lakeConfig = config.lakeConfig ?? DEFAULT_LAKE_CONFIG;
     // Adjust lake-permitted biomes based on global temperature offset
-    const temperatureOffset = config.enhancedBiomeConfig?.worldTemperatureOffset ?? 0;
+    const temperatureOffset = config.enhancedBiomeConfig?.worldTemperatureOffset
+      ?? config.enhancedBiomeConfig?.climateConfig?.worldTemperatureOffset
+      ?? 0;
     const climateLakeBiomes = new Set<BiomeType>(lakeConfig.allowedBiomes);
     if (temperatureOffset > 0.4) {
       // Hot world: tundra and taiga lakes dry out
@@ -1520,6 +1522,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const sampleCount = Math.min(lake.tiles.size, 9);
     const tileArray = Array.from(lake.tiles);
     let totalTemp = 0;
+    let totalMoisture = 0;
     let sampled = 0;
 
     const step = Math.max(1, Math.floor(tileArray.length / sampleCount));
@@ -1534,15 +1537,17 @@ export class ChunkManager implements ChunkManagerSnapshot {
       );
       if (climate) {
         totalTemp += climate.temperature;
+        totalMoisture += climate.moisture;
         sampled++;
       }
     }
 
     if (sampled === 0) return 'filled';
     const avgTemp = totalTemp / sampled;
+    const avgMoisture = totalMoisture / sampled;
 
     // Lake dries out in hot, dry climates
-    if (avgTemp > 0.4) return 'dry';
+    if (avgTemp > 0.4 && avgMoisture < -0.2) return 'dry';
     return 'filled';
   }
 

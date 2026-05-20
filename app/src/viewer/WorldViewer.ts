@@ -154,8 +154,6 @@ export class WorldViewer {
     this.canvasHost.attachToContainer(container);
     this.cameraInputController.attach();
     this.renderLoop.start();
-    
-    console.log('WorldViewer initialized with free camera mode');
   }
   
   private updateSunAndShadowFocus(): void {
@@ -475,7 +473,5 @@ export class WorldViewer {
     this.cameraInputController.detach();
 
     this.canvasHost.detachFromContainer(this.container);
-    
-    console.log('WorldViewer disposed');
   }
 }

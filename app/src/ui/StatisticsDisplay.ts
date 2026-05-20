@@ -67,8 +67,6 @@ export class StatisticsDisplay {
     this.maxHeightElement       = document.getElementById('stat-height-max');
     this.biomeChartContainer    = document.getElementById('stat-biome-chart');
     this.resourceChartContainer = document.getElementById('stat-resource-chart');
-
-    console.log('StatisticsDisplay initialized');
   }
 
   updateChunkCount(count: number): void {

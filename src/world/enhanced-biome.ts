@@ -466,7 +466,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     getHeight: (worldX: number, worldY: number) => number,
   ): number {
     const centerHeight = getHeight(x, y);
-    const centerBiome  = this.getBiome(x, y, centerHeight);
+    const centerBiome  = this.getTransitionBiome(x, y, centerHeight, getHeight);
 
     // Fixed detection radius to identify biome boundaries
     const detectionRadius = 8;
@@ -478,7 +478,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       const sampleX = x + Math.cos(angle) * detectionRadius;
       const sampleY = y + Math.sin(angle) * detectionRadius;
       const sampleHeight = getHeight(sampleX, sampleY);
-      const sampleBiome  = this.getBiome(sampleX, sampleY, sampleHeight);
+      const sampleBiome  = this.getTransitionBiome(sampleX, sampleY, sampleHeight, getHeight);
       if (sampleBiome !== centerBiome) {
         differentBiomeCount++;
       }
@@ -486,5 +486,20 @@ export class EnhancedBiomeSystem extends BiomeSystem {
 
     // Return 0-1 factor: 0 = pure biome center, 1 = on boundary
     return differentBiomeCount / sampleCount;
+  }
+
+  private getTransitionBiome(
+    x: number,
+    y: number,
+    height: number,
+    getHeight: (worldX: number, worldY: number) => number,
+  ): BiomeType {
+    if (this.climateSystem === null) {
+      return this.getBiome(x, y, height);
+    }
+
+    const temperature = this.climateSystem.getTemperature(x, y, height);
+    const moisture = this.climateSystem.getMoisture(x, y, height, getHeight);
+    return this.classifyBiomeFromClimate(height, temperature, moisture, x, y, getHeight);
   }
 }

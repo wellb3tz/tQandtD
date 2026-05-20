@@ -11,7 +11,7 @@ import type { ChunkData } from '@engine/index';
 import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
-import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
+import { buildRiverGeometry, createRiverMaterialForState } from './RiverMeshGenerator';
 import { createOceanMaterial, updateOceanMaterialWaves } from './WaterMaterialFactory';
 
 /**
@@ -125,9 +125,6 @@ export class WaterLayerManager {
       // Filter out dry lakes
       const filledLakes = chunkData.lakes.filter(l => l.state !== 'dry');
       if (filledLakes.length > 0) {
-        console.log(`[Lakes] chunk ${chunkKey}: ${filledLakes.length} filled lake(s) out of ${chunkData.lakes.length} total`, 
-          filledLakes.map(l => ({ tiles: l.tiles.size, waterLevel: l.waterLevel.toFixed(4), maxDepth: l.maxDepth.toFixed(4) }))
-        );
         const lakeTiles = identifyLakeTiles(chunkData, filledLakes);
         if (lakeTiles.length > 0) {
           const lakeGeometry = buildLakeGeometry(lakeTiles, filledLakes, chunkData);
@@ -163,12 +160,17 @@ export class WaterLayerManager {
 
     // Generate river meshes
     if (config.river.enabled && chunkData.rivers && chunkData.rivers.length > 0) {
-      // Filter out dry rivers (keep frozen rivers for ice rendering)
-      const flowingRivers = chunkData.rivers.filter(r => r.state !== 'dry');
-      if (flowingRivers.length > 0) {
-        const riverGeometry = buildRiverGeometry(flowingRivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
+      const visibleRiverGroups = [
+        { state: 'flowing' as const, rivers: chunkData.rivers.filter(r => r.state !== 'dry' && r.state !== 'frozen') },
+        { state: 'frozen' as const, rivers: chunkData.rivers.filter(r => r.state === 'frozen') },
+      ];
+
+      for (const group of visibleRiverGroups) {
+        if (group.rivers.length === 0) continue;
+
+        const riverGeometry = buildRiverGeometry(group.rivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
         if (riverGeometry) {
-          const riverMaterial = createRiverMaterial(config.river);
+          const riverMaterial = createRiverMaterialForState(config.river, group.state);
           const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);
           riverMesh.renderOrder = 2;
           riverMesh.visible = true;
@@ -470,6 +472,9 @@ export class WaterLayerManager {
     for (const waterLayer of this.waterLayers.values()) {
       for (const waterMesh of waterLayer.river) {
         const mat = waterMesh.material;
+        if (mat.userData.riverState === 'frozen') {
+          continue;
+        }
         if (mat.normalMap) {
           const speed = 0.18;
           mat.normalMap.offset.set(

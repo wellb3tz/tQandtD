@@ -145,7 +145,9 @@ export {
 export {
   RIVER_TRENCH_DARKEN_STRENGTH,
   calculateFrozenRiverInfluence,
+  calculateRiverbedInfluence,
   calculateRiverTrenchInfluence,
+  getRiverbedDarkening,
   getRiverTrenchDarkening,
 } from './rendering/terrain-detail';
 export {
@@ -282,6 +284,7 @@ export {
   type RiverData,
   type RiverPath,
   type RiverPoint,
+  type RiverState,
   type WorldRiverData,
   createRiverCorridorPoints,
   createSmoothedRiverPoints,

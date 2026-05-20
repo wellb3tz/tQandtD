@@ -286,7 +286,6 @@ export class WorldApp {
       this.attachWorldSession(session);
       
       this.initialized = true;
-      console.log('WorldApp initialized successfully');
       
       // Notify subscribers of initial state
       this.notifySubscribers();
@@ -528,7 +527,6 @@ export class WorldApp {
       // Update statistics
       this.updateStatistics();
       
-      console.log(`World generated with seed: ${seed}`);
     } catch (error) {
       console.error('Failed to generate world:', error);
       this.emit(AppEvent.ERROR, { message: 'World generation failed', error });
@@ -589,11 +587,6 @@ export class WorldApp {
           avgGenerationTime: avgTime,
         });
       }
-
-      // Only log if chunks were actually loaded (and more than 5 chunks)
-      if (chunksLoaded > 5) {
-        console.log(`Loaded ${chunksLoaded} chunks in ${(endTime - startTime).toFixed(2)}ms`);
-      }
     } catch (error) {
       // Swallow expected abort errors — they’re not real failures.
       if (error instanceof Error && error.message.includes('aborted')) {
@@ -624,8 +617,6 @@ export class WorldApp {
         loadedChunks: new Map(this.state.loadedChunks),
         loadedChunkCount: this.state.loadedChunks.size
       });
-      
-      console.log(`Unloaded ${chunksUnloaded} distant chunks`);
     } else if (chunksUnloaded > 0) {
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
@@ -942,7 +933,5 @@ export class WorldApp {
     this.worldSession?.dispose();
     this.worldSession = null;
     this.initialized = false;
-    
-    console.log('WorldApp destroyed');
   }
 }

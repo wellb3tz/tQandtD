@@ -142,17 +142,23 @@ export interface SerializedChunkData {
   sparseBiomeTypes: ArrayBuffer | ArrayLike<number>;
   sparseBiomeWeights: ArrayBuffer | ArrayLike<number>;
   sparseBiomeOffsets: ArrayBuffer | ArrayLike<number>;
+  climateSnowLine?: number;
+  climateTreeLine?: number;
+  worldTemperatureOffset?: number;
+  temperatureMap?: ArrayBuffer | ArrayLike<number>;
   /** Serialized lake bodies — tiles stored as plain number arrays */
   lakes: Array<{
     waterLevel: number;
     tiles: number[];
     maxDepth: number;
     minTerrainHeight?: number; // Optional for backward compatibility
+    state?: 'filled' | 'dry';
   }>;
   rivers: Array<{
     riverId: string;
     pathId: string;
     isTributary: boolean;
+    state?: 'flowing' | 'frozen' | 'dry';
     points: Array<{
       x: number;
       y: number;
@@ -214,6 +220,10 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
     sparseBiomeTypes: toTransferableBuffer(chunk.sparseBiomeTypes),
     sparseBiomeWeights: toTransferableBuffer(chunk.sparseBiomeWeights),
     sparseBiomeOffsets: toTransferableBuffer(chunk.sparseBiomeOffsets),
+    climateSnowLine: chunk.climateSnowLine,
+    climateTreeLine: chunk.climateTreeLine,
+    worldTemperatureOffset: chunk.worldTemperatureOffset,
+    temperatureMap: chunk.temperatureMap ? toTransferableBuffer(chunk.temperatureMap) : undefined,
     lakes: (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
@@ -225,6 +235,7 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
       riverId: river.riverId,
       pathId: river.pathId,
       isTributary: river.isTributary,
+      state: river.state,
       points: river.points.map(point => ({ ...point })),
       bounds: river.bounds,
     })),
@@ -258,6 +269,9 @@ export function getChunkTransferList(serialized: SerializedChunkData): Transfera
   maybeAdd(serialized.sparseBiomeTypes);
   maybeAdd(serialized.sparseBiomeWeights);
   maybeAdd(serialized.sparseBiomeOffsets);
+  if (serialized.temperatureMap) {
+    maybeAdd(serialized.temperatureMap);
+  }
 
   return transfer;
 }
@@ -279,6 +293,10 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
     sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
     sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
     sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
+    climateSnowLine: serialized.climateSnowLine,
+    climateTreeLine: serialized.climateTreeLine,
+    worldTemperatureOffset: serialized.worldTemperatureOffset,
+    temperatureMap: serialized.temperatureMap ? new Float32Array(serialized.temperatureMap) : undefined,
     lakes: (serialized.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: new Set(lake.tiles),
@@ -290,6 +308,7 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
       riverId: river.riverId,
       pathId: river.pathId,
       isTributary: river.isTributary,
+      state: river.state,
       points: river.points.map(point => ({ ...point })),
       bounds: river.bounds,
     })),

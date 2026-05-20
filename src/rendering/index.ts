@@ -20,7 +20,9 @@ export {
 export {
   RIVER_TRENCH_DARKEN_STRENGTH,
   calculateFrozenRiverInfluence,
+  calculateRiverbedInfluence,
   calculateRiverTrenchInfluence,
+  getRiverbedDarkening,
   getRiverTrenchDarkening,
 } from './terrain-detail';
 export {

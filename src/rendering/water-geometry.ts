@@ -27,6 +27,7 @@ const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
 const RIVER_WATER_DEPTH_FRACTION = 0.72;
 const RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH = 2.25;
 const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
+const FROZEN_RIVER_SURFACE_VERTEX_COLOR = [0.66, 0.82, 0.94] as const;
 
 interface RiverSurfaceSample {
   point: RiverPoint;
@@ -261,7 +262,7 @@ export function buildRiverGeometryData(
         for (let column = 0; column < RIVER_CROSS_SECTION_OFFSETS.length; column++) {
           const lateral = RIVER_CROSS_SECTION_OFFSETS[column];
           const edgeAmount = Math.abs(lateral);
-          const [r, g, b] = riverSurfaceColor(point, edgeAmount);
+          const [r, g, b] = riverSurfaceColor(river, point, edgeAmount);
           const x = worldX + normalX * halfWidth * lateral;
           const z = worldZ + normalY * halfWidth * lateral;
           // Flat water surface — no edge lift so the mesh sits flush with the channel bed
@@ -342,8 +343,16 @@ function getRiverWaterSurfaceHalfWidth(
   return channelRadius;
 }
 
-function riverSurfaceColor(point: RiverPoint, edgeAmount: number): [number, number, number] {
+function riverSurfaceColor(river: RiverData, point: RiverPoint, edgeAmount: number): [number, number, number] {
   void point;
+  if (river.state === 'frozen') {
+    const centerIce = 1 - edgeAmount * 0.22;
+    return [
+      FROZEN_RIVER_SURFACE_VERTEX_COLOR[0] + centerIce * 0.08,
+      FROZEN_RIVER_SURFACE_VERTEX_COLOR[1] + centerIce * 0.06,
+      FROZEN_RIVER_SURFACE_VERTEX_COLOR[2] + centerIce * 0.04,
+    ];
+  }
   void edgeAmount;
   return [
     RIVER_SURFACE_VERTEX_COLOR[0],

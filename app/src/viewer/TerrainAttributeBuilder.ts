@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import {
   BiomeType,
   RIVER_TRENCH_DARKEN_STRENGTH,
+  getRiverbedDarkening,
   getRiverTrenchDarkening,
   type ChunkData,
 } from '@engine/index';
 import { selectTerrainSurfaceKey, type TerrainSurfaceKey } from './terrain-geometry-types';
 
-export { RIVER_TRENCH_DARKEN_STRENGTH, getRiverTrenchDarkening } from '@engine/index';
+export { RIVER_TRENCH_DARKEN_STRENGTH, getRiverbedDarkening, getRiverTrenchDarkening } from '@engine/index';
 
 export type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
 
@@ -52,7 +53,7 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const tileTemperature = data.temperatureMap && tileIndex < data.temperatureMap.length
       ? data.temperatureMap[tileIndex]
       : 0;
-    const surfaceKey = getRiverTrenchDarkening(data, sample.x, sample.y) < 0.82
+    const surfaceKey = getRiverbedDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
       : selectTerrainSurfaceKey(biome, elevation, slope, moisture, tileTemperature);
     weights[surfaceKey] += 1;
@@ -231,11 +232,19 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const riverWetness = clamp01(
       (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
     );
+    const riverbedInfluence = clamp01(
+      (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
+    );
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
-    const snowDetail = (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER))
-      ? Math.min(1, Math.max(0, (rawHeight - 0.73) / 0.14) * (1.0 - steepness * 0.35))
+    const tileTemperature = data.temperatureMap && bmIdx < data.temperatureMap.length
+      ? data.temperatureMap[bmIdx]
       : 0;
-    const riverbedDetail = riverWetness;
+    const temperatureFactor = Math.max(0, Math.min(1, 1 - tileTemperature / 0.5));
+    const snowLine = data.climateSnowLine ?? 0.76;
+    const snowDetail = (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER))
+      ? Math.min(1, Math.max(0, (rawHeight - snowLine) / 0.14) * (1.0 - steepness * 0.35)) * temperatureFactor
+      : 0;
+    const riverbedDetail = riverbedInfluence;
 
     if (wetBand > 0) {
       const wetShade = 1.0 - wetBand * 0.14;

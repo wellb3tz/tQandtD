@@ -20,8 +20,6 @@ import { TerrainTooltip } from './src/ui/TerrainTooltip';
 import { HelpModal } from './src/ui/HelpModal';
 import { errorHandler, ErrorCategory, ErrorSeverity, AppError } from './src/utils/ErrorHandler';
 
-console.log('tQandtD project - Initializing...');
-
 // Global app instance
 let app: WorldApp | null = null;
 let controlPanelInstance: ControlPanel | null = null;
@@ -41,8 +39,6 @@ let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('DOM loaded, setting up world application...');
-  
   // Check WebGL compatibility first (Requirement 18.4)
   const webglCheck = errorHandler.checkWebGLCompatibility();
   if (!webglCheck.supported) {
@@ -123,7 +119,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       worldViewer.initialize(viewerContainer);
       worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
       app.setRenderer(worldRenderer);
-      console.log('WorldViewer initialized successfully');
       
       // Apply initial visibility state from application core
       worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
@@ -316,13 +311,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (controlPanelContainer) {
       controlPanelInstance = new ControlPanel();
       controlPanelInstance.initialize(controlPanelContainer, app);
-      console.log('ControlPanel initialized successfully');
     }
     
     // Initialize WorldManager
     worldManager = new WorldManager();
     worldManager.initialize(app);
-    console.log('WorldManager initialized successfully');
     
     // World statistics panel is always visible (part of overlay layout)
     
@@ -331,7 +324,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (perfMonitorContainer) {
       performanceMonitor = new PerformanceMonitor();
       performanceMonitor.initialize(perfMonitorContainer);
-      console.log('PerformanceMonitor initialized successfully');
     }
     
     // Initialize StatisticsDisplay
@@ -340,7 +332,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       statisticsDisplay = new StatisticsDisplay();
       statisticsDisplay.initialize(statisticsContainer);
       statisticsDisplay.setApp(app);
-      console.log('StatisticsDisplay initialized successfully');
     }
 
     // Initialize Minimap
@@ -353,14 +344,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         () => worldViewer!.getCameraHeading(),
         () => worldViewer!.getCameraPosition()
       );
-      console.log('Minimap initialized successfully');
     }
 
     // Initialize TerrainTooltip
     if (worldViewer) {
       terrainTooltip = new TerrainTooltip();
       terrainTooltip.initialize(app, worldViewer);
-      console.log('TerrainTooltip initialized successfully');
     }
 
     helpModal = new HelpModal();
@@ -448,8 +437,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Verify update occurred within 50ms (requirement 13.8)
         if (updateTime > 50) {
           console.warn(`Visibility update took ${updateTime.toFixed(2)}ms (exceeds 50ms requirement)`);
-        } else {
-          console.log(`Visibility updated in ${updateTime.toFixed(2)}ms`);
         }
       }
     });
@@ -465,7 +452,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       ));
     });
     
-    console.log('Application core initialized successfully');
   } catch (error) {
     console.error('Failed to initialize application core:', error);
     
@@ -658,8 +644,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Remove validation error class
     seedInput?.classList.remove('validation-error');
     
-    console.log(`Generating world with seed: ${seed}`);
-    
     // Show loading indicator (requirement 2.4)
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) {
@@ -694,7 +678,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         errorHandler.hideProgress(progressId);
       }, 1000);
       
-      console.log(`World generated successfully with ${app.getLoadedChunkCount()} chunks`);
     } catch (error) {
       console.error('Failed to generate world:', error);
       errorHandler.hideProgress(progressId);
@@ -734,6 +717,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   
-  console.log('World application initialized successfully');
 });
 

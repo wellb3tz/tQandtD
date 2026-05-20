@@ -7,13 +7,25 @@ import {
 export const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
 
 export function calculateRiverTrenchInfluence(data: ChunkData, x: number, y: number): number {
+  return calculateRiverInfluence(data, x, y, river => river.state !== 'dry');
+}
+
+export function calculateRiverbedInfluence(data: ChunkData, x: number, y: number): number {
+  return calculateRiverInfluence(data, x, y, () => true);
+}
+
+function calculateRiverInfluence(
+  data: ChunkData,
+  x: number,
+  y: number,
+  includeRiver: (river: NonNullable<ChunkData['rivers']>[number]) => boolean,
+): number {
   const rivers = data.rivers ?? [];
   if (rivers.length === 0) return 0;
 
   let strongest = 0;
   for (const river of rivers) {
-    // Dry rivers leave a carved depression but no water effects
-    if (river.state === 'dry') continue;
+    if (!includeRiver(river)) continue;
     const points = river.points;
     if (points.length < 2) continue;
 
@@ -60,6 +72,15 @@ export function getRiverTrenchDarkening(
   strength = RIVER_TRENCH_DARKEN_STRENGTH,
 ): number {
   return 1 - calculateRiverTrenchInfluence(data, x, y) * strength;
+}
+
+export function getRiverbedDarkening(
+  data: ChunkData,
+  x: number,
+  y: number,
+  strength = RIVER_TRENCH_DARKEN_STRENGTH,
+): number {
+  return 1 - calculateRiverbedInfluence(data, x, y) * strength;
 }
 
 function closestRiverRenderSample(

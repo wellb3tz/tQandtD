@@ -117,6 +117,28 @@ describe('water geometry data helpers', () => {
     expect(data!.colors.slice(0, 6)).toEqual([0.04, 0.1, 0.23, 0.04, 0.1, 0.23]);
   });
 
+  it('colors frozen river surfaces as ice instead of flowing water', () => {
+    const points: RiverData['points'] = [
+      { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.42, surfaceLevel: 0.43, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ];
+
+    const frozenRiver = { ...river(points), state: 'frozen' as const };
+    const data = buildRiverGeometryData(
+      [frozenRiver],
+      0,
+      0,
+      16,
+      { heightScale: HEIGHT_SCALE, surfaceOffset: -0.6 },
+      0.3,
+    );
+
+    expect(data).not.toBeNull();
+    expect(data!.colors[0]).toBeGreaterThan(0.6);
+    expect(data!.colors[1]).toBeGreaterThan(0.8);
+    expect(data!.colors[2]).toBeGreaterThan(0.9);
+  });
+
   it('tapers tributary water to zero width at the confluence', () => {
     const points: RiverData['points'] = [
       { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1.2, channelDepth: 0.04, flowX: 1, flowY: 0 },

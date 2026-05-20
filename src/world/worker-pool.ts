@@ -409,6 +409,10 @@ export class WorkerPool {
       sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
       sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
       sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
+      climateSnowLine: serialized.climateSnowLine,
+      climateTreeLine: serialized.climateTreeLine,
+      worldTemperatureOffset: serialized.worldTemperatureOffset,
+      temperatureMap: serialized.temperatureMap ? new Float32Array(serialized.temperatureMap) : undefined,
       lakes: (serialized.lakes ?? []).map(lake => ({
         waterLevel: lake.waterLevel,
         tiles: new Set<number>(lake.tiles),
@@ -420,6 +424,7 @@ export class WorkerPool {
         riverId: river.riverId,
         pathId: river.pathId,
         isTributary: river.isTributary,
+        state: river.state,
         points: river.points.map(point => ({ ...point })),
         bounds: river.bounds,
       })),

@@ -13,6 +13,8 @@ import type { RiverData, RiverPoint } from '../gen/rivers';
 import { WorldConfig } from './chunk-manager';
 import { logger, LogCategory } from '../utils/logger';
 
+const WORLD_BINARY_CHUNK_META_MARKER = 0x434D4554; // "CMET"
+
 declare const Buffer: {
   from(data: Uint8Array): { toString(encoding: 'base64'): string };
   from(data: string, encoding: 'base64'): { toString(encoding: 'binary'): string };
@@ -164,6 +166,7 @@ export interface SerializedRiver {
   riverId: string;
   pathId: string;
   isTributary: boolean;
+  state?: 'flowing' | 'frozen' | 'dry';
   points: SerializedRiverPoint[];
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
 }
@@ -197,6 +200,10 @@ export interface SerializedChunk {
   sparseBiomeTypes?: ArrayBuffer | string;
   sparseBiomeWeights?: ArrayBuffer | string;
   sparseBiomeOffsets?: ArrayBuffer | string;
+  climateSnowLine?: number;
+  climateTreeLine?: number;
+  worldTemperatureOffset?: number;
+  temperatureMap?: ArrayBuffer | string;
   
   /** Array of resources in the chunk */
   resources: Resource[];
@@ -316,6 +323,9 @@ export class WorldSerializer {
     const sparseBiomeTypesBase64 = this.uint8ArrayToBase64(chunk.sparseBiomeTypes, compress);
     const sparseBiomeWeightsBase64 = this.float32ArrayToBase64(chunk.sparseBiomeWeights, compress);
     const sparseBiomeOffsetsBase64 = this.uint16ArrayToBase64(chunk.sparseBiomeOffsets, compress);
+    const temperatureMapBase64 = chunk.temperatureMap
+      ? this.float32ArrayToBase64(chunk.temperatureMap, compress)
+      : undefined;
 
     const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
@@ -328,6 +338,7 @@ export class WorldSerializer {
       riverId: river.riverId,
       pathId: river.pathId,
       isTributary: river.isTributary,
+      state: river.state,
       points: river.points.map(point => ({ ...point })),
       bounds: river.bounds,
     }));
@@ -340,6 +351,10 @@ export class WorldSerializer {
       sparseBiomeTypes: sparseBiomeTypesBase64,
       sparseBiomeWeights: sparseBiomeWeightsBase64,
       sparseBiomeOffsets: sparseBiomeOffsetsBase64,
+      climateSnowLine: chunk.climateSnowLine,
+      climateTreeLine: chunk.climateTreeLine,
+      worldTemperatureOffset: chunk.worldTemperatureOffset,
+      temperatureMap: temperatureMapBase64,
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
@@ -583,6 +598,9 @@ export class WorldSerializer {
     const sparseBiomeTypesBuffer = this.serializeUint8ArrayBinary(chunk.sparseBiomeTypes, compress);
     const sparseBiomeWeightsBuffer = this.serializeFloat32ArrayBinary(chunk.sparseBiomeWeights, compress);
     const sparseBiomeOffsetsBuffer = this.serializeUint16ArrayBinary(chunk.sparseBiomeOffsets, compress);
+    const temperatureMapBuffer = chunk.temperatureMap
+      ? this.serializeFloat32ArrayBinary(chunk.temperatureMap, compress)
+      : undefined;
 
     const lakes: SerializedLake[] = (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
@@ -595,6 +613,7 @@ export class WorldSerializer {
       riverId: river.riverId,
       pathId: river.pathId,
       isTributary: river.isTributary,
+      state: river.state,
       points: river.points.map(point => ({ ...point })),
       bounds: river.bounds,
     }));
@@ -607,6 +626,10 @@ export class WorldSerializer {
       sparseBiomeTypes: sparseBiomeTypesBuffer,
       sparseBiomeWeights: sparseBiomeWeightsBuffer,
       sparseBiomeOffsets: sparseBiomeOffsetsBuffer,
+      climateSnowLine: chunk.climateSnowLine,
+      climateTreeLine: chunk.climateTreeLine,
+      worldTemperatureOffset: chunk.worldTemperatureOffset,
+      temperatureMap: temperatureMapBuffer,
       resources: chunk.resources,
       structures: chunk.structures,
       lakes,
@@ -842,9 +865,13 @@ export class WorldSerializer {
       riverId: sr.riverId,
       pathId: sr.pathId,
       isTributary: sr.isTributary,
+      state: sr.state,
       points: sr.points.map((point: RiverPoint) => ({ ...point })),
       bounds: sr.bounds,
     }));
+    const temperatureMap = serializedChunk.temperatureMap
+      ? this.base64ToFloat32Array(serializedChunk.temperatureMap as string)
+      : undefined;
 
     return {
       x: serializedChunk.x,
@@ -855,6 +882,10 @@ export class WorldSerializer {
       sparseBiomeTypes,
       sparseBiomeWeights,
       sparseBiomeOffsets,
+      climateSnowLine: serializedChunk.climateSnowLine,
+      climateTreeLine: serializedChunk.climateTreeLine,
+      worldTemperatureOffset: serializedChunk.worldTemperatureOffset,
+      temperatureMap,
       lakes,
       rivers,
       resources: serializedChunk.resources,
@@ -872,9 +903,34 @@ export class WorldSerializer {
   private deserializeChunkBinary(serializedChunk: SerializedChunk, chunkSize: number): ChunkData {
     const heightmap = this.deserializeFloat32ArrayBinary(serializedChunk.heightmap as ArrayBuffer);
     const biomeMap = this.deserializeUint8ArrayBinary(serializedChunk.biomeMap as ArrayBuffer);
-    const sparseBiomeTypes = this.deserializeUint8ArrayBinary(serializedChunk.sparseBiomeTypes as ArrayBuffer);
-    const sparseBiomeWeights = this.deserializeFloat32ArrayBinary(serializedChunk.sparseBiomeWeights as ArrayBuffer);
-    const sparseBiomeOffsets = this.deserializeUint16ArrayBinary(serializedChunk.sparseBiomeOffsets as ArrayBuffer);
+    let sparseBiomeTypes: Uint8Array;
+    let sparseBiomeWeights: Float32Array;
+    let sparseBiomeOffsets: Uint16Array;
+
+    if (
+      serializedChunk.sparseBiomeTypes !== undefined &&
+      serializedChunk.sparseBiomeWeights !== undefined &&
+      serializedChunk.sparseBiomeOffsets !== undefined
+    ) {
+      sparseBiomeTypes = this.deserializeUint8ArrayBinary(serializedChunk.sparseBiomeTypes as ArrayBuffer);
+      sparseBiomeWeights = this.deserializeFloat32ArrayBinary(serializedChunk.sparseBiomeWeights as ArrayBuffer);
+      sparseBiomeOffsets = this.deserializeUint16ArrayBinary(serializedChunk.sparseBiomeOffsets as ArrayBuffer);
+    } else {
+      const types: number[] = [];
+      const weights: number[] = [];
+      const offsets: number[] = [];
+      for (let i = 0; i < biomeMap.length; i++) {
+        offsets.push(types.length);
+        types.push(biomeMap[i]);
+        weights.push(1.0);
+      }
+      sparseBiomeTypes = new Uint8Array(types);
+      sparseBiomeWeights = new Float32Array(weights);
+      sparseBiomeOffsets = new Uint16Array(offsets);
+    }
+    const temperatureMap = serializedChunk.temperatureMap
+      ? this.deserializeFloat32ArrayBinary(serializedChunk.temperatureMap as ArrayBuffer)
+      : undefined;
 
     const lakes: LakeData[] = (serializedChunk.lakes ?? []).map(sl => ({
       waterLevel: sl.waterLevel,
@@ -887,6 +943,7 @@ export class WorldSerializer {
       riverId: sr.riverId,
       pathId: sr.pathId,
       isTributary: sr.isTributary,
+      state: sr.state,
       points: sr.points.map((point: RiverPoint) => ({ ...point })),
       bounds: sr.bounds,
     }));
@@ -900,6 +957,10 @@ export class WorldSerializer {
       sparseBiomeTypes,
       sparseBiomeWeights,
       sparseBiomeOffsets,
+      climateSnowLine: serializedChunk.climateSnowLine,
+      climateTreeLine: serializedChunk.climateTreeLine,
+      worldTemperatureOffset: serializedChunk.worldTemperatureOffset,
+      temperatureMap,
       lakes,
       rivers,
       resources: serializedChunk.resources,
@@ -922,8 +983,11 @@ export class WorldSerializer {
 
     let decompressed: Uint8Array;
     if (isCompressed) {
-      // Decompress using pako
-      decompressed = this.decompressUint8Array(uint8Array);
+      try {
+        decompressed = this.decompressUint8Array(uint8Array);
+      } catch {
+        decompressed = uint8Array;
+      }
     } else {
       decompressed = uint8Array;
     }
@@ -954,8 +1018,11 @@ export class WorldSerializer {
     const isCompressed = uint8Array.length > 2 && uint8Array[0] === 0x78;
 
     if (isCompressed) {
-      // Decompress using pako
-      return this.decompressUint8Array(uint8Array);
+      try {
+        return this.decompressUint8Array(uint8Array);
+      } catch {
+        return uint8Array;
+      }
     } else {
       return uint8Array;
     }
@@ -971,7 +1038,14 @@ export class WorldSerializer {
   private base64ToUint16Array(base64: string): Uint16Array {
     const uint8Array = this.base64StringToUint8Array(base64);
     const isCompressed = uint8Array.length > 2 && uint8Array[0] === 0x78;
-    const bytes = isCompressed ? this.decompressUint8Array(uint8Array) : uint8Array;
+    let bytes = uint8Array;
+    if (isCompressed) {
+      try {
+        bytes = this.decompressUint8Array(uint8Array);
+      } catch {
+        bytes = uint8Array;
+      }
+    }
 
     // Ensure 2-byte alignment
     if (bytes.byteOffset % 2 !== 0) {
@@ -1201,14 +1275,30 @@ export class WorldSerializer {
       // + resources JSON length (4) + resources JSON + structures JSON length (4) + structures JSON
       const heightmapBuffer = chunk.heightmap as ArrayBuffer;
       const biomeMapBuffer = chunk.biomeMap as ArrayBuffer;
+      const sparseBiomeTypesBuffer = chunk.sparseBiomeTypes as ArrayBuffer | undefined;
+      const sparseBiomeWeightsBuffer = chunk.sparseBiomeWeights as ArrayBuffer | undefined;
+      const sparseBiomeOffsetsBuffer = chunk.sparseBiomeOffsets as ArrayBuffer | undefined;
+      const temperatureMapBuffer = chunk.temperatureMap instanceof ArrayBuffer
+        ? chunk.temperatureMap
+        : undefined;
       const resourcesBytes = encoder.encode(JSON.stringify(chunk.resources));
       const structuresBytes = encoder.encode(JSON.stringify(chunk.structures));
       const lakesBytes = encoder.encode(JSON.stringify(chunk.lakes ?? []));
       const riversBytes = encoder.encode(JSON.stringify(chunk.rivers ?? []));
+      const chunkMetaBytes = encoder.encode(JSON.stringify({
+        climateSnowLine: chunk.climateSnowLine,
+        climateTreeLine: chunk.climateTreeLine,
+        worldTemperatureOffset: chunk.worldTemperatureOffset,
+      }));
       
       chunkDataSize += 4 + 4 + 4 + heightmapBuffer.byteLength + 4 + biomeMapBuffer.byteLength +
                        4 + resourcesBytes.length + 4 + structuresBytes.length +
-                       4 + lakesBytes.length + 4 + riversBytes.length;
+                       4 + lakesBytes.length + 4 + riversBytes.length +
+                       4 + 4 + chunkMetaBytes.length +
+                       4 + (temperatureMapBuffer?.byteLength ?? 0) +
+                       4 + (sparseBiomeTypesBuffer?.byteLength ?? 0) +
+                       4 + (sparseBiomeWeightsBuffer?.byteLength ?? 0) +
+                       4 + (sparseBiomeOffsetsBuffer?.byteLength ?? 0);
     }
     
     // Calculate modifications data size
@@ -1316,6 +1406,52 @@ export class WorldSerializer {
       offset += 4;
       bytes.set(riversBytes, offset);
       offset += riversBytes.length;
+
+      const chunkMetaBytes = encoder.encode(JSON.stringify({
+        climateSnowLine: chunk.climateSnowLine,
+        climateTreeLine: chunk.climateTreeLine,
+        worldTemperatureOffset: chunk.worldTemperatureOffset,
+      }));
+      view.setUint32(offset, WORLD_BINARY_CHUNK_META_MARKER, true);
+      offset += 4;
+      view.setUint32(offset, chunkMetaBytes.length, true);
+      offset += 4;
+      bytes.set(chunkMetaBytes, offset);
+      offset += chunkMetaBytes.length;
+
+      const temperatureMapBuffer = chunk.temperatureMap instanceof ArrayBuffer
+        ? chunk.temperatureMap
+        : undefined;
+      view.setUint32(offset, temperatureMapBuffer?.byteLength ?? 0, true);
+      offset += 4;
+      if (temperatureMapBuffer) {
+        bytes.set(new Uint8Array(temperatureMapBuffer), offset);
+        offset += temperatureMapBuffer.byteLength;
+      }
+
+      const sparseBiomeTypesBuffer = chunk.sparseBiomeTypes as ArrayBuffer | undefined;
+      view.setUint32(offset, sparseBiomeTypesBuffer?.byteLength ?? 0, true);
+      offset += 4;
+      if (sparseBiomeTypesBuffer) {
+        bytes.set(new Uint8Array(sparseBiomeTypesBuffer), offset);
+        offset += sparseBiomeTypesBuffer.byteLength;
+      }
+
+      const sparseBiomeWeightsBuffer = chunk.sparseBiomeWeights as ArrayBuffer | undefined;
+      view.setUint32(offset, sparseBiomeWeightsBuffer?.byteLength ?? 0, true);
+      offset += 4;
+      if (sparseBiomeWeightsBuffer) {
+        bytes.set(new Uint8Array(sparseBiomeWeightsBuffer), offset);
+        offset += sparseBiomeWeightsBuffer.byteLength;
+      }
+
+      const sparseBiomeOffsetsBuffer = chunk.sparseBiomeOffsets as ArrayBuffer | undefined;
+      view.setUint32(offset, sparseBiomeOffsetsBuffer?.byteLength ?? 0, true);
+      offset += 4;
+      if (sparseBiomeOffsetsBuffer) {
+        bytes.set(new Uint8Array(sparseBiomeOffsetsBuffer), offset);
+        offset += sparseBiomeOffsetsBuffer.byteLength;
+      }
     }
     
     // Write modifications count
@@ -1588,11 +1724,60 @@ export class WorldSerializer {
       const serializedRivers: SerializedRiver[] = JSON.parse(new TextDecoder().decode(riversBytes));
       offset += riversLength;
 
+      const chunkMetaMarker = view.getUint32(offset, true);
+      let chunkMeta: Pick<SerializedChunk, 'climateSnowLine' | 'climateTreeLine' | 'worldTemperatureOffset'> = {};
+      let temperatureMapBuffer: ArrayBuffer | undefined;
+      let sparseBiomeTypesBuffer: ArrayBuffer | undefined;
+      let sparseBiomeWeightsBuffer: ArrayBuffer | undefined;
+      let sparseBiomeOffsetsBuffer: ArrayBuffer | undefined;
+      if (chunkMetaMarker === WORLD_BINARY_CHUNK_META_MARKER) {
+        offset += 4;
+
+        const chunkMetaLength = view.getUint32(offset, true);
+        offset += 4;
+        const chunkMetaBytes = bytes.slice(offset, offset + chunkMetaLength);
+        chunkMeta = JSON.parse(new TextDecoder().decode(chunkMetaBytes));
+        offset += chunkMetaLength;
+
+        const temperatureMapSize = view.getUint32(offset, true);
+        offset += 4;
+        if (temperatureMapSize > 0) {
+          temperatureMapBuffer = buffer.slice(offset, offset + temperatureMapSize);
+          offset += temperatureMapSize;
+        }
+
+        const sparseBiomeTypesSize = view.getUint32(offset, true);
+        offset += 4;
+        if (sparseBiomeTypesSize > 0) {
+          sparseBiomeTypesBuffer = buffer.slice(offset, offset + sparseBiomeTypesSize);
+          offset += sparseBiomeTypesSize;
+        }
+
+        const sparseBiomeWeightsSize = view.getUint32(offset, true);
+        offset += 4;
+        if (sparseBiomeWeightsSize > 0) {
+          sparseBiomeWeightsBuffer = buffer.slice(offset, offset + sparseBiomeWeightsSize);
+          offset += sparseBiomeWeightsSize;
+        }
+
+        const sparseBiomeOffsetsSize = view.getUint32(offset, true);
+        offset += 4;
+        if (sparseBiomeOffsetsSize > 0) {
+          sparseBiomeOffsetsBuffer = buffer.slice(offset, offset + sparseBiomeOffsetsSize);
+          offset += sparseBiomeOffsetsSize;
+        }
+      }
+
       chunks.push({
         x,
         y,
         heightmap: heightmapBuffer,
         biomeMap: biomeMapBuffer,
+        sparseBiomeTypes: sparseBiomeTypesBuffer,
+        sparseBiomeWeights: sparseBiomeWeightsBuffer,
+        sparseBiomeOffsets: sparseBiomeOffsetsBuffer,
+        ...chunkMeta,
+        temperatureMap: temperatureMapBuffer,
         resources,
         structures,
         lakes: serializedLakes,

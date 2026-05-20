@@ -8,6 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { worldToChunk, chunkToWorld, worldToLocal, BiomeType } from '../src/world/chunk';
+import { DEFAULT_CLIMATE_CONFIG } from '../src/world/climate';
+import { EnhancedBiomeSystem } from '../src/world/enhanced-biome';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG, type WorldRiverData } from '../src/gen/rivers';
 import { LakeManager } from '../src/world/lake-manager';
@@ -163,6 +165,86 @@ describe('ChunkData integrity', () => {
         }
       }
     }
+  });
+});
+
+describe('Climate-driven water state', () => {
+  it('keeps hot wet lakes filled and dries only hot dry lakes', () => {
+    const manager = new ChunkManager(makeMinimalConfig(77));
+    (manager as any).enhancedBiomeSystem = {
+      sampleClimate: () => ({ temperature: 0.55, moisture: 0.45 }),
+    };
+    (manager as any).terrainGenerator = {
+      getHeightAt: () => 0.4,
+    };
+
+    const lake = {
+      id: 'lake_1',
+      waterLevel: 0.5,
+      tiles: new Set(['0,0', '1,0', '0,1']),
+      maxDepth: 0.1,
+      minTerrainHeight: 0.4,
+      bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
+    };
+
+    expect((manager as any).determineLakeState(lake)).toBe('filled');
+
+    (manager as any).enhancedBiomeSystem = {
+      sampleClimate: () => ({ temperature: 0.55, moisture: -0.35 }),
+    };
+
+    expect((manager as any).determineLakeState(lake)).toBe('dry');
+  });
+
+  it('uses climateConfig world temperature offset when adjusting lake biomes', () => {
+    const config = makeMinimalConfig(78);
+    config.enhancedBiomeConfig = {
+      ...config.biomeConfig,
+      enableTransitions: false,
+      transitionWidth: 4,
+      enableElevationBands: true,
+      snowLineElevation: 0.8,
+      treeLineElevation: 0.75,
+      climateConfig: {
+        ...DEFAULT_CLIMATE_CONFIG,
+        worldTemperatureOffset: 0.55,
+      },
+    };
+    config.lakeConfig = {
+      ...DEFAULT_LAKE_CONFIG,
+      allowedBiomes: [BiomeType.TUNDRA, BiomeType.TAIGA, BiomeType.PLAINS],
+    };
+
+    const manager = new ChunkManager(config);
+    const lakeConfig = (manager as any).lakeManager.config;
+
+    expect(lakeConfig.allowedBiomes).not.toContain(BiomeType.TUNDRA);
+    expect(lakeConfig.allowedBiomes).not.toContain(BiomeType.TAIGA);
+    expect(lakeConfig.allowedBiomes).toContain(BiomeType.PLAINS);
+  });
+
+  it('uses climate classification when measuring enhanced biome transitions', () => {
+    const system = new EnhancedBiomeSystem(79, {
+      temperatureScale: 0.005,
+      moistureScale: 0.005,
+      blendRadius: 2,
+      enableTransitions: true,
+      transitionWidth: 4,
+      enableElevationBands: true,
+      snowLineElevation: 0.8,
+      treeLineElevation: 0.75,
+    });
+    (system as any).climateSystem = {
+      getDynamicSnowLine: () => 0.76,
+      getDynamicTreeLine: () => 0.75,
+      getTemperature: (x: number) => x < 0 ? -0.6 : 0.6,
+      getMoisture: () => -0.5,
+    };
+
+    const data = system.getEnhancedBiome(1, 0, () => 0.5);
+
+    expect(data.biome).toBe(BiomeType.DESERT);
+    expect(data.transitionFactor).toBeGreaterThan(0);
   });
 });
 
