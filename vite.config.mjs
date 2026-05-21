@@ -35,9 +35,6 @@ export default defineConfig({
       }
     },
     rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'app/index.html')
-      },
       output: {
         manualChunks: {
           'three': ['three'],

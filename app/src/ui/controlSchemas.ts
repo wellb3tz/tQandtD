@@ -29,7 +29,7 @@ export const BIOME_SLIDERS: SliderConfig[] = [
   { id: 'worldMoistureOffset', label: 'World Moisture', min: -1, max: 1, step: 0.05, defaultValue: 0, tooltip: 'Global moisture offset (dry <-> wet)' },
   { id: 'temperatureScale', label: 'Climate Zone Scale', min: 0.0001, max: 0.2, step: 0.001, defaultValue: 0.005, tooltip: 'Size of climate zones (lower = larger biomes)' },
   { id: 'moistureScale', label: 'Moisture Detail Scale', min: 0.0001, max: 0.2, step: 0.001, defaultValue: 0.005, tooltip: 'Scale of moisture variation detail (lower = smoother)' },
-  { id: 'blendRadius', label: 'Biome Blend Radius', min: 0.5, max: 20, step: 0.5, defaultValue: 0.5, tooltip: 'Radius (world units) used to sample neighbouring biomes for blending' },
+  { id: 'blendRadius', label: 'Biome Blend Radius', min: 0.5, max: 20, step: 0.5, defaultValue: 0.5, tooltip: 'Radius in meters used to sample neighbouring biomes for blending' },
 ];
 
 export const RESOURCE_TYPE_TOGGLES: CheckboxConfig[] = [

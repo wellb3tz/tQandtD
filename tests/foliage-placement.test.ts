@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
+  TERRAIN_HEIGHT_SCALE_METERS,
   createSparseBiomeWeights,
   planFoliagePlacements,
 } from '../src';
 
-const HEIGHT_SCALE = 50;
+const HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
 const TREE_AND_PROP_PROTOTYPE_MIN_Y = -0.50;
 
 describe('foliage placement planner', () => {
@@ -137,6 +138,21 @@ describe('foliage placement planner', () => {
     }
 
     expect(plan!.shrubPlacements).toHaveLength(0);
+  });
+
+  it('uses meter-scale tree heights as the world scale anchor', () => {
+    const plan = planFoliagePlacements(0, 0, {
+      size: 16,
+      heightmap: new Float32Array(17 * 17).fill(0.5),
+      biomeMap: new Uint8Array(16 * 16).fill(BiomeType.TAIGA),
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeDefined();
+    expect(plan!.treePlacements.length).toBeGreaterThan(0);
+    expect(Math.min(...plan!.treePlacements.map(tree => tree.height))).toBeGreaterThan(9);
+    expect(Math.max(...plan!.treePlacements.map(tree => tree.height))).toBeLessThan(30);
   });
 });
 

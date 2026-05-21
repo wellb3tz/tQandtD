@@ -76,6 +76,14 @@ export {
   prepareWorldConfig,
   type WorldConfigOverrides,
 } from './config/default-world-config';
+export {
+  DEFAULT_CAMERA_POSITION_METERS,
+  FIRST_PERSON_EYE_HEIGHT_METERS,
+  FOLLOW_TERRAIN_HEIGHT_METERS,
+  ORTHOGRAPHIC_FRUSTUM_SIZE_METERS,
+  TERRAIN_HEIGHT_SCALE_METERS,
+  WORLD_METERS_PER_UNIT,
+} from './config/world-units';
 export { BiomeSystem, type BiomeConfig } from './world/biome';
 export {
   EnhancedBiomeSystem,

@@ -10,7 +10,7 @@ import { NoiseEngine, type NoiseConfig } from '../core/noise';
 export interface EnhancedBiomeConfig extends BiomeConfig {
   /** Enable transition zones (default: true) */
   enableTransitions: boolean;
-  /** Transition zone width in world units (default: 10) */
+  /** Transition zone width in meters (default: 10) */
   transitionWidth: number;
 
 
@@ -252,7 +252,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       } else {
         // Blend with neighbors, but keep strong center bias
         // Use small radius to only sample immediate neighbors
-        const sampleRadius = 2.0 + blendAmount * 3.0; // 2-5 units
+        const sampleRadius = 2.0 + blendAmount * 3.0; // 2-5 meters
 
         // Use the same climate-aware classifier for neighbour samples so that
         // blending never mixes in biomes computed with the legacy noise path.
@@ -398,7 +398,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   }
 
   /**
-   * Returns true if any tile within `radius` world units is ocean (height < 0.3).
+   * Returns true if any tile within `radius` meters is ocean (height < 0.3).
    * Uses a sparse 8-direction sample for performance.
    */
   private isNearWater(

@@ -56,13 +56,18 @@ The rendering entrypoint returns plain arrays and placement data. Use it to buil
 ```ts
 import {
   buildTerrainGridGeometryData,
+  TERRAIN_HEIGHT_SCALE_METERS,
   identifyOceanSurfaceTiles,
   buildOceanGeometryData,
 } from 'procedural-world-engine/rendering';
 
-const terrain = buildTerrainGridGeometryData(chunk, 0, 0, { heightScale: 50 });
+const terrain = buildTerrainGridGeometryData(chunk, 0, 0, {
+  heightScale: TERRAIN_HEIGHT_SCALE_METERS,
+});
 const oceanTiles = identifyOceanSurfaceTiles(chunk, 0.3);
-const ocean = buildOceanGeometryData(oceanTiles, chunk, 0.3, { heightScale: 50 });
+const ocean = buildOceanGeometryData(oceanTiles, chunk, 0.3, {
+  heightScale: TERRAIN_HEIGHT_SCALE_METERS,
+});
 ```
 
 ## Three.js Adapter

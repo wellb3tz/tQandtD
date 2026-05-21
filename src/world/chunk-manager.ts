@@ -96,7 +96,7 @@ export type ChunkInvalidationCallback = (chunkX: number, chunkY: number) => void
 export interface WorldConfig {
   /** World seed for deterministic generation */
   seed: number;
-  /** Size of each chunk (width and height) */
+  /** Size of each chunk side in meters. Runtime coordinates use 1 world unit = 1 meter. */
   chunkSize: number;
   /** Terrain generation configuration */
   terrainConfig: TerrainConfig;

@@ -4,11 +4,12 @@ import {
   buildStructureMarkerPlacements,
   getResourceMarkerColor,
   getStructureMarkerColor,
+  TERRAIN_HEIGHT_SCALE_METERS,
   type ChunkData,
   type StructureMarkerPlacementData,
 } from '@engine/index';
 
-const TERRAIN_HEIGHT_SCALE = 50;
+const TERRAIN_HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
 const RESOURCE_SPHERE_RADIUS = 0.5;
 const RESOURCE_SPHERE_DETAIL = 8;
 

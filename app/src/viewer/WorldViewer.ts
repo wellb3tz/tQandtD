@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { DEFAULT_CAMERA_POSITION_METERS, type ChunkData } from '@engine/index';
 import type { ViewerSettings } from '../core/WorldApp';
 import { createTerrainSurfaceTextureLibrary } from './materials';
 import type { RaycastHit, Vector3 } from '../utils/coordinates';
@@ -148,7 +148,11 @@ export class WorldViewer {
    * Set up the Three.js scene
    */
   private setupScene(): void {
-    this.camera.position.set(50, 100, 50);
+    this.camera.position.set(
+      DEFAULT_CAMERA_POSITION_METERS.x,
+      DEFAULT_CAMERA_POSITION_METERS.y,
+      DEFAULT_CAMERA_POSITION_METERS.z,
+    );
     this.cameraInputController.resetRotation();
 
     const { atmosphereController } = setupWorldScene(this.scene, this.renderer);

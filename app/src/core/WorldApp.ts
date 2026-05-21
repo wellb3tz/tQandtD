@@ -8,6 +8,7 @@
 
 import {
   WorldSession,
+  DEFAULT_CAMERA_POSITION_METERS,
   configureLogger,
   LogLevel,
   BiomeType,
@@ -213,7 +214,7 @@ export class WorldApp {
       loadedChunks: new Map(),
       config: createDefaultWorldConfig(),
       
-      cameraPosition: { x: 50, y: 100, z: 50 },
+      cameraPosition: { ...DEFAULT_CAMERA_POSITION_METERS },
       cameraTarget: { x: 0, y: 0, z: 0 },
       appSettings: { ...DEFAULT_APP_SETTINGS },
       

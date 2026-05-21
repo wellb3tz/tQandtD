@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import {
   buildChunkBoundaryLineData,
+  TERRAIN_HEIGHT_SCALE_METERS,
   type ChunkData,
 } from '@engine/index';
 
-const TERRAIN_HEIGHT_SCALE = 50;
+const TERRAIN_HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
 
 export function createChunkBoundaries(chunkX: number, chunkY: number, data: ChunkData): THREE.LineSegments {
   const boundaryData = buildChunkBoundaryLineData(chunkX, chunkY, data, {

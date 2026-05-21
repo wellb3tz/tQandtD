@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import type { ChunkMesh } from './ChunkMesh';
+import {
+  DEFAULT_CAMERA_POSITION_METERS,
+  FOLLOW_TERRAIN_HEIGHT_METERS,
+  ORTHOGRAPHIC_FRUSTUM_SIZE_METERS,
+} from '@engine/index';
 
 export interface CameraVector3 {
   x: number;
@@ -11,7 +16,7 @@ export class CameraViewController {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly getChunkMeshes: () => Iterable<ChunkMesh>;
   private followTerrainMode = false;
-  private readonly followTerrainHeight = 50;
+  private readonly followTerrainHeight = FOLLOW_TERRAIN_HEIGHT_METERS;
   private orthographicCamera: THREE.OrthographicCamera | null = null;
   private isOrthographicMode = false;
   private isOrbitMode = false;
@@ -47,7 +52,11 @@ export class CameraViewController {
       this.setOrthographicView(false);
     }
     this.followTerrainMode = false;
-    this.camera.position.set(50, 100, 50);
+    this.camera.position.set(
+      DEFAULT_CAMERA_POSITION_METERS.x,
+      DEFAULT_CAMERA_POSITION_METERS.y,
+      DEFAULT_CAMERA_POSITION_METERS.z,
+    );
     this.cameraTarget.set(0, 0, 0);
   }
 
@@ -59,7 +68,7 @@ export class CameraViewController {
 
     if (!this.orthographicCamera) {
       const aspect = this.camera.aspect;
-      const frustumSize = 100;
+      const frustumSize = ORTHOGRAPHIC_FRUSTUM_SIZE_METERS;
       this.orthographicCamera = new THREE.OrthographicCamera(
         -frustumSize * aspect / 2,
         frustumSize * aspect / 2,

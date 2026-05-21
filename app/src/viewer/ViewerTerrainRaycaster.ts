@@ -3,6 +3,7 @@ import {
   raycastTerrain as defaultRaycastTerrain,
   type RaycastHit,
 } from '../utils/coordinates';
+import { TERRAIN_HEIGHT_SCALE_METERS } from '@engine/index';
 import type { ChunkMesh } from './ChunkMesh';
 
 export type TerrainRaycastFunction = (
@@ -42,7 +43,7 @@ export class ViewerTerrainRaycaster {
     this.getChunks = options.getChunks ?? (() => options.chunks ?? []);
     this.getContainer = options.getContainer;
     this.chunkSize = options.chunkSize ?? 32;
-    this.heightScale = options.heightScale ?? 50;
+    this.heightScale = options.heightScale ?? TERRAIN_HEIGHT_SCALE_METERS;
     this.raycastTerrain = options.raycastTerrain ?? defaultRaycastTerrain;
   }
 

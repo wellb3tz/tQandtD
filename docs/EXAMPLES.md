@@ -357,7 +357,7 @@ function findResourcesInArea(
   return resources;
 }
 
-// Find all iron within 100 units of (500, 500)
+// Find all iron within 100 meters of (500, 500)
 const iron = findResourcesInArea(manager, 500, 500, 100, ResourceType.IRON);
 console.log(`Found ${iron.length} iron deposits`);
 ```

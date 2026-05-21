@@ -206,7 +206,7 @@ export class ClimateSystem {
    * @param x         - World X coordinate.
    * @param y         - World Y coordinate.
    * @param getHeight - Callback to sample terrain height at neighbouring positions.
-   * @param step      - Sampling distance in world units (default 1).
+   * @param step      - Sampling distance in meters (default 1).
    * @returns Gradient magnitude >= 0.
    */
   computeGradient(

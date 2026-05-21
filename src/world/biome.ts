@@ -9,7 +9,7 @@ export interface BiomeConfig {
   temperatureScale: number;
   /** Scale factor for moisture noise */
   moistureScale: number;
-  /** Radius for biome blending (in world units) */
+  /** Radius for biome blending in meters */
   blendRadius: number;
 }
 

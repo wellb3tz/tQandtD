@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import type { WaterConfig } from './water/types';
 import { createTerrainMaterial } from './TerrainAppearance';
 import { getGeometryWorkerManager } from './GeometryWorkerManager';
 
-const HEIGHT_SCALE = 50;
+const HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
 
 export interface TerrainMeshBuilderOptions {
   chunkX: number;

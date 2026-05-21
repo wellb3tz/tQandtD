@@ -11,7 +11,7 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 
 /**
  * 3D vector for positions
@@ -113,7 +113,7 @@ export function screenToNDC(
  * @param canvas - Canvas element
  * @param terrainMeshes - Array of terrain meshes to raycast against
  * @param chunkSize - Size of chunks
- * @param heightScale - Height multiplier used in mesh generation (default: 50)
+ * @param heightScale - Height multiplier used in mesh generation (default: TERRAIN_HEIGHT_SCALE_METERS)
  * @returns RaycastHit if terrain was hit, null otherwise
  */
 export function raycastTerrain(
@@ -123,7 +123,7 @@ export function raycastTerrain(
   canvas: HTMLCanvasElement,
   terrainMeshes: THREE.Mesh[],
   chunkSize: number,
-  heightScale: number = 50
+  heightScale: number = TERRAIN_HEIGHT_SCALE_METERS
 ): RaycastHit | null {
   // Convert screen to NDC
   const ndc = screenToNDC(screenX, screenY, canvas);
@@ -370,7 +370,7 @@ export function getInterpolatedHeight(
  * @param chunkData - Chunk data containing heightmap
  * @param chunkX - Chunk X coordinate
  * @param chunkY - Chunk Y coordinate
- * @param heightScale - Height multiplier used in visualization (default: 50)
+ * @param heightScale - Height multiplier used in visualization (default: TERRAIN_HEIGHT_SCALE_METERS)
  * @returns Normal vector, or null if out of bounds
  */
 export function getNormalAtPosition(
@@ -379,7 +379,7 @@ export function getNormalAtPosition(
   chunkData: ChunkData,
   chunkX: number,
   chunkY: number,
-  heightScale: number = 50
+  heightScale: number = TERRAIN_HEIGHT_SCALE_METERS
 ): Vector3 | null {
   const chunkSize = chunkData.size;
   

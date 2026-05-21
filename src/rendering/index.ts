@@ -1,4 +1,8 @@
 export {
+  TERRAIN_HEIGHT_SCALE_METERS,
+  WORLD_METERS_PER_UNIT,
+} from '../config/world-units';
+export {
   createIndexedGeometryData,
   getIndexedGeometryVertexCount,
   type IndexedGeometryData,

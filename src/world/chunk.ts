@@ -87,7 +87,7 @@ export interface ChunkData {
   x: number;
   /** Chunk Y coordinate in chunk space */
   y: number;
-  /** Size of the chunk (number of units per side, not vertex count) */
+  /** Size of the chunk in meters per side, not vertex count */
   size: number;
   /** 
    * Heightmap array with (size + 1) * (size + 1) vertices when seamless chunks enabled.

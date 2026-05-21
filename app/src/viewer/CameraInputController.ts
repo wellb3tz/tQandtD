@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FIRST_PERSON_EYE_HEIGHT_METERS } from '@engine/index';
 import type { ChunkMesh } from './ChunkMesh';
 
 const KEYBOARD_CODE_MAP: Record<string, string> = {
@@ -10,7 +11,7 @@ const KEYBOARD_CODE_MAP: Record<string, string> = {
   ShiftLeft: 'shift',
   ShiftRight: 'shift',
 };
-const FIRST_PERSON_EYE_HEIGHT = 0.12;
+const FIRST_PERSON_EYE_HEIGHT = FIRST_PERSON_EYE_HEIGHT_METERS;
 
 export interface CameraInputControllerOptions {
   camera: THREE.PerspectiveCamera;
