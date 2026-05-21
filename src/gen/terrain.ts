@@ -51,7 +51,7 @@ export class TerrainGenerator {
   private coastlineNoise: NoiseEngine | null = null;
   /** Mountain mask: mid-scale noise that determines where tall mountain ranges appear (seed offset +9999). */
   private mountainMaskNoise: NoiseEngine | null = null;
-  /** Ridge noise engine for sharp mountain peaks (seed offset +6666). */
+  /** Ridge noise engine for mountain ridges (seed offset +6666). */
   private ridgeNoise: NoiseEngine | null = null;
   /**
    * Cached primary noise engine keyed by world seed.
@@ -300,7 +300,7 @@ export class TerrainGenerator {
         // --- Ridge noise ---
         let ridgeContrib = 0;
         if (this.ridgeNoise !== null && mountainMask > 0) {
-          ridgeContrib = this.ridgeNoise.ridgeFbm(x, y, this.ridgeConfig);
+          ridgeContrib = this.getRoundedRidgeContribution(x, y);
         }
 
         // Blend detail and ridge noise
@@ -316,5 +316,32 @@ export class TerrainGenerator {
     height = Math.max(0, Math.min(1, height));
 
     return height;
+  }
+
+  private getRoundedRidgeContribution(x: number, y: number): number {
+    if (this.ridgeNoise === null) {
+      return 0;
+    }
+
+    const center = this.ridgeNoise.ridgeFbm(x, y, this.ridgeConfig);
+    const shoulderOffset = 3;
+    const skirtOffset = 6;
+
+    const shoulders = (
+      this.ridgeNoise.ridgeFbm(x - shoulderOffset, y, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x + shoulderOffset, y, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x, y - shoulderOffset, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x, y + shoulderOffset, this.ridgeConfig)
+    ) * 0.25;
+
+    const skirt = (
+      this.ridgeNoise.ridgeFbm(x - skirtOffset, y - skirtOffset, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x + skirtOffset, y - skirtOffset, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x - skirtOffset, y + skirtOffset, this.ridgeConfig) +
+      this.ridgeNoise.ridgeFbm(x + skirtOffset, y + skirtOffset, this.ridgeConfig)
+    ) * 0.25;
+
+    const rounded = center * 0.45 + shoulders * 0.4 + skirt * 0.15;
+    return Math.min(0.95, rounded);
   }
 }

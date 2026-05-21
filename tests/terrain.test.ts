@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { TerrainGenerator } from '../src/gen/terrain';
+import { createDefaultWorldConfig } from '../src/config/default-world-config';
 import { makeMinimalConfig } from './helpers';
 
 describe('Terrain', () => {
@@ -106,5 +107,38 @@ describe('Terrain', () => {
         expect(fromMap).toBeCloseTo(fromGet, 5);
       }
     });
+
+    it('avoids needle-like mountain height jumps between adjacent vertices', () => {
+      const config = createDefaultWorldConfig({
+        seed: 12345,
+        chunkSize: 32,
+      });
+      const gen = new TerrainGenerator(config.terrainConfig);
+      const chunkSize = config.chunkSize;
+      const heightmap = gen.generateHeightmap(config.seed, chunkSize, 0, 0);
+
+      expect(getMaxAdjacentHeightDelta(heightmap, chunkSize)).toBeLessThanOrEqual(0.18);
+    });
   });
 });
+
+function getMaxAdjacentHeightDelta(heightmap: Float32Array, chunkSize: number): number {
+  const vSize = chunkSize + 1;
+  let maxDelta = 0;
+
+  for (let y = 0; y <= chunkSize; y++) {
+    for (let x = 0; x <= chunkSize; x++) {
+      const height = heightmap[y * vSize + x];
+
+      if (x < chunkSize) {
+        maxDelta = Math.max(maxDelta, Math.abs(height - heightmap[y * vSize + x + 1]));
+      }
+
+      if (y < chunkSize) {
+        maxDelta = Math.max(maxDelta, Math.abs(height - heightmap[(y + 1) * vSize + x]));
+      }
+    }
+  }
+
+  return maxDelta;
+}
