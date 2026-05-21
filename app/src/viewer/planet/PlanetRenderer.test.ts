@@ -45,6 +45,13 @@ describe('PlanetRenderer', () => {
     expect(clouds.visible).toBe(true);
     expect(atmosphere.visible).toBe(true);
 
+    renderer.setTransitionOpacity(0.75, 0);
+    expect((surface.material as THREE.MeshStandardMaterial).opacity).toBe(0.75);
+    expect((clouds.material as THREE.MeshStandardMaterial).opacity).toBeCloseTo(0.435);
+    expect(surface.visible).toBe(true);
+    expect(clouds.visible).toBe(true);
+    expect(atmosphere.visible).toBe(false);
+
     renderer.dispose();
     expect(scene.getObjectByName('planet-surface')).toBeUndefined();
     expect(scene.getObjectByName('planet-clouds')).toBeUndefined();

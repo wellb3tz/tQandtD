@@ -120,7 +120,8 @@ export class PlanetRenderer {
         void main() {
           vec3 vNormal = normalize(normalMatrix * normal);
           vec3 vNormel = normalize(normalMatrix * viewVector);
-          intensity = pow(c - dot(vNormal, vNormel), p);
+          float rim = max(0.0, c - dot(vNormal, vNormel));
+          intensity = pow(rim, p);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -182,19 +183,31 @@ export class PlanetRenderer {
    * Set planet opacity (affects both planet and atmosphere).
    */
   setOpacity(opacity: number): void {
+    this.setTransitionOpacity(opacity, opacity);
+  }
+
+  /**
+   * Set surface/cloud and atmosphere opacity independently for transitions.
+   */
+  setTransitionOpacity(surfaceOpacity: number, atmosphereOpacity = surfaceOpacity): void {
+    const surfaceVisible = surfaceOpacity > 0.015;
+    const atmosphereVisible = atmosphereOpacity > 0.015;
     if (this.planetMesh) {
       const mat = this.planetMesh.material as THREE.MeshStandardMaterial;
-      mat.transparent = opacity < 1.0;
-      mat.opacity = opacity;
+      mat.transparent = surfaceOpacity < 1.0;
+      mat.opacity = surfaceOpacity;
+      this.planetMesh.visible = this.visible && surfaceVisible;
     }
     if (this.cloudMesh) {
       const mat = this.cloudMesh.material as THREE.MeshStandardMaterial;
       mat.transparent = true;
-      mat.opacity = 0.58 * opacity;
+      mat.opacity = 0.58 * surfaceOpacity;
+      this.cloudMesh.visible = this.visible && surfaceVisible;
     }
     if (this.atmosphereMesh) {
       const mat = this.atmosphereMesh.material as THREE.ShaderMaterial;
-      mat.uniforms.c.value = 0.52 * opacity;
+      mat.uniforms.c.value = 0.52 * atmosphereOpacity;
+      this.atmosphereMesh.visible = this.visible && atmosphereVisible;
     }
   }
 

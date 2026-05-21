@@ -34,9 +34,11 @@ const PLANET_RADIUS = 150;
 const ORBIT_CAMERA_DISTANCE = 600;
 
 /** Phase split for the transition timeline (0..1) */
-const CHUNK_FADE_END = 0.35;   // chunks fully invisible by 35%
-const PLANET_FADE_START = 0.25; // planet starts appearing at 25%
-const PLANET_FADE_END = 0.85;  // planet fully visible by 85%
+const CHUNK_FADE_END = 0.42; // chunks fully invisible by 42%
+const SPACE_FADE_START = 0.36; // space appears after terrain overlays are gone
+const SPACE_FADE_END = 0.62;
+const PLANET_FADE_START = 0.5; // planet starts after the scene has gone to space
+const PLANET_FADE_END = 0.92;  // planet fully visible near the end
 
 /**
  * Finite state machine controlling seamless transitions between
@@ -64,6 +66,8 @@ export class OrbitalTransitionController {
   private chunkOpacity = 1.0;
   private orbitAngles = { azimuth: 0, polar: Math.PI / 4 };
   private orbitDistance = ORBIT_CAMERA_DISTANCE;
+  private spaceEntered = false;
+  private chunkOverlaysSuppressed = false;
 
   constructor(options: OrbitalTransitionControllerOptions) {
     this.cameraViewController = options.cameraViewController;
@@ -157,8 +161,12 @@ export class OrbitalTransitionController {
     // Initialize orbit angles from current look direction
     this.orbitDistance = ORBIT_CAMERA_DISTANCE;
     this.orbitAngles = { azimuth: 0, polar: Math.PI / 6 };
+    this.spaceEntered = false;
+    this.chunkOverlaysSuppressed = true;
 
-    this.spaceViewManager.enterSpace();
+    this.setChunkOverlayVisibility(false);
+    this.waterLayerManager.setVisible(false);
+    this.spaceViewManager.setStarOpacity(0);
     if (!this.planetRenderer.isInitialized()) {
       this.planetRenderer.initialize();
     }
@@ -167,7 +175,6 @@ export class OrbitalTransitionController {
 
     // Disable terrain-specific systems
     this.cameraInputController.setOrbitMode(true);
-    this.atmosphereController?.setSpaceMode(true);
   }
 
   /**
@@ -195,7 +202,6 @@ export class OrbitalTransitionController {
     const m = new THREE.Matrix4().lookAt(this.targetCameraPos, lookAt, new THREE.Vector3(0, 1, 0));
     this.targetCameraQuaternion.setFromRotationMatrix(m);
 
-    this.spaceViewManager.exitSpace();
   }
 
   private updateTransitionToOrbit(): void {
@@ -218,7 +224,18 @@ export class OrbitalTransitionController {
     const chunkScale = 1 - this.easeInOutCubic(chunkFadeT) * 0.5;
     this.applyChunkScale(chunkScale);
 
-    // Planet fades in only after chunks are mostly gone (25% .. 85%)
+    if (!this.spaceEntered && t >= SPACE_FADE_START) {
+      this.spaceViewManager.enterSpace();
+      this.atmosphereController?.setSpaceMode(true);
+      this.spaceEntered = true;
+    }
+
+    if (this.spaceEntered) {
+      const spaceT = Math.min((t - SPACE_FADE_START) / (SPACE_FADE_END - SPACE_FADE_START), 1);
+      this.spaceViewManager.setStarOpacity(this.easeInOutCubic(spaceT));
+    }
+
+    // Planet fades in after the scene has already moved into space.
     let planetOpacity = 0;
     if (t > PLANET_FADE_START) {
       const planetT = Math.min(
@@ -234,6 +251,7 @@ export class OrbitalTransitionController {
       this.chunkOpacity = 0;
       this.applyChunkOpacity(0);
       this.applyChunkScale(1);
+      this.spaceViewManager.setStarOpacity(1);
       this.onTransitionComplete?.(OrbitalState.ORBIT);
     }
   }
@@ -266,9 +284,17 @@ export class OrbitalTransitionController {
     camera.position.lerpVectors(this.startCameraPos, this.targetCameraPos, ease);
     camera.quaternion.slerpQuaternions(this.startCameraQuaternion, this.targetCameraQuaternion, ease);
 
-    // Fade planet out
-    this.planetRenderer.setOpacity(1 - ease);
-    this.planetRenderer.setScale(1 + ease * 2); // planet grows as we dive in
+    const spaceOpacity = Math.max(0, 1 - this.easeInOutCubic(Math.min(t / 0.55, 1)));
+    this.spaceViewManager.setStarOpacity(spaceOpacity);
+
+    // Keep the surface visible through the dive so the return feels like an
+    // actual approach. Only the atmosphere fades early to avoid a blue flash.
+    const atmosphereFadeT = Math.min(t / 0.28, 1);
+    const surfaceFadeT = Math.max(0, Math.min((t - 0.76) / 0.2, 1));
+    const surfaceOpacity = 1 - this.easeInOutCubic(surfaceFadeT);
+    const atmosphereOpacity = 1 - this.easeInOutCubic(atmosphereFadeT);
+    this.planetRenderer.setTransitionOpacity(surfaceOpacity, atmosphereOpacity);
+    this.planetRenderer.setScale(1 + ease * 2.05); // planet grows as we dive in
 
     if (t >= 1) {
       this.finishTransitionToTerrain();
@@ -279,11 +305,13 @@ export class OrbitalTransitionController {
     this.state = OrbitalState.TERRAIN;
     this.planetRenderer.hide();
     this.planetRenderer.setScale(1);
+    this.spaceViewManager.exitSpace();
     this.cameraInputController.setOrbitMode(false);
     this.atmosphereController?.setSpaceMode(false);
 
     // Restore chunks
     this.chunkOpacity = 1;
+    this.chunkOverlaysSuppressed = false;
     this.applyChunkOpacity(1);
     this.applyChunkScale(1);
 
@@ -327,19 +355,19 @@ export class OrbitalTransitionController {
       }
       chunk.terrain.visible = opacity > 0.01;
 
-      // Also hide/show foliage, resources, structures
+      const showOverlays = opacity > 0.01 && !this.chunkOverlaysSuppressed;
       const c = chunk as any;
       if (c.foliage) {
-        (c.foliage as THREE.Object3D).visible = opacity > 0.01;
+        (c.foliage as THREE.Object3D).visible = showOverlays;
       }
       if (c.resources) {
-        (c.resources as THREE.Object3D).visible = opacity > 0.01;
+        (c.resources as THREE.Object3D).visible = showOverlays;
       }
       if (c.structures) {
-        (c.structures as THREE.Object3D).visible = opacity > 0.01;
+        (c.structures as THREE.Object3D).visible = showOverlays;
       }
       if (c.boundaries) {
-        (c.boundaries as THREE.Object3D).visible = opacity > 0.01;
+        (c.boundaries as THREE.Object3D).visible = showOverlays;
       }
     }
 
@@ -369,6 +397,24 @@ export class OrbitalTransitionController {
       }
       if (c.water && c.water.group) {
         c.water.group.scale.setScalar(scale);
+      }
+    }
+  }
+
+  private setChunkOverlayVisibility(visible: boolean): void {
+    for (const chunk of this.getChunkMeshes()) {
+      const c = chunk as any;
+      if (c.foliage) {
+        (c.foliage as THREE.Object3D).visible = visible;
+      }
+      if (c.resources) {
+        (c.resources as THREE.Object3D).visible = visible;
+      }
+      if (c.structures) {
+        (c.structures as THREE.Object3D).visible = visible;
+      }
+      if (c.boundaries) {
+        (c.boundaries as THREE.Object3D).visible = visible;
       }
     }
   }
