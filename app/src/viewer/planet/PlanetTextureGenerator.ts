@@ -50,6 +50,7 @@ export class PlanetTextureGenerator {
   private readonly tempNoise: NoiseEngine;
   private readonly cloudNoise: NoiseEngine;
   private readonly iceNoise: NoiseEngine;
+  private readonly mountainNoise: NoiseEngine;
 
   constructor(seed: number) {
     this.seed = seed;
@@ -58,6 +59,7 @@ export class PlanetTextureGenerator {
     this.tempNoise = new NoiseEngine(seed + 999);
     this.cloudNoise = new NoiseEngine(seed + 2027);
     this.iceNoise = new NoiseEngine(seed + 3141);
+    this.mountainNoise = new NoiseEngine(seed + 4242);
   }
 
   /**
@@ -200,7 +202,27 @@ export class PlanetTextureGenerator {
           }
         );
 
-        const sample = this.pickSurfaceSample(elevation, temperature, moisture, cloudNoise, iceNoise, lat);
+        const mountainRelief = this.ridgeFbm3D(
+          x * 2.6 + 90,
+          y * 2.6 + 90,
+          z * 2.6 + 90,
+          {
+            octaves: 5,
+            persistence: 0.52,
+            lacunarity: 2.05,
+            scale: 1.0,
+          }
+        );
+
+        const sample = this.pickSurfaceSample(
+          elevation,
+          temperature,
+          moisture,
+          cloudNoise,
+          iceNoise,
+          mountainRelief,
+          lat
+        );
 
         const idx = (py * width + px) * 4;
         heights[py * width + px] = sample.height;
@@ -256,6 +278,7 @@ export class PlanetTextureGenerator {
     moisture: number,
     cloudNoise: number,
     iceNoise: number,
+    mountainRelief: number,
     lat: number
   ): PlanetSample {
     // Normalize elevation from [-1, 1] to roughly [0, 1] with bias
@@ -266,6 +289,9 @@ export class PlanetTextureGenerator {
     const polarIce = this.smoothstep(1.14 + raggedIceEdge, 1.49 + raggedIceEdge * 0.35, absLat);
     const cloud = this.smoothstep(0.2, 0.74, cloudNoise + moisture * 0.22 - polarIce * 0.2);
     const variation = 0.9 + Math.max(-0.12, Math.min(0.12, elevation * 0.08 + moisture * 0.05));
+    const landMask = this.smoothstep(waterLevel + 0.02, waterLevel + 0.18, height);
+    const mountainMask = this.smoothstep(0.58, 0.86, mountainRelief) * landMask * (1 - polarIce * 0.7);
+    const ruggedHeight = mountainMask * (0.14 + Math.max(0, height - 0.55) * 0.16);
 
     if (polarIce > 0.72) {
       const seaIce = height < waterLevel ? 0.22 : 0;
@@ -337,14 +363,14 @@ export class PlanetTextureGenerator {
           cloud: cloud * 0.45,
         };
       }
-      const coldPeak = temperature < -0.5 ? this.smoothstep(0.86, 0.98, height) * 0.38 : 0;
+      const coldPeak = temperature < -0.5 ? this.smoothstep(0.86, 0.98, height + ruggedHeight) * 0.38 : 0;
       return {
         color: this.mix(
           this.tint(BIOME_COLORS.mountain, variation),
           this.tint(BIOME_COLORS.glacier, variation),
           coldPeak
         ),
-        height: 0.78 + Math.min(0.22, (height - 0.78) * 1.1),
+        height: Math.min(1, 0.78 + Math.min(0.22, (height - 0.78) * 1.1) + ruggedHeight),
         roughness: 0.95,
         cloud: cloud * 0.7,
       };
@@ -390,12 +416,35 @@ export class PlanetTextureGenerator {
       color = BIOME_COLORS.plains;
     }
 
+    const mountainBlend = Math.min(0.72, mountainMask * 0.85);
+    const surfaceColor = this.mix(this.tint(color, variation), this.tint(BIOME_COLORS.mountain, variation), mountainBlend);
+
     return {
-      color: this.tint(color, variation),
-      height: 0.35 + Math.max(0, height - waterLevel) * 0.62,
-      roughness,
+      color: surfaceColor,
+      height: Math.min(1, 0.35 + Math.max(0, height - waterLevel) * 0.62 + ruggedHeight),
+      roughness: Math.min(0.98, roughness + mountainMask * 0.12),
       cloud,
     };
+  }
+
+  private ridgeFbm3D(x: number, y: number, z: number, config: NoiseConfig): number {
+    let total = 0;
+    let frequency = config.scale;
+    let amplitude = 1;
+    let maxValue = 0;
+    let previous = 1;
+
+    for (let i = 0; i < config.octaves; i++) {
+      const folded = 1 - Math.abs(this.mountainNoise.noise3D(x * frequency, y * frequency, z * frequency));
+      const ridge = folded * folded;
+      total += ridge * amplitude * previous;
+      maxValue += amplitude;
+      previous = ridge;
+      amplitude *= config.persistence;
+      frequency *= config.lacunarity;
+    }
+
+    return maxValue > 0 ? total / maxValue : 0;
   }
 
   private populateNormalMap(

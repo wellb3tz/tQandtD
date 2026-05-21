@@ -68,10 +68,10 @@ export class PlanetRenderer {
     const material = new THREE.MeshStandardMaterial({
       map: planetTexture,
       displacementMap: planetHeightMap,
-      displacementScale: this.radius * 0.018,
-      displacementBias: -this.radius * 0.006,
+      displacementScale: this.radius * 0.038,
+      displacementBias: -this.radius * 0.012,
       normalMap: planetNormalMap,
-      normalScale: new THREE.Vector2(0.85, 0.85),
+      normalScale: new THREE.Vector2(1.15, 1.15),
       roughnessMap: planetRoughnessMap,
       roughness: 0.7,
       metalness: 0.0,
