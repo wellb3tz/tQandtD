@@ -5,14 +5,14 @@ import type { NoiseConfig } from '@engine/core/noise';
  * Color palette for planet biomes (RGB tuples, 0-255).
  */
 const BIOME_COLORS: Record<string, [number, number, number]> = {
-  ocean: [20, 60, 120],
-  deepOcean: [10, 40, 90],
-  beach: [210, 190, 140],
+  ocean: [34, 92, 150],
+  deepOcean: [14, 58, 112],
+  beach: [188, 172, 118],
   desert: [230, 210, 160],
   plains: [100, 160, 70],
   forest: [40, 110, 40],
   taiga: [80, 120, 90],
-  tundra: [180, 190, 200],
+  tundra: [142, 150, 136],
   mountain: [120, 110, 100],
   savanna: [180, 160, 80],
   swamp: [80, 100, 60],
@@ -49,6 +49,7 @@ export class PlanetTextureGenerator {
   private readonly moistureNoise: NoiseEngine;
   private readonly tempNoise: NoiseEngine;
   private readonly cloudNoise: NoiseEngine;
+  private readonly iceNoise: NoiseEngine;
 
   constructor(seed: number) {
     this.seed = seed;
@@ -56,6 +57,7 @@ export class PlanetTextureGenerator {
     this.moistureNoise = new NoiseEngine(seed + 123);
     this.tempNoise = new NoiseEngine(seed + 999);
     this.cloudNoise = new NoiseEngine(seed + 2027);
+    this.iceNoise = new NoiseEngine(seed + 3141);
   }
 
   /**
@@ -96,11 +98,18 @@ export class PlanetTextureGenerator {
     const cloudData = cloudImageData.data;
     const heights = new Float32Array(width * height);
 
-    const elevationConfig: NoiseConfig = {
-      octaves: 5,
-      persistence: 0.5,
-      lacunarity: 2.0,
-      scale: 1.8,
+    const continentConfig: NoiseConfig = {
+      octaves: 4,
+      persistence: 0.52,
+      lacunarity: 1.9,
+      scale: 0.82,
+    };
+
+    const elevationDetailConfig: NoiseConfig = {
+      octaves: 3,
+      persistence: 0.46,
+      lacunarity: 2.1,
+      scale: 1.15,
     };
 
     const tempConfig: NoiseConfig = {
@@ -135,13 +144,20 @@ export class PlanetTextureGenerator {
         const y = sinLat;
         const z = cosLat * Math.sin(lon);
 
-        // Elevation: 3D fbm sampled on the sphere surface
-        const elevation = this.elevationNoise.fbm3D(
-          x * 2.0,
-          y * 2.0,
-          z * 2.0,
-          elevationConfig
+        // Elevation: low-frequency continental plates with restrained detail.
+        const continentElevation = this.elevationNoise.fbm3D(
+          x * 1.1,
+          y * 1.1,
+          z * 1.1,
+          continentConfig
         );
+        const elevationDetail = this.elevationNoise.fbm3D(
+          x * 3.4 + 50,
+          y * 3.4 + 50,
+          z * 3.4 + 50,
+          elevationDetailConfig
+        );
+        const elevation = Math.max(-1, Math.min(1, continentElevation * 0.86 + elevationDetail * 0.14));
 
         // Temperature: latitude bias + 3D noise variation
         const tempNoise = this.tempNoise.fbm3D(
@@ -172,7 +188,19 @@ export class PlanetTextureGenerator {
           }
         );
 
-        const sample = this.pickSurfaceSample(elevation, temperature, moisture, cloudNoise, lat);
+        const iceNoise = this.iceNoise.fbm3D(
+          x * 5.2 - 180,
+          y * 5.2 - 180,
+          z * 5.2 - 180,
+          {
+            octaves: 4,
+            persistence: 0.54,
+            lacunarity: 2.05,
+            scale: 1.0,
+          }
+        );
+
+        const sample = this.pickSurfaceSample(elevation, temperature, moisture, cloudNoise, iceNoise, lat);
 
         const idx = (py * width + px) * 4;
         heights[py * width + px] = sample.height;
@@ -227,44 +255,74 @@ export class PlanetTextureGenerator {
     temperature: number,
     moisture: number,
     cloudNoise: number,
+    iceNoise: number,
     lat: number
   ): PlanetSample {
     // Normalize elevation from [-1, 1] to roughly [0, 1] with bias
     const height = (elevation + 1) * 0.5;
     const waterLevel = 0.38;
-    const polarIce = Math.max(0, (Math.abs(lat) - 1.05) / 0.45);
+    const absLat = Math.abs(lat);
+    const raggedIceEdge = iceNoise * 0.18 + elevation * 0.07 + moisture * 0.04;
+    const polarIce = this.smoothstep(1.14 + raggedIceEdge, 1.49 + raggedIceEdge * 0.35, absLat);
     const cloud = this.smoothstep(0.2, 0.74, cloudNoise + moisture * 0.22 - polarIce * 0.2);
     const variation = 0.9 + Math.max(-0.12, Math.min(0.12, elevation * 0.08 + moisture * 0.05));
 
-    if (height < waterLevel - 0.06) {
+    if (polarIce > 0.72) {
+      const seaIce = height < waterLevel ? 0.22 : 0;
       return {
-        color: this.tint(BIOME_COLORS.deepOcean, 0.85 + height * 0.35),
+        color: this.mix(
+          this.tint(BIOME_COLORS.glacier, variation),
+          [205, 225, 238],
+          Math.min(0.34, polarIce * 0.3 + seaIce)
+        ),
+        height: height < waterLevel
+          ? 0.18 + polarIce * 0.1
+          : 0.58 + Math.min(0.22, polarIce * 0.22),
+        roughness: height < waterLevel ? 0.42 : 0.58,
+        cloud,
+      };
+    }
+
+    if (height < waterLevel - 0.06) {
+      const depth = Math.max(0, Math.min(1, (waterLevel - height) / waterLevel));
+      return {
+        color: this.mix(BIOME_COLORS.ocean, BIOME_COLORS.deepOcean, depth * 0.72),
         height: 0.03,
-        roughness: 0.35,
+        roughness: 0.22,
         cloud,
       };
     }
     if (height < waterLevel) {
+      const coast = this.smoothstep(waterLevel - 0.06, waterLevel, height);
       return {
-        color: this.tint(BIOME_COLORS.ocean, 0.9 + height * 0.25),
+        color: this.mix(BIOME_COLORS.ocean, [58, 122, 168], coast * 0.35),
         height: 0.08,
-        roughness: 0.3,
+        roughness: 0.24,
         cloud,
       };
     }
-    if (height < waterLevel + 0.05) {
+    if (height < waterLevel + 0.018) {
+      const coast = this.smoothstep(waterLevel, waterLevel + 0.018, height);
       return {
-        color: this.tint(BIOME_COLORS.beach, variation),
-        height: 0.28,
-        roughness: 0.76,
+        color: this.mix(
+          this.tint(BIOME_COLORS.beach, variation * 0.92),
+          this.tint(BIOME_COLORS.plains, variation * 0.94),
+          coast * 0.55
+        ),
+        height: 0.24,
+        roughness: 0.72,
         cloud,
       };
     }
 
-    if (polarIce > 0.25 || (temperature < -0.55 && height > waterLevel + 0.05)) {
+    if (polarIce > 0.62 || (polarIce > 0.28 && temperature < -0.64 && height > waterLevel + 0.08)) {
       return {
-        color: this.mix(this.tint(BIOME_COLORS.glacier, variation), [205, 225, 238], polarIce * 0.35),
-        height: 0.62 + Math.min(0.2, polarIce * 0.2),
+        color: this.mix(
+          this.tint(BIOME_COLORS.glacier, variation),
+          [205, 225, 238],
+          Math.min(0.32, polarIce * 0.28)
+        ),
+        height: 0.58 + Math.min(0.22, polarIce * 0.22),
         roughness: 0.58,
         cloud,
       };
@@ -279,8 +337,13 @@ export class PlanetTextureGenerator {
           cloud: cloud * 0.45,
         };
       }
+      const coldPeak = temperature < -0.5 ? this.smoothstep(0.86, 0.98, height) * 0.38 : 0;
       return {
-        color: this.tint(temperature < -0.3 ? BIOME_COLORS.glacier : BIOME_COLORS.mountain, variation),
+        color: this.mix(
+          this.tint(BIOME_COLORS.mountain, variation),
+          this.tint(BIOME_COLORS.glacier, variation),
+          coldPeak
+        ),
         height: 0.78 + Math.min(0.22, (height - 0.78) * 1.1),
         roughness: 0.95,
         cloud: cloud * 0.7,

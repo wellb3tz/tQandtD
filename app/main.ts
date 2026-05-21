@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const topDownBtn = document.getElementById('top-down-btn');
   const followTerrainBtn = document.getElementById('follow-terrain-btn');
   const firstPersonBtn = document.getElementById('first-person-btn');
+  const planetModeBtn = document.getElementById('planet-mode-btn');
 
   // Camera position display elements
   const cameraXDisplay = document.getElementById('camera-x');
@@ -406,6 +407,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // Start dive transition back to terrain first
       worldViewer.startLandingTransition(detail.lat, detail.lon);
+      planetModeBtn?.classList.remove('active');
 
       errorHandler.showSuccessToast('Landing on new world...');
       const planetLoading = document.getElementById('loading-indicator');
@@ -586,6 +588,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       topDownBtn?.classList.remove('active');
       followTerrainBtn?.classList.remove('active');
       firstPersonBtn?.classList.remove('active');
+      planetModeBtn?.classList.remove('active');
       document.body.classList.remove('first-person-active');
       errorHandler.showSuccessToast('Camera reset to default position');
     }
@@ -600,6 +603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         topDownBtn.classList.add('active');
         followTerrainBtn?.classList.remove('active');
         firstPersonBtn?.classList.remove('active');
+        planetModeBtn?.classList.remove('active');
         document.body.classList.remove('first-person-active');
         errorHandler.showSuccessToast('Top-down orthographic view enabled');
       } else {
@@ -618,6 +622,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         followTerrainBtn.classList.add('active');
         topDownBtn?.classList.remove('active');
         firstPersonBtn?.classList.remove('active');
+        planetModeBtn?.classList.remove('active');
         document.body.classList.remove('first-person-active');
         errorHandler.showSuccessToast('Follow terrain mode enabled');
       } else {
@@ -636,6 +641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         firstPersonBtn.classList.add('active');
         topDownBtn?.classList.remove('active');
         followTerrainBtn?.classList.remove('active');
+        planetModeBtn?.classList.remove('active');
         document.body.classList.add('first-person-active');
         errorHandler.showSuccessToast('First-person mode enabled. Click to look around, WASD to walk, Space to jump.');
       } else {
@@ -643,6 +649,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.classList.remove('first-person-active');
         errorHandler.showSuccessToast('First-person mode disabled');
       }
+    }
+  });
+
+  planetModeBtn?.addEventListener('click', () => {
+    if (worldViewer) {
+      worldViewer.enterPlanetMode();
+      planetModeBtn.classList.add('active');
+      topDownBtn?.classList.remove('active');
+      followTerrainBtn?.classList.remove('active');
+      firstPersonBtn?.classList.remove('active');
+      document.body.classList.remove('first-person-active');
+      errorHandler.showSuccessToast('Planet mode enabled');
     }
   });
   

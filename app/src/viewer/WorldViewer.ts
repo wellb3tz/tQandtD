@@ -215,6 +215,16 @@ export class WorldViewer {
     this.orbitalTransitionController?.startTransitionToSurface(lat, lon);
   }
 
+  /**
+   * Begin the transition from terrain view into the orbital planet view.
+   */
+  enterPlanetMode(): void {
+    this.setFirstPersonMode(false);
+    this.cameraViewController.setFollowTerrainMode(false);
+    this.cameraViewController.setOrthographicView(false);
+    this.orbitalTransitionController?.startTransitionToOrbit();
+  }
+
   private handlePlanetClicked(lat: number, lon: number): void {
     // Emit event for main.ts to pick up
     const event = new CustomEvent('planet-clicked', {
