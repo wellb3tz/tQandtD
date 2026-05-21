@@ -29,6 +29,11 @@ export class AtmosphereController {
   private skyParams: SkyParams = { ...DEFAULT_SKY_PARAMS };
 
   private originalBackground: THREE.Color | null = null;
+  private readonly shadowFocus = new THREE.Vector3();
+  private readonly shadowFocusSnapDelta = new THREE.Vector3();
+  private readonly shadowFocusRight = new THREE.Vector3();
+  private readonly shadowFocusUp = new THREE.Vector3();
+  private readonly shadowFocusForward = new THREE.Vector3();
 
   constructor(
     scene: THREE.Scene,
@@ -43,11 +48,7 @@ export class AtmosphereController {
   }
 
   private updateDirectionalLightPosition(): void {
-    const phi = THREE.MathUtils.degToRad(90 - this.skyParams.elevation);
-    const theta = THREE.MathUtils.degToRad(this.skyParams.azimuth);
-
-    const sunDir = new THREE.Vector3();
-    sunDir.setFromSphericalCoords(1, phi, theta);
+    const sunDir = this.getSunDirection(new THREE.Vector3());
 
     const target = this.directionalLight.target.position;
     this.directionalLight.position.set(
@@ -95,20 +96,59 @@ export class AtmosphereController {
   private updateSkySunPosition(): void {
     if (!this.sky) return;
 
-    const phi = THREE.MathUtils.degToRad(90 - this.skyParams.elevation);
-    const theta = THREE.MathUtils.degToRad(this.skyParams.azimuth);
-
-    const sun = new THREE.Vector3();
-    sun.setFromSphericalCoords(1, phi, theta);
+    const sun = this.getSunDirection(new THREE.Vector3());
 
     this.sky.material.uniforms['sunPosition'].value.copy(sun);
   }
 
   updateSunAndShadowFocus(activeCamera: THREE.Camera): void {
-    this.directionalLight.target.position.set(activeCamera.position.x, 0, activeCamera.position.z);
+    const focus = this.getStableShadowFocus(activeCamera);
+    this.directionalLight.target.position.copy(focus);
     this.directionalLight.target.updateMatrixWorld();
     this.updateDirectionalLightPosition();
     this.directionalLight.updateMatrixWorld();
+  }
+
+  private getStableShadowFocus(activeCamera: THREE.Camera): THREE.Vector3 {
+    this.shadowFocus.set(activeCamera.position.x, 0, activeCamera.position.z);
+
+    const shadowCamera = this.directionalLight.shadow.camera;
+    const shadowMapSize = this.directionalLight.shadow.mapSize;
+    if (!(shadowCamera instanceof THREE.OrthographicCamera) || shadowMapSize.width <= 0 || shadowMapSize.height <= 0) {
+      return this.shadowFocus;
+    }
+
+    const texelWidth = (shadowCamera.right - shadowCamera.left) / shadowMapSize.width;
+    const texelHeight = (shadowCamera.top - shadowCamera.bottom) / shadowMapSize.height;
+    if (texelWidth <= 0 || texelHeight <= 0) {
+      return this.shadowFocus;
+    }
+
+    this.getSunDirection(this.shadowFocusForward).negate();
+    this.shadowFocusRight.crossVectors(this.directionalLight.up, this.shadowFocusForward);
+    if (this.shadowFocusRight.lengthSq() < 0.000001) {
+      this.shadowFocusRight.set(1, 0, 0);
+    } else {
+      this.shadowFocusRight.normalize();
+    }
+    this.shadowFocusUp.crossVectors(this.shadowFocusForward, this.shadowFocusRight).normalize();
+
+    const localX = this.shadowFocus.dot(this.shadowFocusRight);
+    const localY = this.shadowFocus.dot(this.shadowFocusUp);
+    const snappedX = Math.round(localX / texelWidth) * texelWidth;
+    const snappedY = Math.round(localY / texelHeight) * texelHeight;
+
+    this.shadowFocusSnapDelta
+      .copy(this.shadowFocusRight).multiplyScalar(snappedX - localX)
+      .addScaledVector(this.shadowFocusUp, snappedY - localY);
+
+    return this.shadowFocus.add(this.shadowFocusSnapDelta);
+  }
+
+  private getSunDirection(target: THREE.Vector3): THREE.Vector3 {
+    const phi = THREE.MathUtils.degToRad(90 - this.skyParams.elevation);
+    const theta = THREE.MathUtils.degToRad(this.skyParams.azimuth);
+    return target.setFromSphericalCoords(1, phi, theta).normalize();
   }
 
   /**

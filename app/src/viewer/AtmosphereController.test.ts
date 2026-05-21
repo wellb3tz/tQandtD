@@ -23,7 +23,7 @@ describe('AtmosphereController', () => {
     camera.position.set(320, 80, -240);
     atmosphere.updateSunAndShadowFocus(camera);
 
-    // Target should be projected to ground at camera XZ
+    // Target should be projected near the camera XZ, then snapped to the shadow texel grid.
     expect(directionalLight.target.position.x).toBeCloseTo(320);
     expect(directionalLight.target.position.z).toBeCloseTo(-240);
 
@@ -41,6 +41,41 @@ describe('AtmosphereController', () => {
     // Default azimuth = 0 deg => sun is toward North (0 deg)
     expect(Math.abs(offset.x)).toBeLessThan(1);
     expect(offset.z).toBeGreaterThan(150);
+
+    atmosphere.dispose();
+  });
+
+  it('snaps the moving shadow focus to texels so small camera moves do not shimmer shadows', () => {
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
+    const directionalLight = new THREE.DirectionalLight(0xffe2b8, 1.12);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.camera.left = -200;
+    directionalLight.shadow.camera.right = 200;
+    directionalLight.shadow.camera.top = 200;
+    directionalLight.shadow.camera.bottom = -200;
+    directionalLight.shadow.mapSize.set(2048, 2048);
+
+    scene.add(ambientLight);
+    scene.add(directionalLight);
+
+    const atmosphere = new AtmosphereController(scene, ambientLight, directionalLight);
+
+    camera.position.set(11.95, 50, -20);
+    atmosphere.updateSunAndShadowFocus(camera);
+    const stableTarget = directionalLight.target.position.clone();
+
+    camera.position.set(11.955, 50, -19.995);
+    atmosphere.updateSunAndShadowFocus(camera);
+
+    expect(directionalLight.target.position.x).toBeCloseTo(stableTarget.x);
+    expect(directionalLight.target.position.z).toBeCloseTo(stableTarget.z);
+
+    camera.position.x += 0.4;
+    atmosphere.updateSunAndShadowFocus(camera);
+
+    expect(directionalLight.target.position.x).not.toBeCloseTo(stableTarget.x);
 
     atmosphere.dispose();
   });
