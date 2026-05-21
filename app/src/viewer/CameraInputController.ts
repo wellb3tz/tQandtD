@@ -10,6 +10,7 @@ const KEYBOARD_CODE_MAP: Record<string, string> = {
   ShiftLeft: 'shift',
   ShiftRight: 'shift',
 };
+const FIRST_PERSON_EYE_HEIGHT = 0.12;
 
 export interface CameraInputControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -37,7 +38,7 @@ export class CameraInputController {
   private cameraRotation = { pitch: 0, yaw: 0 };
   private firstPersonMode = false;
   private orbitMode = false;
-  private eyeHeight = 0.5;
+  private eyeHeight = FIRST_PERSON_EYE_HEIGHT;
   private velocityY = 0;
   private isOnGround = false;
   private readonly gravity = 0.004;

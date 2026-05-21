@@ -6,9 +6,25 @@
 import { WorldApp } from '../core/WorldApp';
 import type { ChunkData } from '@engine/index';
 import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
+import { calculateVertexSurfaceWeights, type TerrainSurfaceWeights } from '../viewer/TerrainAttributeBuilder';
+import type { TerrainSurfaceKey } from '../viewer/terrain-geometry-types';
 
 const LAKE_NAME  = 'Lake';
 const LAKE_COLOR = '#4fc3d4'; // matches DEFAULT_LAKE_RENDER_CONFIG shallow color
+
+const SURFACE_DISPLAY_NAMES: Record<TerrainSurfaceKey, string> = {
+  plains: 'Plains',
+  desert: 'Desert',
+  beach: 'Beach',
+  mountainRock: 'Mountain Rock',
+  snow: 'Snow',
+  forestFloor: 'Forest Floor',
+  dryGrass: 'Dry Grass',
+  swampMud: 'Swamp Mud',
+  volcanicRock: 'Volcanic Rock',
+  ice: 'Ice',
+  riverbed: 'Riverbed',
+};
 
 /**
  * Check whether a tile index falls inside any lake in the chunk.
@@ -30,6 +46,24 @@ function hasTile(tiles: unknown, tileIndex: number): boolean {
     return (typedTiles as { includes: (value: number) => boolean }).includes(tileIndex);
   }
   return false;
+}
+
+export function formatSurfaceSummary(weights: TerrainSurfaceWeights): string {
+  const ranked = (Object.entries(weights) as Array<[TerrainSurfaceKey, number]>)
+    .filter(([, weight]) => weight > 0.01)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  if (ranked.length === 0) {
+    return SURFACE_DISPLAY_NAMES.plains;
+  }
+
+  return ranked
+    .map(([surface, weight]) => {
+      const label = SURFACE_DISPLAY_NAMES[surface];
+      return weight >= 0.995 ? label : `${label} ${Math.round(weight * 100)}%`;
+    })
+    .join(' / ');
 }
 
 export class TerrainTooltip {
@@ -140,6 +174,7 @@ export class TerrainTooltip {
     const biomeColor = lakeLevel !== null
       ? LAKE_COLOR
       : getBiomeCssColor(chunk.biomeMap[tileIndex]);
+    const surfaceSummary = formatSurfaceSummary(calculateVertexSurfaceWeights(chunk, hit.localX, hit.localY));
 
     const height = hit.height.toFixed(2);
     const wx     = hit.point.x.toFixed(1);
@@ -157,7 +192,10 @@ export class TerrainTooltip {
     this.el!.innerHTML = `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;border-bottom:1px solid rgba(180,83,9,0.15);padding-bottom:5px">
         <span style="width:10px;height:10px;border-radius:50%;background:${biomeColor};flex-shrink:0;display:inline-block"></span>
-        <span style="font-weight:700;color:#b45309;letter-spacing:0.5px;text-transform:uppercase;font-size:10px">${biomeName}</span>
+        <div style="min-width:0">
+          <div style="font-weight:700;color:#b45309;letter-spacing:0.5px;text-transform:uppercase;font-size:10px">${biomeName}</div>
+          <div style="color:#cbd5e1;font-size:10px;line-height:1.35;white-space:normal">Surface: ${surfaceSummary}</div>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;color:#9ca3af">
         <span>Height</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${height}</span>

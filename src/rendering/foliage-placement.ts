@@ -7,6 +7,8 @@ const FOLIAGE_BANK_WIDTH = 2.4;
 const TREE_AND_PROP_PROTOTYPE_MIN_Y = -0.50;
 export const SHRUB_PROTOTYPE_MIN_Y = -0.30;
 const CLEARING_CELL_SIZE = 25;
+const TREE_WORLD_SCALE = 0.45;
+const PROP_WORLD_SCALE = 0.55;
 
 export type FoliageProfile = {
   density: number;
@@ -128,8 +130,8 @@ export function planFoliagePlacements(
       const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
       if (propChance <= propDensity) {
         const propScale = 0.72 + deterministic01(worldTileX, worldTileZ, 193) * 0.56;
-        const stumpHeight = 0.30 * propScale;
-        const stumpRadius = 0.25 * propScale;
+        const stumpHeight = 0.30 * propScale * PROP_WORLD_SCALE;
+        const stumpRadius = 0.25 * propScale * PROP_WORLD_SCALE;
         terrainPropPlacements.push({
           x: placementX,
           y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * stumpHeight,
@@ -149,8 +151,8 @@ export function planFoliagePlacements(
       const treeDensity = profile.density * clusterDensity * slopeDensityScale * bankTreeScale * clearingTreeScale;
       if (chance <= treeDensity) {
         const treeHeightScale = (1 - waterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - clearingInfluence.strength * 0.18);
-        const treeHeight = profile.height * scaleJitter * Math.max(0.68, treeHeightScale);
-        const treeRadius = profile.radius * scaleJitter * Math.max(0.72, treeHeightScale);
+        const treeHeight = profile.height * scaleJitter * Math.max(0.68, treeHeightScale) * TREE_WORLD_SCALE;
+        const treeRadius = profile.radius * scaleJitter * Math.max(0.72, treeHeightScale) * TREE_WORLD_SCALE;
         treePlacements.push({
           x: placementX,
           y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * treeHeight,

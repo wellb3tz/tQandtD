@@ -74,7 +74,7 @@ export class WorldViewer {
 
   constructor() {
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 2000);
+    this.camera = new THREE.PerspectiveCamera(75, 1, 0.005, 2000);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.canvasHost = new ViewerCanvasHost({
       camera: this.camera,
