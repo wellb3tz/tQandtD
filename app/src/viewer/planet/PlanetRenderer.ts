@@ -24,6 +24,7 @@ export class PlanetRenderer {
   private readonly radius: number;
   private readonly position: THREE.Vector3;
   private planetMesh: THREE.Mesh | null = null;
+  private cloudMesh: THREE.Mesh | null = null;
   private atmosphereMesh: THREE.Mesh | null = null;
   private raycaster = new THREE.Raycaster();
   private visible = false;
@@ -49,16 +50,31 @@ export class PlanetRenderer {
     if (this.planetMesh) return;
 
     const generator = new PlanetTextureGenerator(this.seed);
-    const { texture } = generator.generate(512, 256);
-    const planetTexture = new THREE.CanvasTexture(texture);
-    planetTexture.colorSpace = THREE.SRGBColorSpace;
+    const {
+      texture,
+      heightMap,
+      normalMap,
+      roughnessMap,
+      cloudTexture,
+    } = generator.generate(1024, 512);
+    const planetTexture = this.createCanvasTexture(texture, true);
+    const planetHeightMap = this.createCanvasTexture(heightMap, false);
+    const planetNormalMap = this.createCanvasTexture(normalMap, false);
+    const planetRoughnessMap = this.createCanvasTexture(roughnessMap, false);
+    const planetCloudTexture = this.createCanvasTexture(cloudTexture, true);
 
     // Planet sphere
-    const geometry = new THREE.SphereGeometry(this.radius, 128, 64);
+    const geometry = new THREE.SphereGeometry(this.radius, 192, 96);
     const material = new THREE.MeshStandardMaterial({
       map: planetTexture,
-      roughness: 0.8,
-      metalness: 0.1,
+      displacementMap: planetHeightMap,
+      displacementScale: this.radius * 0.018,
+      displacementBias: -this.radius * 0.006,
+      normalMap: planetNormalMap,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughnessMap: planetRoughnessMap,
+      roughness: 0.7,
+      metalness: 0.0,
     });
     this.planetMesh = new THREE.Mesh(geometry, material);
     this.planetMesh.position.copy(this.position);
@@ -66,16 +82,34 @@ export class PlanetRenderer {
     this.planetMesh.visible = false;
     this.scene.add(this.planetMesh);
 
+    const cloudGeometry = new THREE.SphereGeometry(this.radius * 1.018, 160, 80);
+    const cloudMaterial = new THREE.MeshStandardMaterial({
+      map: planetCloudTexture,
+      transparent: true,
+      opacity: 0.58,
+      depthWrite: false,
+      roughness: 0.95,
+      metalness: 0,
+      alphaTest: 0.025,
+    });
+    this.cloudMesh = new THREE.Mesh(cloudGeometry, cloudMaterial);
+    this.cloudMesh.position.copy(this.position);
+    this.cloudMesh.name = 'planet-clouds';
+    this.cloudMesh.visible = false;
+    this.cloudMesh.renderOrder = 1;
+    this.scene.add(this.cloudMesh);
+
     // Atmosphere glow (slightly larger sphere with fresnel-like transparency)
     const atmGeometry = new THREE.SphereGeometry(this.radius * 1.08, 64, 32);
     const atmMaterial = new THREE.ShaderMaterial({
       transparent: true,
-      side: THREE.FrontSide,
+      side: THREE.BackSide,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
       uniforms: {
-        c: { value: 0.35 },
-        p: { value: 4.5 },
-        glowColor: { value: new THREE.Color(0x4488cc) },
+        c: { value: 0.52 },
+        p: { value: 3.2 },
+        glowColor: { value: new THREE.Color(0x5aa7ff) },
         viewVector: { value: new THREE.Vector3(0, 0, 1) },
       },
       vertexShader: `
@@ -94,8 +128,9 @@ export class PlanetRenderer {
         uniform vec3 glowColor;
         varying float intensity;
         void main() {
-          vec3 glow = glowColor * intensity;
-          gl_FragColor = vec4(glow, intensity);
+          float alpha = clamp(intensity * 0.85, 0.0, 0.75);
+          vec3 glow = glowColor * alpha;
+          gl_FragColor = vec4(glow, alpha);
         }
       `,
     });
@@ -117,6 +152,10 @@ export class PlanetRenderer {
       this.atmosphereMesh.position
     ).normalize();
     mat.uniforms.viewVector.value = viewVector;
+
+    if (this.cloudMesh) {
+      this.cloudMesh.rotation.y += 0.00035;
+    }
   }
 
   /**
@@ -125,6 +164,7 @@ export class PlanetRenderer {
   show(): void {
     this.visible = true;
     if (this.planetMesh) this.planetMesh.visible = true;
+    if (this.cloudMesh) this.cloudMesh.visible = true;
     if (this.atmosphereMesh) this.atmosphereMesh.visible = true;
   }
 
@@ -134,6 +174,7 @@ export class PlanetRenderer {
   hide(): void {
     this.visible = false;
     if (this.planetMesh) this.planetMesh.visible = false;
+    if (this.cloudMesh) this.cloudMesh.visible = false;
     if (this.atmosphereMesh) this.atmosphereMesh.visible = false;
   }
 
@@ -146,9 +187,14 @@ export class PlanetRenderer {
       mat.transparent = opacity < 1.0;
       mat.opacity = opacity;
     }
+    if (this.cloudMesh) {
+      const mat = this.cloudMesh.material as THREE.MeshStandardMaterial;
+      mat.transparent = true;
+      mat.opacity = 0.58 * opacity;
+    }
     if (this.atmosphereMesh) {
       const mat = this.atmosphereMesh.material as THREE.ShaderMaterial;
-      mat.uniforms.c.value = 0.35 * opacity;
+      mat.uniforms.c.value = 0.52 * opacity;
     }
   }
 
@@ -157,6 +203,7 @@ export class PlanetRenderer {
    */
   setScale(scale: number): void {
     if (this.planetMesh) this.planetMesh.scale.setScalar(scale);
+    if (this.cloudMesh) this.cloudMesh.scale.setScalar(scale);
     if (this.atmosphereMesh) this.atmosphereMesh.scale.setScalar(scale);
   }
 
@@ -198,13 +245,36 @@ export class PlanetRenderer {
     return this.visible;
   }
 
+  private createCanvasTexture(canvas: HTMLCanvasElement, srgb: boolean): THREE.CanvasTexture {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.anisotropy = 8;
+    if (srgb) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    return texture;
+  }
+
   dispose(): void {
     if (this.planetMesh) {
       this.scene.remove(this.planetMesh);
       this.planetMesh.geometry.dispose();
-      (this.planetMesh.material as THREE.MeshStandardMaterial).map?.dispose();
-      (this.planetMesh.material as THREE.MeshStandardMaterial).dispose();
+      const material = this.planetMesh.material as THREE.MeshStandardMaterial;
+      material.map?.dispose();
+      material.displacementMap?.dispose();
+      material.normalMap?.dispose();
+      material.roughnessMap?.dispose();
+      material.dispose();
       this.planetMesh = null;
+    }
+    if (this.cloudMesh) {
+      this.scene.remove(this.cloudMesh);
+      this.cloudMesh.geometry.dispose();
+      const material = this.cloudMesh.material as THREE.MeshStandardMaterial;
+      material.map?.dispose();
+      material.dispose();
+      this.cloudMesh = null;
     }
     if (this.atmosphereMesh) {
       this.scene.remove(this.atmosphereMesh);

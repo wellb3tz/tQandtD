@@ -83,6 +83,109 @@ describe('WorldChunkController', () => {
     expect(onChunksChanged).not.toHaveBeenCalled();
   });
 
+  it('removes lingering untracked terrain objects when clearing', () => {
+    const onChunksChanged = vi.fn();
+    const context = createContext({ onChunksChanged });
+    const terrain = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial());
+    terrain.name = 'terrain-99,99';
+    context.scene.add(terrain);
+
+    context.controller.clearChunks();
+
+    expect(context.scene.getObjectByName('terrain-99,99')).toBeUndefined();
+    expect(onChunksChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards async chunk builds that finish after chunks were cleared', async () => {
+    let resolveBuild!: (changed: boolean) => void;
+    const addChunkToSceneFn = vi.fn(() => new Promise<boolean>(resolve => {
+      resolveBuild = resolve;
+    }));
+    const removeChunkFromSceneFn = vi.fn(() => true);
+    const onChunksChanged = vi.fn();
+    const context = createContext({ addChunkToSceneFn, removeChunkFromSceneFn, onChunksChanged });
+
+    context.controller.addChunk(7, 8, createChunkData());
+    const updatePromise = context.controller.update();
+    await Promise.resolve();
+
+    context.controller.clearChunks();
+    resolveBuild(true);
+    await updatePromise;
+
+    expect(removeChunkFromSceneFn).toHaveBeenCalledWith(expect.objectContaining({
+      chunkX: 7,
+      chunkY: 8,
+      keepFogOfWar: false,
+    }));
+    expect(onChunksChanged).not.toHaveBeenCalled();
+  });
+
+  it('cancels a queued chunk build when that chunk is removed before processing', async () => {
+    const addChunkToSceneFn = vi.fn(() => true);
+    const removeChunkFromSceneFn = vi.fn(() => false);
+    const onChunksChanged = vi.fn();
+    const context = createContext({ addChunkToSceneFn, removeChunkFromSceneFn, onChunksChanged });
+
+    context.controller.addChunk(4, 5, createChunkData());
+    context.controller.removeChunk(4, 5);
+    await context.controller.update();
+
+    expect(addChunkToSceneFn).not.toHaveBeenCalled();
+    expect(removeChunkFromSceneFn).toHaveBeenCalledWith(expect.objectContaining({
+      chunkX: 4,
+      chunkY: 5,
+    }));
+    expect(onChunksChanged).not.toHaveBeenCalled();
+  });
+
+  it('removes an async chunk build that finishes after that chunk was unloaded', async () => {
+    let resolveBuild!: (changed: boolean) => void;
+    const addChunkToSceneFn = vi.fn(() => new Promise<boolean>(resolve => {
+      resolveBuild = resolve;
+    }));
+    const removeChunkFromSceneFn = vi
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const onChunksChanged = vi.fn();
+    const context = createContext({ addChunkToSceneFn, removeChunkFromSceneFn, onChunksChanged });
+
+    context.controller.addChunk(7, 8, createChunkData());
+    const updatePromise = context.controller.update();
+    await Promise.resolve();
+
+    context.controller.removeChunk(7, 8);
+    resolveBuild(true);
+    await updatePromise;
+
+    expect(removeChunkFromSceneFn).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      chunkX: 7,
+      chunkY: 8,
+      keepFogOfWar: false,
+    }));
+    expect(onChunksChanged).not.toHaveBeenCalled();
+  });
+
+  it('keeps chunk build updates serialized when the render loop ticks again during a build', async () => {
+    let resolveBuild!: (changed: boolean) => void;
+    const addChunkToSceneFn = vi.fn(() => new Promise<boolean>(resolve => {
+      resolveBuild = resolve;
+    }));
+    const context = createContext({ addChunkToSceneFn });
+
+    context.controller.addChunk(1, 1, createChunkData());
+    const firstUpdate = context.controller.update();
+    await Promise.resolve();
+    const secondUpdate = context.controller.update();
+
+    expect(addChunkToSceneFn).toHaveBeenCalledTimes(1);
+
+    resolveBuild(true);
+    await firstUpdate;
+    await secondUpdate;
+  });
+
   it('updates water meshes before replacing an existing chunk', async () => {
     const addChunkToSceneFn = vi.fn(() => true);
     const removeChunkFromSceneFn = vi.fn(() => true);

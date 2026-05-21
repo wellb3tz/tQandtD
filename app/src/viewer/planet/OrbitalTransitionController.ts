@@ -250,6 +250,8 @@ export class OrbitalTransitionController {
     camera.position.set(x, y, z);
     camera.lookAt(0, 0, 0);
 
+    this.hideLateChunksInOrbit();
+
     // Update atmosphere fresnel
     this.planetRenderer.updateAtmosphere(camera);
   }
@@ -336,6 +338,9 @@ export class OrbitalTransitionController {
       if (c.structures) {
         (c.structures as THREE.Object3D).visible = opacity > 0.01;
       }
+      if (c.boundaries) {
+        (c.boundaries as THREE.Object3D).visible = opacity > 0.01;
+      }
     }
 
     // Also hide water, fog of war, etc during orbit
@@ -359,8 +364,35 @@ export class OrbitalTransitionController {
       if (c.structures) {
         (c.structures as THREE.Object3D).scale.setScalar(scale);
       }
+      if (c.boundaries) {
+        (c.boundaries as THREE.Object3D).scale.setScalar(scale);
+      }
       if (c.water && c.water.group) {
         c.water.group.scale.setScalar(scale);
+      }
+    }
+  }
+
+  private hideLateChunksInOrbit(): void {
+    for (const chunk of this.getChunkMeshes()) {
+      const c = chunk as any;
+      if (chunk.terrain.visible) {
+        chunk.terrain.visible = false;
+      }
+      if (c.foliage?.visible) {
+        (c.foliage as THREE.Object3D).visible = false;
+      }
+      if (c.resources?.visible) {
+        (c.resources as THREE.Object3D).visible = false;
+      }
+      if (c.structures?.visible) {
+        (c.structures as THREE.Object3D).visible = false;
+      }
+      if (c.boundaries?.visible) {
+        (c.boundaries as THREE.Object3D).visible = false;
+      }
+      if (c.water?.group?.visible) {
+        (c.water.group as THREE.Object3D).visible = false;
       }
     }
   }

@@ -75,7 +75,7 @@ export class WorldRenderLoop {
         });
       }
 
-      if (!isOrbital) {
+      if (!isOrbital && !isTransitioning) {
         this.cameraInputController.updateMovement();
         this.cameraInputController.updateFirstPersonPhysics();
         this.cameraViewController.updateFollowTerrainMode();
@@ -85,12 +85,12 @@ export class WorldRenderLoop {
       const elapsedSeconds = now / 1000;
       const waterConfig = this.getWaterConfig();
 
-      if (!isOrbital) {
+      if (!isOrbital && !isTransitioning) {
         this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
         this.waterLayerManager.updateRiverFlows(elapsedSeconds);
       }
 
-      if (this.enableFrustumCulling && !isOrbital && now - this.lastCullingCheck > this.cullingCheckInterval) {
+      if (this.enableFrustumCulling && !isOrbital && !isTransitioning && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();
         this.lastCullingCheck = now;
         if (waterConfig.performance.enableFrustumCulling) {

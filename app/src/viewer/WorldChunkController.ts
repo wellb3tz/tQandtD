@@ -38,11 +38,14 @@ export interface WorldChunkControllerOptions {
 }
 
 interface PendingBuild {
+  key: string;
   chunkX: number;
   chunkY: number;
   data: ChunkData;
   partial: boolean;
   stage?: number;
+  generation: number;
+  version: number;
 }
 
 export class WorldChunkController {
@@ -58,6 +61,10 @@ export class WorldChunkController {
   private readonly maxBuildTimeMs: number;
   private readonly immediateBuilds: boolean;
   private readonly pendingBuilds: PendingBuild[];
+  private readonly chunkBuildVersions = new Map<string, number>();
+  private updateInProgress: Promise<void> | null = null;
+  private updateRequested = false;
+  private buildGeneration = 0;
   private chunkSize: number | null = null;
   private cameraChunkX = 0;
   private cameraChunkY = 0;
@@ -78,16 +85,24 @@ export class WorldChunkController {
   }
 
   addChunk(chunkX: number, chunkY: number, data: ChunkData, partial = false, stage?: number): void {
+    const key = getChunkKey(chunkX, chunkY);
     if (this.chunkSize === null && data.size > 0) {
       this.chunkSize = data.size;
     }
+    this.cancelPendingBuildsForKey(key);
+    const version = this.bumpChunkBuildVersion(key);
+    const build = { key, chunkX, chunkY, data, partial, stage, generation: this.buildGeneration, version };
     if (this.immediateBuilds) {
-      this.processBuild({ chunkX, chunkY, data, partial, stage });
+      void this.processBuild(build).then(changed => {
+        if (changed) {
+          this.onChunksChanged();
+        }
+      });
       return;
     }
     // Queue the build instead of doing it synchronously to avoid frame drops
     // when multiple chunks arrive at once (e.g. fast camera movement).
-    this.pendingBuilds.push({ chunkX, chunkY, data, partial, stage });
+    this.pendingBuilds.push(build);
   }
 
   setCameraPosition(worldX: number, worldZ: number): void {
@@ -101,6 +116,27 @@ export class WorldChunkController {
    * Call this once per frame, ideally before rendering.
    */
   async update(): Promise<void> {
+    if (this.updateInProgress) {
+      this.updateRequested = true;
+      return this.updateInProgress;
+    }
+
+    this.updateInProgress = this.drainPendingBuilds();
+    try {
+      await this.updateInProgress;
+    } finally {
+      this.updateInProgress = null;
+    }
+  }
+
+  private async drainPendingBuilds(): Promise<void> {
+    do {
+      this.updateRequested = false;
+      await this.processPendingBuilds();
+    } while (this.updateRequested && this.pendingBuilds.length > 0);
+  }
+
+  private async processPendingBuilds(): Promise<void> {
     if (this.pendingBuilds.length === 0) {
       return;
     }
@@ -148,7 +184,11 @@ export class WorldChunkController {
   }
 
   private async processBuild(build: PendingBuild): Promise<boolean> {
-    return this.addChunkToSceneFn({
+    if (!this.isBuildCurrent(build)) {
+      return false;
+    }
+
+    const changed = await this.addChunkToSceneFn({
       chunkX: build.chunkX,
       chunkY: build.chunkY,
       data: build.data,
@@ -164,9 +204,28 @@ export class WorldChunkController {
       terrainTexturesEnabled: this.viewSettings.getTerrainTexturesEnabled(),
       wireframeMode: this.viewSettings.getWireframeMode(),
     });
+
+    if (!this.isBuildCurrent(build)) {
+      this.removeChunkFromSceneFn({
+        chunkX: build.chunkX,
+        chunkY: build.chunkY,
+        keepFogOfWar: false,
+        scene: this.scene,
+        chunkMeshes: this.chunkMeshes,
+        waterLayerManager: this.waterLayerManager,
+        fogOfWarManager: this.fogOfWarManager,
+      });
+      return false;
+    }
+
+    return changed;
   }
 
   removeChunk(chunkX: number, chunkY: number, keepFogOfWar = false): void {
+    const key = getChunkKey(chunkX, chunkY);
+    this.cancelPendingBuildsForKey(key);
+    this.bumpChunkBuildVersion(key);
+
     const removed = this.removeChunkFromSceneFn({
       chunkX,
       chunkY,
@@ -183,6 +242,8 @@ export class WorldChunkController {
   }
 
   clearChunks(): void {
+    this.buildGeneration++;
+    this.chunkBuildVersions.clear();
     const keys = Array.from(this.chunkMeshes.keys());
     let removedAny = false;
 
@@ -203,14 +264,16 @@ export class WorldChunkController {
     // Also clear pending builds so old backlog does not interfere after world switch
     this.pendingBuilds.length = 0;
 
-    // Safety: remove any lingering foliage/resources/structures that were left in the scene
+    // Safety: remove any lingering chunk objects that were left in the scene.
     const lingering: THREE.Object3D[] = [];
     this.scene.traverse((object) => {
       if (
         object.name &&
-        (object.name.startsWith('foliage-') ||
+        (object.name.startsWith('terrain-') ||
+          object.name.startsWith('foliage-') ||
           object.name.startsWith('resources-') ||
-          object.name.startsWith('structures-'))
+          object.name.startsWith('structures-') ||
+          object.name.startsWith('chunk-boundaries-'))
       ) {
         lingering.push(object);
       }
@@ -238,5 +301,29 @@ export class WorldChunkController {
 
     this.removeChunk(chunkX, chunkY);
     this.addChunk(chunkX, chunkY, data);
+  }
+
+  private bumpChunkBuildVersion(key: string): number {
+    const nextVersion = (this.chunkBuildVersions.get(key) ?? 0) + 1;
+    this.chunkBuildVersions.set(key, nextVersion);
+    return nextVersion;
+  }
+
+  private cancelPendingBuildsForKey(key: string): boolean {
+    let cancelled = false;
+    for (let i = this.pendingBuilds.length - 1; i >= 0; i--) {
+      if (this.pendingBuilds[i].key === key) {
+        this.pendingBuilds.splice(i, 1);
+        cancelled = true;
+      }
+    }
+    return cancelled;
+  }
+
+  private isBuildCurrent(build: PendingBuild): boolean {
+    return (
+      build.generation === this.buildGeneration &&
+      this.chunkBuildVersions.get(build.key) === build.version
+    );
   }
 }
