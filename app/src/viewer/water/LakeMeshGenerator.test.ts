@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData, type LakeData } from '@engine/index';
+import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData } from '@engine/index';
 import type { LakeTile } from './types';
 import { buildLakeGeometry } from './LakeMeshGenerator';
 
@@ -61,10 +61,10 @@ describe('LakeMeshGenerator contour mesh', () => {
     const lake = createLake([1 * chunk.size + 1]);
     const bounds = buildBounds(lake, chunk);
 
-    expect(bounds.minX).toBeLessThan(1);
-    expect(bounds.maxX).toBeGreaterThan(2);
+    expect(bounds.minX).toBeLessThan(1 * TERRAIN_TILE_SIZE_METERS);
+    expect(bounds.maxX).toBeGreaterThan(2 * TERRAIN_TILE_SIZE_METERS);
     expect(bounds.minX).toBeGreaterThan(0);
-    expect(bounds.maxX).toBeLessThan(3);
+    expect(bounds.maxX).toBeLessThan(3 * TERRAIN_TILE_SIZE_METERS);
   });
 
   it('generates shoreline polygons instead of only square tile quads', () => {

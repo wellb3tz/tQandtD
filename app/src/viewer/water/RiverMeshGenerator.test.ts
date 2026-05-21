@@ -4,6 +4,7 @@ import {
   getRiverChannelWidth,
   getRiverValleyWidth,
   getRiverWaterLevel,
+  TERRAIN_TILE_SIZE_METERS,
   type RiverData,
 } from '@engine/index';
 import { HEIGHT_SCALE } from './config';
@@ -77,7 +78,7 @@ describe('RiverMeshGenerator', () => {
     const renderedWidth = Math.abs(firstLeftZ - firstRightZ);
 
     expect(renderedWidth).toBeGreaterThan(0.5);
-    expect(renderedWidth).toBeLessThan(getRiverValleyWidth(points[0]));
+    expect(renderedWidth).toBeLessThan(getRiverValleyWidth(points[0]) * TERRAIN_TILE_SIZE_METERS);
   });
 
   it('places river water at the recessed channel water level', () => {
@@ -160,8 +161,8 @@ describe('RiverMeshGenerator', () => {
     );
 
     expect(positions.count).toBe(30);
-    expect(maxX).toBeLessThan(8);
-    expect(maxX).toBeGreaterThan(4);
+    expect(maxX).toBeLessThan(8 * TERRAIN_TILE_SIZE_METERS);
+    expect(maxX).toBeGreaterThan(4 * TERRAIN_TILE_SIZE_METERS);
     expect(minSurfaceY).toBeGreaterThanOrEqual(seaLevel * HEIGHT_SCALE);
   });
 

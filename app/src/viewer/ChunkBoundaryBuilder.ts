@@ -2,14 +2,17 @@ import * as THREE from 'three';
 import {
   buildChunkBoundaryLineData,
   TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   type ChunkData,
 } from '@engine/index';
 
 const TERRAIN_HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
+const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
 
 export function createChunkBoundaries(chunkX: number, chunkY: number, data: ChunkData): THREE.LineSegments {
   const boundaryData = buildChunkBoundaryLineData(chunkX, chunkY, data, {
     heightScale: TERRAIN_HEIGHT_SCALE,
+    horizontalScale: HORIZONTAL_SCALE,
   });
 
   const geometry = new THREE.BufferGeometry();

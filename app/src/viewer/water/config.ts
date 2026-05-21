@@ -6,7 +6,7 @@
  */
 
 import type { WaterConfig } from './types';
-import { TERRAIN_HEIGHT_SCALE_METERS } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '@engine/index';
 
 /**
  * Height scale factor used for terrain rendering
@@ -18,6 +18,7 @@ import { TERRAIN_HEIGHT_SCALE_METERS } from '@engine/index';
  * - Property-based tests
  */
 export const HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
+export const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
 
 /**
  * Default ocean configuration

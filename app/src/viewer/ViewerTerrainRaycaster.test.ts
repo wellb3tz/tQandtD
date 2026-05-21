@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '@engine/index';
 import { describe, expect, it, vi } from 'vitest';
 import { ViewerTerrainRaycaster } from './ViewerTerrainRaycaster';
 import type { ChunkMesh } from './ChunkMesh';
@@ -56,7 +57,8 @@ describe('ViewerTerrainRaycaster', () => {
       canvas,
       [terrain],
       32,
-      50
+      TERRAIN_HEIGHT_SCALE_METERS,
+      TERRAIN_TILE_SIZE_METERS
     );
   });
 
@@ -81,7 +83,8 @@ describe('ViewerTerrainRaycaster', () => {
       canvas,
       [expect.any(THREE.Mesh)],
       32,
-      50
+      TERRAIN_HEIGHT_SCALE_METERS,
+      TERRAIN_TILE_SIZE_METERS
     );
   });
 

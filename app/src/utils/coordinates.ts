@@ -11,7 +11,7 @@
  */
 
 import * as THREE from 'three';
-import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 
 /**
  * 3D vector for positions
@@ -114,6 +114,7 @@ export function screenToNDC(
  * @param terrainMeshes - Array of terrain meshes to raycast against
  * @param chunkSize - Size of chunks
  * @param heightScale - Height multiplier used in mesh generation (default: TERRAIN_HEIGHT_SCALE_METERS)
+ * @param horizontalScale - Rendered meters per terrain tile (default: TERRAIN_TILE_SIZE_METERS)
  * @returns RaycastHit if terrain was hit, null otherwise
  */
 export function raycastTerrain(
@@ -123,7 +124,8 @@ export function raycastTerrain(
   canvas: HTMLCanvasElement,
   terrainMeshes: THREE.Mesh[],
   chunkSize: number,
-  heightScale: number = TERRAIN_HEIGHT_SCALE_METERS
+  heightScale: number = TERRAIN_HEIGHT_SCALE_METERS,
+  horizontalScale: number = TERRAIN_TILE_SIZE_METERS
 ): RaycastHit | null {
   // Convert screen to NDC
   const ndc = screenToNDC(screenX, screenY, canvas);
@@ -144,14 +146,14 @@ export function raycastTerrain(
   const point = intersection.point;
   
   // Convert world position to chunk coordinates
-  const worldX = Math.floor(point.x);
-  const worldZ = Math.floor(point.z);
-  const chunkX = Math.floor(worldX / chunkSize);
-  const chunkY = Math.floor(worldZ / chunkSize);
+  const terrainX = Math.floor(point.x / horizontalScale);
+  const terrainZ = Math.floor(point.z / horizontalScale);
+  const chunkX = Math.floor(terrainX / chunkSize);
+  const chunkY = Math.floor(terrainZ / chunkSize);
   
   // Calculate local coordinates within chunk
-  const localX = ((worldX % chunkSize) + chunkSize) % chunkSize;
-  const localY = ((worldZ % chunkSize) + chunkSize) % chunkSize;
+  const localX = ((terrainX % chunkSize) + chunkSize) % chunkSize;
+  const localY = ((terrainZ % chunkSize) + chunkSize) % chunkSize;
   
   // Calculate height (unscale from mesh height)
   const height = point.y / heightScale;

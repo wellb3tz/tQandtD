@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import {
   addChunkToScene,
@@ -107,8 +107,9 @@ export class WorldChunkController {
 
   setCameraPosition(worldX: number, worldZ: number): void {
     if (this.chunkSize === null) return;
-    this.cameraChunkX = Math.floor(worldX / this.chunkSize);
-    this.cameraChunkY = Math.floor(worldZ / this.chunkSize);
+    const scaledChunkSize = this.chunkSize * TERRAIN_TILE_SIZE_METERS;
+    this.cameraChunkX = Math.floor(worldX / scaledChunkSize);
+    this.cameraChunkY = Math.floor(worldZ / scaledChunkSize);
   }
 
   /**

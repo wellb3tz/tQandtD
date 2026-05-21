@@ -82,6 +82,7 @@ export {
   FOLLOW_TERRAIN_HEIGHT_METERS,
   ORTHOGRAPHIC_FRUSTUM_SIZE_METERS,
   TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   WORLD_METERS_PER_UNIT,
 } from './config/world-units';
 export { BiomeSystem, type BiomeConfig } from './world/biome';

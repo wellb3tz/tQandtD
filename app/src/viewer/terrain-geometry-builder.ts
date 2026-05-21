@@ -40,6 +40,7 @@ export interface TerrainGeometryOptions {
   chunkX: number;
   chunkY: number;
   heightScale: number;
+  horizontalScale?: number;
   seaLevel: number;
   underwaterDarkenFactor: number;
   underwaterDesaturationFactor: number;
@@ -58,6 +59,7 @@ export function buildTerrainGeometryBuffers(
     chunkX,
     chunkY,
     heightScale,
+    horizontalScale = 1,
     seaLevel,
     underwaterDarkenFactor,
     underwaterDesaturationFactor,
@@ -68,6 +70,7 @@ export function buildTerrainGeometryBuffers(
 
   const terrainGrid = buildTerrainGridGeometryData(data, chunkX, chunkY, {
     heightScale,
+    horizontalScale,
   });
 
   const normalizedData = terrainGrid.chunkData;
@@ -143,6 +146,7 @@ export function buildTerrainGeometryBuffers(
     worldZBase,
     seaLevel,
     heightScale,
+    horizontalScale,
     climateSnowLine: options.climateSnowLine,
   }));
 
@@ -292,6 +296,7 @@ interface DetailModulationOptions {
   worldZBase: number;
   seaLevel: number;
   heightScale: number;
+  horizontalScale: number;
   climateSnowLine?: number;
 }
 
@@ -306,6 +311,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     worldZBase,
     seaLevel,
     heightScale,
+    horizontalScale,
     climateSnowLine: rawSnowLine,
   } = options;
   const snowLine = rawSnowLine ?? 0.76;
@@ -324,8 +330,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const vi = i * 3;
     const rawHeight = positions[vi + 1] / heightScale;
 
-    const bvX = Math.min(Math.round(positions[vi] - worldXBase), chunkSize - 1);
-    const bvY = Math.min(Math.round(positions[vi + 2] - worldZBase), chunkSize - 1);
+    const bvX = Math.min(Math.round((positions[vi] - worldXBase) / horizontalScale), chunkSize - 1);
+    const bvY = Math.min(Math.round((positions[vi + 2] - worldZBase) / horizontalScale), chunkSize - 1);
     const bmIdx = Math.max(0, bvY) * chunkSize + Math.max(0, bvX);
     const vertexBiome = data.biomeMap ? data.biomeMap[Math.min(bmIdx, data.biomeMap.length - 1)] : -1;
 

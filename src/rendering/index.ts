@@ -1,5 +1,6 @@
 export {
   TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   WORLD_METERS_PER_UNIT,
 } from '../config/world-units';
 export {

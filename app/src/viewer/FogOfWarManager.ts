@@ -23,8 +23,11 @@ export class FogOfWarManager {
     }
     avgHeight = positions.count > 0 ? avgHeight / positions.count : 0;
 
-    const chunkSize = Math.sqrt(positions.count) - 1;
-    const planeGeometry = new THREE.PlaneGeometry(chunkSize, chunkSize, 1, 1);
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    const chunkWidth = bounds ? bounds.max.x - bounds.min.x : Math.sqrt(positions.count) - 1;
+    const chunkDepth = bounds ? bounds.max.z - bounds.min.z : chunkWidth;
+    const planeGeometry = new THREE.PlaneGeometry(chunkWidth, chunkDepth, 1, 1);
     planeGeometry.rotateX(-Math.PI / 2);
 
     const material = new THREE.MeshBasicMaterial({
@@ -38,9 +41,9 @@ export class FogOfWarManager {
     const plane = new THREE.Mesh(planeGeometry, material);
     plane.visible = visible;
     plane.position.set(
-      chunkX * chunkSize + chunkSize / 2,
+      bounds ? (bounds.min.x + bounds.max.x) / 2 : chunkX * chunkWidth + chunkWidth / 2,
       avgHeight,
-      chunkY * chunkSize + chunkSize / 2,
+      bounds ? (bounds.min.z + bounds.max.z) / 2 : chunkY * chunkDepth + chunkDepth / 2,
     );
 
     scene.add(plane);

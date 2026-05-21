@@ -8,6 +8,7 @@
 // Import styles
 import './styles.css';
 
+import { TERRAIN_TILE_SIZE_METERS } from '@engine/index';
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
 import { WorldApp, AppEvent } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
@@ -233,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Run chunk loading asynchronously to avoid blocking rendering.
             setTimeout(() => {
-              const chunkSize = 32;
+              const chunkSize = 32 * TERRAIN_TILE_SIZE_METERS;
               const loadRadius = app!.getViewDistance();
               const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
               const cameraChunkY = Math.floor(cameraPos.z / chunkSize);

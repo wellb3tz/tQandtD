@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import type { WaterConfig } from './water/types';
 import { createTerrainMaterial } from './TerrainAppearance';
 import { getGeometryWorkerManager } from './GeometryWorkerManager';
 
 const HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
+const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
 
 export interface TerrainMeshBuilderOptions {
   chunkX: number;
@@ -36,6 +37,7 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
     chunkX,
     chunkY,
     heightScale: HEIGHT_SCALE,
+    horizontalScale: HORIZONTAL_SCALE,
     seaLevel: waterConfig.seaLevel,
     underwaterDarkenFactor: waterConfig.rendering.underwaterDarkenFactor,
     underwaterDesaturationFactor: waterConfig.rendering.underwaterDesaturationFactor,

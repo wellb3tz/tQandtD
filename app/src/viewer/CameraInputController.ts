@@ -12,6 +12,10 @@ const KEYBOARD_CODE_MAP: Record<string, string> = {
   ShiftRight: 'shift',
 };
 const FIRST_PERSON_EYE_HEIGHT = FIRST_PERSON_EYE_HEIGHT_METERS;
+const FREE_CAMERA_MOVE_SPEED = 1.6;
+const FIRST_PERSON_MOVE_SPEED = 0.18;
+const FREE_CAMERA_SPRINT_MULTIPLIER = 4;
+const FIRST_PERSON_SPRINT_MULTIPLIER = 3.5;
 
 export interface CameraInputControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -30,7 +34,6 @@ export class CameraInputController {
   private readonly getOrthographicCamera: () => THREE.OrthographicCamera | null;
   private readonly getChunkMeshes: (() => Iterable<ChunkMesh>) | undefined;
   private readonly keyboardState = new Map<string, boolean>();
-  private readonly keyboardMoveSpeed = 0.5;
   private readonly mouseSensitivity = 0.002;
   private useFreeCamera = true;
   private isPointerLocked = false;
@@ -101,9 +104,9 @@ export class CameraInputController {
   updateMovement(): void {
     if (!this.useFreeCamera) return;
 
-    let moveSpeed = this.firstPersonMode ? 0.05 : this.keyboardMoveSpeed;
+    let moveSpeed = this.firstPersonMode ? FIRST_PERSON_MOVE_SPEED : FREE_CAMERA_MOVE_SPEED;
     if (this.keyboardState.get('shift')) {
-      moveSpeed *= this.firstPersonMode ? 2.5 : 3;
+      moveSpeed *= this.firstPersonMode ? FIRST_PERSON_SPRINT_MULTIPLIER : FREE_CAMERA_SPRINT_MULTIPLIER;
     }
 
     const activeCamera = this.getActiveCamera();

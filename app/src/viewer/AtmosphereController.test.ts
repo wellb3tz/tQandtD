@@ -34,13 +34,13 @@ describe('AtmosphereController', () => {
     );
     expect(offset.length()).toBeCloseTo(SUN_DISTANCE);
 
-    // Default elevation = 30 deg => sun is lower, Y offset is moderate
-    expect(offset.y).toBeGreaterThan(80);
-    expect(offset.y).toBeLessThan(120);
+    // Default elevation = 30 deg => sun is lower, Y offset is half of the sun distance.
+    expect(offset.y).toBeGreaterThan(SUN_DISTANCE * 0.49);
+    expect(offset.y).toBeLessThan(SUN_DISTANCE * 0.51);
 
     // Default azimuth = 0 deg => sun is toward North (0 deg)
     expect(Math.abs(offset.x)).toBeLessThan(1);
-    expect(offset.z).toBeGreaterThan(150);
+    expect(offset.z).toBeGreaterThan(SUN_DISTANCE * 0.85);
 
     atmosphere.dispose();
   });

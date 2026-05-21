@@ -5,7 +5,7 @@ import {
   type RiverState,
 } from '@engine/index';
 import type { RiverRenderConfig } from './types';
-import { HEIGHT_SCALE } from './config';
+import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
@@ -26,6 +26,7 @@ export function buildRiverGeometry(
       chunkSize,
       {
         heightScale: HEIGHT_SCALE,
+        horizontalScale: HORIZONTAL_SCALE,
         surfaceOffset: WATER_SURFACE_OFFSET,
       },
       seaLevel,

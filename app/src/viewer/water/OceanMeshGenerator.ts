@@ -12,7 +12,7 @@ import {
   type ChunkData,
 } from '@engine/index';
 import type { WaterConfig, OceanTile } from './types';
-import { HEIGHT_SCALE } from './config';
+import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 
 export function identifyOceanTiles(
@@ -30,6 +30,7 @@ export function buildOceanGeometry(
   const geometry = createBufferGeometry(
     buildOceanGeometryData(oceanTiles, chunkData, config.seaLevel, {
       heightScale: HEIGHT_SCALE,
+      horizontalScale: HORIZONTAL_SCALE,
     })
   );
   if (!geometry) {
@@ -51,12 +52,12 @@ function createOceanDepthAttribute(
 ): Float32Array {
   const position = geometry.getAttribute('position');
   const depth = new Float32Array(position.count);
-  const baseX = chunkData.x * chunkData.size;
-  const baseZ = chunkData.y * chunkData.size;
+  const baseX = chunkData.x * chunkData.size * HORIZONTAL_SCALE;
+  const baseZ = chunkData.y * chunkData.size * HORIZONTAL_SCALE;
 
   for (let i = 0; i < position.count; i++) {
-    const localX = position.getX(i) - baseX;
-    const localZ = position.getZ(i) - baseZ;
+    const localX = (position.getX(i) - baseX) / HORIZONTAL_SCALE;
+    const localZ = (position.getZ(i) - baseZ) / HORIZONTAL_SCALE;
     const terrainHeight = sampleHeightmap(chunkData, localX, localZ);
     depth[i] = Math.max(0, config.seaLevel - terrainHeight) * HEIGHT_SCALE;
   }

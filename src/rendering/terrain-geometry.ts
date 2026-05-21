@@ -2,6 +2,7 @@ import type { ChunkData } from '../world/chunk';
 
 export interface TerrainGridGeometryOptions {
   heightScale: number;
+  horizontalScale?: number;
 }
 
 export interface TerrainGridGeometryData {
@@ -44,9 +45,12 @@ export function buildTerrainGridGeometryData(
   const indices = new Uint32Array(indexCount);
   const worldXBase = chunkX * chunkSize;
   const worldZBase = chunkY * chunkSize;
+  const horizontalScale = options.horizontalScale ?? 1;
+  const scaledWorldXBase = worldXBase * horizontalScale;
+  const scaledWorldZBase = worldZBase * horizontalScale;
 
   for (let y = 0; y <= chunkSize; y++) {
-    const worldZ = worldZBase + y;
+    const worldZ = scaledWorldZBase + y * horizontalScale;
     const rowOffset = y * verticesPerSide;
 
     for (let x = 0; x <= chunkSize; x++) {
@@ -54,13 +58,13 @@ export function buildTerrainGridGeometryData(
       const vertexIndex = index * 3;
       const uvIndex = index * 2;
       const height = normalizedHeightmap[index] ?? 0;
-      const worldX = worldXBase + x;
+      const worldX = scaledWorldXBase + x * horizontalScale;
 
       positions[vertexIndex] = worldX;
       positions[vertexIndex + 1] = height * options.heightScale;
       positions[vertexIndex + 2] = worldZ;
-      uvs[uvIndex] = worldX / chunkSize;
-      uvs[uvIndex + 1] = worldZ / chunkSize;
+      uvs[uvIndex] = (worldXBase + x) / chunkSize;
+      uvs[uvIndex + 1] = (worldZBase + y) / chunkSize;
     }
   }
 
@@ -88,8 +92,8 @@ export function buildTerrainGridGeometryData(
     chunkSize,
     verticesPerSide,
     vertexCount,
-    worldXBase,
-    worldZBase,
+    worldXBase: scaledWorldXBase,
+    worldZBase: scaledWorldZBase,
     expectedHeightmapSize,
     originalHeightmapSize,
     heightmapSizeMismatch,

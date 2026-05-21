@@ -50,6 +50,7 @@ export interface WaterSurfaceTile {
 
 export interface WaterGeometryOptions {
   heightScale: number;
+  horizontalScale?: number;
   surfaceOffset?: number;
 }
 
@@ -135,6 +136,7 @@ export function buildOceanGeometryData(
   }
 
   const { size } = chunkData;
+  const horizontalScale = options.horizontalScale ?? 1;
   const surfaceOffset = options.surfaceOffset ?? DEFAULT_WATER_SURFACE_OFFSET;
   const data = createIndexedGeometryData();
   let vertexCount = 0;
@@ -150,8 +152,8 @@ export function buildOceanGeometryData(
 
     const baseIndex = vertexCount;
     for (const point of polygon) {
-      const worldX = chunkData.x * size + point.x;
-      const worldZ = chunkData.y * size + point.z;
+      const worldX = (chunkData.x * size + point.x) * horizontalScale;
+      const worldZ = (chunkData.y * size + point.z) * horizontalScale;
       const depth = Math.max(0, seaLevel - point.terrainHeight);
       const [r, g, b] = depthColor(depth, seaLevel);
 
@@ -181,6 +183,7 @@ export function buildLakeGeometryData(
   }
 
   const { size } = chunkData;
+  const horizontalScale = options.horizontalScale ?? 1;
   const surfaceOffset = options.surfaceOffset ?? DEFAULT_WATER_SURFACE_OFFSET;
   const data = createIndexedGeometryData();
   let vertexCount = 0;
@@ -203,8 +206,8 @@ export function buildLakeGeometryData(
 
       const baseIndex = vertexCount;
       for (const point of polygon) {
-        const worldX = chunkData.x * size + point.x;
-        const worldZ = chunkData.y * size + point.z;
+        const worldX = (chunkData.x * size + point.x) * horizontalScale;
+        const worldZ = (chunkData.y * size + point.z) * horizontalScale;
         const depth = Math.max(0, waterY - point.terrainHeight);
         const [r, g, b] = lakeDepthColor(depth, maxDepth);
 
@@ -233,6 +236,7 @@ export function buildRiverGeometryData(
   seaLevel = -Infinity,
 ): IndexedGeometryData | null {
   const surfaceOffset = options.surfaceOffset ?? DEFAULT_RIVER_SURFACE_OFFSET;
+  const horizontalScale = options.horizontalScale ?? 1;
   const data = createIndexedGeometryData();
   let vertexCount = 0;
 
@@ -254,8 +258,8 @@ export function buildRiverGeometryData(
         const normalY = tangent.x;
         const halfWidth = getRiverWaterSurfaceHalfWidth(point, surfaceOffset, options.heightScale)
           * getRiverMouthTaper(river, samples[i].distance, totalRunDistance);
-        const worldX = chunkX * chunkSize + point.x;
-        const worldZ = chunkY * chunkSize + point.y;
+        const worldX = (chunkX * chunkSize + point.x) * horizontalScale;
+        const worldZ = (chunkY * chunkSize + point.y) * horizontalScale;
         const baseY = getRiverWaterLevel(point) * options.heightScale + surfaceOffset;
         const v = samples[i].distance * RIVER_UV_DISTANCE_SCALE;
 
@@ -263,8 +267,8 @@ export function buildRiverGeometryData(
           const lateral = RIVER_CROSS_SECTION_OFFSETS[column];
           const edgeAmount = Math.abs(lateral);
           const [r, g, b] = riverSurfaceColor(river, point, edgeAmount);
-          const x = worldX + normalX * halfWidth * lateral;
-          const z = worldZ + normalY * halfWidth * lateral;
+          const x = worldX + normalX * halfWidth * horizontalScale * lateral;
+          const z = worldZ + normalY * halfWidth * horizontalScale * lateral;
           // Flat water surface - no edge lift so the mesh sits flush with the channel bed
           const y = baseY;
 

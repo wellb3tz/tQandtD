@@ -12,7 +12,7 @@ import {
   type LakeData,
 } from '@engine/index';
 import type { LakeTile, LakeRenderConfig } from './types';
-import { HEIGHT_SCALE } from './config';
+import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 
 export function identifyLakeTiles(
@@ -30,6 +30,7 @@ export function buildLakeGeometry(
   return createBufferGeometry(
     buildLakeGeometryData(lakeTiles, lakes, chunkData, {
       heightScale: HEIGHT_SCALE,
+      horizontalScale: HORIZONTAL_SCALE,
     })
   );
 }

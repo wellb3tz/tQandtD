@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '@engine/index';
+import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import { DEFAULT_WATER_CONFIG } from './config';
 import { buildOceanGeometry, identifyOceanTiles } from './OceanMeshGenerator';
 
@@ -57,8 +57,8 @@ describe('OceanMeshGenerator contour mesh', () => {
     expect(box.min.x).toBe(0);
     expect(box.min.z).toBe(0);
     expect(box.max.x).toBeGreaterThan(0);
-    expect(box.max.x).toBeLessThan(1);
+    expect(box.max.x).toBeLessThan(1 * TERRAIN_TILE_SIZE_METERS);
     expect(box.max.z).toBeGreaterThan(0);
-    expect(box.max.z).toBeLessThan(1);
+    expect(box.max.z).toBeLessThan(1 * TERRAIN_TILE_SIZE_METERS);
   });
 });

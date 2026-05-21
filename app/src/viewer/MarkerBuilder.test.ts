@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ResourceType, StructureType, type ChunkData } from '@engine/index';
+import { ResourceType, StructureType, TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import {
   createResourceMarkers,
   createStructureMarkers,
@@ -35,9 +35,9 @@ describe('MarkerBuilder', () => {
     const color = new THREE.Color();
     mesh.getColorAt(0, color);
 
-    expect(position.x).toBe(5);
-    expect(position.z).toBe(7);
-    expect(position.y).toBeCloseTo(0.7 * 50 + 1);
+    expect(position.x).toBe(5 * TERRAIN_TILE_SIZE_METERS);
+    expect(position.z).toBe(7 * TERRAIN_TILE_SIZE_METERS);
+    expect(position.y).toBeCloseTo(0.7 * TERRAIN_HEIGHT_SCALE_METERS + 1);
     expect(color.getHex()).toBe(0xffd700);
   });
 
@@ -55,7 +55,7 @@ describe('MarkerBuilder', () => {
     mesh.getColorAt(0, color);
 
     expect(mesh.geometry).toBeInstanceOf(THREE.BoxGeometry);
-    expect(position.y).toBeCloseTo(0.7 * 50 + 2.5);
+    expect(position.y).toBeCloseTo(0.7 * TERRAIN_HEIGHT_SCALE_METERS + 2.5);
     expect(color.getHex()).toBe(0xdaa520);
   });
 });

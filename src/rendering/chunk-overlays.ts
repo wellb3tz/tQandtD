@@ -27,6 +27,7 @@ export interface StructureMarkerPlacementData extends MarkerPlacementData {
 
 export interface ChunkOverlayOptions {
   heightScale: number;
+  horizontalScale?: number;
 }
 
 export function buildChunkBoundaryLineData(
@@ -36,9 +37,11 @@ export function buildChunkBoundaryLineData(
   options: ChunkOverlayOptions,
 ): ChunkBoundaryLineData {
   const chunkSize = data.size;
+  const horizontalScale = options.horizontalScale ?? 1;
   const verticesPerSide = chunkSize + 1;
-  const worldX = chunkX * chunkSize;
-  const worldZ = chunkY * chunkSize;
+  const worldX = chunkX * chunkSize * horizontalScale;
+  const worldZ = chunkY * chunkSize * horizontalScale;
+  const scaledChunkSize = chunkSize * horizontalScale;
   const topLeft = data.heightmap[0] ?? 0;
   const topRight = data.heightmap[chunkSize] ?? topLeft;
   const bottomLeft = data.heightmap[chunkSize * verticesPerSide] ?? topLeft;
@@ -46,9 +49,9 @@ export function buildChunkBoundaryLineData(
   return {
     positions: [
       worldX, topLeft * options.heightScale, worldZ,
-      worldX + chunkSize, topRight * options.heightScale, worldZ,
+      worldX + scaledChunkSize, topRight * options.heightScale, worldZ,
       worldX, topLeft * options.heightScale, worldZ,
-      worldX, bottomLeft * options.heightScale, worldZ + chunkSize,
+      worldX, bottomLeft * options.heightScale, worldZ + scaledChunkSize,
     ],
   };
 }
@@ -63,8 +66,9 @@ export function buildResourceMarkerPlacements(
   if (resources.length === 0) return [];
 
   return resources.map(resource => {
-    const worldX = chunkX * data.size + resource.x;
-    const worldZ = chunkY * data.size + resource.y;
+    const horizontalScale = options.horizontalScale ?? 1;
+    const worldX = (chunkX * data.size + resource.x) * horizontalScale;
+    const worldZ = (chunkY * data.size + resource.y) * horizontalScale;
     const height = getMarkerTerrainHeight(data, resource.x, resource.y);
 
     return {
@@ -86,8 +90,9 @@ export function buildStructureMarkerPlacements(
   if (structures.length === 0) return [];
 
   return structures.map(structure => {
-    const worldX = chunkX * data.size + structure.x;
-    const worldZ = chunkY * data.size + structure.y;
+    const horizontalScale = options.horizontalScale ?? 1;
+    const worldX = (chunkX * data.size + structure.x) * horizontalScale;
+    const worldZ = (chunkY * data.size + structure.y) * horizontalScale;
     const height = getMarkerTerrainHeight(data, structure.x, structure.y);
     const typeNum = toNumericType(structure.type);
     const geometry = getStructureMarkerGeometry(typeNum);

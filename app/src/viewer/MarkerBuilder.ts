@@ -5,11 +5,13 @@ import {
   getResourceMarkerColor,
   getStructureMarkerColor,
   TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   type ChunkData,
   type StructureMarkerPlacementData,
 } from '@engine/index';
 
 const TERRAIN_HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
+const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
 const RESOURCE_SPHERE_RADIUS = 0.5;
 const RESOURCE_SPHERE_DETAIL = 8;
 
@@ -17,6 +19,7 @@ export function createResourceMarkers(chunkX: number, chunkY: number, data: Chun
   const group = new THREE.Group();
   const placements = buildResourceMarkerPlacements(chunkX, chunkY, data, {
     heightScale: TERRAIN_HEIGHT_SCALE,
+    horizontalScale: HORIZONTAL_SCALE,
   });
 
   if (placements.length === 0) {
@@ -54,6 +57,7 @@ export function createStructureMarkers(chunkX: number, chunkY: number, data: Chu
   const group = new THREE.Group();
   const placements = buildStructureMarkerPlacements(chunkX, chunkY, data, {
     heightScale: TERRAIN_HEIGHT_SCALE,
+    horizontalScale: HORIZONTAL_SCALE,
   });
 
   if (placements.length === 0) {

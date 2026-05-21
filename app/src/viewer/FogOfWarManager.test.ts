@@ -13,9 +13,9 @@ describe('FogOfWarManager', () => {
     const plane = scene.children[0] as THREE.Mesh;
     expect(manager.size).toBe(1);
     expect(plane).toBeInstanceOf(THREE.Mesh);
-    expect(plane.position.x).toBe(2.5);
+    expect(plane.position.x).toBe(0.5);
     expect(plane.position.y).toBe(3);
-    expect(plane.position.z).toBe(3.5);
+    expect(plane.position.z).toBe(0.5);
     expect((plane.material as THREE.MeshBasicMaterial).opacity).toBeCloseTo(0.3);
   });
 

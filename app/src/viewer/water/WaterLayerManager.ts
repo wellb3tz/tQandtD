@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
@@ -306,7 +306,7 @@ export class WaterLayerManager {
       return;
     }
 
-    const shared = this.getSharedWaterBoundary(chunkAX, chunkAY, dx, dz, chunkSize);
+    const shared = this.getSharedWaterBoundary(chunkAX, chunkAY, dx, dz, chunkSize * TERRAIN_TILE_SIZE_METERS);
     if (!shared) {
       return;
     }

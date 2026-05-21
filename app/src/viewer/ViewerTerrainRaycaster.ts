@@ -3,7 +3,7 @@ import {
   raycastTerrain as defaultRaycastTerrain,
   type RaycastHit,
 } from '../utils/coordinates';
-import { TERRAIN_HEIGHT_SCALE_METERS } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '@engine/index';
 import type { ChunkMesh } from './ChunkMesh';
 
 export type TerrainRaycastFunction = (
@@ -13,7 +13,8 @@ export type TerrainRaycastFunction = (
   canvas: HTMLCanvasElement,
   terrainMeshes: THREE.Mesh[],
   chunkSize: number,
-  heightScale: number
+  heightScale: number,
+  horizontalScale?: number
 ) => RaycastHit | null;
 
 export interface ViewerTerrainRaycasterOptions {
@@ -25,6 +26,7 @@ export interface ViewerTerrainRaycasterOptions {
   getContainer: () => HTMLElement | null;
   chunkSize?: number;
   heightScale?: number;
+  horizontalScale?: number;
   raycastTerrain?: TerrainRaycastFunction;
 }
 
@@ -35,6 +37,7 @@ export class ViewerTerrainRaycaster {
   private readonly getContainer: () => HTMLElement | null;
   private readonly chunkSize: number;
   private readonly heightScale: number;
+  private readonly horizontalScale: number;
   private readonly raycastTerrain: TerrainRaycastFunction;
 
   constructor(options: ViewerTerrainRaycasterOptions) {
@@ -44,6 +47,7 @@ export class ViewerTerrainRaycaster {
     this.getContainer = options.getContainer;
     this.chunkSize = options.chunkSize ?? 32;
     this.heightScale = options.heightScale ?? TERRAIN_HEIGHT_SCALE_METERS;
+    this.horizontalScale = options.horizontalScale ?? TERRAIN_TILE_SIZE_METERS;
     this.raycastTerrain = options.raycastTerrain ?? defaultRaycastTerrain;
   }
 
@@ -64,7 +68,8 @@ export class ViewerTerrainRaycaster {
       this.canvas,
       terrainMeshes,
       this.chunkSize,
-      this.heightScale
+      this.heightScale,
+      this.horizontalScale
     );
   }
 

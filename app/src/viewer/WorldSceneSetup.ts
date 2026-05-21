@@ -5,6 +5,9 @@ import {
   SUN_DISTANCE,
 } from './AtmosphereController';
 
+const SUN_SHADOW_HALF_EXTENT = 768;
+const SUN_SHADOW_CAMERA_FAR = 1800;
+
 export interface WorldSceneObjects {
   ambientLight: THREE.AmbientLight;
   directionalLight: THREE.DirectionalLight;
@@ -53,12 +56,15 @@ function createSunLight(): THREE.DirectionalLight {
   );
 
   light.castShadow = true;
-  light.shadow.camera.left = -200;
-  light.shadow.camera.right = 200;
-  light.shadow.camera.top = 200;
-  light.shadow.camera.bottom = -200;
-  light.shadow.mapSize.width = 2048;
-  light.shadow.mapSize.height = 2048;
+  light.shadow.camera.left = -SUN_SHADOW_HALF_EXTENT;
+  light.shadow.camera.right = SUN_SHADOW_HALF_EXTENT;
+  light.shadow.camera.top = SUN_SHADOW_HALF_EXTENT;
+  light.shadow.camera.bottom = -SUN_SHADOW_HALF_EXTENT;
+  light.shadow.camera.near = 1;
+  light.shadow.camera.far = SUN_SHADOW_CAMERA_FAR;
+  light.shadow.mapSize.width = 4096;
+  light.shadow.mapSize.height = 4096;
   light.shadow.bias = -0.0005;
+  light.shadow.normalBias = 0.035;
   return light;
 }

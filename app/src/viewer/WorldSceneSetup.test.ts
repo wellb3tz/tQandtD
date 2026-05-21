@@ -28,6 +28,10 @@ describe('WorldSceneSetup', () => {
     expect(objects.directionalLight.color.getHex()).toBe(0xffe2b8);
     expect(objects.directionalLight.position.y).toBeGreaterThan(0);
     expect(objects.directionalLight.castShadow).toBe(true);
+    expect(objects.directionalLight.shadow.camera.left).toBeLessThanOrEqual(-768);
+    expect(objects.directionalLight.shadow.camera.right).toBeGreaterThanOrEqual(768);
+    expect(objects.directionalLight.shadow.camera.far).toBeGreaterThanOrEqual(1800);
+    expect(objects.directionalLight.shadow.mapSize.width).toBe(4096);
   });
 });
 

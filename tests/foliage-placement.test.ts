@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
   TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   createSparseBiomeWeights,
   planFoliagePlacements,
 } from '../src';
@@ -126,13 +127,23 @@ describe('foliage placement planner', () => {
     expect(plan?.treePlacements.length).toBeGreaterThan(0);
 
     for (const placement of plan!.treePlacements) {
-      const expectedSurface = sampleTerrainSurface(heightmap, size, placement.x, placement.z) * HEIGHT_SCALE;
+      const expectedSurface = sampleTerrainSurface(
+        heightmap,
+        size,
+        placement.x / TERRAIN_TILE_SIZE_METERS,
+        placement.z / TERRAIN_TILE_SIZE_METERS,
+      ) * HEIGHT_SCALE;
       const actualBase = placement.y + TREE_AND_PROP_PROTOTYPE_MIN_Y * placement.height;
       expect(actualBase).toBeCloseTo(expectedSurface, 5);
     }
 
     for (const placement of plan!.terrainPropPlacements) {
-      const expectedSurface = sampleTerrainSurface(heightmap, size, placement.x, placement.z) * HEIGHT_SCALE;
+      const expectedSurface = sampleTerrainSurface(
+        heightmap,
+        size,
+        placement.x / TERRAIN_TILE_SIZE_METERS,
+        placement.z / TERRAIN_TILE_SIZE_METERS,
+      ) * HEIGHT_SCALE;
       const actualBase = placement.y + TREE_AND_PROP_PROTOTYPE_MIN_Y * placement.height;
       expect(actualBase).toBeCloseTo(expectedSurface, 5);
     }

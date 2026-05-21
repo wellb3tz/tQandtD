@@ -245,6 +245,23 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('does not enter orbital transition automatically from high camera altitude', () => {
+    vi.spyOn(PlanetRenderer.prototype, 'initialize').mockImplementation(() => undefined);
+
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', { value: 800 });
+    Object.defineProperty(container, 'clientHeight', { value: 600 });
+    document.body.appendChild(container);
+
+    const viewer = new WorldViewer();
+    viewer.getCamera().position.y = 1000;
+    viewer.initialize(container);
+
+    expect(viewer.isOrbitalOrTransitioning()).toBe(false);
+
+    viewer.dispose();
+  });
+
   it('uses a softened cinematic lighting profile for readable forest shadows', () => {
     const viewer = new WorldViewer();
     const ambientLight = getSceneAmbientLight(viewer);

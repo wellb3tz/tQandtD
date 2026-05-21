@@ -21,6 +21,7 @@ export interface TerrainDetailModulationOptions {
   worldZBase: number;
   seaLevel: number;
   heightScale: number;
+  horizontalScale?: number;
 }
 
 export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
@@ -196,6 +197,7 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     worldZBase,
     seaLevel,
     heightScale,
+    horizontalScale = 1,
   } = options;
   const normals = geometry.getAttribute('normal') as THREE.BufferAttribute;
   const colorAttr = geometry.getAttribute('color') as THREE.BufferAttribute;
@@ -208,8 +210,8 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const vi = i * 3;
     const rawHeight = vertices[vi + 1] / heightScale;
 
-    const bvX = Math.min(Math.round(vertices[vi] - worldXBase), chunkSize - 1);
-    const bvY = Math.min(Math.round(vertices[vi + 2] - worldZBase), chunkSize - 1);
+    const bvX = Math.min(Math.round((vertices[vi] - worldXBase) / horizontalScale), chunkSize - 1);
+    const bvY = Math.min(Math.round((vertices[vi + 2] - worldZBase) / horizontalScale), chunkSize - 1);
     const bmIdx = Math.max(0, bvY) * chunkSize + Math.max(0, bvX);
 
     const slopeFactor = Math.max(0, 1.0 - ny * ny);

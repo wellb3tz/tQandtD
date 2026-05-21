@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DEFAULT_CAMERA_POSITION_METERS, FOLLOW_TERRAIN_HEIGHT_METERS } from '@engine/index';
 import { describe, expect, it } from 'vitest';
 import { CameraViewController } from './CameraViewController';
 import type { ChunkMesh } from './ChunkMesh';
@@ -26,7 +27,7 @@ describe('CameraViewController', () => {
     controller.resetCamera();
 
     expect(controller.isOrthographic()).toBe(false);
-    expect(controller.getCameraPosition()).toEqual({ x: 50, y: 100, z: 50 });
+    expect(controller.getCameraPosition()).toEqual(DEFAULT_CAMERA_POSITION_METERS);
     expect(controller.getCameraTarget()).toEqual({ x: 0, y: 0, z: 0 });
   });
 
@@ -40,7 +41,7 @@ describe('CameraViewController', () => {
 
     controller.updateFollowTerrainMode();
 
-    expect(camera.position.y).toBeCloseTo(52);
+    expect(camera.position.y).toBeCloseTo(50 + (20 + FOLLOW_TERRAIN_HEIGHT_METERS - 50) * 0.1);
   });
 });
 

@@ -28,7 +28,6 @@ export interface OrbitalTransitionControllerOptions {
   canvas: HTMLCanvasElement;
 }
 
-const ORBIT_AUTO_THRESHOLD = 380;
 const TRANSITION_DURATION = 1200;
 const PLANET_RADIUS = 150;
 const ORBIT_CAMERA_DISTANCE = 600;
@@ -99,14 +98,6 @@ export class OrbitalTransitionController {
    * Call every frame from the render loop.
    */
   update(deltaTime: number): void {
-    const camera = this.cameraViewController.getActiveCamera() as THREE.PerspectiveCamera;
-    const pos = camera.position;
-
-    // Auto-trigger orbit when camera is high enough
-    if (this.state === OrbitalState.TERRAIN && pos.y > ORBIT_AUTO_THRESHOLD) {
-      this.startTransitionToOrbit();
-    }
-
     switch (this.state) {
       case OrbitalState.TRANSITION_TO_ORBIT:
         this.updateTransitionToOrbit();

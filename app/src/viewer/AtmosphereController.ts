@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 
 export const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
-export const SUN_DISTANCE = 200;
+export const SUN_DISTANCE = 900;
 
 export interface SkyParams {
   turbidity: number;

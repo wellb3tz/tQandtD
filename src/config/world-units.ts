@@ -6,14 +6,15 @@
  * meters with TERRAIN_HEIGHT_SCALE_METERS.
  */
 export const WORLD_METERS_PER_UNIT = 1;
-export const TERRAIN_HEIGHT_SCALE_METERS = 50;
+export const TERRAIN_TILE_SIZE_METERS = 4;
+export const TERRAIN_HEIGHT_SCALE_METERS = 240;
 
 export const DEFAULT_CAMERA_POSITION_METERS = {
-  x: 50,
-  y: 100,
-  z: 50,
+  x: 400,
+  y: 300,
+  z: 400,
 } as const;
 
-export const FOLLOW_TERRAIN_HEIGHT_METERS = 50;
-export const ORTHOGRAPHIC_FRUSTUM_SIZE_METERS = 100;
+export const FOLLOW_TERRAIN_HEIGHT_METERS = 120;
+export const ORTHOGRAPHIC_FRUSTUM_SIZE_METERS = 260;
 export const FIRST_PERSON_EYE_HEIGHT_METERS = 1.7;

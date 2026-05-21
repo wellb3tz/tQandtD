@@ -1,6 +1,6 @@
 import { BiomeType, type ChunkData, getBiomeWeightForTile } from '../world/chunk';
 import { getRiverChannelWidth, type RiverPoint } from '../gen/rivers';
-import { TERRAIN_HEIGHT_SCALE_METERS } from '../config/world-units';
+import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '../config/world-units';
 
 const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
 const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
@@ -74,6 +74,7 @@ export function planFoliagePlacements(
   const worldXBase = chunkX * chunkSize;
   const worldZBase = chunkY * chunkSize;
   const heightScale = TERRAIN_HEIGHT_SCALE_METERS;
+  const horizontalScale = TERRAIN_TILE_SIZE_METERS;
   const treePlacements: TreePlacement[] = [];
   const shrubPlacements: FoliagePlacement[] = [];
   const terrainPropPlacements: TerrainPropPlacement[] = [];
@@ -134,9 +135,9 @@ export function planFoliagePlacements(
         const stumpHeight = 0.30 * propScale * PROP_HEIGHT_METERS_SCALE;
         const stumpRadius = 0.25 * propScale * PROP_HEIGHT_METERS_SCALE;
         terrainPropPlacements.push({
-          x: placementX,
+          x: placementX * horizontalScale,
           y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * stumpHeight,
-          z: placementZ,
+          z: placementZ * horizontalScale,
           radius: stumpRadius,
           height: stumpHeight,
           rotation: deterministic01(worldTileX, worldTileZ, 197) * Math.PI * 2,
@@ -155,9 +156,9 @@ export function planFoliagePlacements(
         const treeHeight = profile.height * scaleJitter * Math.max(0.68, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
         const treeRadius = profile.radius * scaleJitter * Math.max(0.72, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
         treePlacements.push({
-          x: placementX,
+          x: placementX * horizontalScale,
           y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * treeHeight,
-          z: placementZ,
+          z: placementZ * horizontalScale,
           radius: treeRadius,
           height: treeHeight,
           rotation: deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,

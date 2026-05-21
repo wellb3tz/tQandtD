@@ -27,6 +27,22 @@ describe('CameraInputController', () => {
     controller.detach();
   });
 
+  it('uses a faster camera stride for the expanded meter-scale world', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const controller = createController(camera, container);
+    controller.resetRotation();
+    controller.attach();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    controller.updateMovement();
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+
+    expect(Math.abs(camera.position.z)).toBeGreaterThan(1);
+    controller.detach();
+  });
+
   it('rotates with mouse drag when pointer lock is unavailable', () => {
     const camera = new THREE.PerspectiveCamera();
     const container = document.createElement('div');
