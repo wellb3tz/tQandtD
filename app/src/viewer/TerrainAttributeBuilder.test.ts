@@ -40,6 +40,22 @@ describe('TerrainAttributeBuilder', () => {
     expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
   });
 
+  it('uses muted seabed texture weights for underwater ocean tiles', () => {
+    const data = {
+      size: 1,
+      heightmap: new Float32Array([0.22, 0.22, 0.22, 0.22]),
+      biomeMap: new Uint8Array([BiomeType.OCEAN]),
+      resources: [],
+      structures: [],
+    } as unknown as ChunkData;
+
+    const weights = calculateVertexSurfaceWeights(data, 0, 0);
+
+    expect(weights.riverbed).toBe(1);
+    expect(weights.beach).toBe(0);
+    expect(weights.plains).toBe(0);
+  });
+
   it('keeps dry riverbeds visible without treating them as wet water channels', () => {
     const data = createRiverChunk({
       rivers: [{

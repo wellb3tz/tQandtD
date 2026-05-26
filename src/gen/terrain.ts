@@ -283,9 +283,9 @@ export class TerrainGenerator {
         // Ocean bathymetry
         const shelfT = Math.min(s / 0.5, 1.0);
         const shelfSmooth = shelfT * shelfT * (3.0 - 2.0 * shelfT);
-        const nearShoreFade = 1.0 - Math.max(0, Math.min(1, (shelfT - 0.82) / 0.18));
+        const nearShoreFade = 1.0 - Math.max(0, Math.min(1, (shelfT - 0.76) / 0.24));
         const detailAmplitude = 0.12 * (0.35 + (1.0 - shelfSmooth) * 0.65) * nearShoreFade;
-        const seabedRise = Math.min(seaLevel - 0.001, smooth * seaLevel * 1.98);
+        const seabedRise = Math.min(seaLevel - 0.001, smooth * seaLevel * 1.96);
         height = Math.max(0, Math.min(seaLevel - 0.001, seabedRise + (height - 0.5) * detailAmplitude));
       } else {
         // Land

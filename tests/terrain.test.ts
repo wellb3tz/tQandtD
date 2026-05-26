@@ -119,6 +119,40 @@ describe('Terrain', () => {
 
       expect(getMaxAdjacentHeightDelta(heightmap, chunkSize)).toBeLessThanOrEqual(0.18);
     });
+
+    it('keeps continental ocean shelves sloped instead of clamped near sea level', () => {
+      const seaLevel = 0.3;
+      const config = createDefaultWorldConfig({
+        seed: 12345,
+        chunkSize: 32,
+      });
+      const gen = new TerrainGenerator(config.terrainConfig);
+      const nearShoreOceanHeights: number[] = [];
+
+      for (let chunkY = -3; chunkY <= 3; chunkY++) {
+        for (let chunkX = -3; chunkX <= 3; chunkX++) {
+          const heightmap = gen.generateHeightmap(config.seed, config.chunkSize, chunkX, chunkY);
+          for (const height of heightmap) {
+            if (height >= seaLevel - 0.04 && height < seaLevel) {
+              nearShoreOceanHeights.push(height);
+            }
+          }
+        }
+      }
+
+      expect(nearShoreOceanHeights.length).toBeGreaterThan(20);
+
+      const clampedShelfHeight = seaLevel - 0.001;
+      const nearlyFlatShelfVertices = nearShoreOceanHeights.filter(
+        height => Math.abs(height - clampedShelfHeight) < 0.00001,
+      );
+      const distinctHeightBuckets = new Set(
+        nearShoreOceanHeights.map(height => Math.round(height * 10000)),
+      );
+
+      expect(nearlyFlatShelfVertices.length / nearShoreOceanHeights.length).toBeLessThan(0.2);
+      expect(distinctHeightBuckets.size).toBeGreaterThan(12);
+    });
   });
 });
 

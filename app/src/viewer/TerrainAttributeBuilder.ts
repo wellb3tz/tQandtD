@@ -54,7 +54,9 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const tileTemperature = data.temperatureMap && tileIndex < data.temperatureMap.length
       ? data.temperatureMap[tileIndex]
       : 0;
-    const surfaceKey = getRiverbedDarkening(data, sample.x, sample.y) < 0.82
+    const surfaceKey = biome === BiomeType.OCEAN && elevation < 0.3
+      ? 'riverbed'
+      : getRiverbedDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
       : selectTerrainSurfaceKey(biome, elevation, slope, moisture, tileTemperature);
     weights[surfaceKey] += 1;

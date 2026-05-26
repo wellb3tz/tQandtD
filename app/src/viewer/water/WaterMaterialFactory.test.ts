@@ -49,6 +49,7 @@ describe('WaterMaterialFactory', () => {
     expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);
+    expect(material.depthWrite).toBe(false);
   });
 
   it('injects configurable ocean wave displacement into the shader', () => {
@@ -64,7 +65,7 @@ describe('WaterMaterialFactory', () => {
     const shader = {
       uniforms: {},
       vertexShader: '#include <common>\nvoid main() {\n#include <begin_vertex>\n}',
-      fragmentShader: '',
+      fragmentShader: '#include <common>\nvoid main() {\nvec4 diffuseColor = vec4(1.0);\n#include <color_fragment>\n}',
     } as THREE.Shader;
 
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
@@ -73,6 +74,10 @@ describe('WaterMaterialFactory', () => {
     expect(shader.uniforms).toHaveProperty('uOceanWaveTime');
     expect(shader.uniforms).toHaveProperty('uOceanWaveShoreFadeStart');
     expect(shader.vertexShader).toContain('attribute float waterDepth');
+    expect(shader.vertexShader).toContain('varying float vOceanWaterDepth');
+    expect(shader.vertexShader).toContain('vOceanWaterDepth = waterDepth');
+    expect(shader.fragmentShader).toContain('smoothstep(1.5, 14.0, vOceanWaterDepth)');
+    expect(shader.fragmentShader).toContain('diffuseColor.a = max(diffuseColor.a');
     expect(shader.vertexShader).toContain('smoothstep(uOceanWaveShoreFadeStart');
     expect(shader.vertexShader).toContain('oceanWaveSafeTrough');
     expect(shader.vertexShader).toContain('transformed.y +=');

@@ -9,6 +9,8 @@ import type { BiomeColor } from '../materials';
 import { BiomeType } from '@engine/index';
 import { BIOME_COLORS } from '../materials';
 
+const OCEAN_FLOOR_COLOR: BiomeColor = { r: 0.09, g: 0.18, b: 0.16 };
+
 /**
  * Configuration for underwater color adjustments
  */
@@ -240,8 +242,8 @@ export function adjustUnderwaterColors(
         baseColor.g /= totalWeight;
         baseColor.b /= totalWeight;
       } else {
-        // Fallback to beach color if only ocean biome present
-        baseColor = BIOME_COLORS[BiomeType.BEACH];
+        // Pure ocean tiles should read as dark seabed, not bright sand speckles through water.
+        baseColor = OCEAN_FLOOR_COLOR;
       }
       
       // Apply underwater adjustments

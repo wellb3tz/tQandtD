@@ -14,7 +14,7 @@ export const WATER_NORMAL_SCALE = {
   x: 0.11,
   y: 0.16,
 } as const;
-export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v1';
+export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v3';
 
 interface OceanWaveUniforms {
   uOceanWaveTime: { value: number };
@@ -63,6 +63,7 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
+    depthWrite: false,
     opacity: config.opacity,
     shininess: config.shininess,
     side: THREE.DoubleSide,
@@ -87,6 +88,7 @@ uniform float uOceanWaveSpeed;
 uniform float uOceanWaveShoreFadeStart;
 uniform float uOceanWaveShoreFadeEnd;
 attribute float waterDepth;
+varying float vOceanWaterDepth;
 
 float oceanWaveHash(vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
@@ -108,6 +110,7 @@ float oceanWaveNoise(vec2 p) {
     shader.vertexShader = shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
+vOceanWaterDepth = waterDepth;
 float oceanWaveTime = uOceanWaveTime * uOceanWaveSpeed;
 vec2 oceanWavePosition = position.xz;
 float oceanWavePatch = oceanWaveNoise(oceanWavePosition * 0.055 + oceanWaveTime * 0.025);
@@ -121,6 +124,18 @@ float oceanWaveShoreFade = smoothstep(uOceanWaveShoreFadeStart, uOceanWaveShoreF
 float oceanWaveOffset = oceanWaveBlend * (0.72 + oceanWavePatch * 0.28) * uOceanWaveHeight * oceanWaveShoreFade;
 float oceanWaveSafeTrough = max(waterDepth - 0.12, 0.0);
 transformed.y += max(oceanWaveOffset, -oceanWaveSafeTrough);`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+varying float vOceanWaterDepth;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+float oceanDepthOpacity = smoothstep(1.5, 14.0, vOceanWaterDepth);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.11, 0.15), oceanDepthOpacity * 0.62);
+diffuseColor.a = max(diffuseColor.a, mix(0.76, 0.97, oceanDepthOpacity));`
     );
   };
   material.customProgramCacheKey = () => OCEAN_WAVE_SHADER_KEY;
