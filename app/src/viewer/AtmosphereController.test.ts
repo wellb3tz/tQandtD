@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { AtmosphereController, SUN_DISTANCE, TERRAIN_FOG_COLOR, TERRAIN_FOG_DENSITY } from './AtmosphereController';
+import { AtmosphereController, SUN_DISTANCE } from './AtmosphereController';
 
 describe('AtmosphereController', () => {
   it('starts with Sky background, updates sun focus, and cleans up on dispose', () => {
@@ -18,9 +18,7 @@ describe('AtmosphereController', () => {
     const defaultBackground = scene.background as THREE.Color;
     expect(defaultBackground).toBeInstanceOf(THREE.Color);
     expect(defaultBackground.getHex()).toBe(0x050810);
-    expect(scene.fog).toBeInstanceOf(THREE.FogExp2);
-    expect((scene.fog as THREE.FogExp2).color.getHex()).toBe(TERRAIN_FOG_COLOR);
-    expect((scene.fog as THREE.FogExp2).density).toBe(TERRAIN_FOG_DENSITY);
+    expect(scene.fog).toBeNull();
 
     camera.position.set(320, 80, -240);
     atmosphere.updateSunAndShadowFocus(camera);
