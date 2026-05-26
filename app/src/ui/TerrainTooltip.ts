@@ -4,7 +4,7 @@
  */
 
 import { WorldApp } from '../core/WorldApp';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
 import { calculateVertexSurfaceWeights, type TerrainSurfaceWeights } from '../viewer/TerrainAttributeBuilder';
 import type { TerrainSurfaceKey } from '../viewer/terrain-geometry-types';
@@ -25,6 +25,10 @@ const SURFACE_DISPLAY_NAMES: Record<TerrainSurfaceKey, string> = {
   ice: 'Ice',
   riverbed: 'Riverbed',
 };
+
+function formatMeters(value: number, fractionDigits: number): string {
+  return `${value.toFixed(fractionDigits)} m`;
+}
 
 /**
  * Check whether a tile index falls inside any lake in the chunk.
@@ -176,16 +180,16 @@ export class TerrainTooltip {
       : getBiomeCssColor(chunk.biomeMap[tileIndex]);
     const surfaceSummary = formatSurfaceSummary(calculateVertexSurfaceWeights(chunk, hit.localX, hit.localY));
 
-    const height = hit.height.toFixed(2);
-    const wx     = hit.point.x.toFixed(1);
-    const wy     = hit.point.z.toFixed(1);
+    const height = formatMeters(hit.height * TERRAIN_HEIGHT_SCALE_METERS, 2);
+    const wx     = formatMeters(hit.point.x, 1);
+    const wy     = formatMeters(hit.point.z, 1);
 
     const extraRow = lakeLevel !== null && chunk
       ? (() => {
           const terrainH = chunk.heightmap[hit.localY * (chunk.size + 1) + hit.localX];
           const depth = Math.max(0, lakeLevel - terrainH);
-          return `<span>Water level</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${lakeLevel.toFixed(2)}</span>
-                  <span>Depth</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${depth.toFixed(2)}</span>`;
+          return `<span>Water level</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${formatMeters(lakeLevel * TERRAIN_HEIGHT_SCALE_METERS, 2)}</span>
+                  <span>Depth</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${formatMeters(depth * TERRAIN_HEIGHT_SCALE_METERS, 2)}</span>`;
         })()
       : '';
 
