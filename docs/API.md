@@ -189,7 +189,7 @@ interface TerrainConfig {
   octaves: number;            // Noise octaves (1-16, default: 4)
   persistence: number;        // Amplitude decay (0-1, default: 0.5)
   lacunarity: number;         // Frequency multiplier (1-4, default: 2.0)
-  warpStrength: number;       // Domain warping (0-100, default: 1)
+  warpStrength: number;       // Domain warping (0-100, default: 0.2)
   heightMultiplier: number;   // Height scaling (0.1-10, default: 2.0)
   enable3D?: boolean;         // Enable volumetric noise (default: false)
   zScale?: number;            // Z-axis scale for 3D (default: 0.5)

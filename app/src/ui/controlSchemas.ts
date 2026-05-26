@@ -20,7 +20,7 @@ export const TERRAIN_SLIDERS: SliderConfig[] = [
   { id: 'octaves', label: 'Octaves', min: 1, max: 8, step: 1, defaultValue: 4, tooltip: 'Number of noise layers for detail' },
   { id: 'persistence', label: 'Persistence', min: 0.1, max: 0.9, step: 0.1, defaultValue: 0.5, tooltip: 'How much each octave contributes' },
   { id: 'lacunarity', label: 'Lacunarity', min: 1.5, max: 3.0, step: 0.1, defaultValue: 2.0, tooltip: 'Frequency multiplier between octaves' },
-  { id: 'warpStrength', label: 'Warp Strength', min: 0, max: 100, step: 1, defaultValue: 1, tooltip: 'Domain warping intensity' },
+  { id: 'warpStrength', label: 'Warp Strength', min: 0, max: 100, step: 0.1, defaultValue: 0.2, tooltip: 'Domain warping intensity' },
   { id: 'heightMultiplier', label: 'Height Multiplier', min: 0.5, max: 5.0, step: 0.1, defaultValue: 2.0, tooltip: 'Overall terrain height scaling' },
 ];
 

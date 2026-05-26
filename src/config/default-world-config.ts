@@ -177,7 +177,7 @@ function createBaseWorldConfig(): WorldConfig {
       octaves: 4,
       persistence: 0.5,
       lacunarity: 2.0,
-      warpStrength: 1,
+      warpStrength: 0.2,
       heightMultiplier: 2.0,
       enable3D: false,
       zScale: 0.5,
