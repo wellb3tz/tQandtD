@@ -173,7 +173,7 @@ export class WaterLayerManager {
       for (const group of visibleRiverGroups) {
         if (group.rivers.length === 0) continue;
 
-        const riverGeometry = buildRiverGeometry(group.rivers, chunkData.x, chunkData.y, chunkData.size, config.seaLevel);
+        const riverGeometry = buildRiverGeometry(group.rivers, chunkData, config.seaLevel);
         if (riverGeometry) {
           const riverMaterial = createRiverMaterialForState(config.river, group.state);
           const riverMesh = new THREE.Mesh(riverGeometry, riverMaterial);
