@@ -139,6 +139,16 @@ export const WATER_VIEW_CONTROLS = {
   },
 } as const;
 
+export const RIVER_SPLINE_RESOLUTION_SLIDER: SliderConfig = {
+  id: 'riverSplineResolution',
+  label: 'River Spline Density',
+  min: 0,
+  max: 4,
+  step: 0.25,
+  defaultValue: 0,
+  tooltip: 'Catmull-Rom spline subdivisions per world unit. 0 = straight segments, 1–2 = smooth curves, 4 = very dense (reduces stair-step carving). Rivers are traced at ~1 unit steps so values below 1 have little effect.',
+};
+
 export const SKY_VIEW_CONTROLS = {
   turbidity: {
     id: 'skyTurbidity',

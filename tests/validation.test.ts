@@ -238,6 +238,7 @@ describe('Configuration Validation', () => {
         baseWidth: 1.6,
         baseDepth: 0.035,
         carveBankWidth: 2.5,
+        splineResolution: 0,
       };
 
       expect(() => validateWorldConfig(config)).toThrow(ValidationError);
@@ -261,6 +262,7 @@ describe('Configuration Validation', () => {
         baseWidth: 1.6,
         baseDepth: 0.035,
         carveBankWidth: 2.5,
+        splineResolution: 0,
       };
 
       expect(() => validateWorldConfig(config)).not.toThrow();

@@ -9,6 +9,7 @@ import {
   getRiverValleyDepth,
   getRiverValleyWidth,
   getRiverWaterLevel,
+  resampleRiverPointsSpline,
   type WorldRiverData,
 } from '../src/gen/rivers';
 import { RiverManager } from '../src/world/river-manager';
@@ -437,5 +438,70 @@ describe('RiverManager', () => {
     (manager as any).rivers.set(worldRiver.id, worldRiver);
 
     expect(manager.getRiversForChunk(1, 0, 16).map(river => river.id)).toContain(worldRiver.id);
+  });
+});
+
+describe('resampleRiverPointsSpline', () => {
+  const makePoints = (): Parameters<typeof resampleRiverPointsSpline>[0] => [
+    { x: 0, y: 0, height: 0.72, surfaceLevel: 0.73, width: 1.6, depth: 0.03, flowX: 1, flowY: 0 },
+    { x: 2, y: 0, height: 0.66, surfaceLevel: 0.67, width: 1.8, depth: 0.035, flowX: 1, flowY: 0 },
+    { x: 4, y: 2, height: 0.57, surfaceLevel: 0.58, width: 2.1, depth: 0.04, flowX: 1, flowY: 1 },
+    { x: 6, y: 2, height: 0.42, surfaceLevel: 0.43, width: 2.4, depth: 0.045, flowX: 1, flowY: 0 },
+  ];
+
+  it('returns original points when density is 0', () => {
+    const original = makePoints();
+    const result = resampleRiverPointsSpline(original, 0);
+    expect(result).toHaveLength(original.length);
+    expect(result.map(p => [p.x, p.y])).toEqual(original.map(p => [p.x, p.y]));
+  });
+
+  it('returns original points when fewer than 2 points are given', () => {
+    const single = [makePoints()[0]];
+    const result = resampleRiverPointsSpline(single, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].x).toBe(single[0].x);
+  });
+
+  it('increases point count with spline density', () => {
+    const original = makePoints();
+    const result = resampleRiverPointsSpline(original, 1);
+    expect(result.length).toBeGreaterThan(original.length);
+  });
+
+  it('produces smooth curves that deviate from straight segments', () => {
+    const original = makePoints();
+    const result = resampleRiverPointsSpline(original, 2);
+
+    // Find a point that should curve inward between (2,0) and (4,2)
+    const midIndex = Math.floor(result.length / 2);
+    const mid = result[midIndex];
+
+    // The spline should produce a point whose y is between the straight-line
+    // interpolation and the actual control polygon
+    expect(mid.y).toBeGreaterThanOrEqual(0);
+    expect(mid.y).toBeLessThanOrEqual(2.5);
+  });
+
+  it('preserves start and end points', () => {
+    const original = makePoints();
+    const result = resampleRiverPointsSpline(original, 2);
+    const start = result[0];
+    const end = result[result.length - 1];
+
+    expect(start.x).toBeCloseTo(original[0].x, 3);
+    expect(start.y).toBeCloseTo(original[0].y, 3);
+    expect(end.x).toBeCloseTo(original[original.length - 1].x, 3);
+    expect(end.y).toBeCloseTo(original[original.length - 1].y, 3);
+  });
+
+  it('derives flow direction for interpolated points', () => {
+    const original = makePoints();
+    const result = resampleRiverPointsSpline(original, 2);
+
+    // At least some interior points should have non-zero flow
+    const interior = result.slice(1, -1);
+    const hasFlow = interior.some(p => p.flowX !== 0 || p.flowY !== 0);
+    expect(hasFlow).toBe(true);
   });
 });

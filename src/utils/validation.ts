@@ -205,6 +205,7 @@ export function validateRiverConfig(config: RiverConfig): void {
   validatePositive('riverConfig.baseDepth', config.baseDepth);
   validatePositive('riverConfig.carveBankWidth', config.carveBankWidth);
   validateNonNegative('riverConfig.maxUphillBudget', config.maxUphillBudget);
+  validateNonNegative('riverConfig.splineResolution', config.splineResolution);
 
   if (config.minRiverLength >= config.maxLength) {
     throw new ValidationError(

@@ -21,6 +21,7 @@ import {
   VIEW_DISTANCE_SLIDER,
   VISIBILITY_TOGGLES,
   WATER_VIEW_CONTROLS,
+  RIVER_SPLINE_RESOLUTION_SLIDER,
   type CheckboxConfig,
   type SliderConfig,
 } from './controlSchemas';
@@ -407,6 +408,11 @@ export class ControlPanel {
       this.updateRiverConfig('enabled', checked);
     });
     riversSection.appendChild(enableRiversCheckbox);
+
+    const splineResolutionControl = this.createSliderControl(RIVER_SPLINE_RESOLUTION_SLIDER, (value) => {
+      this.updateRiverConfig('splineResolution', value);
+    });
+    riversSection.appendChild(splineResolutionControl);
 
     const viewSection = document.createElement('div');
     viewSection.style.marginTop = '24px';

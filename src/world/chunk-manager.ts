@@ -11,6 +11,7 @@ import {
   getRiverChannelWidth,
   getRiverValleyDepth,
   getRiverValleyWidth,
+  resampleRiverPointsSpline,
   type RiverConfig,
   type RiverData,
   type RiverPoint,
@@ -1622,7 +1623,9 @@ export class ChunkManager implements ChunkManagerSnapshot {
       isTributary: boolean,
       points: RiverPoint[]
     ): void => {
-      const smoothed = createSmoothedRiverPoints(points);
+      const splineResolution = this.config.riverConfig?.splineResolution ?? DEFAULT_RIVER_CONFIG.splineResolution;
+      const densified = splineResolution > 0 ? resampleRiverPointsSpline(points, splineResolution) : points;
+      const smoothed = createSmoothedRiverPoints(densified);
       const selectedRuns: RiverPoint[][] = [];
       let currentRun: RiverPoint[] | null = null;
 
