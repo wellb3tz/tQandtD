@@ -25,6 +25,7 @@ export {
 export {
   RIVER_TRENCH_DARKEN_STRENGTH,
   calculateFrozenRiverInfluence,
+  calculateRiverBankInfluence,
   calculateRiverbedInfluence,
   calculateRiverTrenchInfluence,
   getRiverbedDarkening,

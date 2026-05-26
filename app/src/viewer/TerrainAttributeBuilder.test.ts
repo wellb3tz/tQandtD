@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '@engine/index';
+import { BiomeType, calculateRiverBankInfluence, type ChunkData } from '@engine/index';
 import {
   applyTerrainDetailAndColorModulation,
   calculateVertexSurfaceWeights,
@@ -38,6 +38,31 @@ describe('TerrainAttributeBuilder', () => {
 
     expect(getRiverTrenchDarkening(data, 0, 0)).toBeLessThan(1);
     expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
+  });
+
+  it('paints damp riverbank surfaces outside the channel', () => {
+    const data = createRiverChunk({
+      size: 4,
+      heightmap: new Float32Array(25).fill(0.48),
+      biomeMap: new Uint8Array(16).fill(BiomeType.PLAINS),
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        points: [
+          { x: 0, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+          { x: 4, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 4, minY: 1, maxY: 1 },
+      }],
+    });
+
+    const weights = calculateVertexSurfaceWeights(data, 2, 3);
+
+    expect(getRiverTrenchDarkening(data, 2, 3)).toBe(1);
+    expect(calculateRiverBankInfluence(data, 2, 3)).toBeGreaterThan(0);
+    expect(weights.swampMud + weights.beach + weights.forestFloor).toBeGreaterThan(0);
+    expect(weights.riverbed).toBe(0);
   });
 
   it('uses muted seabed texture weights for underwater ocean tiles', () => {
@@ -142,6 +167,49 @@ describe('TerrainAttributeBuilder', () => {
     expect(detailBlend[1 * 4 + 1]).toBeGreaterThan(0);
     expect(detailBlend[0 * 4 + 2]).toBeGreaterThan(0);
     expect(detailBlend[0 * 4 + 3]).toBeGreaterThan(0);
+  });
+
+  it('extends wet detail masks onto riverbanks without marking them as riverbed', () => {
+    const data = createRiverChunk({
+      size: 4,
+      heightmap: new Float32Array(25).fill(0.48),
+      biomeMap: new Uint8Array(16).fill(BiomeType.PLAINS),
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        points: [
+          { x: 0, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+          { x: 4, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 4, minY: 1, maxY: 1 },
+      }],
+    });
+    const geometry = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+      2, 24, 2,
+      3, 24, 2,
+      2, 24, 3,
+      3, 24, 3,
+    ]);
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(12).fill(0.5), 3));
+    geometry.setIndex([0, 2, 1, 1, 2, 3]);
+    geometry.computeVertexNormals();
+
+    const detailBlend = applyTerrainDetailAndColorModulation({
+      geometry,
+      vertices,
+      data,
+      chunkSize: 4,
+      worldXBase: 0,
+      worldZBase: 0,
+      seaLevel: 0.3,
+      heightScale: 50,
+    });
+
+    expect(detailBlend[2]).toBeGreaterThan(0);
+    expect(detailBlend[3]).toBe(0);
   });
 
   it('uses climate snow line and local temperature in the legacy detail helper', () => {

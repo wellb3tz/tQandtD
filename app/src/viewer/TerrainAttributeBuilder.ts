@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   BiomeType,
   RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateRiverBankInfluence,
   getRiverbedDarkening,
   getRiverTrenchDarkening,
   type ChunkData,
@@ -50,15 +51,17 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
     const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
     const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
-    const moisture = calculateTerrainMoisture(data, sample.x, sample.y, biome, elevation, slope, lakeTiles);
+    const riverBankInfluence = calculateRiverBankInfluence(data, sample.x, sample.y);
+    const moisture = calculateTerrainMoisture(data, sample.x, sample.y, biome, elevation, slope, lakeTiles, riverBankInfluence);
     const tileTemperature = data.temperatureMap && tileIndex < data.temperatureMap.length
       ? data.temperatureMap[tileIndex]
       : 0;
+    const riverBankSurfaceKey = selectRiverBankSurfaceKey(biome, elevation, riverBankInfluence);
     const surfaceKey = biome === BiomeType.OCEAN && elevation < 0.3
       ? 'riverbed'
       : getRiverbedDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
-      : selectTerrainSurfaceKey(biome, elevation, slope, moisture, tileTemperature);
+      : riverBankSurfaceKey ?? selectTerrainSurfaceKey(biome, elevation, slope, moisture, tileTemperature);
     weights[surfaceKey] += 1;
     sampleCount++;
   }
@@ -82,6 +85,7 @@ function calculateTerrainMoisture(
   elevation: number,
   slope: number,
   lakeTiles: Set<number>,
+  riverBankInfluence = 0,
 ): number {
   const riverInfluence = clamp01(
     (1 - getRiverTrenchDarkening(data, vertexX, vertexY)) / RIVER_TRENCH_DARKEN_STRENGTH
@@ -93,11 +97,35 @@ function calculateTerrainMoisture(
 
   return clamp01(
     (riverInfluence * 0.42 +
+      riverBankInfluence * 0.24 +
       lakeInfluence * 0.30 +
       lowlandInfluence * 0.18 +
       biomeBias * 0.10) *
       (0.58 + slopeRetention * 0.42)
   );
+}
+
+function selectRiverBankSurfaceKey(
+  biome: BiomeType,
+  elevation: number,
+  riverBankInfluence: number,
+): TerrainSurfaceKey | null {
+  if (riverBankInfluence < 0.38 || elevation < 0.28) {
+    return null;
+  }
+
+  if (riverBankInfluence > 0.74) {
+    if (biome === BiomeType.DESERT || biome === BiomeType.BEACH || biome === BiomeType.SAVANNA) {
+      return 'beach';
+    }
+    return 'swampMud';
+  }
+
+  if (biome === BiomeType.FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST || biome === BiomeType.SWAMP) {
+    return 'forestFloor';
+  }
+
+  return elevation < 0.56 ? 'beach' : 'plains';
 }
 
 function calculateLakeWetness(
@@ -236,10 +264,11 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const riverWetness = clamp01(
       (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
     );
+    const riverBankWetness = calculateRiverBankInfluence(data, bvX, bvY);
     const riverbedInfluence = clamp01(
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
     );
-    const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
+    const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
     const tileTemperature = data.temperatureMap && bmIdx < data.temperatureMap.length
       ? data.temperatureMap[bmIdx]
       : 0;

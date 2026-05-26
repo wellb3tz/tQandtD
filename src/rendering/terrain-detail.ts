@@ -14,6 +14,36 @@ export function calculateRiverbedInfluence(data: ChunkData, x: number, y: number
   return calculateRiverInfluence(data, x, y, () => true);
 }
 
+export function calculateRiverBankInfluence(data: ChunkData, x: number, y: number): number {
+  const rivers = data.rivers ?? [];
+  if (rivers.length === 0) return 0;
+
+  let strongest = 0;
+  for (const river of rivers) {
+    if (river.state === 'dry') continue;
+    const points = river.points;
+    if (points.length < 2) continue;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const sample = closestRiverRenderSample(x, y, points[i], points[i + 1]);
+      const channelRadius = Math.max(getRiverChannelWidth(sample) * 0.5, 0);
+      const valleyRadius = Number.isFinite(sample.valleyWidth)
+        ? Math.max(sample.valleyWidth as number * 0.5, 0)
+        : 0;
+      const bankOuterRadius = Math.max(channelRadius + 2.35, valleyRadius, sample.width * 0.5 + 1.45);
+      if (channelRadius <= 0 || bankOuterRadius <= channelRadius || sample.distance <= channelRadius || sample.distance > bankOuterRadius) {
+        continue;
+      }
+
+      const t = (sample.distance - channelRadius) / (bankOuterRadius - channelRadius);
+      const fade = 1 - smoothstep(0, 1, t);
+      strongest = Math.max(strongest, fade * fade);
+    }
+  }
+
+  return strongest;
+}
+
 function calculateRiverInfluence(
   data: ChunkData,
   x: number,
@@ -81,6 +111,11 @@ export function getRiverbedDarkening(
   strength = RIVER_TRENCH_DARKEN_STRENGTH,
 ): number {
   return 1 - calculateRiverbedInfluence(data, x, y) * strength;
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function closestRiverRenderSample(

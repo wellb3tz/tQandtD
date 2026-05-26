@@ -1,5 +1,6 @@
 import {
   BiomeType,
+  calculateRiverBankInfluence,
   getRiverbedDarkening,
   getRiverTrenchDarkening,
   calculateFrozenRiverInfluence,
@@ -360,11 +361,12 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const riverWetness = clamp01(
       (1 - getRiverTrenchDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
+    const riverBankWetness = calculateRiverBankInfluence(data, bvX, bvY);
     const riverbedInfluence = clamp01(
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
     const frozenBand = clamp01(calculateFrozenRiverInfluence(data, bvX, bvY));
-    const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75));
+    const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
 
     // Local temperature suppresses snow on hot mountain peaks.
     // At or below 0 (neutral/cold) snow is full; above 0.5 (hot desert climate) snow vanishes.
@@ -424,6 +426,16 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       r = Math.min(1.0, r * wetShade * (1.0 - wetBand * 0.03));
       g = Math.min(1.0, g * wetShade * wetSaturation);
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
+    }
+
+    if (riverBankWetness > 0) {
+      const silt = isBeach || vertexBiome === BiomeType.DESERT || vertexBiome === BiomeType.SAVANNA
+        ? { r: 0.68, g: 0.57, b: 0.34 }
+        : { r: 0.30, g: 0.39, b: 0.25 };
+      const bankTint = riverBankWetness * 0.34;
+      r = blend(r, silt.r, bankTint);
+      g = blend(g, silt.g, bankTint);
+      b = blend(b, silt.b, bankTint);
     }
 
     if (frozenBand > 0) {
