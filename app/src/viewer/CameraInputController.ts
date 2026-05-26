@@ -12,7 +12,7 @@ const KEYBOARD_CODE_MAP: Record<string, string> = {
   ShiftRight: 'shift',
 };
 const FIRST_PERSON_EYE_HEIGHT = FIRST_PERSON_EYE_HEIGHT_METERS;
-const FREE_CAMERA_MOVE_SPEED = 1.6;
+const FREE_CAMERA_MOVE_SPEED = 8;
 const FIRST_PERSON_MOVE_SPEED = 0.18;
 const FREE_CAMERA_SPRINT_MULTIPLIER = 4;
 const FIRST_PERSON_SPRINT_MULTIPLIER = 3.5;
@@ -51,7 +51,7 @@ export class CameraInputController {
   private eyeHeight = FIRST_PERSON_EYE_HEIGHT;
   private velocityY = 0;
   private isOnGround = false;
-  private readonly gravity = 0.004;
+  private readonly gravity = 0.012;
   private readonly jumpForce = 0.10;
 
   /** Callback for orbit drag + scroll, set by OrbitalTransitionController. */
@@ -150,7 +150,7 @@ export class CameraInputController {
     const x = this.camera.position.x;
     const z = this.camera.position.z;
     raycaster.set(
-      new THREE.Vector3(x, 1000, z),
+      new THREE.Vector3(x, 2000, z),
       new THREE.Vector3(0, -1, 0),
     );
 

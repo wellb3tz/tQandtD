@@ -2,8 +2,9 @@ import { BiomeType, type ChunkData, getBiomeWeightForTile } from '../world/chunk
 import { getRiverChannelWidth, type RiverPoint } from '../gen/rivers';
 import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '../config/world-units';
 
-const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 512;
+const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 2048;
 const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
+const TREE_CANDIDATES_PER_TILE = 4;
 const FOLIAGE_BANK_WIDTH = 2.4;
 const TREE_AND_PROP_PROTOTYPE_MIN_Y = -0.50;
 export const SHRUB_PROTOTYPE_MIN_Y = -0.30;
@@ -99,7 +100,6 @@ export function planFoliagePlacements(
       const worldTileZ = worldZBase + tileY;
       const jitterX = 0.08 + deterministic01(worldTileX, worldTileZ, 23) * 0.84;
       const jitterZ = 0.08 + deterministic01(worldTileX, worldTileZ, 31) * 0.84;
-      const scaleJitter = 0.82 + deterministic01(worldTileX, worldTileZ, 43) * 0.46;
       const placementX = worldTileX + jitterX;
       const placementZ = worldTileZ + jitterZ;
       const placementElevation = sampleTerrainElevationAtTilePoint(
@@ -125,7 +125,6 @@ export function planFoliagePlacements(
         };
       }
 
-      const chance = deterministic01(worldTileX, worldTileZ, 17);
       const clusterDensity = getForestClusterDensity(worldTileX, worldTileZ);
       const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
       const propChance = deterministic01(worldTileX, worldTileZ, 181);
@@ -148,26 +147,47 @@ export function planFoliagePlacements(
       }
 
       const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
-      const bankTreeScale = Math.max(0, 1 - waterInfluence.bank);
-      const clearingTreeScale = 1 - clearingInfluence.strength;
-      const treeDensity = profile.density * clusterDensity * slopeDensityScale * bankTreeScale * clearingTreeScale;
-      if (chance <= treeDensity) {
-        const treeHeightScale = (1 - waterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - clearingInfluence.strength * 0.18);
-        const treeHeight = profile.height * scaleJitter * Math.max(0.68, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
-        const treeRadius = profile.radius * scaleJitter * Math.max(0.72, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
+      for (let candidate = 0; candidate < TREE_CANDIDATES_PER_TILE; candidate++) {
+        const localCellX = candidate % 2;
+        const localCellZ = Math.floor(candidate / 2);
+        const treeJitterX = (localCellX + 0.10 + deterministic01(worldTileX, worldTileZ, 23 + candidate * 11) * 0.80) * 0.5;
+        const treeJitterZ = (localCellZ + 0.10 + deterministic01(worldTileX, worldTileZ, 31 + candidate * 11) * 0.80) * 0.5;
+        const treeX = worldTileX + treeJitterX;
+        const treeZ = worldTileZ + treeJitterZ;
+        const treeElevation = sampleTerrainElevationAtTilePoint(
+          data.heightmap,
+          verticesPerSide,
+          tileX,
+          tileY,
+          treeJitterX,
+          treeJitterZ
+        );
+        if (treeElevation <= seaLevel + 0.035) continue;
+
+        const treeWaterInfluence = getFoliageWaterInfluence(data, tileIndex, treeX, treeZ, worldXBase, worldZBase);
+        if (treeWaterInfluence.inWater) continue;
+        const treeClearingInfluence = getClearingInfluence(treeX, treeZ);
+        const bankTreeScale = Math.max(0, 1 - treeWaterInfluence.bank);
+        const clearingTreeScale = 1 - treeClearingInfluence.strength;
+        const treeDensity = Math.min(1, profile.density * clusterDensity * 1.08 * slopeDensityScale * bankTreeScale * clearingTreeScale);
+        if (deterministic01(worldTileX, worldTileZ, 17 + candidate * 11) > treeDensity) continue;
+
+        const treeScaleJitter = 0.82 + deterministic01(worldTileX, worldTileZ, 43 + candidate * 11) * 0.46;
+        const treeHeightScale = (1 - treeWaterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - treeClearingInfluence.strength * 0.18);
+        const treeHeight = profile.height * treeScaleJitter * Math.max(0.68, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
+        const treeRadius = profile.radius * treeScaleJitter * Math.max(0.72, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
         treePlacements.push({
-          x: placementX * horizontalScale,
-          y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * treeHeight,
-          z: placementZ * horizontalScale,
+          x: treeX * horizontalScale,
+          y: treeElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * treeHeight,
+          z: treeZ * horizontalScale,
           radius: treeRadius,
           height: treeHeight,
-          rotation: deterministic01(worldTileX, worldTileZ, 59) * Math.PI * 2,
+          rotation: deterministic01(worldTileX, worldTileZ, 59 + candidate * 11) * Math.PI * 2,
           color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
-          rank: deterministic01(worldTileX, worldTileZ, 101),
-          variant: selectTreeVariant(profile, worldTileX, worldTileZ),
+          rank: deterministic01(worldTileX, worldTileZ, 101 + candidate * 11),
+          variant: selectTreeVariant(profile, worldTileX * TREE_CANDIDATES_PER_TILE + candidate, worldTileZ),
         });
       }
-
     }
   }
 

@@ -75,13 +75,13 @@ export class CameraViewController {
         frustumSize / 2,
         -frustumSize / 2,
         0.1,
-        2000,
+        10000,
       );
     }
 
     const px = this.camera.position.x;
     const pz = this.camera.position.z;
-    this.orthographicCamera.position.set(px, 200, pz);
+    this.orthographicCamera.position.set(px, 2000, pz);
     this.orthographicCamera.lookAt(px, 0, pz);
   }
 
@@ -97,7 +97,7 @@ export class CameraViewController {
 
     const raycaster = new THREE.Raycaster();
     raycaster.set(
-      new THREE.Vector3(this.cameraTarget.x, 1000, this.cameraTarget.z),
+      new THREE.Vector3(this.cameraTarget.x, 2000, this.cameraTarget.z),
       new THREE.Vector3(0, -1, 0),
     );
 

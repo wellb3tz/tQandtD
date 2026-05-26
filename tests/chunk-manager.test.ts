@@ -596,7 +596,7 @@ describe('ChunkManager rivers', () => {
     expect(outerBank).toBeLessThan(untouchedHeight);
   });
 
-  it('widens sub-cell river channels enough to avoid needle-like terrain cuts', () => {
+  it('keeps sub-cell river channels narrow enough for the meter-scale world', () => {
     const config = makeMinimalConfig(42);
     config.lakeConfig = { ...DEFAULT_LAKE_CONFIG, enabled: false };
     config.riverConfig = { ...DEFAULT_RIVER_CONFIG, enabled: true, carveBankWidth: 2 };
@@ -657,8 +657,8 @@ describe('ChunkManager rivers', () => {
     const heights = [8, 9, 10].map(y => chunk.heightmap[y * vertexSize + 8]);
 
     expect(heights[0]).toBeLessThan(0.45);
-    expect(heights[1]).toBeLessThan(0.58);
-    expect(heights[1] - heights[0]).toBeLessThan(0.14);
+    expect(heights[1]).toBeGreaterThan(0.60);
+    expect(heights[1] - heights[0]).toBeGreaterThan(0.18);
     expect(heights[2]).toBeGreaterThan(heights[1]);
   });
 

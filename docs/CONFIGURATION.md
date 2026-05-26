@@ -24,7 +24,7 @@ Detailed reference for all configuration options in Procedural World Engine.
 
 Runtime world coordinates are metric: **1 world unit equals 1 meter**. This applies to X/Z positions, chunk sizes, river widths, lake tile coverage, camera positions, first-person eye height, and rendered foliage dimensions.
 
-Heightmaps remain normalized values in `[0, 1]`; rendering converts them to meters with `TERRAIN_HEIGHT_SCALE_METERS` (default `240`). Terrain samples render `TERRAIN_TILE_SIZE_METERS` apart (default `4`), so with the default config a `chunkSize` of `32` means a `128 m x 128 m` rendered chunk, and full heightmap range spans `240 m` vertically.
+Heightmaps remain normalized values in `[0, 1]`; rendering converts them to meters with `TERRAIN_HEIGHT_SCALE_METERS` (default `1200`). Terrain samples render `TERRAIN_TILE_SIZE_METERS` apart (default `20`), so with the default config a `chunkSize` of `32` means a `640 m x 640 m` rendered chunk, and full heightmap range spans `1200 m` vertically.
 
 Useful exported constants:
 

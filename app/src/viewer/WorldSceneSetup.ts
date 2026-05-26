@@ -5,8 +5,8 @@ import {
   SUN_DISTANCE,
 } from './AtmosphereController';
 
-const SUN_SHADOW_HALF_EXTENT = 768;
-const SUN_SHADOW_CAMERA_FAR = 1800;
+const SUN_SHADOW_HALF_EXTENT = 3840;
+const SUN_SHADOW_CAMERA_FAR = 9000;
 
 export interface WorldSceneObjects {
   ambientLight: THREE.AmbientLight;
@@ -20,7 +20,7 @@ export function setupWorldScene(
 ): WorldSceneObjects {
   configureRenderer(renderer);
 
-  const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
+  const ambientLight = new THREE.AmbientLight(0xb5cad6, 0.45);
   scene.add(ambientLight);
 
   const directionalLight = createSunLight();
@@ -28,7 +28,7 @@ export function setupWorldScene(
 
   const atmosphereController = new AtmosphereController(scene, ambientLight, directionalLight);
 
-  const fillLight = new THREE.DirectionalLight(0xb0c8e8, 0.15);
+  const fillLight = new THREE.DirectionalLight(0xc2d7eb, 0.22);
   fillLight.position.set(-60, 40, -40);
   scene.add(fillLight);
 
@@ -39,7 +39,7 @@ function configureRenderer(renderer: THREE.WebGLRenderer): void {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.81;
+  renderer.toneMappingExposure = 0.9;
 }
 
 function createSunLight(): THREE.DirectionalLight {

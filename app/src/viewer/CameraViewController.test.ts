@@ -14,7 +14,7 @@ describe('CameraViewController', () => {
 
     expect(controller.isOrthographic()).toBe(true);
     expect(controller.getActiveCamera()).toBe(controller.getOrthographicCamera());
-    expect(controller.getCameraPosition()).toEqual({ x: 12, y: 200, z: 34 });
+    expect(controller.getCameraPosition()).toEqual({ x: 12, y: 2000, z: 34 });
   });
 
   it('resets perspective camera position, target, and orthographic mode', () => {

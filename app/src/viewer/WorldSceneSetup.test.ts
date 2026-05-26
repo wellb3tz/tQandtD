@@ -17,12 +17,11 @@ describe('WorldSceneSetup', () => {
 
     expect(renderer.shadowMap.enabled).toBe(true);
     expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
-    expect(renderer.toneMappingExposure).toBe(0.81);
+    expect(renderer.toneMappingExposure).toBe(0.9);
     expect(scene.children).toContain(objects.ambientLight);
     expect(scene.children).toContain(objects.directionalLight);
-    expect(objects.ambientLight.intensity).toBeGreaterThanOrEqual(0.36);
-    expect(objects.ambientLight.intensity).toBeLessThanOrEqual(0.37);
-    expect(objects.ambientLight.color.getHex()).toBe(0x9fb6c8);
+    expect(objects.ambientLight.intensity).toBe(0.45);
+    expect(objects.ambientLight.color.getHex()).toBe(0xb5cad6);
     expect(objects.directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
     expect(objects.directionalLight.intensity).toBeLessThanOrEqual(1.16);
     expect(objects.directionalLight.color.getHex()).toBe(0xffe2b8);

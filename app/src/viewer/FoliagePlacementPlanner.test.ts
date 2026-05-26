@@ -53,7 +53,8 @@ describe('planFoliagePlacements', () => {
     }, 0.3);
 
     expect(plan).toBeDefined();
-    expect(plan?.treePlacements.length).toBeLessThanOrEqual(512);
+    expect(plan?.treePlacements.length).toBeGreaterThan(512);
+    expect(plan?.treePlacements.length).toBeLessThanOrEqual(2048);
     expect(plan?.treePlacements.some(placement => placement.z >= 31)).toBe(true);
     expect(plan?.clearingCount).toBeGreaterThan(0);
   });

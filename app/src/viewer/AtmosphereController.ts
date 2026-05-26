@@ -3,6 +3,8 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 
 export const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
 export const SUN_DISTANCE = 900;
+export const TERRAIN_FOG_COLOR = 0x7f96a1;
+export const TERRAIN_FOG_DENSITY = 0.00018;
 
 export interface SkyParams {
   turbidity: number;
@@ -73,9 +75,9 @@ export class AtmosphereController {
 
     this.updateSkySunPosition();
 
-    // Dark base background so the Sky dome is visible behind the terrain
+    // A pale distant haze keeps the expanded world readable into the horizon.
     this.scene.background = new THREE.Color(0x050810);
-    this.scene.fog = new THREE.FogExp2(0x050810, 0.0012);
+    this.scene.fog = new THREE.FogExp2(TERRAIN_FOG_COLOR, TERRAIN_FOG_DENSITY);
   }
 
   setSkyParams(params: Partial<SkyParams>): void {
@@ -168,7 +170,7 @@ export class AtmosphereController {
       if (this.originalBackground) {
         this.scene.background = this.originalBackground;
       }
-      this.scene.fog = new THREE.FogExp2(0x050810, 0.0012);
+      this.scene.fog = new THREE.FogExp2(TERRAIN_FOG_COLOR, TERRAIN_FOG_DENSITY);
     }
   }
 

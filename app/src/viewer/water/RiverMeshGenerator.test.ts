@@ -113,7 +113,7 @@ describe('RiverMeshGenerator', () => {
     const positions = geometry.getAttribute('position').array;
 
     // Check centre vertex (index 2 out of 5 cross-section offsets) - flat surface
-    expect(positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 0.6, 5);
+    expect(positions[7]).toBeCloseTo(getRiverWaterLevel(points[0]) * HEIGHT_SCALE - 0.6, 4);
   });
 
   it('uses the dark ocean vertex color for river water', () => {

@@ -267,9 +267,8 @@ describe('WorldViewer lifecycle', () => {
     const ambientLight = getSceneAmbientLight(viewer);
     const directionalLight = getSceneSunLight(viewer);
 
-    expect(ambientLight.intensity).toBeGreaterThanOrEqual(0.36);
-    expect(ambientLight.intensity).toBeLessThanOrEqual(0.37);
-    expect(ambientLight.color.getHex()).toBe(0x9fb6c8);
+    expect(ambientLight.intensity).toBe(0.45);
+    expect(ambientLight.color.getHex()).toBe(0xb5cad6);
     expect(directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
     expect(directionalLight.intensity).toBeLessThanOrEqual(1.16);
     expect(directionalLight.color.getHex()).toBe(0xffe2b8);
@@ -835,7 +834,8 @@ describe('WorldViewer lifecycle', () => {
       }
     }
 
-    expect(treeCount).toBeLessThanOrEqual(512);
+    expect(treeCount).toBeGreaterThan(512);
+    expect(treeCount).toBeLessThanOrEqual(2048);
     expect(hasTrailingRowFoliage).toBe(true);
 
     viewer.dispose();

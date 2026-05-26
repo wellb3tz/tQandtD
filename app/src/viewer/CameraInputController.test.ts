@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CameraInputController } from './CameraInputController';
+import type { ChunkMesh } from './ChunkMesh';
 
 describe('CameraInputController', () => {
   afterEach(() => {
@@ -93,15 +94,37 @@ describe('CameraInputController', () => {
     expect(camera.position.z).toBeCloseTo(movedZ);
     controller.detach();
   });
+
+  it('pulls a falling first-person camera down firmly in the meter-scale world', () => {
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 10, 0);
+    const container = document.createElement('div');
+    const terrain = new THREE.Mesh(new THREE.PlaneGeometry(100, 100));
+    terrain.rotateX(-Math.PI / 2);
+    terrain.updateMatrixWorld(true);
+    const controller = createController(camera, container, [terrain]);
+    controller.setFirstPersonMode(true);
+
+    controller.updateFirstPersonPhysics();
+    const firstDrop = 10 - camera.position.y;
+    controller.updateFirstPersonPhysics();
+    const secondDrop = 10 - camera.position.y;
+
+    expect(firstDrop).toBeCloseTo(0.012);
+    expect(secondDrop).toBeGreaterThan(firstDrop * 2);
+  });
 });
 
-function createController(camera: THREE.PerspectiveCamera, container: HTMLElement): CameraInputController {
+function createController(camera: THREE.PerspectiveCamera, container: HTMLElement, terrains: THREE.Mesh[] = []): CameraInputController {
   return new CameraInputController({
     camera,
     getContainer: () => container,
     getActiveCamera: () => camera,
     isOrthographic: () => false,
     getOrthographicCamera: () => null,
+    getChunkMeshes: terrains.length > 0
+      ? () => terrains.map(terrain => ({ terrain } as ChunkMesh))
+      : undefined,
   });
 }
 

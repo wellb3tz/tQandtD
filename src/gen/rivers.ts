@@ -85,7 +85,9 @@ export const DEFAULT_RIVER_CONFIG: RiverConfig = {
   maxRiversPerRegion: 3,
   maxTributaries: 2,
   baseWidth: 1.6,
-  baseDepth: 0.055,
+  // Normalized terrain units. With the default 1200 m height scale this is
+  // about 1.2 m before downstream channel shaping, keeping rivers human-scale.
+  baseDepth: 0.001,
   carveBankWidth: 3.5,
 };
 
