@@ -5,7 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { BiomeType, createSparseBiomeWeights, type ChunkData } from '@engine/index';
-import { WorldViewer } from './WorldViewer';
+import {
+  VIEWER_CAMERA_FAR_METERS,
+  VIEWER_CAMERA_NEAR_METERS,
+  WorldViewer,
+} from './WorldViewer';
 import { PlanetRenderer } from './planet/PlanetRenderer';
 
 function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {
@@ -169,6 +173,17 @@ describe('WorldViewer lifecycle', () => {
     expect(removeDocumentListener).toHaveBeenCalledWith('keydown', documentKeyDownHandler);
     expect(removeWindowListener).toHaveBeenCalledWith('keydown', windowKeyDownHandler);
     expect(removeWindowListener).toHaveBeenCalledWith('keyup', windowKeyUpHandler);
+  });
+
+  it('uses a camera near plane that preserves depth precision for distant ocean water', () => {
+    const viewer = new WorldViewer();
+    const camera = viewer.getCamera();
+
+    expect(camera.near).toBe(VIEWER_CAMERA_NEAR_METERS);
+    expect(camera.far).toBe(VIEWER_CAMERA_FAR_METERS);
+    expect(camera.far / camera.near).toBeLessThanOrEqual(20000);
+
+    viewer.dispose();
   });
 
   it('rotates the free camera with mouse drag when pointer lock is unavailable', () => {

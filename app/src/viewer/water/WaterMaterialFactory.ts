@@ -14,7 +14,7 @@ export const WATER_NORMAL_SCALE = {
   x: 0.11,
   y: 0.16,
 } as const;
-export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v3';
+export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v5';
 
 interface OceanWaveUniforms {
   uOceanWaveTime: { value: number };
@@ -64,6 +64,9 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -4,
     opacity: config.opacity,
     shininess: config.shininess,
     side: THREE.DoubleSide,

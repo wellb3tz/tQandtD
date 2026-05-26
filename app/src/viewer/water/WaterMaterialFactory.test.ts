@@ -49,7 +49,11 @@ describe('WaterMaterialFactory', () => {
     expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);
+    expect(material.depthTest).toBe(true);
     expect(material.depthWrite).toBe(false);
+    expect(material.polygonOffset).toBe(true);
+    expect(material.polygonOffsetFactor).toBeLessThan(0);
+    expect(material.polygonOffsetUnits).toBeLessThan(0);
   });
 
   it('injects configurable ocean wave displacement into the shader', () => {

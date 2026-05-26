@@ -40,6 +40,9 @@ export { RenderLayer } from './RenderLayerVisibility';
 export type { ChunkCoord, RaycastHit, Vector3 } from '../utils/coordinates';
 export { OrbitalState } from './planet/OrbitalTransitionController';
 
+export const VIEWER_CAMERA_NEAR_METERS = 0.5;
+export const VIEWER_CAMERA_FAR_METERS = 10000;
+
 /**
  * WorldViewer - Manages 3D visualization of the procedural world
  */
@@ -74,7 +77,7 @@ export class WorldViewer {
 
   constructor() {
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, 1, 0.005, 10000);
+    this.camera = new THREE.PerspectiveCamera(75, 1, VIEWER_CAMERA_NEAR_METERS, VIEWER_CAMERA_FAR_METERS);
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.canvasHost = new ViewerCanvasHost({
       camera: this.camera,
