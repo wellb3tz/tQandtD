@@ -17,10 +17,9 @@ const RIVER_CROSS_SECTION_OFFSETS = [
   0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1,
 ] as const;
 const RIVER_MAX_SURFACE_SEGMENT_LENGTH = 0.125;
-const RIVER_MIN_SURFACE_RADIUS = 0.45;
+const RIVER_MIN_SURFACE_RADIUS = 0.01;
 const RIVER_UV_DISTANCE_SCALE = 0.22;
-const RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH = 2.25;
-const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
+const RIVER_SURFACE_VERTEX_COLOR = [0.31, 0.76, 0.83] as const;
 const FROZEN_RIVER_SURFACE_VERTEX_COLOR = [0.74, 0.88, 0.98] as const;
 
 interface RiverSurfaceSample {
@@ -68,7 +67,6 @@ function buildTerrainDrapedRiverGeometryData(
     for (const samples of visibleRuns) {
       if (samples.length < 2) continue;
 
-      const totalRunDistance = samples[samples.length - 1].distance;
       const rows = samples.map((sample, index) => {
         const point = sample.point;
         const prev = samples[Math.max(0, index - 1)].point;
@@ -76,8 +74,7 @@ function buildTerrainDrapedRiverGeometryData(
         const tangent = getRiverSurfaceTangent(point, prev, next);
         const normalX = -tangent.y;
         const normalY = tangent.x;
-        const halfWidth = Math.max(getRiverChannelWidth(point) * 0.5, RIVER_MIN_SURFACE_RADIUS)
-          * getRiverMouthTaper(river, sample.distance, totalRunDistance);
+        const halfWidth = Math.max(getRiverChannelWidth(point) * 0.5, RIVER_MIN_SURFACE_RADIUS);
         const v = sample.distance * RIVER_UV_DISTANCE_SCALE;
 
         return RIVER_CROSS_SECTION_OFFSETS.map((lateral): RiverRibbonVertex => {
@@ -259,15 +256,6 @@ function getRiverSurfaceTangent(
   return { x: dx / length, y: dy / length };
 }
 
-function getRiverMouthTaper(river: RiverData, distance: number, totalDistance: number): number {
-  if (!river.isTributary) return 1;
-  if (totalDistance <= 1e-6) return 1;
-
-  const remaining = totalDistance - distance;
-  if (remaining >= RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH) return 1;
-  return smoothStep(remaining / RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH);
-}
-
 function interpolateRiverPoint(a: RiverPoint, b: RiverPoint, t: number, x: number, y: number): RiverPoint {
   const optional = (start: number | undefined, end: number | undefined): number | undefined => {
     if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined;
@@ -330,11 +318,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function smoothStep(t: number): number {
-  const clamped = clamp(t, 0, 1);
-  return clamped * clamped * (3 - 2 * clamped);
-}
-
 export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshStandardMaterial {
   return createRiverMaterialForState(config, 'flowing');
 }
@@ -352,7 +335,8 @@ export function createRiverMaterialForState(
     roughness: frozen ? 0.68 : 0.22,
     metalness: frozen ? 0 : 0.05,
     side: THREE.DoubleSide,
-    depthWrite: false,
+    depthWrite: true,
+    depthFunc: THREE.LessDepth,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,

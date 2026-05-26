@@ -121,14 +121,33 @@ describe('RiverMeshGenerator', () => {
     expect(hasBoundaryCenterVertex).toBe(true);
   });
 
-  it('uses the dark ocean vertex color for flowing river overlays', () => {
+  it('uses the freshwater lake surface color for flowing river overlays', () => {
     const geometry = buildRiverGeometry([twoPointRiver], chunk())!;
     const colors = geometry.getAttribute('color').array;
-    const expected = [0.04, 0.1, 0.23];
+    const expected = [0.31, 0.76, 0.83];
 
     for (let channel = 0; channel < expected.length; channel++) {
       expect(colors[channel]).toBeCloseTo(expected[channel], 5);
     }
+  });
+
+  it('preserves narrow sources and gradual downstream widening', () => {
+    const wideningRiver = river([
+      { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 0.2, depth: 0.03, channelWidth: 0.2, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 1, height: 0.45, surfaceLevel: 0.46, width: 1.6, depth: 0.03, channelWidth: 1.6, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ]);
+    const geometry = buildRiverGeometry([wideningRiver], chunk())!;
+    const positions = geometry.getAttribute('position');
+    const widthAt = (x: number): number => {
+      const values = Array.from({ length: positions.count }, (_, index) => index)
+        .filter(index => Math.abs(positions.getX(index) / TERRAIN_TILE_SIZE_METERS - x) < 0.001)
+        .map(index => positions.getZ(index) / TERRAIN_TILE_SIZE_METERS);
+      return Math.max(...values) - Math.min(...values);
+    };
+
+    expect(widthAt(0)).toBeCloseTo(0.2, 3);
+    expect(widthAt(4)).toBeCloseTo(1.6, 3);
+    expect(widthAt(0)).toBeLessThan(widthAt(4));
   });
 
   it('uses an icy vertex color for frozen river overlays', () => {
@@ -136,6 +155,23 @@ describe('RiverMeshGenerator', () => {
     const color = geometry.getAttribute('color') as THREE.BufferAttribute;
 
     expect(color.getZ(0)).toBeGreaterThan(0.9);
+  });
+
+  it('keeps tributary width through the confluence instead of tapering it', () => {
+    const tributary = {
+      ...river([
+        { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1, channelDepth: 0.04, flowX: 1, flowY: 0 },
+        { x: 4, y: 1, height: 0.45, surfaceLevel: 0.46, width: 1, depth: 0.03, channelWidth: 1.4, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      ]),
+      isTributary: true,
+      pathId: 'river_1:tributary',
+    };
+    const geometry = buildRiverGeometry([tributary], chunk())!;
+    const positions = geometry.getAttribute('position');
+    const maxX = Array.from({ length: positions.count }, (_, index) => positions.getX(index))
+      .reduce((max, value) => Math.max(max, value), -Infinity);
+
+    expect(maxX).toBeCloseTo(4 * TERRAIN_TILE_SIZE_METERS, 4);
   });
 
   it('applies river normal maps for small flow ripples', () => {
@@ -152,5 +188,7 @@ describe('RiverMeshGenerator', () => {
     expect(material.normalScale.x).toBeCloseTo(WATER_NORMAL_SCALE.x);
     expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
     expect(material.vertexColors).toBe(true);
+    expect(material.depthWrite).toBe(true);
+    expect(material.depthFunc).toBe(THREE.LessDepth);
   });
 });
