@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type RiverData } from '@engine/index';
+import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData, type RiverData } from '@engine/index';
 import { HEIGHT_SCALE } from './config';
 import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
 import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
@@ -16,7 +16,11 @@ function river(points: RiverData['points'], state?: RiverData['state']): RiverDa
   };
 }
 
-function chunk(size = 4, heightAt: (x: number, y: number) => number = () => 0.5): ChunkData {
+function chunk(
+  size = 4,
+  heightAt: (x: number, y: number) => number = () => 0.5,
+  lakes?: ChunkData['lakes'],
+): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize);
 
@@ -35,6 +39,7 @@ function chunk(size = 4, heightAt: (x: number, y: number) => number = () => 0.5)
     sparseBiomeTypes: new Uint8Array(0),
     sparseBiomeWeights: new Float32Array(0),
     sparseBiomeOffsets: new Uint16Array(size * size + 1),
+    lakes,
     resources: [],
     structures: [],
   };
@@ -190,5 +195,59 @@ describe('RiverMeshGenerator', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.depthWrite).toBe(true);
     expect(material.depthFunc).toBe(THREE.LessDepth);
+  });
+
+  it('clips river mesh to lake shape', () => {
+    const size = 8;
+    const lakeTiles = new Set<number>();
+    for (let y = 4; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        lakeTiles.add(y * size + x);
+      }
+    }
+    const lakes: LakeData[] = [{
+      waterLevel: 0.55,
+      tiles: lakeTiles,
+      maxDepth: 0.15,
+      minTerrainHeight: 0.35,
+    }];
+    const data = chunk(size, () => 0.5, lakes);
+    const verticalRiver = river([
+      { x: 2, y: 0, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1, channelDepth: 0.04, flowX: 0, flowY: 1 },
+      { x: 2, y: 7, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelWidth: 1, channelDepth: 0.04, flowX: 0, flowY: 1 },
+    ]);
+    const geometry = buildRiverGeometry([verticalRiver], data, 0.3);
+
+    expect(geometry).not.toBeNull();
+    const positions = geometry!.getAttribute('position');
+    const localZValues: number[] = [];
+    for (let i = 0; i < positions.count; i++) {
+      localZValues.push(positions.getZ(i) / TERRAIN_TILE_SIZE_METERS);
+    }
+    const maxLocalZ = Math.max(...localZValues);
+    // The river should be clipped before it reaches the lake tiles (y >= 4)
+    expect(maxLocalZ).toBeLessThan(4.2);
+  });
+
+  it('hides river completely inside a lake', () => {
+    const size = 4;
+    const lakeTiles = new Set<number>();
+    for (let i = 0; i < size * size; i++) {
+      lakeTiles.add(i);
+    }
+    const lakes: LakeData[] = [{
+      waterLevel: 0.55,
+      tiles: lakeTiles,
+      maxDepth: 0.15,
+      minTerrainHeight: 0.35,
+    }];
+    const data = chunk(size, () => 0.4, lakes);
+    const fullLakeRiver = river([
+      { x: 0, y: 2, height: 0.4, surfaceLevel: 0.41, width: 1, depth: 0.03, channelWidth: 1, channelDepth: 0.04, flowX: 1, flowY: 0 },
+      { x: 4, y: 2, height: 0.4, surfaceLevel: 0.41, width: 1, depth: 0.03, channelWidth: 1, channelDepth: 0.04, flowX: 1, flowY: 0 },
+    ]);
+    const geometry = buildRiverGeometry([fullLakeRiver], data, 0.3);
+
+    expect(geometry).toBeNull();
   });
 });

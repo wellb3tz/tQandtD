@@ -92,14 +92,22 @@ function buildTerrainDrapedRiverGeometryData(
 
       for (let row = 0; row < rows.length - 1; row++) {
         for (let column = 0; column < RIVER_CROSS_SECTION_OFFSETS.length - 1; column++) {
-          const polygon = clipPolygonToChunk([
+          let polygon = clipPolygonToChunk([
             rows[row][column],
             rows[row + 1][column],
             rows[row + 1][column + 1],
             rows[row][column + 1],
           ], size);
 
-          if (polygon.length < 3) continue;
+          if (polygon.length < 3) {
+            continue;
+          }
+
+          polygon = clipPolygonToWater(polygon, chunkData, seaLevel);
+
+          if (polygon.length < 3) {
+            continue;
+          }
 
           const baseIndex = vertexCount;
           for (const vertex of polygon) {
@@ -140,6 +148,50 @@ function clipPolygonToChunk(polygon: RiverRibbonVertex[], chunkSize: number): Ri
   clipped = clipPolygon(clipped, vertex => vertex.y >= 0, (a, b) => interpolateRibbonVertexAtY(a, b, 0));
   clipped = clipPolygon(clipped, vertex => vertex.y <= chunkSize, (a, b) => interpolateRibbonVertexAtY(a, b, chunkSize));
   return clipped;
+}
+
+function getWaterFieldAt(
+  x: number,
+  y: number,
+  chunkData: ChunkData,
+  seaLevel: number,
+): number {
+  const terrainHeight = sampleTerrainHeight(chunkData.heightmap, chunkData.size, x, y);
+  let field = seaLevel - terrainHeight;
+
+  for (const lake of chunkData.lakes ?? []) {
+    if (lake.state === 'dry') continue;
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    if (tx >= 0 && tx < chunkData.size && ty >= 0 && ty < chunkData.size) {
+      const tileIdx = ty * chunkData.size + tx;
+      if (lake.tiles.has(tileIdx)) {
+        field = Math.max(field, lake.waterLevel - terrainHeight);
+      }
+    }
+  }
+
+  return field;
+}
+
+function clipPolygonToWater(
+  polygon: RiverRibbonVertex[],
+  chunkData: ChunkData,
+  seaLevel: number,
+): RiverRibbonVertex[] {
+  const inside = (vertex: RiverRibbonVertex) => {
+    return getWaterFieldAt(vertex.x, vertex.y, chunkData, seaLevel) < 0;
+  };
+
+  const intersect = (a: RiverRibbonVertex, b: RiverRibbonVertex) => {
+    const fa = getWaterFieldAt(a.x, a.y, chunkData, seaLevel);
+    const fb = getWaterFieldAt(b.x, b.y, chunkData, seaLevel);
+    const denominator = fa - fb;
+    const t = Math.abs(denominator) > 1e-9 ? fa / denominator : 0.5;
+    return interpolateRibbonVertex(a, b, clamp(t, 0, 1));
+  };
+
+  return clipPolygon(polygon, inside, intersect);
 }
 
 function clipPolygon(
@@ -226,8 +278,8 @@ function splitVisibleRuns(
   let current: RiverSurfaceSample[] = [];
 
   for (const sample of samples) {
-    const terrainHeight = sampleTerrainHeight(chunkData.heightmap, chunkData.size, sample.point.x, sample.point.y);
-    if (terrainHeight >= seaLevel - 0.02) {
+    const field = getWaterFieldAt(sample.point.x, sample.point.y, chunkData, seaLevel);
+    if (field <= 0.05) {
       current.push(sample);
       continue;
     }
