@@ -190,6 +190,7 @@ export const SKY_VIEW_CONTROLS = {
 
 export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
   { id: 'showTerrain', label: 'Terrain Layer', defaultValue: true },
+  { id: 'showFoliage', label: 'Foliage Layer', defaultValue: true },
   { id: 'showBiomes', label: 'Biome Colors', defaultValue: true },
   { id: 'showTemperature', label: 'Temperature Map', defaultValue: false, tooltip: 'Show temperature heatmap overlay on terrain (blue=cold, red=hot)' },
   { id: 'showWater', label: 'Water Layer', defaultValue: true },

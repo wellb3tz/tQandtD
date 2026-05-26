@@ -1,5 +1,6 @@
 export enum RenderLayer {
   TERRAIN = 'terrain',
+  FOLIAGE = 'foliage',
   BIOMES = 'biomes',
   TEMPERATURE = 'temperature',
   RESOURCES = 'resources',
@@ -35,7 +36,7 @@ export function applyChunkVisibility(
   chunk.terrain.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.TERRAIN);
 
   if (chunk.foliage) {
-    chunk.foliage.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.TERRAIN);
+    chunk.foliage.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.FOLIAGE);
   }
 
   if (chunk.resources) {
@@ -61,8 +62,10 @@ export function applyRenderLayerVisibility(
   switch (layer) {
     case RenderLayer.TERRAIN:
       chunk.terrain.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.TERRAIN);
+      break;
+    case RenderLayer.FOLIAGE:
       if (chunk.foliage) {
-        chunk.foliage.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.TERRAIN);
+        chunk.foliage.visible = frustumVisible && isRenderLayerVisible(layerVisibility, RenderLayer.FOLIAGE);
       }
       break;
     case RenderLayer.RESOURCES:
@@ -81,6 +84,7 @@ export function applyRenderLayerVisibility(
       }
       break;
     case RenderLayer.BIOMES:
+    case RenderLayer.TEMPERATURE:
       break;
   }
 }

@@ -10,14 +10,19 @@ import type { WaterLayerManager } from './water/WaterLayerManager';
 describe('WorldViewSettings', () => {
   it('updates layer visibility and preserves biome color toggling', () => {
     const terrain = createTerrainMesh();
+    const foliage = new THREE.Group();
     const resources = new THREE.Group();
     const chunkMeshes = new Map<string, ChunkMesh>([
-      ['0,0', { terrain, resources, visible: true }],
+      ['0,0', { terrain, foliage, resources, visible: true }],
     ]);
     const settings = createSettings(chunkMeshes);
 
     settings.setVisibility(RenderLayer.RESOURCES, false);
     expect(resources.visible).toBe(false);
+
+    settings.setVisibility(RenderLayer.FOLIAGE, false);
+    expect(foliage.visible).toBe(false);
+    expect(terrain.visible).toBe(true);
 
     settings.setVisibility(RenderLayer.BIOMES, false);
     const colors = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;

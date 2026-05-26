@@ -41,6 +41,7 @@ describe('RenderLayerVisibility', () => {
   it('updates only the requested render layer', () => {
     const layers = new Map<RenderLayer, boolean>([
       [RenderLayer.TERRAIN, false],
+      [RenderLayer.FOLIAGE, true],
       [RenderLayer.RESOURCES, true],
     ]);
     const chunk = createChunk();
@@ -49,8 +50,14 @@ describe('RenderLayerVisibility', () => {
     applyRenderLayerVisibility(chunk, RenderLayer.TERRAIN, layers);
 
     expect(chunk.terrain.visible).toBe(false);
-    expect(chunk.foliage?.visible).toBe(false);
+    expect(chunk.foliage?.visible).toBe(true);
     expect(chunk.resources?.visible).toBe(true);
+
+    layers.set(RenderLayer.FOLIAGE, false);
+    applyRenderLayerVisibility(chunk, RenderLayer.FOLIAGE, layers);
+
+    expect(chunk.foliage?.visible).toBe(false);
+    expect(chunk.terrain.visible).toBe(false);
   });
 });
 

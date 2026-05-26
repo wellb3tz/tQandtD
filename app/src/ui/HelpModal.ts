@@ -130,7 +130,7 @@ export class HelpModal {
         <h4>Display Layers</h4>
         <p>
           Use the checkboxes in the control panel to choose which world layers are visible:
-          terrain, biomes, water, resources, structures, chunk boundaries, textures, fog of war, and background mode.
+          terrain, foliage, biomes, water, resources, structures, chunk boundaries, textures, fog of war, and background mode.
         </p>
       </div>
 

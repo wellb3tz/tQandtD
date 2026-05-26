@@ -298,6 +298,7 @@ describe('WorldViewer lifecycle', () => {
 
     viewer.applyViewerSettings({
       showTerrain: true,
+      showFoliage: true,
       showBiomes: true,
       showWater: true,
       showResources: false,

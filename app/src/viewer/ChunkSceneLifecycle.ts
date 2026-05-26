@@ -143,7 +143,7 @@ async function createChunkMesh(
 
   const foliage = createFoliageLayer(chunkX, chunkY, data, waterConfig.seaLevel);
   if (foliage) {
-    foliage.visible = isRenderLayerVisible(layerVisibility, RenderLayer.TERRAIN);
+    foliage.visible = isRenderLayerVisible(layerVisibility, RenderLayer.FOLIAGE);
     chunkMesh.foliage = foliage;
     scene.add(foliage);
   }
