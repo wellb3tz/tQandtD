@@ -1568,7 +1568,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * Determines the climate-driven state of a lake based on average temperature
    * across its tiles. Requires EnhancedBiomeSystem with ClimateSystem.
    */
-  private determineLakeState(lake: WorldLakeData): 'filled' | 'dry' {
+  private determineLakeState(lake: WorldLakeData): 'filled' | 'frozen' | 'dry' {
     if (!this.enhancedBiomeSystem) return 'filled';
 
     // Sample temperature at multiple points across the lake
@@ -1599,6 +1599,7 @@ export class ChunkManager implements ChunkManagerSnapshot {
     const avgTemp = totalTemp / sampled;
     const avgMoisture = totalMoisture / sampled;
 
+    if (avgTemp < -0.4) return 'frozen';
     // Lake dries out in hot, dry climates
     if (avgTemp > 0.4 && avgMoisture < -0.2) return 'dry';
     return 'filled';

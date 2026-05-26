@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
-import { identifyLakeTiles, buildLakeGeometry, createLakeMaterial } from './LakeMeshGenerator';
+import { identifyLakeTiles, buildLakeGeometry, createLakeMaterialForState } from './LakeMeshGenerator';
 import { buildRiverGeometry, createRiverMaterialForState } from './RiverMeshGenerator';
 import { createOceanMaterial, updateOceanMaterialWaves } from './WaterMaterialFactory';
 
@@ -122,14 +122,19 @@ export class WaterLayerManager {
 
     // Generate lake meshes
     if (config.lake.enabled && chunkData.lakes && chunkData.lakes.length > 0) {
-      // Filter out dry lakes
-      const filledLakes = chunkData.lakes.filter(l => l.state !== 'dry');
-      if (filledLakes.length > 0) {
-        const lakeTiles = identifyLakeTiles(chunkData, filledLakes);
+      const visibleLakeGroups = [
+        { state: 'filled' as const, lakes: chunkData.lakes.filter(l => l.state !== 'dry' && l.state !== 'frozen') },
+        { state: 'frozen' as const, lakes: chunkData.lakes.filter(l => l.state === 'frozen') },
+      ];
+
+      for (const group of visibleLakeGroups) {
+        if (group.lakes.length === 0) continue;
+
+        const lakeTiles = identifyLakeTiles(chunkData, group.lakes);
         if (lakeTiles.length > 0) {
-          const lakeGeometry = buildLakeGeometry(lakeTiles, filledLakes, chunkData);
+          const lakeGeometry = buildLakeGeometry(lakeTiles, group.lakes, chunkData);
           if (lakeGeometry) {
-            const lakeMaterial = createLakeMaterial(config.lake);
+            const lakeMaterial = createLakeMaterialForState(config.lake, group.state);
             const lakeMesh = new THREE.Mesh(lakeGeometry, lakeMaterial);
             lakeMesh.renderOrder = 1;
             lakeMesh.visible = true;

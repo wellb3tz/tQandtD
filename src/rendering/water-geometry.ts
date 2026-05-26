@@ -27,6 +27,7 @@ const RIVER_WATER_DEPTH_FRACTION = 0.72;
 const RIVER_TRIBUTARY_MOUTH_TAPER_LENGTH = 2.25;
 const RIVER_SURFACE_VERTEX_COLOR = [0.04, 0.1, 0.23] as const;
 const FROZEN_RIVER_SURFACE_VERTEX_COLOR = [0.66, 0.82, 0.94] as const;
+const FROZEN_LAKE_SURFACE_VERTEX_COLOR = [0.68, 0.84, 0.96] as const;
 
 interface RiverSurfaceSample {
   point: RiverPoint;
@@ -208,7 +209,9 @@ export function buildLakeGeometryData(
         const worldX = (chunkData.x * size + point.x) * horizontalScale;
         const worldZ = (chunkData.y * size + point.z) * horizontalScale;
         const depth = Math.max(0, waterY - point.terrainHeight);
-        const [r, g, b] = lakeDepthColor(depth, maxDepth);
+        const [r, g, b] = lake.state === 'frozen'
+          ? frozenLakeSurfaceColor(depth, maxDepth)
+          : lakeDepthColor(depth, maxDepth);
 
         data.positions.push(worldX, waterY * options.heightScale + surfaceOffset, worldZ);
         data.normals.push(0, 1, 0);
@@ -361,6 +364,16 @@ function riverSurfaceColor(river: RiverData, point: RiverPoint, edgeAmount: numb
     RIVER_SURFACE_VERTEX_COLOR[0],
     RIVER_SURFACE_VERTEX_COLOR[1],
     RIVER_SURFACE_VERTEX_COLOR[2],
+  ];
+}
+
+function frozenLakeSurfaceColor(depth: number, maxDepth: number): [number, number, number] {
+  const depthT = maxDepth > 1e-6 ? Math.min(1, Math.max(0, depth / maxDepth)) : 0;
+  const centerIce = 1 - depthT * 0.18;
+  return [
+    FROZEN_LAKE_SURFACE_VERTEX_COLOR[0] + centerIce * 0.08,
+    FROZEN_LAKE_SURFACE_VERTEX_COLOR[1] + centerIce * 0.06,
+    FROZEN_LAKE_SURFACE_VERTEX_COLOR[2] + centerIce * 0.03,
   ];
 }
 

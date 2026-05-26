@@ -10,7 +10,7 @@ import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
 import { logger, LogCategory } from '../utils/logger';
 
-export type LakeState = 'filled' | 'dry';
+export type LakeState = 'filled' | 'frozen' | 'dry';
 
 /**
  * A lake body that can span multiple chunks.

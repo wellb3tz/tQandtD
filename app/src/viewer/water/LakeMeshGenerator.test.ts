@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData } from '@engine/index';
 import type { LakeTile } from './types';
-import { buildLakeGeometry } from './LakeMeshGenerator';
+import { buildLakeGeometry, createLakeMaterialForState } from './LakeMeshGenerator';
 
 function createChunk(size = 4): ChunkData {
   const vertexSize = size + 1;
@@ -89,5 +89,26 @@ describe('LakeMeshGenerator contour mesh', () => {
     expect(colors.getX(0)).toBeLessThanOrEqual(0.08);
     expect(colors.getY(0)).toBeLessThanOrEqual(0.30);
     expect(colors.getZ(0)).toBeLessThanOrEqual(0.38);
+  });
+
+  it('colors frozen lake surfaces as pale ice', () => {
+    const chunk = createChunk(1);
+    lowerTileCorners(chunk, 0, 0);
+
+    const lake = { ...createLake([0]), state: 'frozen' as const };
+    const geometry = buildGeometry(lake, chunk);
+    const colors = geometry.getAttribute('color');
+
+    expect(colors.getX(0)).toBeGreaterThan(0.68);
+    expect(colors.getY(0)).toBeGreaterThan(0.84);
+    expect(colors.getZ(0)).toBeGreaterThan(0.96);
+  });
+
+  it('creates a distinct material for frozen lakes', () => {
+    const material = createLakeMaterialForState({ enabled: true, color: 0x4fc3d4, opacity: 0.8, shininess: 60 }, 'frozen');
+
+    expect(material.userData.lakeState).toBe('frozen');
+    expect(material.opacity).toBeGreaterThanOrEqual(0.88);
+    expect(material.shininess).toBeGreaterThanOrEqual(82);
   });
 });

@@ -152,7 +152,7 @@ export interface SerializedChunkData {
     tiles: number[];
     maxDepth: number;
     minTerrainHeight?: number; // Optional for backward compatibility
-    state?: 'filled' | 'dry';
+    state?: 'filled' | 'frozen' | 'dry';
   }>;
   rivers: Array<{
     riverId: string;

@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { WaterLayerManager } from './WaterLayerManager';
 import { DEFAULT_WATER_CONFIG } from './config';
-import { BiomeType, type ChunkData, type RiverData } from '@engine/index';
+import { BiomeType, type ChunkData, type LakeData, type RiverData } from '@engine/index';
 
 /**
  * Create a mock ChunkData with ocean tiles for testing
@@ -85,6 +85,28 @@ function createMockChunkWithRivers(rivers: RiverData[]): ChunkData {
   const chunk = createMockChunkWithoutWater();
   chunk.rivers = rivers;
   return chunk;
+}
+
+function createMockChunkWithLakes(lakes: LakeData[]): ChunkData {
+  const chunk = createMockChunkWithoutWater();
+  const vertexSize = chunk.size + 1;
+  for (let y = 0; y <= 3; y++) {
+    for (let x = 0; x <= 3; x++) {
+      chunk.heightmap[y * vertexSize + x] = 0.35;
+    }
+  }
+  chunk.lakes = lakes;
+  return chunk;
+}
+
+function createMockLake(tileIndex: number, state?: LakeData['state']): LakeData {
+  return {
+    waterLevel: 0.5,
+    tiles: new Set([tileIndex]),
+    maxDepth: 0.15,
+    minTerrainHeight: 0.35,
+    state,
+  };
 }
 
 function createMockRiver(state?: RiverData['state'], y = 1): RiverData {
@@ -267,6 +289,25 @@ describe('WaterLayerManager - Integration Tests', () => {
       expect(flowing!.material.normalMap!.offset.x).not.toBe(0);
       expect(frozenNormalMap.offset.x).toBe(0);
       expect(frozenNormalMap.offset.y).toBe(0);
+    });
+
+    it('renders frozen lakes separately with ice material and skips dry lakes', () => {
+      const chunkData = createMockChunkWithLakes([
+        createMockLake(0),
+        createMockLake(1, 'frozen'),
+        createMockLake(2, 'dry'),
+      ]);
+
+      manager.addWaterToChunk('0,0', chunkData, scene, DEFAULT_WATER_CONFIG);
+
+      const waterLayer = manager.getWaterLayer('0,0');
+      expect(waterLayer!.lake).toHaveLength(2);
+      const filled = waterLayer!.lake.find(mesh => mesh.material.userData.lakeState === 'filled');
+      const frozen = waterLayer!.lake.find(mesh => mesh.material.userData.lakeState === 'frozen');
+      expect(filled).toBeDefined();
+      expect(frozen).toBeDefined();
+      expect((frozen!.mesh.geometry.getAttribute('color') as THREE.BufferAttribute).getZ(0)).toBeGreaterThan(0.96);
+      expect(frozen!.material.opacity).toBeGreaterThanOrEqual(0.88);
     });
   });
 

@@ -17,7 +17,7 @@ import { BiomeType } from '../world/chunk';
 
 // --- Public types ------------------------------------------------------------
 
-export type LakeState = 'filled' | 'dry';
+export type LakeState = 'filled' | 'frozen' | 'dry';
 
 /**
  * A single lake body detected inside a chunk.

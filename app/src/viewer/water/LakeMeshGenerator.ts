@@ -10,6 +10,7 @@ import {
   identifyLakeSurfaceTiles,
   type ChunkData,
   type LakeData,
+  type LakeState,
 } from '@engine/index';
 import type { LakeTile, LakeRenderConfig } from './types';
 import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
@@ -36,13 +37,24 @@ export function buildLakeGeometry(
 }
 
 export function createLakeMaterial(config: LakeRenderConfig): THREE.MeshPhongMaterial {
-  return new THREE.MeshPhongMaterial({
+  return createLakeMaterialForState(config, 'filled');
+}
+
+export function createLakeMaterialForState(
+  config: LakeRenderConfig,
+  state: LakeState = 'filled',
+): THREE.MeshPhongMaterial {
+  const frozen = state === 'frozen';
+  const material = new THREE.MeshPhongMaterial({
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
-    opacity: config.opacity,
-    shininess: config.shininess,
+    opacity: frozen ? Math.min(1, Math.max(config.opacity, 0.88)) : config.opacity,
+    shininess: frozen ? Math.min(100, Math.max(config.shininess, 82)) : config.shininess,
     side: THREE.DoubleSide,
-    specular: new THREE.Color(0x88ffcc),
+    specular: new THREE.Color(frozen ? 0xd8f6ff : 0x88ffcc),
   });
+
+  material.userData.lakeState = state;
+  return material;
 }

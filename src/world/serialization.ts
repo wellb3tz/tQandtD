@@ -143,7 +143,7 @@ export interface SerializedLake {
   tiles: number[];
   maxDepth: number;
   minTerrainHeight?: number;
-  state?: 'filled' | 'dry';
+  state?: 'filled' | 'frozen' | 'dry';
 }
 
 export interface SerializedRiverPoint {

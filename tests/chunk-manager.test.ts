@@ -169,7 +169,7 @@ describe('ChunkData integrity', () => {
 });
 
 describe('Climate-driven water state', () => {
-  it('keeps hot wet lakes filled and dries only hot dry lakes', () => {
+  it('freezes cold lakes, keeps hot wet lakes filled, and dries only hot dry lakes', () => {
     const manager = new ChunkManager(makeMinimalConfig(77));
     (manager as any).enhancedBiomeSystem = {
       sampleClimate: () => ({ temperature: 0.55, moisture: 0.45 }),
@@ -188,6 +188,12 @@ describe('Climate-driven water state', () => {
     };
 
     expect((manager as any).determineLakeState(lake)).toBe('filled');
+
+    (manager as any).enhancedBiomeSystem = {
+      sampleClimate: () => ({ temperature: -0.55, moisture: 0.2 }),
+    };
+
+    expect((manager as any).determineLakeState(lake)).toBe('frozen');
 
     (manager as any).enhancedBiomeSystem = {
       sampleClimate: () => ({ temperature: 0.55, moisture: -0.35 }),
