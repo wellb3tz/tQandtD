@@ -16,6 +16,7 @@ const FREE_CAMERA_MOVE_SPEED = 1.6;
 const FIRST_PERSON_MOVE_SPEED = 0.18;
 const FREE_CAMERA_SPRINT_MULTIPLIER = 4;
 const FIRST_PERSON_SPRINT_MULTIPLIER = 3.5;
+const TOUCH_JOYSTICK_RADIUS_PX = 72;
 
 export interface CameraInputControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -39,6 +40,11 @@ export class CameraInputController {
   private isPointerLocked = false;
   private isMouseDragRotating = false;
   private lastMouseDragPosition: { x: number; y: number } | null = null;
+  private moveTouchId: number | null = null;
+  private lookTouchId: number | null = null;
+  private moveTouchStart: { x: number; y: number } | null = null;
+  private lastLookTouchPosition: { x: number; y: number } | null = null;
+  private touchMoveVector = { x: 0, y: 0 };
   private cameraRotation = { pitch: 0, yaw: 0 };
   private firstPersonMode = false;
   private orbitMode = false;
@@ -68,6 +74,10 @@ export class CameraInputController {
     container.addEventListener('mousedown', this.handleCameraDragStart);
     container.addEventListener('mouseleave', this.handleCameraDragEnd);
     container.addEventListener('wheel', this.handleWheel, { passive: false });
+    container.addEventListener('touchstart', this.handleTouchStart, { passive: false });
+    container.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    container.addEventListener('touchend', this.handleTouchEnd, { passive: false });
+    container.addEventListener('touchcancel', this.handleTouchEnd, { passive: false });
     document.addEventListener('pointerlockchange', this.handlePointerLockChange);
     document.addEventListener('mousemove', this.handlePointerLockedMouseMove);
     document.addEventListener('mousemove', this.handleCameraDragMove);
@@ -84,6 +94,10 @@ export class CameraInputController {
       container.removeEventListener('mousedown', this.handleCameraDragStart);
       container.removeEventListener('mouseleave', this.handleCameraDragEnd);
       container.removeEventListener('wheel', this.handleWheel);
+      container.removeEventListener('touchstart', this.handleTouchStart);
+      container.removeEventListener('touchmove', this.handleTouchMove);
+      container.removeEventListener('touchend', this.handleTouchEnd);
+      container.removeEventListener('touchcancel', this.handleTouchEnd);
     }
 
     document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
@@ -107,6 +121,9 @@ export class CameraInputController {
     let moveSpeed = this.firstPersonMode ? FIRST_PERSON_MOVE_SPEED : FREE_CAMERA_MOVE_SPEED;
     if (this.keyboardState.get('shift')) {
       moveSpeed *= this.firstPersonMode ? FIRST_PERSON_SPRINT_MULTIPLIER : FREE_CAMERA_SPRINT_MULTIPLIER;
+    }
+    if (this.hasTouchMovement()) {
+      moveSpeed *= 0.75;
     }
 
     const activeCamera = this.getActiveCamera();
@@ -238,6 +255,8 @@ export class CameraInputController {
     if (this.keyboardState.get('s')) movement.z += 1;
     if (this.keyboardState.get('a')) movement.x -= 1;
     if (this.keyboardState.get('d')) movement.x += 1;
+    movement.x += this.touchMoveVector.x;
+    movement.z -= this.touchMoveVector.y;
 
     const camera = this.getOrthographicCamera();
     if (!camera) return;
@@ -262,6 +281,8 @@ export class CameraInputController {
     if (this.keyboardState.get('s')) movement.sub(forward);
     if (this.keyboardState.get('a')) movement.sub(right);
     if (this.keyboardState.get('d')) movement.add(right);
+    movement.addScaledVector(forward, this.touchMoveVector.y);
+    movement.addScaledVector(right, this.touchMoveVector.x);
     if (this.keyboardState.get('space')) {
       movement.add(up);
     }
@@ -284,6 +305,8 @@ export class CameraInputController {
     if (this.keyboardState.get('s')) movement.sub(forward);
     if (this.keyboardState.get('a')) movement.sub(right);
     if (this.keyboardState.get('d')) movement.add(right);
+    movement.addScaledVector(forward, this.touchMoveVector.y);
+    movement.addScaledVector(right, this.touchMoveVector.x);
 
     if (this.keyboardState.get('space')) {
       if (this.isOnGround) {
@@ -299,6 +322,35 @@ export class CameraInputController {
     camera.top *= scale;
     camera.bottom *= scale;
     camera.updateProjectionMatrix();
+  }
+
+  private hasTouchMovement(): boolean {
+    return Math.abs(this.touchMoveVector.x) > 0.01 || Math.abs(this.touchMoveVector.y) > 0.01;
+  }
+
+  private updateTouchMoveVector(touch: Touch): void {
+    if (!this.moveTouchStart) return;
+
+    const dx = touch.clientX - this.moveTouchStart.x;
+    const dy = touch.clientY - this.moveTouchStart.y;
+    const distance = Math.hypot(dx, dy);
+    const scale = distance > TOUCH_JOYSTICK_RADIUS_PX
+      ? TOUCH_JOYSTICK_RADIUS_PX / distance
+      : 1;
+
+    this.touchMoveVector = {
+      x: (dx * scale) / TOUCH_JOYSTICK_RADIUS_PX,
+      y: (-dy * scale) / TOUCH_JOYSTICK_RADIUS_PX,
+    };
+  }
+
+  private isLeftSideTouch(touch: Touch): boolean {
+    const container = this.getContainer();
+    if (!container) return false;
+
+    const rect = container.getBoundingClientRect();
+    const width = rect.width || container.clientWidth || window.innerWidth;
+    return touch.clientX < rect.left + width * 0.5;
   }
 
   private readonly handleContainerClick = (): void => {
@@ -369,6 +421,71 @@ export class CameraInputController {
     if (this.orbitMode && this.onOrbitInput) {
       e.preventDefault();
       this.onOrbitInput(0, 0, e.deltaY > 0 ? 1 : -1);
+    }
+  };
+
+  private readonly handleTouchStart = (e: TouchEvent): void => {
+    if (!this.useFreeCamera && !this.orbitMode) return;
+
+    for (const touch of Array.from(e.changedTouches)) {
+      if (this.moveTouchId === null && this.isLeftSideTouch(touch) && !this.orbitMode) {
+        this.moveTouchId = touch.identifier;
+        this.moveTouchStart = { x: touch.clientX, y: touch.clientY };
+        this.touchMoveVector = { x: 0, y: 0 };
+        continue;
+      }
+
+      if (this.lookTouchId === null) {
+        this.lookTouchId = touch.identifier;
+        this.lastLookTouchPosition = { x: touch.clientX, y: touch.clientY };
+      }
+    }
+
+    if (this.moveTouchId !== null || this.lookTouchId !== null) {
+      e.preventDefault();
+    }
+  };
+
+  private readonly handleTouchMove = (e: TouchEvent): void => {
+    if (!this.useFreeCamera && !this.orbitMode) return;
+
+    for (const touch of Array.from(e.changedTouches)) {
+      if (touch.identifier === this.moveTouchId) {
+        this.updateTouchMoveVector(touch);
+        e.preventDefault();
+        continue;
+      }
+
+      if (touch.identifier === this.lookTouchId && this.lastLookTouchPosition) {
+        const deltaX = touch.clientX - this.lastLookTouchPosition.x;
+        const deltaY = touch.clientY - this.lastLookTouchPosition.y;
+
+        if (this.orbitMode && this.onOrbitInput) {
+          this.onOrbitInput(deltaX, deltaY, 0);
+        } else if (!this.isPointerLocked) {
+          this.cameraRotation.yaw -= deltaX * this.mouseSensitivity;
+          this.cameraRotation.pitch -= deltaY * this.mouseSensitivity;
+          this.updateCameraRotation();
+        }
+
+        this.lastLookTouchPosition = { x: touch.clientX, y: touch.clientY };
+        e.preventDefault();
+      }
+    }
+  };
+
+  private readonly handleTouchEnd = (e: TouchEvent): void => {
+    for (const touch of Array.from(e.changedTouches)) {
+      if (touch.identifier === this.moveTouchId) {
+        this.moveTouchId = null;
+        this.moveTouchStart = null;
+        this.touchMoveVector = { x: 0, y: 0 };
+      }
+
+      if (touch.identifier === this.lookTouchId) {
+        this.lookTouchId = null;
+        this.lastLookTouchPosition = null;
+      }
     }
   };
 

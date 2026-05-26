@@ -116,6 +116,10 @@ export class HelpModal {
             <td>Lock pointer for FPS camera controls when supported</td>
           </tr>
           <tr>
+            <td><kbd>Touch</kbd></td>
+            <td>On mobile, drag the left side to move and the right side to look around</td>
+          </tr>
+          <tr>
             <td><kbd>?</kbd></td>
             <td>Show this help dialog</td>
           </tr>

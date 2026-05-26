@@ -58,6 +58,41 @@ describe('CameraInputController', () => {
     expect(controller.getHeadingDegrees()).toBeGreaterThan(0);
     controller.detach();
   });
+
+  it('rotates with right-side touch drag for mobile camera look', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const container = createContainer();
+    const controller = createController(camera, container);
+    controller.resetRotation();
+    controller.attach();
+
+    container.dispatchEvent(createTouchEvent('touchstart', [{ identifier: 1, clientX: 280, clientY: 100 }]));
+    container.dispatchEvent(createTouchEvent('touchmove', [{ identifier: 1, clientX: 330, clientY: 100 }]));
+    container.dispatchEvent(createTouchEvent('touchend', [{ identifier: 1, clientX: 330, clientY: 100 }]));
+
+    expect(controller.getHeadingDegrees()).toBeGreaterThan(0);
+    controller.detach();
+  });
+
+  it('moves with a left-side touch joystick and stops after release', () => {
+    const camera = new THREE.PerspectiveCamera();
+    const container = createContainer();
+    const controller = createController(camera, container);
+    controller.resetRotation();
+    controller.attach();
+
+    container.dispatchEvent(createTouchEvent('touchstart', [{ identifier: 1, clientX: 40, clientY: 180 }]));
+    container.dispatchEvent(createTouchEvent('touchmove', [{ identifier: 1, clientX: 40, clientY: 90 }]));
+    controller.updateMovement();
+
+    const movedZ = camera.position.z;
+    container.dispatchEvent(createTouchEvent('touchend', [{ identifier: 1, clientX: 40, clientY: 90 }]));
+    controller.updateMovement();
+
+    expect(movedZ).toBeLessThan(0);
+    expect(camera.position.z).toBeCloseTo(movedZ);
+    controller.detach();
+  });
 });
 
 function createController(camera: THREE.PerspectiveCamera, container: HTMLElement): CameraInputController {
@@ -68,4 +103,38 @@ function createController(camera: THREE.PerspectiveCamera, container: HTMLElemen
     isOrthographic: () => false,
     getOrthographicCamera: () => null,
   });
+}
+
+function createContainer(): HTMLElement {
+  const container = document.createElement('div');
+  Object.defineProperty(container, 'clientWidth', { value: 400 });
+  Object.defineProperty(container, 'clientHeight', { value: 300 });
+  container.getBoundingClientRect = () => ({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 400,
+    bottom: 300,
+    width: 400,
+    height: 300,
+    toJSON: () => undefined,
+  });
+  document.body.appendChild(container);
+  return container;
+}
+
+function createTouchEvent(
+  type: string,
+  touches: Array<{ identifier: number; clientX: number; clientY: number }>,
+): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const changedTouches = touches.map(touch => ({
+    identifier: touch.identifier,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  }));
+
+  Object.defineProperty(event, 'changedTouches', { value: changedTouches });
+  return event;
 }
