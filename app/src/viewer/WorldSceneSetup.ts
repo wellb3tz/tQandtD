@@ -6,7 +6,7 @@ import {
 } from './AtmosphereController';
 
 const SUN_SHADOW_HALF_EXTENT = 3840;
-const SUN_SHADOW_CAMERA_FAR = 9000;
+const SUN_SHADOW_CAMERA_FAR = 18000;
 
 export interface WorldSceneObjects {
   ambientLight: THREE.AmbientLight;
@@ -66,5 +66,6 @@ function createSunLight(): THREE.DirectionalLight {
   light.shadow.mapSize.height = 4096;
   light.shadow.bias = -0.0005;
   light.shadow.normalBias = 0.035;
+  light.shadow.camera.updateProjectionMatrix();
   return light;
 }

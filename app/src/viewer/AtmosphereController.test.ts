@@ -45,7 +45,7 @@ describe('AtmosphereController', () => {
     atmosphere.dispose();
   });
 
-  it('snaps the moving shadow focus to texels so small camera moves do not shimmer shadows', () => {
+  it('keeps the shadow focus stable during camera flight until recentering is needed', () => {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera();
     const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
@@ -73,6 +73,12 @@ describe('AtmosphereController', () => {
     expect(directionalLight.target.position.z).toBeCloseTo(stableTarget.z);
 
     camera.position.x += 0.4;
+    atmosphere.updateSunAndShadowFocus(camera);
+
+    expect(directionalLight.target.position.x).toBeCloseTo(stableTarget.x);
+    expect(directionalLight.target.position.z).toBeCloseTo(stableTarget.z);
+
+    camera.position.x += 50;
     atmosphere.updateSunAndShadowFocus(camera);
 
     expect(directionalLight.target.position.x).not.toBeCloseTo(stableTarget.x);

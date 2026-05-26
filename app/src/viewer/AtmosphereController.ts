@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 
 export const ATMOSPHERIC_OCEAN_PLANE_COLOR = 0x1d3433;
-export const SUN_DISTANCE = 900;
+export const SUN_DISTANCE = 8000;
+const SHADOW_FOCUS_RECENTER_RATIO = 0.06;
 
 export interface SkyParams {
   turbidity: number;
@@ -30,10 +31,13 @@ export class AtmosphereController {
 
   private originalBackground: THREE.Color | null = null;
   private readonly shadowFocus = new THREE.Vector3();
+  private readonly stableShadowFocus = new THREE.Vector3();
   private readonly shadowFocusSnapDelta = new THREE.Vector3();
   private readonly shadowFocusRight = new THREE.Vector3();
   private readonly shadowFocusUp = new THREE.Vector3();
   private readonly shadowFocusForward = new THREE.Vector3();
+  private readonly shadowFocusOffset = new THREE.Vector3();
+  private shadowFocusInitialized = false;
 
   constructor(
     scene: THREE.Scene,
@@ -87,6 +91,7 @@ export class AtmosphereController {
     if (params.mieCoefficient !== undefined) uniforms['mieCoefficient'].value = params.mieCoefficient;
     if (params.mieDirectionalG !== undefined) uniforms['mieDirectionalG'].value = params.mieDirectionalG;
     if (params.elevation !== undefined || params.azimuth !== undefined) {
+      this.shadowFocusInitialized = false;
       this.updateSkySunPosition();
       this.updateDirectionalLightPosition();
     }
@@ -141,7 +146,26 @@ export class AtmosphereController {
       .copy(this.shadowFocusRight).multiplyScalar(snappedX - localX)
       .addScaledVector(this.shadowFocusUp, snappedY - localY);
 
-    return this.shadowFocus.add(this.shadowFocusSnapDelta);
+    this.shadowFocus.add(this.shadowFocusSnapDelta);
+
+    if (!this.shadowFocusInitialized) {
+      this.shadowFocusInitialized = true;
+      return this.stableShadowFocus.copy(this.shadowFocus);
+    }
+
+    this.shadowFocusOffset.subVectors(this.shadowFocus, this.stableShadowFocus);
+    const lightSpaceOffsetX = Math.abs(this.shadowFocusOffset.dot(this.shadowFocusRight));
+    const lightSpaceOffsetY = Math.abs(this.shadowFocusOffset.dot(this.shadowFocusUp));
+    const recenterDistance = Math.min(
+      shadowCamera.right - shadowCamera.left,
+      shadowCamera.top - shadowCamera.bottom
+    ) * SHADOW_FOCUS_RECENTER_RATIO;
+
+    if (Math.max(lightSpaceOffsetX, lightSpaceOffsetY) < recenterDistance) {
+      return this.stableShadowFocus;
+    }
+
+    return this.stableShadowFocus.copy(this.shadowFocus);
   }
 
   private getSunDirection(target: THREE.Vector3): THREE.Vector3 {
