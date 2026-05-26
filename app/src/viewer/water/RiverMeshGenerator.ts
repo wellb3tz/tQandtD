@@ -74,7 +74,8 @@ function buildTerrainDrapedRiverGeometryData(
         const tangent = getRiverSurfaceTangent(point, prev, next);
         const normalX = -tangent.y;
         const normalY = tangent.x;
-        const halfWidth = Math.max(getRiverChannelWidth(point) * 0.5, RIVER_MIN_SURFACE_RADIUS);
+        const rawHalfWidth = Math.max(getRiverChannelWidth(point) * 0.5, RIVER_MIN_SURFACE_RADIUS);
+        const halfWidth = getSafeHalfWidth(point, prev, next, rawHalfWidth);
         const v = sample.distance * RIVER_UV_DISTANCE_SCALE;
 
         return RIVER_CROSS_SECTION_OFFSETS.map((lateral): RiverRibbonVertex => {
@@ -116,8 +117,13 @@ function buildTerrainDrapedRiverGeometryData(
             vertexCount++;
           }
 
-          for (let i = 1; i < polygon.length - 1; i++) {
-            data.indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
+          const triIndices = triangulatePolygon2D(polygon);
+          for (let i = 0; i < triIndices.length; i += 3) {
+            const i0 = baseIndex + triIndices[i];
+            const i1 = baseIndex + triIndices[i + 1];
+            const i2 = baseIndex + triIndices[i + 2];
+            if (i0 === i1 || i1 === i2 || i0 === i2) continue;
+            data.indices.push(i0, i1, i2);
           }
         }
       }
@@ -316,6 +322,151 @@ function getRiverSurfaceColor(river: RiverData): readonly [number, number, numbe
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function getSafeHalfWidth(
+  point: RiverPoint,
+  prev: RiverPoint,
+  next: RiverPoint,
+  requestedHalfWidth: number,
+): number {
+  const v1x = point.x - prev.x;
+  const v1y = point.y - prev.y;
+  const v2x = next.x - point.x;
+  const v2y = next.y - point.y;
+  const len1 = Math.hypot(v1x, v1y);
+  const len2 = Math.hypot(v2x, v2y);
+
+  if (len1 < 1e-6 || len2 < 1e-6) {
+    return requestedHalfWidth;
+  }
+
+  const dot = v1x * v2x + v1y * v2y;
+  const cross = v1x * v2y - v1y * v2x;
+
+  // Sharp U-turn (> 120°): limit width to a fraction of the shortest segment
+  const cosAngle = dot / (len1 * len2);
+  if (cosAngle < -0.5) {
+    const limit = Math.min(len1, len2) * 0.45;
+    return Math.min(requestedHalfWidth, Math.max(limit, RIVER_MIN_SURFACE_RADIUS));
+  }
+
+  // Straight-ish: no cross-section intersection issue
+  if (Math.abs(cross) < 1e-6) {
+    return requestedHalfWidth;
+  }
+
+  // For moderate bends: compute where adjacent cross-section lines intersect
+  const tNext = Math.abs(len2 * len2 / cross);
+  const tPrev = Math.abs(len1 * len1 / cross);
+  const safe = Math.min(tNext, tPrev) * 0.95;
+
+  return Math.min(requestedHalfWidth, Math.max(safe, RIVER_MIN_SURFACE_RADIUS));
+}
+
+function triangulatePolygon2D(polygon: RiverRibbonVertex[]): number[] {
+  const n = polygon.length;
+  if (n < 3) return [];
+  if (n === 3) return [0, 1, 2];
+
+  const area = polygonSignedArea2D(polygon);
+  if (Math.abs(area) < 1e-10) return [];
+
+  const indices: number[] = [];
+  const V: number[] = [];
+  const clockwise = area < 0;
+
+  for (let i = 0; i < n; i++) {
+    V.push(clockwise ? n - 1 - i : i);
+  }
+
+  let nv = n;
+  let count = 2 * nv;
+
+  for (let v = nv - 1; nv > 2; ) {
+    if (count-- <= 0) {
+      break;
+    }
+
+    let u = v;
+    if (nv <= u) u = 0;
+    v = u + 1;
+    if (nv <= v) v = 0;
+    let w = v + 1;
+    if (nv <= w) w = 0;
+
+    if (isEar(polygon, V, u, v, w, nv)) {
+      indices.push(V[u], V[v], V[w]);
+      for (let s = v, t = v + 1; t < nv; t++, s++) {
+        V[s] = V[t];
+      }
+      nv--;
+      count = 2 * nv;
+    }
+  }
+
+  return indices;
+}
+
+function polygonSignedArea2D(polygon: RiverRibbonVertex[]): number {
+  let area = 0;
+  const n = polygon.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += polygon[i].x * polygon[j].y - polygon[j].x * polygon[i].y;
+  }
+  return area;
+}
+
+function isEar(
+  polygon: RiverRibbonVertex[],
+  V: number[],
+  u: number,
+  v: number,
+  w: number,
+  n: number,
+): boolean {
+  const a = polygon[V[u]];
+  const b = polygon[V[v]];
+  const c = polygon[V[w]];
+
+  const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  if (cross <= 1e-10) {
+    return false;
+  }
+
+  for (let p = 0; p < n; p++) {
+    if (p === u || p === v || p === w) continue;
+    const pt = polygon[V[p]];
+    if (pointInTriangle2D(pt, a, b, c)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function pointInTriangle2D(
+  p: RiverRibbonVertex,
+  a: RiverRibbonVertex,
+  b: RiverRibbonVertex,
+  c: RiverRibbonVertex,
+): boolean {
+  const ax = c.x - a.x;
+  const ay = c.y - a.y;
+  const bx = b.x - a.x;
+  const by = b.y - a.y;
+  const cx = p.x - a.x;
+  const cy = p.y - a.y;
+
+  const d = ax * by - ay * bx;
+  if (Math.abs(d) < 1e-10) return false;
+
+  const wA = (cx * by - cy * bx) / d;
+  const wB = (ax * cy - ay * cx) / d;
+  const wC = 1 - wA - wB;
+
+  return wA >= -1e-6 && wB >= -1e-6 && wC >= -1e-6;
 }
 
 export function createRiverMaterial(config: RiverRenderConfig): THREE.MeshStandardMaterial {
