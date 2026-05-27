@@ -1363,14 +1363,6 @@ body {
   align-items: center;
 }
 
-.fps-pill {
-  margin-right: 8px;
-  color: var(--accent-ok);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 .icon-btn,
 .icon-btn-small {
   background: rgba(255, 255, 255, 0.035);
