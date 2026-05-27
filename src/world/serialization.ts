@@ -10,7 +10,7 @@ import { deflate, inflate } from 'pako';
 import { ChunkData, Resource, Structure } from './chunk';
 import type { LakeData } from '../gen/lakes';
 import type { RiverData, RiverPoint } from '../gen/rivers';
-import { WorldConfig } from './chunk-manager';
+import type { WorldConfig } from './world-config';
 import { logger, LogCategory } from '../utils/logger';
 
 const WORLD_BINARY_CHUNK_META_MARKER = 0x434D4554; // "CMET"

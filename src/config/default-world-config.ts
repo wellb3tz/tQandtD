@@ -1,5 +1,5 @@
 import { DEFAULT_RIVER_CONFIG } from '../gen/rivers';
-import type { WorldConfig } from '../world/chunk-manager';
+import type { WorldConfig } from '../world/world-config';
 
 export type WorldConfigOverrides = Omit<
   Partial<WorldConfig>,

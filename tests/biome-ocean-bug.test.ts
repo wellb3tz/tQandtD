@@ -11,6 +11,8 @@ import { EnhancedBiomeSystem } from '../src/world/enhanced-biome';
 import { makeMinimalConfig } from './helpers';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
+import { fixBiomesAfterHeightChange } from '../src/world/chunk-biome-processing';
+import { carveTerrainForRivers } from '../src/world/river-chunk-processing';
 
 const SEA_LEVEL = 0.3;
 
@@ -56,12 +58,12 @@ describe('Biome / height mismatch regression', () => {
       bounds: { minX: 2, maxX: 14, minY: 8, maxY: 8 },
     };
 
-    (manager as any).carveTerrainForRivers([river], chunk.heightmap, chunk.size);
+    carveTerrainForRivers([river], chunk.heightmap, chunk.size, config.riverConfig?.carveBankWidth);
 
     // fixBiomesAfterHeightChange is normally invoked automatically inside
     // generateChunkInternal right after river carving.  Here we call it
     // explicitly because we are testing the helper in isolation.
-    (manager as any).fixBiomesAfterHeightChange(chunk);
+    fixBiomesAfterHeightChange(chunk);
 
     // After carving, any tile whose height dropped below sea level must be OCEAN.
     let mismatchCount = 0;

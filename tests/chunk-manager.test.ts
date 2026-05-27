@@ -13,6 +13,8 @@ import { EnhancedBiomeSystem } from '../src/world/enhanced-biome';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG, type WorldRiverData } from '../src/gen/rivers';
 import { LakeManager } from '../src/world/lake-manager';
+import { determineLakeState } from '../src/world/lake-chunk-processing';
+import { convertWorldRiversToChunkRivers } from '../src/world/river-chunk-processing';
 import { makeMinimalConfig } from './helpers';
 
 // --- Coordinate utilities -----------------------------------------------------
@@ -170,14 +172,6 @@ describe('ChunkData integrity', () => {
 
 describe('Climate-driven water state', () => {
   it('freezes cold lakes, keeps hot wet lakes filled, and dries only hot dry lakes', () => {
-    const manager = new ChunkManager(makeMinimalConfig(77));
-    (manager as any).enhancedBiomeSystem = {
-      sampleClimate: () => ({ temperature: 0.55, moisture: 0.45 }),
-    };
-    (manager as any).terrainGenerator = {
-      getHeightAt: () => 0.4,
-    };
-
     const lake = {
       id: 'lake_1',
       waterLevel: 0.5,
@@ -187,19 +181,9 @@ describe('Climate-driven water state', () => {
       bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
     };
 
-    expect((manager as any).determineLakeState(lake)).toBe('filled');
-
-    (manager as any).enhancedBiomeSystem = {
-      sampleClimate: () => ({ temperature: -0.55, moisture: 0.2 }),
-    };
-
-    expect((manager as any).determineLakeState(lake)).toBe('frozen');
-
-    (manager as any).enhancedBiomeSystem = {
-      sampleClimate: () => ({ temperature: 0.55, moisture: -0.35 }),
-    };
-
-    expect((manager as any).determineLakeState(lake)).toBe('dry');
+    expect(determineLakeState(lake, () => ({ temperature: 0.55, moisture: 0.45 }))).toBe('filled');
+    expect(determineLakeState(lake, () => ({ temperature: -0.55, moisture: 0.2 }))).toBe('frozen');
+    expect(determineLakeState(lake, () => ({ temperature: 0.55, moisture: -0.35 }))).toBe('dry');
   });
 
   it('uses climateConfig world temperature offset when adjusting lake biomes', () => {
@@ -981,8 +965,8 @@ describe('ChunkManager rivers', () => {
       bounds: { minX: 8, maxX: 24, minY: 8, maxY: 12 },
     };
 
-    const left = (manager as any).convertWorldRiversToChunkRivers([worldRiver], 0, 0, config.chunkSize);
-    const right = (manager as any).convertWorldRiversToChunkRivers([worldRiver], 1, 0, config.chunkSize);
+    const left = convertWorldRiversToChunkRivers([worldRiver], 0, 0, config.chunkSize, config.riverConfig?.splineResolution);
+    const right = convertWorldRiversToChunkRivers([worldRiver], 1, 0, config.chunkSize, config.riverConfig?.splineResolution);
     const leftBoundaryPoint = left[0].points.find((point: { x: number }) => point.x === 16);
     const rightBoundaryPoint = right[0].points.find((point: { x: number }) => point.x === 0);
 
@@ -1144,7 +1128,7 @@ describe('ChunkManager rivers', () => {
       bounds: { minX: -10, maxX: 60, minY: 8, maxY: 40 },
     };
 
-    const rivers = (manager as any).convertWorldRiversToChunkRivers([worldRiver], 0, 0, config.chunkSize);
+    const rivers = convertWorldRiversToChunkRivers([worldRiver], 0, 0, config.chunkSize, config.riverConfig?.splineResolution);
 
     expect(rivers).toHaveLength(2);
     expect(rivers.every((river: { points: unknown[] }) => river.points.length >= 2)).toBe(true);

@@ -5,7 +5,7 @@
  * to prevent invalid inputs and provide clear error messages.
  */
 
-import type { WorldConfig } from '../world/chunk-manager';
+import type { WorldConfig } from '../world/world-config';
 import type { TerrainConfig } from '../gen/terrain';
 import type { BiomeConfig } from '../world/biome';
 import type { ResourceConfig } from '../gen/resources';

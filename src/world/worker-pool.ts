@@ -1,6 +1,6 @@
 import type { ChunkData } from './chunk.js';
 import type { SerializedChunkData, WorkerResponse } from '../worker';
-import type { WorldConfig } from './chunk-manager';
+import type { WorldConfig } from './world-config';
 import { logger, LogCategory } from '../utils/logger';
 
 /**
