@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>tQandtD project</title>
+  <title>World Generator</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -28,10 +28,10 @@
             <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
-        <h1>tQandtD project</h1>
-        <span class="version-badge">APP</span>
+        <h1>World Generator</h1>
       </div>
       <div class="header-actions">
+        <span class="fps-pill"><span id="header-fps-value">--</span> FPS</span>
         <button id="help-btn" class="icon-btn" title="Help">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -63,13 +63,13 @@
     <aside id="control-panel" class="control-panel">
 
       <!-- World Generation -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
-          <h2>WORLD GENERATION</h2>
+          <h2>TERRAIN SETTINGS</h2>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -90,18 +90,18 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
-            GENERATE WORLD
+            Generate
           </button>
         </div>
       </div>
 
       <!-- Terrain Parameters -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
           </svg>
-          <h3>TERRAIN PARAMETERS</h3>
+          <h3>NOISE</h3>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -110,12 +110,12 @@
       </div>
 
       <!-- Biome Parameters -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
           </svg>
-          <h3>BIOME PARAMETERS</h3>
+          <h3>BIOMES</h3>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -124,14 +124,14 @@
       </div>
 
       <!-- Resource & Structure Systems -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
             <line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
-          <h3>RESOURCE & STRUCTURE SYSTEMS</h3>
+          <h3>RESOURCES & STRUCTURES</h3>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -140,12 +140,12 @@
       </div>
 
       <!-- Water Rendering -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
           </svg>
-          <h3>WATER RENDERING</h3>
+          <h3>WATER</h3>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -154,13 +154,13 @@
       </div>
 
       <!-- System Settings -->
-      <div class="panel-section collapsible collapsed">
+      <div class="panel-section collapsible">
         <div class="section-header clickable">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
           </svg>
-          <h3>SYSTEM SETTINGS</h3>
+          <h3>OUTPUT & SYSTEM</h3>
           <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="6 9 12 15 18 9"/>
           </svg>
@@ -168,60 +168,45 @@
         <div class="section-content"><div id="advanced-controls"></div></div>
       </div>
 
-      <!-- Display Layers -->
-      <div class="panel-section collapsible collapsed">
-        <div class="section-header clickable">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          <h3>DISPLAY LAYERS</h3>
-          <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </div>
-        <div class="section-content"><div id="visibility-controls"></div></div>
-      </div>
-
     </aside>
 
     <!-- Top-center toolbar overlay -->
     <div class="top-toolbar">
       <div class="toolbar-group">
-        <button id="reset-btn" class="toolbar-btn">
+        <button id="reset-btn" class="toolbar-btn" title="Reset camera">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
-          Reset
+          <span>Reset</span>
         </button>
-        <button id="top-down-btn" class="toolbar-btn">
+        <button id="top-down-btn" class="toolbar-btn" title="Top-down view">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 19V5M5 12l7-7 7 7"/>
           </svg>
-          Top-Down
+          <span>Top</span>
         </button>
-        <button id="follow-terrain-btn" class="toolbar-btn">
+        <button id="follow-terrain-btn" class="toolbar-btn" title="Follow terrain">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
-          Follow
+          <span>Follow</span>
         </button>
-        <button id="first-person-btn" class="toolbar-btn">
+        <button id="first-person-btn" class="toolbar-btn" title="First-person mode">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2a5 5 0 0 1 5 5v2a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/>
             <path d="M9 22v-5h6v5"/>
             <path d="M8 14h8"/>
           </svg>
-          First-Person
+          <span>Walk</span>
         </button>
-        <button id="planet-mode-btn" class="toolbar-btn">
+        <button id="planet-mode-btn" class="toolbar-btn" title="Planet mode">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="8"/>
             <path d="M3 12c3 2 15 2 18 0"/>
             <path d="M12 4c2.5 2.2 2.5 13.8 0 16"/>
           </svg>
-          Planet
+          <span>Planet</span>
         </button>
       </div>
     </div>
@@ -266,22 +251,7 @@
     <!-- Right panel - unified with tabs -->
     <aside id="right-panel" class="right-panel">
       <div class="right-panel-header">
-        <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="performance" title="Performance Monitor">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-            <span>PERF</span>
-          </button>
-          <button class="panel-tab" data-tab="statistics" title="World Statistics">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="20" x2="12" y2="10"/>
-              <line x1="18" y1="20" x2="18" y2="4"/>
-              <line x1="6" y1="20" x2="6" y2="16"/>
-            </svg>
-            <span>STATS</span>
-          </button>
-        </div>
+        <h3>Visualization</h3>
         <button id="hide-right-panel-btn" class="monitor-hide-btn" title="Hide Panel" aria-label="Hide Panel">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 6L6 18M6 6l12 12"/>
@@ -290,9 +260,11 @@
       </div>
 
       <div class="right-panel-body">
-        <!-- Tab: Performance -->
-        <div id="tab-performance" class="tab-content active">
+        <div class="right-panel-section visualization-section">
+          <div id="visibility-controls"></div>
+        </div>
 
+        <div id="tab-performance" class="tab-content active">
           <div class="monitor-section">
             <h4>FRAME RATE</h4>
             <div class="metric-large">
@@ -362,28 +334,10 @@
             </div>
           </div>
 
-          <div class="monitor-section">
-            <h4>CAMERA POSITION</h4>
-            <div class="position-grid">
-              <div class="position-item">
-                <span class="position-label">X</span>
-                <span class="position-value" id="camera-x">0.00</span>
-              </div>
-              <div class="position-item">
-                <span class="position-label">Y</span>
-                <span class="position-value" id="camera-y">0.00</span>
-              </div>
-              <div class="position-item">
-                <span class="position-label">Z</span>
-                <span class="position-value" id="camera-z">0.00</span>
-              </div>
-            </div>
-          </div>
-
         </div>
 
         <!-- Tab: Statistics -->
-        <div id="tab-statistics" class="tab-content">
+        <div id="tab-statistics" class="tab-content active">
 
           <div id="statistics-display">
             <div class="monitor-section">
@@ -425,32 +379,27 @@
             </div>
           </div>
 
-          <div class="monitor-section">
-            <h4>WORLD MANAGEMENT</h4>
-            <div class="button-group-vertical">
-              <button id="save-json-btn" class="secondary-btn-small">SAVE (JSON)</button>
-              <button id="save-binary-btn" class="secondary-btn-small">SAVE (BINARY)</button>
-              <button id="load-btn" class="secondary-btn-small">LOAD WORLD</button>
-              <button id="export-heightmap-btn" class="secondary-btn-small">EXPORT HEIGHTMAP</button>
-              <button id="export-biome-btn" class="secondary-btn-small">EXPORT BIOME MAP</button>
-              <button id="export-config-btn" class="secondary-btn-small">EXPORT CONFIG</button>
-              <button id="copy-seed-btn" class="secondary-btn-small">COPY SEED</button>
-              <button id="share-url-btn" class="secondary-btn-small success">GENERATE SHAREABLE URL</button>
-            </div>
-          </div>
+        </div>
 
+        <div class="right-panel-section tools-section">
+          <h4>WORLD MANAGEMENT</h4>
+          <div class="button-group-vertical">
+            <button id="save-json-btn" class="secondary-btn-small">Save JSON</button>
+            <button id="save-binary-btn" class="secondary-btn-small">Save Binary</button>
+            <button id="load-btn" class="secondary-btn-small">Load World</button>
+            <button id="export-heightmap-btn" class="secondary-btn-small">Export Heightmap</button>
+            <button id="export-biome-btn" class="secondary-btn-small">Export Biome Map</button>
+            <button id="export-config-btn" class="secondary-btn-small">Export Config</button>
+            <button id="copy-seed-btn" class="secondary-btn-small">Copy Seed</button>
+            <button id="share-url-btn" class="secondary-btn-small success">Share URL</button>
+          </div>
         </div>
       </div>
     </aside>
 
-    <!-- Minimap overlay bottom-left of viewer -->
+    <!-- Terrain overview map -->
     <div class="minimap-container">
-      <div class="minimap-header">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 7l6-4 6 4 6-4v14l-6 4-6-4-6 4V7z"/>
-        </svg>
-        MINIMAP
-      </div>
+      <div class="minimap-badge" aria-hidden="true">M</div>
       <canvas id="minimap-canvas"></canvas>
     </div>
 
@@ -491,23 +440,9 @@
     <div id="toast-container" class="toast-container"></div>
   </div>
 
-  <script>
-    // Right-panel tab switching
+    <script>
+    // Lightweight right-panel behavior.
     (function() {
-      const tabs = document.querySelectorAll('.panel-tab');
-      const contents = document.querySelectorAll('.tab-content');
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          const target = tab.dataset.tab;
-          tabs.forEach(t => t.classList.remove('active'));
-          contents.forEach(c => c.classList.remove('active'));
-          tab.classList.add('active');
-          const pane = document.getElementById('tab-' + target);
-          if (pane) pane.classList.add('active');
-        });
-      });
-
-      // Hide right panel
       const hideBtn = document.getElementById('hide-right-panel-btn');
       const rightPanel = document.getElementById('right-panel');
       if (hideBtn && rightPanel) {

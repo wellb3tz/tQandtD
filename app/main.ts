@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cameraXDisplay = document.getElementById('camera-x');
   const cameraYDisplay = document.getElementById('camera-y');
   const cameraZDisplay = document.getElementById('camera-z');
+  const headerFpsDisplay = document.getElementById('header-fps-value');
 
   // Status bar elements
   const statusSeed     = document.getElementById('status-seed');
@@ -150,6 +151,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           // Update FPS in app state
           if (app) {
             app.updateState({ fps: currentFPS });
+          }
+          if (headerFpsDisplay) {
+            headerFpsDisplay.textContent = currentFPS.toString();
           }
         }
         
@@ -746,7 +750,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Re-enable generate button
       if (generateBtn) {
         generateBtn.removeAttribute('disabled');
-        generateBtn.textContent = 'Generate World';
+        generateBtn.textContent = 'Generate';
       }
     }
   });
