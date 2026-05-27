@@ -1,6 +1,6 @@
-﻿# Architecture
+# Architecture
 
-Internal architecture and design decisions of Procedural World Engine.
+Internal architecture and design decisions of tQandtD project.
 
 ## Table of Contents
 
@@ -16,36 +16,36 @@ Internal architecture and design decisions of Procedural World Engine.
 
 ## Overview
 
-Procedural World Engine is built around a **chunk-based architecture** with **deterministic generation**. The core principle: same seed + same coordinates = same output, always.
+tQandtD project is built around a **chunk-based architecture** with **deterministic generation**. The core principle: same seed + same coordinates = same output, always.
 
 ### Key Components
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     ChunkManager                            │
-│  - Entry point for all generation                           │
-│  - LRU cache management                                     │
-│  - Orchestrates generation pipeline                         │
-└─────────────────────────────────────────────────────────────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-┌────────────────┐  ┌────────────────┐  ┌────────────────┐
-│   Terrain      │  │    Biomes      │  │    Rivers      │
-│  Generator     │  │  Classifier    │  │   Manager      │
-└────────────────┘  └────────────────┘  └────────────────┘
-         │                 │                 │
-         └─────────────────┼─────────────────┘
-                           ▼
-                  ┌────────────────┐
-                  │  ChunkData     │
-                  │  - heightmap   │
-                  │  - biomeMap    │
-                  │  - resources   │
-                  │  - structures  │
-                  │  - lakes       │
-                  │  - rivers      │
-                  └────────────────┘
+--------------------------------------------------------------�
+�                     ChunkManager                            �
+�  - Entry point for all generation                           �
+�  - LRU cache management                                     �
+�  - Orchestrates generation pipeline                         �
+L--------------------------------------------------------------
+                           �
+         ------------------+-----------------�
+         �                 �                 �
+-----------------�  -----------------�  -----------------�
+�   Terrain      �  �    Biomes      �  �    Rivers      �
+�  Generator     �  �  Classifier    �  �   Manager      �
+L-----------------  L-----------------  L-----------------
+         �                 �                 �
+         L-----------------+------------------
+                           �
+                  -----------------�
+                  �  ChunkData     �
+                  �  - heightmap   �
+                  �  - biomeMap    �
+                  �  - resources   �
+                  �  - structures  �
+                  �  - lakes       �
+                  �  - rivers      �
+                  L-----------------
 ```
 
 ---
@@ -233,7 +233,7 @@ class ChunkCache {
 5. Apply 3D noise slice (optional)
 6. Normalize to [0, 1]
 
-**Memory:** `(chunkSize + 1)² x 4 bytes`
+**Memory:** `(chunkSize + 1)? x 4 bytes`
 
 **Time:** ~0.3ms (32x32 chunk)
 
@@ -253,7 +253,7 @@ class ChunkCache {
 5. Convert to sparse representation
 
 **Memory:**
-- Biome map: `chunkSize² x 1 byte`
+- Biome map: `chunkSize? x 1 byte`
 - Sparse weights: ~4.75 KB (32x32 chunk)
 
 **Time:** ~48ms (32x32 chunk); blending dominates (~90% of biome time)

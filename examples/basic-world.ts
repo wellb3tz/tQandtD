@@ -2,7 +2,7 @@ import {
   ChunkManager,
   createDefaultWorldConfig,
   getBiomeWeightsForTile,
-} from 'procedural-world-engine';
+} from 'tqandtd-project';
 
 async function main(): Promise<void> {
   const config = createDefaultWorldConfig({

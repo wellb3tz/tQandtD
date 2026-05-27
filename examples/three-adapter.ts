@@ -1,8 +1,8 @@
 import {
   WorldSession,
   createDefaultWorldConfig,
-} from 'procedural-world-engine';
-import { ThreeWorldRendererAdapter } from 'procedural-world-engine/adapters/three';
+} from 'tqandtd-project';
+import { ThreeWorldRendererAdapter } from 'tqandtd-project/adapters/three';
 
 /**
  * Adapter construction is intentionally separate from the interactive app.

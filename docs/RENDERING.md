@@ -1,6 +1,6 @@
-﻿# Rendering Helpers
+# Rendering Helpers
 
-The `procedural-world-engine/rendering` entrypoint contains renderer-neutral helpers. These helpers do not create DOM nodes, WebGL objects, or Three.js classes. They return plain data that can be consumed by any renderer.
+The `tqandtd-project/rendering` entrypoint contains renderer-neutral helpers. These helpers do not create DOM nodes, WebGL objects, or Three.js classes. They return plain data that can be consumed by any renderer.
 
 ## Terrain
 

@@ -1,6 +1,6 @@
-﻿# API Reference
+# API Reference
 
-Complete API documentation for Procedural World Engine.
+Complete API documentation for tQandtD project.
 
 ## Table of Contents
 
@@ -624,7 +624,7 @@ interface LoggerConfig {
 
 **Example:**
 ```typescript
-import { configureLogger, LogLevel, LogCategory } from 'procedural-world-engine';
+import { configureLogger, LogLevel, LogCategory } from 'tqandtd-project';
 
 // Development
 configureLogger({

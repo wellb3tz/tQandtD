@@ -1,6 +1,6 @@
-﻿# Configuration Guide
+# Configuration Guide
 
-Detailed reference for all configuration options in Procedural World Engine.
+Detailed reference for all configuration options in tQandtD project.
 
 ## Table of Contents
 
@@ -34,7 +34,7 @@ import {
   TERRAIN_TILE_SIZE_METERS,
   TERRAIN_HEIGHT_SCALE_METERS,
   FIRST_PERSON_EYE_HEIGHT_METERS,
-} from 'procedural-world-engine';
+} from 'tqandtd-project';
 ```
 
 Foliage uses trees as the visual scale anchor: default adult trees are roughly `10-25 m` tall depending on biome and deterministic jitter.
@@ -1254,7 +1254,7 @@ All configuration values are validated on `ChunkManager` construction. Invalid v
 ### Common Validation Errors
 
 ```typescript
-import { ValidationError } from 'procedural-world-engine';
+import { ValidationError } from 'tqandtd-project';
 
 try {
   new ChunkManager({ seed: 12345, chunkSize: 1000 });

@@ -30,6 +30,6 @@ Requirements:
 - HTTPS (for Web Workers in production)
 
 For more information, visit:
-https://github.com/[your-repo]/procedural-world-engine
+https://github.com/[your-repo]/tqandtd-project
 
 License: MIT

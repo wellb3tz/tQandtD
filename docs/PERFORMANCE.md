@@ -1,6 +1,6 @@
-﻿# Performance Guide
+# Performance Guide
 
-Optimization tips and benchmarks for Procedural World Engine.
+Optimization tips and benchmarks for tQandtD project.
 
 ## Table of Contents
 

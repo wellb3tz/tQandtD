@@ -1,7 +1,7 @@
 {
-  "name": "procedural-world-engine",
+  "name": "tqandtd-project",
   "version": "1.0.0",
-  "description": "A TypeScript-based procedural world engine with a browser client",
+  "description": "A TypeScript-based procedural world engine for the tQandtD project",
   "sideEffects": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

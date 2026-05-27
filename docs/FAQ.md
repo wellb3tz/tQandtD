@@ -1,6 +1,6 @@
-﻿# Frequently Asked Questions
+# Frequently Asked Questions
 
-Common questions and answers about Procedural World Engine.
+Common questions and answers about tQandtD project.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ Common questions and answers about Procedural World Engine.
 
 ## General
 
-### What is Procedural World Engine?
+### What is tQandtD project?
 
 A TypeScript library for generating infinite, deterministic procedural worlds in the browser. It uses seed-based random number generation to create terrain, biomes, rivers, lakes, resources, and structures.
 
@@ -242,7 +242,7 @@ Common ranges:
 ### How do I access biome weights?
 
 ```typescript
-import { getBiomeWeightsForTile } from 'procedural-world-engine';
+import { getBiomeWeightsForTile } from 'tqandtd-project';
 
 const chunk = await manager.getChunk(0, 0);
 const tileIndex = 16 * 32 + 16; // Center tile
@@ -365,7 +365,7 @@ This can save ~40-60ms per chunk.
 ### How do I save a world?
 
 ```typescript
-import { WorldSerializer, SerializationFormat } from 'procedural-world-engine';
+import { WorldSerializer, SerializationFormat } from 'tqandtd-project';
 
 const serializer = new WorldSerializer();
 
@@ -496,7 +496,7 @@ Check:
 ### How do I enable debug logging?
 
 ```typescript
-import { configureLogger, LogLevel } from 'procedural-world-engine';
+import { configureLogger, LogLevel } from 'tqandtd-project';
 
 configureLogger({
   level: LogLevel.DEBUG,

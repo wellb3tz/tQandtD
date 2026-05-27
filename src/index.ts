@@ -7,7 +7,7 @@
  * 
  * @example
  * ```typescript
- * import { ChunkManager, BiomeType, ResourceType, StructureType } from 'procedural-world-engine';
+ * import { ChunkManager, BiomeType, ResourceType, StructureType } from 'tqandtd-project';
  * 
  * const manager = new ChunkManager({
  *   seed: 12345,

@@ -14,7 +14,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'procedural-world-engine': resolve(__dirname, './src/index.ts'),
+      'tqandtd-project': resolve(__dirname, './src/index.ts'),
       '@engine': resolve(__dirname, './src'),
       '@core': resolve(__dirname, './app/src/core'),
       '@viewer': resolve(__dirname, './app/src/viewer'),

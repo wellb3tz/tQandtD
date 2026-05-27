@@ -6,7 +6,7 @@ import {
   createDefaultWorldConfig,
   identifyOceanSurfaceTiles,
   planFoliagePlacements,
-} from 'procedural-world-engine';
+} from 'tqandtd-project';
 
 async function main(): Promise<void> {
   const world = new ChunkManager(createDefaultWorldConfig({ seed: 777 }));

@@ -1,26 +1,26 @@
-﻿# Getting Started
+# Getting Started
 
-Get up and running with Procedural World Engine in 5 minutes!
+Get up and running with tQandtD project in 5 minutes!
 
 ## Installation
 
 ### NPM
 
 ```bash
-npm install procedural-world-engine
+npm install tqandtd-project
 ```
 
 ### Yarn
 
 ```bash
-yarn add procedural-world-engine
+yarn add tqandtd-project
 ```
 
 ### CDN (Browser)
 
 ```html
 <script type="module">
-  import { ChunkManager } from 'https://unpkg.com/procedural-world-engine';
+  import { ChunkManager } from 'https://unpkg.com/tqandtd-project';
 </script>
 ```
 
@@ -29,7 +29,7 @@ yarn add procedural-world-engine
 ### 1. Create a World Generator
 
 ```typescript
-import { ChunkManager } from 'procedural-world-engine';
+import { ChunkManager } from 'tqandtd-project';
 
 const manager = new ChunkManager({
   seed: 12345,
@@ -77,7 +77,7 @@ import {
   BiomeType,
   ResourceType,
   getBiomeWeightsForTile
-} from 'procedural-world-engine';
+} from 'tqandtd-project';
 
 // Create world generator
 const manager = new ChunkManager({
@@ -166,7 +166,7 @@ const chunks = await loadChunksAround(100, 200, 2);
 ### Converting Coordinates
 
 ```typescript
-import { worldToChunk, worldToLocal, chunkToWorld, localToIndex } from 'procedural-world-engine';
+import { worldToChunk, worldToLocal, chunkToWorld, localToIndex } from 'tqandtd-project';
 
 // World position -> Chunk coordinates
 const worldX = 100, worldY = 200;
@@ -188,7 +188,7 @@ console.log(`Tile (${localX}, ${localY}) is at index ${index}`);
 ### Error Handling
 
 ```typescript
-import { ChunkGenerationError } from 'procedural-world-engine';
+import { ChunkGenerationError } from 'tqandtd-project';
 
 try {
   const chunk = manager.generateChunk(0, 0);
@@ -204,7 +204,7 @@ try {
 ### Logging Configuration
 
 ```typescript
-import { configureLogger, LogLevel, LogCategory } from 'procedural-world-engine';
+import { configureLogger, LogLevel, LogCategory } from 'tqandtd-project';
 
 // Development: show all logs
 configureLogger({
@@ -279,7 +279,7 @@ setInterval(() => {
 If you get `ValidationError`:
 
 ```typescript
-import { ValidationError } from 'procedural-world-engine';
+import { ValidationError } from 'tqandtd-project';
 
 try {
   const manager = new ChunkManager({

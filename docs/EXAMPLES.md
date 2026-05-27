@@ -1,4 +1,4 @@
-﻿# Examples
+# Examples
 
 Practical code examples for common use cases.
 
@@ -27,7 +27,7 @@ Repository examples are available in `examples/`:
 ### Simple World
 
 ```typescript
-import { ChunkManager } from 'procedural-world-engine';
+import { ChunkManager } from 'tqandtd-project';
 
 const manager = new ChunkManager({
   seed: 12345,
@@ -76,7 +76,7 @@ console.log(`Generated ${chunks.length} chunks`);
 ### Load Chunks Around Player
 
 ```typescript
-import { worldToChunk } from 'procedural-world-engine';
+import { worldToChunk } from 'tqandtd-project';
 
 async function loadChunksAroundPlayer(
   playerX: number,
@@ -225,7 +225,7 @@ const manager = new ChunkManager({
 ### Access Biome Weights
 
 ```typescript
-import { getBiomeWeightsForTile, BiomeType } from 'procedural-world-engine';
+import { getBiomeWeightsForTile, BiomeType } from 'tqandtd-project';
 
 const chunk = await manager.getChunk(0, 0);
 
@@ -270,7 +270,7 @@ console.log(`Found ${forestTiles.length} forest tiles`);
 ### Custom Resources
 
 ```typescript
-import { ResourceType, BiomeType } from 'procedural-world-engine';
+import { ResourceType, BiomeType } from 'tqandtd-project';
 
 const manager = new ChunkManager({
   seed: 12345,
@@ -394,7 +394,7 @@ const chunks = await Promise.all([
 
 ```typescript
 // worker.js
-import { installWorkerHandler } from 'procedural-world-engine/worker';
+import { installWorkerHandler } from 'tqandtd-project/worker';
 
 // Install message handler
 installWorkerHandler();
@@ -409,7 +409,7 @@ installWorkerHandler();
 ### Save World (JSON)
 
 ```typescript
-import { WorldSerializer, SerializationFormat } from 'procedural-world-engine';
+import { WorldSerializer, SerializationFormat } from 'tqandtd-project';
 
 const serializer = new WorldSerializer();
 
@@ -493,7 +493,7 @@ console.log(`Exported ${data.chunks.length} chunks`);
 ### World to Chunk
 
 ```typescript
-import { worldToChunk, worldToLocal } from 'procedural-world-engine';
+import { worldToChunk, worldToLocal } from 'tqandtd-project';
 
 const worldX = 100;
 const worldY = 200;
@@ -513,7 +513,7 @@ console.log(`Local coordinates: (${localX}, ${localY})`);
 ### Get Height at World Position
 
 ```typescript
-import { worldToChunk, worldToLocal, localToIndex } from 'procedural-world-engine';
+import { worldToChunk, worldToLocal, localToIndex } from 'tqandtd-project';
 
 async function getHeightAt(worldX: number, worldY: number): Promise<number> {
   const chunkSize = 32;

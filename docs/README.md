@@ -1,6 +1,6 @@
-﻿# tQandtD project Documentation
+# tQandtD project Documentation
 
-Documentation for the tQandtD procedural world engine and browser client.
+Documentation for the tQandtD project procedural world engine and browser client.
 
 ## Documentation Index
 
@@ -37,11 +37,11 @@ Documentation for the tQandtD procedural world engine and browser client.
 
 ## Package Entrypoints
 
-- `procedural-world-engine`
-- `procedural-world-engine/config`
-- `procedural-world-engine/runtime`
-- `procedural-world-engine/rendering`
-- `procedural-world-engine/worker`
-- `procedural-world-engine/adapters/three`
+- `tqandtd-project`
+- `tqandtd-project/config`
+- `tqandtd-project/runtime`
+- `tqandtd-project/rendering`
+- `tqandtd-project/worker`
+- `tqandtd-project/adapters/three`
 
 

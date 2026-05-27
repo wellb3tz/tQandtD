@@ -1,6 +1,6 @@
-﻿# Advanced Topics
+# Advanced Topics
 
-Advanced features and techniques for Procedural World Engine.
+Advanced features and techniques for tQandtD project.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ Use Web Workers to generate chunks in parallel without blocking the main thread.
 
 ```typescript
 // worker.ts
-import { installWorkerHandler } from 'procedural-world-engine/worker';
+import { installWorkerHandler } from 'tqandtd-project/worker';
 
 // Install message handler
 installWorkerHandler();
@@ -165,7 +165,7 @@ Save and load worlds with JSON or binary format.
 ### Basic Serialization
 
 ```typescript
-import { WorldSerializer, SerializationFormat } from 'procedural-world-engine';
+import { WorldSerializer, SerializationFormat } from 'tqandtd-project';
 
 const serializer = new WorldSerializer();
 
@@ -309,7 +309,7 @@ Create custom biome classification systems.
 ### Custom Biome Classifier
 
 ```typescript
-import { BiomeType, ChunkData } from 'procedural-world-engine';
+import { BiomeType, ChunkData } from 'tqandtd-project';
 
 class CustomBiomeClassifier {
   classify(
@@ -373,7 +373,7 @@ function getBiomeColor(biome: BiomeType) {
 ### Blended Biome Colors
 
 ```typescript
-import { getBiomeWeightsForTile } from 'procedural-world-engine';
+import { getBiomeWeightsForTile } from 'tqandtd-project';
 
 function calculateBlendedColor(
   chunk: ChunkData,
@@ -515,7 +515,7 @@ Extend the engine with custom generation logic.
 ### Custom Resource Generator
 
 ```typescript
-import { Resource, ResourceType, ChunkData } from 'procedural-world-engine';
+import { Resource, ResourceType, ChunkData } from 'tqandtd-project';
 
 class CustomResourceGenerator {
   generate(
@@ -561,7 +561,7 @@ class CustomResourceGenerator {
 ### Custom Structure Generator
 
 ```typescript
-import { Structure, StructureType, ChunkData } from 'procedural-world-engine';
+import { Structure, StructureType, ChunkData } from 'tqandtd-project';
 
 class CustomStructureGenerator {
   generate(

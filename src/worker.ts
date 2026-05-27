@@ -415,7 +415,7 @@ export function handleWorkerMessage(event: { data: WorkerRequest }): void {
  * @example
  * ```typescript
  * // worker.js
- * import { installWorkerHandler } from 'procedural-world-engine/worker';
+ * import { installWorkerHandler } from 'tqandtd-project/worker';
  * installWorkerHandler();
  * ```
  */

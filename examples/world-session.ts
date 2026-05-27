@@ -1,7 +1,7 @@
 import {
   WorldSession,
   createDefaultWorldConfig,
-} from 'procedural-world-engine';
+} from 'tqandtd-project';
 
 async function main(): Promise<void> {
   const session = new WorldSession({

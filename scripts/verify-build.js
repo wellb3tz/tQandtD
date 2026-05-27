@@ -48,12 +48,12 @@ const configApi = require(configEntry);
 const runtimeApi = require(runtimeEntry);
 const renderingApi = require(renderingEntry);
 const threeAdapterApi = require(threeAdapterEntry);
-const packageApi = require('procedural-world-engine');
-const packageWorkerApi = require('procedural-world-engine/worker');
-const packageConfigApi = require('procedural-world-engine/config');
-const packageRuntimeApi = require('procedural-world-engine/runtime');
-const packageRenderingApi = require('procedural-world-engine/rendering');
-const packageThreeAdapterApi = require('procedural-world-engine/adapters/three');
+const packageApi = require('tqandtd-project');
+const packageWorkerApi = require('tqandtd-project/worker');
+const packageConfigApi = require('tqandtd-project/config');
+const packageRuntimeApi = require('tqandtd-project/runtime');
+const packageRenderingApi = require('tqandtd-project/rendering');
+const packageThreeAdapterApi = require('tqandtd-project/adapters/three');
 
 const requiredExports = [
   'ChunkManager',
