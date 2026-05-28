@@ -9,7 +9,7 @@ import {
   type RiverData,
   type RiverPoint,
   type WorldRiverData,
-} from '../gen/rivers';
+} from '../../../gen/rivers';
 
 const SEA_LEVEL = 0.3;
 const RIVER_MOUTH_TAPER_HEIGHT = 0.1;

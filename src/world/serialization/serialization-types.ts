@@ -1,5 +1,5 @@
-import type { Resource, Structure, ChunkData } from './chunk';
-import type { WorldConfig } from './world-config';
+import type { Resource, Structure, ChunkData } from '../chunk';
+import type { WorldConfig } from '../world-config';
 
 export interface ChunkManagerSnapshot {
   readonly config: WorldConfig;
@@ -95,4 +95,3 @@ export interface SerializedChunk {
   lakes: SerializedLake[];
   rivers: SerializedRiver[];
 }
-

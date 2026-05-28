@@ -9,8 +9,8 @@ import { NoiseEngine, type NoiseConfig } from '../core/noise';
 import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
 import { logger, LogCategory } from '../utils/logger';
-import { evictOldLakeCacheEntries, type LakeCacheState } from './lake-cache-eviction';
-import type { WorldLakeData } from './lake-manager-types';
+import { evictOldLakeCacheEntries, type LakeCacheState } from './water/lakes/lake-cache-eviction';
+import type { WorldLakeData } from './water/lakes/lake-manager-types';
 import {
   decodeLakeTile,
   encodeLakeTile,
@@ -19,9 +19,9 @@ import {
   indexLakeTiles,
   registerLakeChunks,
   unindexLakeTiles,
-} from './lake-spatial-index';
+} from './water/lakes/lake-spatial-index';
 
-export type { LakeState, WorldLakeData } from './lake-manager-types';
+export type { LakeState, WorldLakeData } from './water/lakes/lake-manager-types';
 
 /**
  * Manages lakes across multiple chunks.

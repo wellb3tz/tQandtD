@@ -1,10 +1,10 @@
-import type { ChunkData } from './chunk';
+import type { ChunkData } from '../chunk';
 import { createOceanFallbackChunk } from './chunk-biome-processing';
 import {
   ChunkGenerationError,
   type ErrorRecoveryOptions,
-} from '../utils/errors';
-import { logger, LogCategory } from '../utils/logger';
+} from '../../utils/errors';
+import { logger, LogCategory } from '../../utils/logger';
 
 export interface ChunkErrorRecoveryOptions {
   chunkX: number;
@@ -69,4 +69,3 @@ export function generateChunkWithErrorRecovery({
     throw chunkError;
   }
 }
-

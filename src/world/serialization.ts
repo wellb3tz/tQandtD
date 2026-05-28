@@ -10,24 +10,24 @@ import type { ChunkData } from './chunk';
 import { logger, LogCategory } from '../utils/logger';
 import {
   base64StringToUint8Array,
-} from './serialization-array-codec';
-import { deserializeWorldFromBinary, serializeWorldToBinary } from './serialization-binary-container';
+} from './serialization/serialization-array-codec';
+import { deserializeWorldFromBinary, serializeWorldToBinary } from './serialization/serialization-binary-container';
 import {
   deserializeChunkBinary,
   deserializeChunkJSON,
   serializeChunkBinary,
   serializeChunkJSON,
-} from './serialization-chunk-codec';
+} from './serialization/serialization-chunk-codec';
 import {
   calculateChecksum as calculateSerializedWorldChecksum,
   validateChecksum,
   validateSerializedWorld,
-} from './serialization-integrity';
+} from './serialization/serialization-integrity';
 import {
   addChunkToSnapshotCache,
   applyModifications,
   serializeModifications,
-} from './serialization-modifications';
+} from './serialization/serialization-modifications';
 import {
   SerializationFormat,
   type ChunkManagerSnapshot,
@@ -37,7 +37,7 @@ import {
   type SerializedLake,
   type SerializedRiver,
   type SerializedChunk,
-} from './serialization-types';
+} from './serialization/serialization-types';
 
 export {
   SerializationFormat,
@@ -49,7 +49,7 @@ export {
   type SerializedRiverPoint,
   type SerializedRiver,
   type SerializedChunk,
-} from './serialization-types';
+} from './serialization/serialization-types';
 
 /**
  * WorldSerializer class for serializing and deserializing world data

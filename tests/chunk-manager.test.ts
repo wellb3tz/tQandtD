@@ -13,8 +13,8 @@ import { EnhancedBiomeSystem } from '../src/world/enhanced-biome';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG, type WorldRiverData } from '../src/gen/rivers';
 import { LakeManager } from '../src/world/lake-manager';
-import { determineLakeState } from '../src/world/lake-chunk-processing';
-import { convertWorldRiversToChunkRivers } from '../src/world/river-chunk-processing';
+import { determineLakeState } from '../src/world/water/lakes/lake-chunk-processing';
+import { convertWorldRiversToChunkRivers } from '../src/world/water/rivers/river-chunk-processing';
 import { makeMinimalConfig } from './helpers';
 
 // --- Coordinate utilities -----------------------------------------------------

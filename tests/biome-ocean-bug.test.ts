@@ -11,8 +11,8 @@ import { EnhancedBiomeSystem } from '../src/world/enhanced-biome';
 import { makeMinimalConfig } from './helpers';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
-import { fixBiomesAfterHeightChange } from '../src/world/chunk-biome-processing';
-import { carveTerrainForRivers } from '../src/world/river-chunk-processing';
+import { fixBiomesAfterHeightChange } from '../src/world/chunk-manager/chunk-biome-processing';
+import { carveTerrainForRivers } from '../src/world/water/rivers/river-chunk-processing';
 
 const SEA_LEVEL = 0.3;
 

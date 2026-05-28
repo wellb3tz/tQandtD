@@ -1,6 +1,6 @@
-import type { BiomeConfig, BiomeSystem } from './biome';
-import { BiomeType, type ChunkData, createSparseBiomeWeights, getBiomeWeightsForTile } from './chunk';
-import type { EnhancedBiomeSystem } from './enhanced-biome';
+import type { BiomeConfig, BiomeSystem } from '../biome';
+import { BiomeType, type ChunkData, createSparseBiomeWeights, getBiomeWeightsForTile } from '../chunk';
+import type { EnhancedBiomeSystem } from '../enhanced-biome';
 
 const SEA_LEVEL = 0.3;
 

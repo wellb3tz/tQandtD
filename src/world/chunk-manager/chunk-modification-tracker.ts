@@ -1,5 +1,5 @@
-import type { Structure } from './chunk';
-import type { ChunkModification } from './serialization';
+import type { Structure } from '../chunk';
+import type { ChunkModification } from '../serialization';
 
 export function mergeChunkModification(
   modifications: Map<string, ChunkModification>,

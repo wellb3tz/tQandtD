@@ -1,5 +1,5 @@
-import type { LakeData } from '../gen/lakes';
-import type { WorldLakeData } from './lake-manager';
+import type { LakeData } from '../../../gen/lakes';
+import type { WorldLakeData } from '../../lake-manager';
 
 const LAKE_CARVE_DEPTH = 0.04;
 

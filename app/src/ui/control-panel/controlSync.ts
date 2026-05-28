@@ -1,4 +1,4 @@
-import type { ViewerSettings } from '../core/WorldApp';
+import type { ViewerSettings } from '../../core/WorldApp';
 import type { WorldConfig } from '@engine/index';
 import { updateCheckboxValue, updateSliderValue } from './controlElements';
 

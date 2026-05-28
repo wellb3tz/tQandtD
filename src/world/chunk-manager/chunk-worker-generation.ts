@@ -1,6 +1,6 @@
-import type { ChunkData } from './chunk';
-import type { WorkerPool, WorkerTask } from './worker-pool';
-import { logger, LogCategory } from '../utils/logger';
+import type { ChunkData } from '../chunk';
+import type { WorkerPool, WorkerTask } from '../worker-pool';
+import { logger, LogCategory } from '../../utils/logger';
 
 export interface ChunkWorkerGenerationOptions {
   workerPool: WorkerPool;
@@ -51,4 +51,3 @@ export function generateChunkWithWorkerPool({
     workerPool.submitTask(task);
   });
 }
-

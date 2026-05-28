@@ -17,8 +17,8 @@ import {
   getRiverInfluenceRadius,
   interpolateRiverPoint,
   normalized,
-} from './river-geometry';
-import { RiverOccupancyIndex, type OccupiedRiverSegment, type RiverConfluenceHit } from './river-occupancy-index';
+} from './water/rivers/river-geometry';
+import { RiverOccupancyIndex, type OccupiedRiverSegment, type RiverConfluenceHit } from './water/rivers/river-occupancy-index';
 
 const SEA_LEVEL = 0.3;
 const MAX_SAFE_MOUTH_HEIGHT = SEA_LEVEL + 0.14;

@@ -14,7 +14,7 @@ import {
   createExportDialogElement,
   createLoadDialogElement,
   createSaveDialogElement,
-} from './worldManagerDialogs';
+} from './world-manager/worldManagerDialogs';
 
 /**
  * Export format for images

@@ -1,4 +1,4 @@
-import { getRiverValleyWidth, type RiverPoint, type WorldRiverData } from '../gen/rivers';
+import { getRiverValleyWidth, type RiverPoint, type WorldRiverData } from '../../../gen/rivers';
 
 export interface ClosestSegmentPoints {
   candidateT: number;

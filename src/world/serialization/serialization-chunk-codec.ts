@@ -1,6 +1,6 @@
-import type { LakeData } from '../gen/lakes';
-import type { RiverData, RiverPoint } from '../gen/rivers';
-import type { ChunkData } from './chunk';
+import type { LakeData } from '../../gen/lakes';
+import type { RiverData, RiverPoint } from '../../gen/rivers';
+import type { ChunkData } from '../chunk';
 import {
   base64ToFloat32Array,
   base64ToUint16Array,

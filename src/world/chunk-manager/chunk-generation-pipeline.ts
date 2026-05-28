@@ -1,17 +1,17 @@
-import { chunkSeed } from '../core/hash';
-import type { NoiseEngine } from '../core/noise';
-import type { ResourceGenerator } from '../gen/resources';
-import type { StructurePlacer } from '../gen/structures';
-import type { TerrainGenerator } from '../gen/terrain';
-import type { BiomeSystem } from './biome';
-import type { ChunkData } from './chunk';
+import { chunkSeed } from '../../core/hash';
+import type { NoiseEngine } from '../../core/noise';
+import type { ResourceGenerator } from '../../gen/resources';
+import type { StructurePlacer } from '../../gen/structures';
+import type { TerrainGenerator } from '../../gen/terrain';
+import type { BiomeSystem } from '../biome';
+import type { ChunkData } from '../chunk';
 import { fixBiomesAfterHeightChange, generateChunkBiomeData } from './chunk-biome-processing';
-import type { ChunkPerformanceMetrics, WorldConfig } from './world-config';
-import type { EnhancedBiomeSystem } from './enhanced-biome';
-import { carveTerrainForWorldLakes, convertWorldLakesToChunkLakes, determineLakeState } from './lake-chunk-processing';
-import type { LakeManager } from './lake-manager';
-import { carveTerrainForRivers, convertWorldRiversToChunkRivers, determineRiverState } from './river-chunk-processing';
-import type { RiverManager } from './river-manager';
+import type { ChunkPerformanceMetrics, WorldConfig } from '../world-config';
+import type { EnhancedBiomeSystem } from '../enhanced-biome';
+import { carveTerrainForWorldLakes, convertWorldLakesToChunkLakes, determineLakeState } from '../water/lakes/lake-chunk-processing';
+import type { LakeManager } from '../lake-manager';
+import { carveTerrainForRivers, convertWorldRiversToChunkRivers, determineRiverState } from '../water/rivers/river-chunk-processing';
+import type { RiverManager } from '../river-manager';
 import {
   BiomeGenerationError,
   LakeGenerationError,
@@ -20,8 +20,8 @@ import {
   StructureGenerationError,
   TerrainGenerationError,
   type ErrorRecoveryOptions,
-} from '../utils/errors';
-import { logger, LogCategory } from '../utils/logger';
+} from '../../utils/errors';
+import { logger, LogCategory } from '../../utils/logger';
 
 export interface ChunkGenerationPipelineDependencies {
   config: WorldConfig;

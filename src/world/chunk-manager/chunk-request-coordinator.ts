@@ -1,8 +1,8 @@
-import type { ChunkData } from './chunk';
+import type { ChunkData } from '../chunk';
 import type { ChunkCacheStore, InFlightChunkRequests } from './chunk-cache-store';
 import { generateChunkWithWorkerPool } from './chunk-worker-generation';
-import type { WorkerPool } from './worker-pool';
-import { logger, LogCategory } from '../utils/logger';
+import type { WorkerPool } from '../worker-pool';
+import { logger, LogCategory } from '../../utils/logger';
 
 export interface ChunkRequestCoordinatorOptions {
   chunkX: number;
@@ -106,4 +106,3 @@ async function generateAndCacheChunk({
   clearInFlight();
   return chunk;
 }
-

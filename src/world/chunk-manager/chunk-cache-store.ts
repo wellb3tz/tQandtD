@@ -1,4 +1,4 @@
-import type { ChunkData } from './chunk';
+import type { ChunkData } from '../chunk';
 
 export interface CacheEntry {
   chunk: ChunkData;

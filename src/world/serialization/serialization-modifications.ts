@@ -1,10 +1,10 @@
-import type { ChunkData } from './chunk';
+import type { ChunkData } from '../chunk';
 import type {
   ChunkManagerSnapshot,
   ChunkModification,
   SerializationOptions,
 } from './serialization-types';
-import { logger, LogCategory } from '../utils/logger';
+import { logger, LogCategory } from '../../utils/logger';
 
 export function serializeModifications(
   chunkManager: ChunkManagerSnapshot,
@@ -75,4 +75,3 @@ function applyStructureRemovals(chunk: ChunkData, modification: ChunkModificatio
     }
   }
 }
-

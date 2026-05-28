@@ -19,12 +19,12 @@ import {
   VISIBILITY_TOGGLES,
   WATER_VIEW_CONTROLS,
   RIVER_SPLINE_RESOLUTION_SLIDER,
-} from './controlSchemas';
+} from './control-panel/controlSchemas';
 import {
   createCheckboxControl,
   createColorControl,
   createSliderControl,
-} from './controlElements';
+} from './control-panel/controlElements';
 import {
   buildBiomeConfigPatch,
   buildBiomeUpdateConfig,
@@ -35,8 +35,8 @@ import {
   buildStructureConfigPatch,
   buildStructureTypePatch,
   buildTerrainConfigPatch,
-} from './controlConfigPatches';
-import { syncControlsWithConfig, syncVisibilityControls } from './controlSync';
+} from './control-panel/controlConfigPatches';
+import { syncControlsWithConfig, syncVisibilityControls } from './control-panel/controlSync';
 
 /**
  * Parameter change callback type

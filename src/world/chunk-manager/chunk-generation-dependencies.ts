@@ -1,10 +1,10 @@
-import { NoiseEngine } from '../core/noise';
-import { ResourceGenerator } from '../gen/resources';
-import { StructurePlacer } from '../gen/structures';
-import { TerrainGenerator } from '../gen/terrain';
-import { BiomeSystem } from './biome';
-import { EnhancedBiomeSystem } from './enhanced-biome';
-import type { WorldConfig } from './world-config';
+import { NoiseEngine } from '../../core/noise';
+import { ResourceGenerator } from '../../gen/resources';
+import { StructurePlacer } from '../../gen/structures';
+import { TerrainGenerator } from '../../gen/terrain';
+import { BiomeSystem } from '../biome';
+import { EnhancedBiomeSystem } from '../enhanced-biome';
+import type { WorldConfig } from '../world-config';
 
 export interface ChunkGenerationDependencies {
   terrainGenerator: TerrainGenerator;
@@ -40,4 +40,3 @@ export function createChunkGenerationDependencies(config: WorldConfig): ChunkGen
     enhancedBiomeSystem,
   };
 }
-

@@ -1,4 +1,4 @@
-import { getRiverValleyWidth, type RiverConfig, type RiverPoint } from '../gen/rivers';
+import { getRiverValleyWidth, type RiverConfig, type RiverPoint } from '../../../gen/rivers';
 import {
   closestBetweenSegments,
   distanceToSegment,

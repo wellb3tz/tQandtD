@@ -1,4 +1,4 @@
-import type { ChunkData } from './chunk';
+import type { ChunkData } from '../chunk';
 
 type CacheEntry = { chunk: ChunkData };
 type ChunkInvalidationCallback = (chunkX: number, chunkY: number) => void;
