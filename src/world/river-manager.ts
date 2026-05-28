@@ -12,6 +12,13 @@ import {
   type WorldRiverData,
 } from '../gen/rivers';
 import { BiomeType } from './chunk';
+import {
+  boundsForPoints,
+  getRiverInfluenceRadius,
+  interpolateRiverPoint,
+  normalized,
+} from './river-geometry';
+import { RiverOccupancyIndex, type OccupiedRiverSegment, type RiverConfluenceHit } from './river-occupancy-index';
 
 const SEA_LEVEL = 0.3;
 const MAX_SAFE_MOUTH_HEIGHT = SEA_LEVEL + 0.14;
@@ -21,30 +28,8 @@ const MAX_SAFE_COAST_APPROACH_DROP = 0.28;
 const MIN_CONFLUENCE_DRY_POINTS = 4;
 const MAX_CONFLUENCE_OPPOSING_DOT = -0.35;
 const MAX_CONFLUENCE_SURFACE_DROP = 0.14;
-const MIN_OCCUPANCY_CELL_SIZE = 4;
 const CONFLUENCE_ROUTE_BONUS = 6;
 const OCCUPIED_CORRIDOR_EARLY_PENALTY = -8;
-
-interface OccupiedRiverSegment {
-  riverId: string;
-  segmentIndex: number;
-  a: RiverPoint;
-  b: RiverPoint;
-  radius: number;
-}
-
-interface RiverConfluenceHit {
-  segment: OccupiedRiverSegment;
-  candidateT: number;
-  distance: number;
-  existingPoint: RiverPoint;
-}
-
-interface ClosestSegmentPoints {
-  candidateT: number;
-  existingT: number;
-  distance: number;
-}
 
 /**
  * Manages deterministic world-space river systems and exposes chunk
@@ -56,10 +41,7 @@ export class RiverManager {
   private readonly allowedSourceBiomes: Set<number>;
   private readonly rivers: Map<string, WorldRiverData>;
   private readonly generatedRegions: Set<string>;
-  private readonly occupiedSegments: OccupiedRiverSegment[];
-  private readonly occupiedSegmentGrid: Map<string, OccupiedRiverSegment[]>;
-  private readonly occupancyCellSize: number;
-  private maxOccupiedRadius: number;
+  private readonly occupancyIndex: RiverOccupancyIndex;
   private isLakeTile?: (worldX: number, worldY: number) => boolean;
 
   constructor(
@@ -78,10 +60,7 @@ export class RiverManager {
     };
     this.rivers = new Map();
     this.generatedRegions = new Set();
-    this.occupiedSegments = [];
-    this.occupiedSegmentGrid = new Map();
-    this.occupancyCellSize = Math.max(MIN_OCCUPANCY_CELL_SIZE, config.carveBankWidth * 2);
-    this.maxOccupiedRadius = config.carveBankWidth;
+    this.occupancyIndex = new RiverOccupancyIndex(config.carveBankWidth);
   }
 
   getRiversForChunk(chunkX: number, chunkY: number, chunkSize: number): WorldRiverData[] {
@@ -103,7 +82,7 @@ export class RiverManager {
     const chunkMaxY = chunkWorldY + chunkSize;
 
     return Array.from(this.rivers.values()).filter(river => {
-      const padding = this.getRiverInfluenceRadius(river);
+      const padding = getRiverInfluenceRadius(river, this.config.carveBankWidth);
       return (
         river.bounds.maxX >= chunkWorldX - padding &&
         river.bounds.minX <= chunkMaxX + padding &&
@@ -116,9 +95,7 @@ export class RiverManager {
   clear(): void {
     this.rivers.clear();
     this.generatedRegions.clear();
-    this.occupiedSegments.length = 0;
-    this.occupiedSegmentGrid.clear();
-    this.maxOccupiedRadius = this.config.carveBankWidth;
+    this.occupancyIndex.clear();
   }
 
   notifyChunkEvicted(_chunkX: number, _chunkY: number): void {
@@ -141,6 +118,10 @@ export class RiverManager {
    */
   isPointInRiverCorridor(worldX: number, worldY: number): boolean {
     return this.findOccupiedPoint(worldX, worldY) !== null;
+  }
+
+  private findOccupiedPoint(worldX: number, worldY: number): OccupiedRiverSegment | null {
+    return this.occupancyIndex.findOccupiedPoint(worldX, worldY);
   }
 
   private generateRiversForRegion(chunkX: number, chunkY: number, chunkSize: number): void {
@@ -204,7 +185,7 @@ export class RiverManager {
       if (points.length >= 2) {
         const previous = points[points.length - 2];
         const current = points[points.length - 1];
-        const hit = this.findConfluenceHit(previous, current);
+        const hit = this.occupancyIndex.findConfluenceHit(previous, current);
         if (hit) {
           return this.tryCreateMergedTributary(points, hit);
         }
@@ -288,11 +269,11 @@ export class RiverManager {
     nextHeight: number,
     step: number,
   ): number {
-    if (this.occupiedSegments.length === 0) return 0;
+    if (this.occupancyIndex.isEmpty()) return 0;
 
     const current = this.createPoint(x, y, currentHeight);
     const next = this.createPoint(nextX, nextY, nextHeight, current);
-    const hit = this.findConfluenceHit(current, next);
+    const hit = this.occupancyIndex.findConfluenceHit(current, next);
     if (!hit) return 0;
 
     const requiredPoints = Math.max(MIN_CONFLUENCE_DRY_POINTS, this.config.minRiverLength);
@@ -363,7 +344,7 @@ export class RiverManager {
       : points;
     const mainPath = createRiverCorridorPoints(rawMainPath);
     const id = `river_${rawSource.x}_${rawSource.y}_${mouth.x}_${mouth.y}`;
-    const bounds = this.boundsForPoints(mainPath.length > 0 ? mainPath : [mouth]);
+    const bounds = boundsForPoints(mainPath.length > 0 ? mainPath : [mouth]);
 
     return {
       id,
@@ -377,9 +358,9 @@ export class RiverManager {
 
   private acceptRiver(river: WorldRiverData): void {
     this.rivers.set(river.id, river);
-    this.indexRiverPath(river.id, river.mainPath);
+    this.occupancyIndex.indexRiverPath(river.id, river.mainPath, this.config);
     for (const tributary of river.tributaries) {
-      this.indexRiverPath(river.id, tributary.points);
+      this.occupancyIndex.indexRiverPath(river.id, tributary.points, this.config);
     }
   }
 
@@ -410,11 +391,11 @@ export class RiverManager {
 
     targetRiver.tributaries.push(tributary);
     this.boostDownstreamFlow(targetRiver, hit.segment.segmentIndex, tributaryPoints);
-    targetRiver.bounds = this.boundsForPoints([
+    targetRiver.bounds = boundsForPoints([
       ...targetRiver.mainPath,
       ...targetRiver.tributaries.flatMap(path => path.points),
     ]);
-    this.indexRiverPath(targetRiver.id, tributary.points);
+    this.occupancyIndex.indexRiverPath(targetRiver.id, tributary.points, this.config);
 
     return null;
   }
@@ -423,7 +404,7 @@ export class RiverManager {
     const previous = points[points.length - 2];
     const current = points[points.length - 1];
     const raw = points.slice(0, -1);
-    const candidateEnd = this.interpolateRiverPoint(previous, current, hit.candidateT);
+    const candidateEnd = interpolateRiverPoint(previous, current, hit.candidateT);
     if (Math.hypot(candidateEnd.x - raw[raw.length - 1].x, candidateEnd.y - raw[raw.length - 1].y) > 1e-6) {
       raw.push(candidateEnd);
     }
@@ -445,8 +426,8 @@ export class RiverManager {
 
     const previous = points[points.length - 2];
     const current = points[points.length - 1];
-    const candidateDir = this.normalized(current.x - previous.x, current.y - previous.y);
-    const existingDir = this.normalized(hit.segment.b.x - hit.segment.a.x, hit.segment.b.y - hit.segment.a.y);
+    const candidateDir = normalized(current.x - previous.x, current.y - previous.y);
+    const existingDir = normalized(hit.segment.b.x - hit.segment.a.x, hit.segment.b.y - hit.segment.a.y);
     const dot = candidateDir.x * existingDir.x + candidateDir.y * existingDir.y;
     if (dot < MAX_CONFLUENCE_OPPOSING_DOT) return false;
 
@@ -474,283 +455,8 @@ export class RiverManager {
     }
   }
 
-  private indexRiverPath(
-    riverId: string,
-    points: RiverPoint[],
-  ): void {
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i];
-      const b = points[i + 1];
-      const segment: OccupiedRiverSegment = {
-        riverId,
-        segmentIndex: i,
-        a,
-        b,
-        radius: Math.max(
-          this.config.carveBankWidth * 1.15,
-          getRiverValleyWidth(a) * 0.5,
-          getRiverValleyWidth(b) * 0.5,
-        ),
-      };
-      this.occupiedSegments.push(segment);
-      this.maxOccupiedRadius = Math.max(this.maxOccupiedRadius, segment.radius);
-      this.indexOccupiedSegment(segment);
-    }
-  }
-
-  private findOccupiedPoint(x: number, y: number): OccupiedRiverSegment | null {
-    for (const segment of this.queryOccupiedSegmentsForPoint(x, y)) {
-      const distance = this.distanceToSegment(x, y, segment.a, segment.b);
-      if (distance <= segment.radius) return segment;
-    }
-
-    return null;
-  }
-
-  private findConfluenceHit(a: RiverPoint, b: RiverPoint): RiverConfluenceHit | null {
-    let best: RiverConfluenceHit | null = null;
-
-    for (const segment of this.queryOccupiedSegmentsForSegment(a, b)) {
-      const closest = this.closestBetweenSegments(a, b, segment.a, segment.b);
-      if (closest.distance > segment.radius) continue;
-
-      const existingPoint = this.interpolateRiverPoint(segment.a, segment.b, closest.existingT);
-      const hit: RiverConfluenceHit = {
-        segment,
-        candidateT: closest.candidateT,
-        distance: closest.distance,
-        existingPoint,
-      };
-
-      if (!best || hit.distance < best.distance) {
-        best = hit;
-      }
-    }
-
-    return best;
-  }
-
-  private indexOccupiedSegment(segment: OccupiedRiverSegment): void {
-    for (const cellKey of this.getGridKeysForBounds(
-      Math.min(segment.a.x, segment.b.x) - segment.radius,
-      Math.max(segment.a.x, segment.b.x) + segment.radius,
-      Math.min(segment.a.y, segment.b.y) - segment.radius,
-      Math.max(segment.a.y, segment.b.y) + segment.radius,
-    )) {
-      const bucket = this.occupiedSegmentGrid.get(cellKey);
-      if (bucket) {
-        bucket.push(segment);
-      } else {
-        this.occupiedSegmentGrid.set(cellKey, [segment]);
-      }
-    }
-  }
-
-  private queryOccupiedSegmentsForPoint(x: number, y: number): OccupiedRiverSegment[] {
-    const bucket = this.occupiedSegmentGrid.get(this.getGridKeyForPoint(x, y));
-    return bucket ?? [];
-  }
-
-  private queryOccupiedSegmentsForSegment(a: RiverPoint, b: RiverPoint): OccupiedRiverSegment[] {
-    const result: OccupiedRiverSegment[] = [];
-    const seen = new Set<OccupiedRiverSegment>();
-
-    for (const cellKey of this.getGridKeysForBounds(
-      Math.min(a.x, b.x) - this.maxOccupiedRadius,
-      Math.max(a.x, b.x) + this.maxOccupiedRadius,
-      Math.min(a.y, b.y) - this.maxOccupiedRadius,
-      Math.max(a.y, b.y) + this.maxOccupiedRadius,
-    )) {
-      const bucket = this.occupiedSegmentGrid.get(cellKey);
-      if (!bucket) continue;
-
-      for (const segment of bucket) {
-        if (seen.has(segment)) continue;
-        seen.add(segment);
-        result.push(segment);
-      }
-    }
-
-    return result;
-  }
-
-  private getGridKeysForBounds(minX: number, maxX: number, minY: number, maxY: number): string[] {
-    const keys: string[] = [];
-    const minCellX = Math.floor(minX / this.occupancyCellSize);
-    const maxCellX = Math.floor(maxX / this.occupancyCellSize);
-    const minCellY = Math.floor(minY / this.occupancyCellSize);
-    const maxCellY = Math.floor(maxY / this.occupancyCellSize);
-
-    for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
-      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
-        keys.push(`${cellX},${cellY}`);
-      }
-    }
-
-    return keys;
-  }
-
-  private getGridKeyForPoint(x: number, y: number): string {
-    return `${Math.floor(x / this.occupancyCellSize)},${Math.floor(y / this.occupancyCellSize)}`;
-  }
-
-  private closestBetweenSegments(
-    candidateA: RiverPoint,
-    candidateB: RiverPoint,
-    existingA: RiverPoint,
-    existingB: RiverPoint,
-  ): ClosestSegmentPoints {
-    const candidates: ClosestSegmentPoints[] = [];
-    const candidateToExistingA = this.closestPointOnSegment(existingA.x, existingA.y, candidateA, candidateB);
-    candidates.push({
-      candidateT: candidateToExistingA.t,
-      existingT: 0,
-      distance: candidateToExistingA.distance,
-    });
-
-    const candidateToExistingB = this.closestPointOnSegment(existingB.x, existingB.y, candidateA, candidateB);
-    candidates.push({
-      candidateT: candidateToExistingB.t,
-      existingT: 1,
-      distance: candidateToExistingB.distance,
-    });
-
-    const existingToCandidateA = this.closestPointOnSegment(candidateA.x, candidateA.y, existingA, existingB);
-    candidates.push({
-      candidateT: 0,
-      existingT: existingToCandidateA.t,
-      distance: existingToCandidateA.distance,
-    });
-
-    const existingToCandidateB = this.closestPointOnSegment(candidateB.x, candidateB.y, existingA, existingB);
-    candidates.push({
-      candidateT: 1,
-      existingT: existingToCandidateB.t,
-      distance: existingToCandidateB.distance,
-    });
-
-    const intersection = this.segmentIntersection(candidateA, candidateB, existingA, existingB);
-    if (intersection) {
-      candidates.push({
-        candidateT: intersection.candidateT,
-        existingT: intersection.existingT,
-        distance: 0,
-      });
-    }
-
-    return candidates.reduce((best, current) => current.distance < best.distance ? current : best);
-  }
-
-  private closestPointOnSegment(
-    x: number,
-    y: number,
-    a: RiverPoint,
-    b: RiverPoint,
-  ): { x: number; y: number; t: number; distance: number } {
-    const vx = b.x - a.x;
-    const vy = b.y - a.y;
-    const lenSq = vx * vx + vy * vy || 1;
-    const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / lenSq));
-    const px = a.x + vx * t;
-    const py = a.y + vy * t;
-
-    return {
-      x: px,
-      y: py,
-      t,
-      distance: Math.hypot(x - px, y - py),
-    };
-  }
-
-  private distanceToSegment(x: number, y: number, a: RiverPoint, b: RiverPoint): number {
-    return this.closestPointOnSegment(x, y, a, b).distance;
-  }
-
-  private segmentIntersection(
-    a: RiverPoint,
-    b: RiverPoint,
-    c: RiverPoint,
-    d: RiverPoint,
-  ): { candidateT: number; existingT: number } | null {
-    const rX = b.x - a.x;
-    const rY = b.y - a.y;
-    const sX = d.x - c.x;
-    const sY = d.y - c.y;
-    const denominator = rX * sY - rY * sX;
-    if (Math.abs(denominator) < 1e-9) return null;
-
-    const cmaX = c.x - a.x;
-    const cmaY = c.y - a.y;
-    const candidateT = (cmaX * sY - cmaY * sX) / denominator;
-    const existingT = (cmaX * rY - cmaY * rX) / denominator;
-
-    if (candidateT < 0 || candidateT > 1 || existingT < 0 || existingT > 1) return null;
-
-    return {
-      candidateT,
-      existingT,
-    };
-  }
-
-  private interpolateRiverPoint(a: RiverPoint, b: RiverPoint, t: number): RiverPoint {
-    const optional = (start: number | undefined, end: number | undefined): number | undefined => {
-      if (!Number.isFinite(start) && !Number.isFinite(end)) return undefined;
-      const from = Number.isFinite(start) ? (start as number) : (end as number);
-      const to = Number.isFinite(end) ? (end as number) : from;
-      return from + (to - from) * t;
-    };
-
-    return {
-      ...a,
-      x: a.x + (b.x - a.x) * t,
-      y: a.y + (b.y - a.y) * t,
-      height: a.height + (b.height - a.height) * t,
-      surfaceLevel: a.surfaceLevel + (b.surfaceLevel - a.surfaceLevel) * t,
-      width: a.width + (b.width - a.width) * t,
-      depth: a.depth + (b.depth - a.depth) * t,
-      flow: optional(a.flow, b.flow),
-      channelWidth: optional(a.channelWidth, b.channelWidth),
-      valleyWidth: optional(a.valleyWidth, b.valleyWidth),
-      channelDepth: optional(a.channelDepth, b.channelDepth),
-      valleyDepth: optional(a.valleyDepth, b.valleyDepth),
-      flowX: a.flowX + (b.flowX - a.flowX) * t,
-      flowY: a.flowY + (b.flowY - a.flowY) * t,
-    };
-  }
-
-  private normalized(x: number, y: number): { x: number; y: number } {
-    const length = Math.hypot(x, y) || 1;
-    return { x: x / length, y: y / length };
-  }
-
-  private getRiverInfluenceRadius(river: WorldRiverData): number {
-    let radius = this.config.carveBankWidth;
-    const includePoint = (point: RiverPoint): void => {
-      radius = Math.max(radius, getRiverValleyWidth(point) * 0.5);
-    };
-
-    river.mainPath.forEach(includePoint);
-    for (const tributary of river.tributaries) {
-      tributary.points.forEach(includePoint);
-    }
-
-    return radius;
-  }
-
   private isOceanPoint(point: RiverPoint): boolean {
     return point.height <= SEA_LEVEL || this.getBiomeAt(point.x, point.y) === BiomeType.OCEAN;
-  }
-
-  private boundsForPoints(points: RiverPoint[]): { minX: number; maxX: number; minY: number; maxY: number } {
-    const xs = points.map(p => p.x);
-    const ys = points.map(p => p.y);
-
-    return {
-      minX: Math.min(...xs),
-      maxX: Math.max(...xs),
-      minY: Math.min(...ys),
-      maxY: Math.max(...ys),
-    };
   }
 
   private getChunkKey(chunkX: number, chunkY: number): string {

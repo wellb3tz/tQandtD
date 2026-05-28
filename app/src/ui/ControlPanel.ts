@@ -6,25 +6,37 @@
  */
 
 import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings, type SkyViewSettings } from '../core/WorldApp';
-import { DEFAULT_CLIMATE_CONFIG, DEFAULT_RIVER_CONFIG, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
+import { type WorldConfig, type WorldConfigOverrides } from '@engine/index';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
   BIOME_SLIDERS,
   CACHE_SIZE_SLIDER,
-  DEFAULT_RESOURCE_BIOMES,
   RESOURCE_TYPE_TOGGLES,
-  RESOURCE_TYPE_BY_CONTROL_ID,
   STRUCTURE_TYPE_TOGGLES,
-  STRUCTURE_TYPE_BY_CONTROL_ID,
   SKY_VIEW_CONTROLS,
   TERRAIN_SLIDERS,
   VIEW_DISTANCE_SLIDER,
   VISIBILITY_TOGGLES,
   WATER_VIEW_CONTROLS,
   RIVER_SPLINE_RESOLUTION_SLIDER,
-  type CheckboxConfig,
-  type SliderConfig,
 } from './controlSchemas';
+import {
+  createCheckboxControl,
+  createColorControl,
+  createSliderControl,
+} from './controlElements';
+import {
+  buildBiomeConfigPatch,
+  buildBiomeUpdateConfig,
+  buildLakeConfigPatch,
+  buildResourceConfigPatch,
+  buildResourceTypePatch,
+  buildRiverConfigPatch,
+  buildStructureConfigPatch,
+  buildStructureTypePatch,
+  buildTerrainConfigPatch,
+} from './controlConfigPatches';
+import { syncControlsWithConfig, syncVisibilityControls } from './controlSync';
 
 /**
  * Parameter change callback type
@@ -49,16 +61,6 @@ export interface PresetConfig {
  * Built-in presets
  */
 const PRESETS: PresetConfig[] = [];
-
-const ENHANCED_BIOME_FEATURES = new Set([
-  'enableTransitions',
-  'transitionWidth',
-  'enableElevationBands',
-  'snowLineElevation',
-  'treeLineElevation',
-  'worldTemperatureOffset',
-  'worldMoistureOffset',
-]);
 
 /**
  * Element ID constants for DOM queries
@@ -108,17 +110,6 @@ export class ControlPanel {
   }
 
   /**
-   * Calculate decimal places from step size
-   */
-  private getDecimalPlaces(step: number): number {
-    if (step >= 1) return 0;
-    
-    const stepStr = step.toString();
-    const decimalIndex = stepStr.indexOf('.');
-    return decimalIndex !== -1 ? stepStr.length - decimalIndex - 1 : 0;
-  }
-
-  /**
    * Create terrain parameter controls
    */
   private createTerrainControls(): void {
@@ -126,14 +117,14 @@ export class ControlPanel {
     if (!terrainContainer) return;
 
     TERRAIN_SLIDERS.forEach(config => {
-      const control = this.createSliderControl(config, (value) => {
+      const control = createSliderControl(config, (value) => {
         this.updateTerrainConfig(config.id, value);
       });
       terrainContainer.appendChild(control);
     });
 
     // 3D noise checkbox
-    const enable3DCheckbox = this.createCheckboxControl({
+    const enable3DCheckbox = createCheckboxControl({
       id: 'enable3D',
       label: 'Enable 3D Noise',
       defaultValue: false,
@@ -148,7 +139,7 @@ export class ControlPanel {
     terrainContainer.appendChild(enable3DCheckbox);
 
     // Z-scale slider (conditional)
-    const zScaleControl = this.createSliderControl({
+    const zScaleControl = createSliderControl({
       id: 'zScale',
       label: 'Z Scale',
       min: 0.1,
@@ -170,7 +161,7 @@ export class ControlPanel {
     terrainContainer.appendChild(continentalSection);
 
     // Enable continentalness checkbox
-    const continentalnessCheckbox = this.createCheckboxControl({
+    const continentalnessCheckbox = createCheckboxControl({
       id: 'enableContinentalness',
       label: 'Enable Continentalness',
       defaultValue: true,
@@ -185,7 +176,7 @@ export class ControlPanel {
     terrainContainer.appendChild(continentalnessCheckbox);
 
     // Continental scale slider
-    const continentalScaleControl = this.createSliderControl({
+    const continentalScaleControl = createSliderControl({
       id: 'continentalScale',
       label: 'Continental Scale',
       min: 0.0005,
@@ -200,7 +191,7 @@ export class ControlPanel {
     terrainContainer.appendChild(continentalScaleControl);
 
     // Continental strength slider
-    const continentalStrengthControl = this.createSliderControl({
+    const continentalStrengthControl = createSliderControl({
       id: 'continentalStrength',
       label: 'Ocean Coverage',
       min: 0.1,
@@ -223,7 +214,7 @@ export class ControlPanel {
     if (!biomeContainer) return;
 
     BIOME_SLIDERS.forEach(config => {
-      const control = this.createSliderControl(config, (value) => {
+      const control = createSliderControl(config, (value) => {
         this.updateBiomeConfig(config.id, value);
       });
       biomeContainer.appendChild(control);
@@ -236,7 +227,7 @@ export class ControlPanel {
     biomeContainer.appendChild(enhancedSection);
 
     // Enable transitions
-    const transitionsCheckbox = this.createCheckboxControl({
+    const transitionsCheckbox = createCheckboxControl({
       id: 'enableTransitions',
       label: 'Enable Biome Blending',
       defaultValue: false,
@@ -251,7 +242,7 @@ export class ControlPanel {
     biomeContainer.appendChild(transitionsCheckbox);
 
     // Transition width (conditional)
-    const transitionWidthControl = this.createSliderControl({
+    const transitionWidthControl = createSliderControl({
       id: 'transitionWidth',
       label: 'Blend Strength',
       min: 0.01,
@@ -267,7 +258,7 @@ export class ControlPanel {
     biomeContainer.appendChild(transitionWidthControl);
 
     // Enable elevation bands
-    const elevationBandsCheckbox = this.createCheckboxControl({
+    const elevationBandsCheckbox = createCheckboxControl({
       id: 'enableElevationBands',
       label: 'Enable Elevation Bands',
       defaultValue: false,
@@ -282,7 +273,7 @@ export class ControlPanel {
     biomeContainer.appendChild(elevationBandsCheckbox);
 
     // Snow line elevation (conditional)
-    const snowLineControl = this.createSliderControl({
+    const snowLineControl = createSliderControl({
       id: 'snowLineElevation',
       label: 'Snow Line Elevation',
       min: 0.6,
@@ -312,13 +303,13 @@ export class ControlPanel {
     resourceContainer.appendChild(resourceTypesSection);
 
     RESOURCE_TYPE_TOGGLES.forEach(config => {
-      const control = this.createCheckboxControl(config, (checked) => {
+      const control = createCheckboxControl(config, (checked) => {
         this.updateResourceTypeConfig(config.id, checked);
       });
       resourceContainer.appendChild(control);
     });
 
-    const densityControl = this.createSliderControl({
+    const densityControl = createSliderControl({
       id: 'densityThreshold',
       label: 'Resource Density',
       min: 0.3,
@@ -339,13 +330,13 @@ export class ControlPanel {
     resourceContainer.appendChild(structureTypesSection);
 
     STRUCTURE_TYPE_TOGGLES.forEach(config => {
-      const control = this.createCheckboxControl(config, (checked) => {
+      const control = createCheckboxControl(config, (checked) => {
         this.updateStructureTypeConfig(config.id, checked);
       });
       resourceContainer.appendChild(control);
     });
 
-    const minDistanceControl = this.createSliderControl({
+    const minDistanceControl = createSliderControl({
       id: 'minDistance',
       label: 'Structure Min Distance',
       min: 5,
@@ -380,7 +371,7 @@ export class ControlPanel {
     const currentLakeConfig = this.currentConfig?.lakeConfig;
     const lakesEnabled = currentLakeConfig?.enabled ?? true;
 
-    const enableLakesCheckbox = this.createCheckboxControl({
+    const enableLakesCheckbox = createCheckboxControl({
       id: 'enableMultiChunkLakes',
       label: 'Enable Multi-Chunk Lakes',
       defaultValue: lakesEnabled,
@@ -399,7 +390,7 @@ export class ControlPanel {
     const currentRiverConfig = this.currentConfig?.riverConfig;
     const riversEnabled = currentRiverConfig?.enabled ?? true;
 
-    const enableRiversCheckbox = this.createCheckboxControl({
+    const enableRiversCheckbox = createCheckboxControl({
       id: 'enableRivers',
       label: 'Enable Rivers',
       defaultValue: riversEnabled,
@@ -409,7 +400,7 @@ export class ControlPanel {
     });
     riversSection.appendChild(enableRiversCheckbox);
 
-    const splineResolutionControl = this.createSliderControl(RIVER_SPLINE_RESOLUTION_SLIDER, (value) => {
+    const splineResolutionControl = createSliderControl(RIVER_SPLINE_RESOLUTION_SLIDER, (value) => {
       this.updateRiverConfig('splineResolution', value);
     });
     riversSection.appendChild(splineResolutionControl);
@@ -420,32 +411,32 @@ export class ControlPanel {
     viewSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Water Surface View</h4>';
     waterContainer.appendChild(viewSection);
 
-    const colorControl = this.createColorControl(WATER_VIEW_CONTROLS.color, (color) => {
+    const colorControl = createColorControl(WATER_VIEW_CONTROLS.color, (color) => {
       this.updateWaterViewConfig('ocean', 'color', parseInt(color.replace('#', '0x')));
     });
     viewSection.appendChild(colorControl);
 
-    const opacityControl = this.createSliderControl(WATER_VIEW_CONTROLS.opacity, (value) => {
+    const opacityControl = createSliderControl(WATER_VIEW_CONTROLS.opacity, (value) => {
       this.updateWaterViewConfig('ocean', 'opacity', value);
     });
     viewSection.appendChild(opacityControl);
 
-    const shininessControl = this.createSliderControl(WATER_VIEW_CONTROLS.shininess, (value) => {
+    const shininessControl = createSliderControl(WATER_VIEW_CONTROLS.shininess, (value) => {
       this.updateWaterViewConfig('ocean', 'shininess', value);
     });
     viewSection.appendChild(shininessControl);
 
-    const wavesControl = this.createCheckboxControl(WATER_VIEW_CONTROLS.enableWaves, (checked) => {
+    const wavesControl = createCheckboxControl(WATER_VIEW_CONTROLS.enableWaves, (checked) => {
       this.updateWaterViewConfig('ocean', 'enableWaves', checked);
     });
     viewSection.appendChild(wavesControl);
 
-    const waveHeightControl = this.createSliderControl(WATER_VIEW_CONTROLS.waveHeight, (value) => {
+    const waveHeightControl = createSliderControl(WATER_VIEW_CONTROLS.waveHeight, (value) => {
       this.updateWaterViewConfig('ocean', 'waveHeight', value);
     });
     viewSection.appendChild(waveHeightControl);
 
-    const waveSpeedControl = this.createSliderControl(WATER_VIEW_CONTROLS.waveSpeed, (value) => {
+    const waveSpeedControl = createSliderControl(WATER_VIEW_CONTROLS.waveSpeed, (value) => {
       this.updateWaterViewConfig('ocean', 'waveSpeed', value);
     });
     viewSection.appendChild(waveSpeedControl);
@@ -458,19 +449,19 @@ export class ControlPanel {
     const advancedContainer = document.getElementById(ELEMENT_IDS.ADVANCED_CONTROLS);
     if (!advancedContainer) return;
 
-    const viewDistanceControl = this.createSliderControl(VIEW_DISTANCE_SLIDER, (value) => {
+    const viewDistanceControl = createSliderControl(VIEW_DISTANCE_SLIDER, (value) => {
       this.app?.updateAppSettings({ viewDistance: value });
     });
     advancedContainer.appendChild(viewDistanceControl);
 
-    const cacheSizeControl = this.createSliderControl(CACHE_SIZE_SLIDER, (value) => {
+    const cacheSizeControl = createSliderControl(CACHE_SIZE_SLIDER, (value) => {
       if (this.app) {
         this.applyEngineConfigChange({ maxCacheSize: value });
       }
     });
     advancedContainer.appendChild(cacheSizeControl);
 
-    const workerCheckbox = this.createCheckboxControl({
+    const workerCheckbox = createCheckboxControl({
       id: 'enableWorkerPool',
       label: 'Enable Additional Worker (World Generation)',
       defaultValue: false,
@@ -486,22 +477,22 @@ export class ControlPanel {
     atmosphereSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Atmosphere</h4>';
     advancedContainer.appendChild(atmosphereSection);
 
-    const turbidityControl = this.createSliderControl(SKY_VIEW_CONTROLS.turbidity, (value) => {
+    const turbidityControl = createSliderControl(SKY_VIEW_CONTROLS.turbidity, (value) => {
       this.updateSkyConfig('turbidity', value);
     });
     atmosphereSection.appendChild(turbidityControl);
 
-    const rayleighControl = this.createSliderControl(SKY_VIEW_CONTROLS.rayleigh, (value) => {
+    const rayleighControl = createSliderControl(SKY_VIEW_CONTROLS.rayleigh, (value) => {
       this.updateSkyConfig('rayleigh', value);
     });
     atmosphereSection.appendChild(rayleighControl);
 
-    const elevationControl = this.createSliderControl(SKY_VIEW_CONTROLS.elevation, (value) => {
+    const elevationControl = createSliderControl(SKY_VIEW_CONTROLS.elevation, (value) => {
       this.updateSkyConfig('elevation', value);
     });
     atmosphereSection.appendChild(elevationControl);
 
-    const azimuthControl = this.createSliderControl(SKY_VIEW_CONTROLS.azimuth, (value) => {
+    const azimuthControl = createSliderControl(SKY_VIEW_CONTROLS.azimuth, (value) => {
       this.updateSkyConfig('azimuth', value);
     });
     atmosphereSection.appendChild(azimuthControl);
@@ -553,136 +544,11 @@ export class ControlPanel {
     if (!visibilityContainer) return;
 
     VISIBILITY_TOGGLES.forEach(config => {
-      const control = this.createCheckboxControl(config, (checked) => {
+      const control = createCheckboxControl(config, (checked) => {
         this.updateVisibility(config.id as keyof ViewerSettings, checked);
       });
       visibilityContainer.appendChild(control);
     });
-  }
-
-  /**
-   * Create a slider control element
-   */
-  private createSliderControl(
-    config: SliderConfig,
-    onChange: (value: number) => void
-  ): HTMLElement {
-    const group = document.createElement('div');
-    group.className = 'control-group';
-
-    const label = document.createElement('label');
-    label.htmlFor = config.id;
-    label.textContent = config.label;
-    if (config.tooltip) {
-      label.title = config.tooltip;
-    }
-
-    const valueDisplay = document.createElement('span');
-    valueDisplay.className = 'slider-value';
-    const decimalPlaces = this.getDecimalPlaces(config.step);
-    valueDisplay.textContent = config.defaultValue.toFixed(decimalPlaces);
-
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.id = config.id;
-    slider.min = config.min.toString();
-    slider.max = config.max.toString();
-    slider.step = config.step.toString();
-    slider.value = config.defaultValue.toString();
-
-    slider.addEventListener('input', (e) => {
-      const value = parseFloat((e.target as HTMLInputElement).value);
-      const decimalPlaces = this.getDecimalPlaces(config.step);
-      valueDisplay.textContent = value.toFixed(decimalPlaces);
-      onChange(value);
-    });
-
-    label.appendChild(valueDisplay);
-    group.appendChild(label);
-    group.appendChild(slider);
-
-    return group;
-  }
-
-  /**
-   * Create a color control element
-   */
-  private createColorControl(
-    config: { id: string; label: string; defaultValue: string; tooltip?: string },
-    onChange: (color: string) => void
-  ): HTMLElement {
-    const group = document.createElement('div');
-    group.className = 'control-group';
-    group.style.display = 'flex';
-    group.style.alignItems = 'center';
-    group.style.gap = '8px';
-    group.style.marginBottom = '12px';
-
-    const label = document.createElement('label');
-    label.htmlFor = config.id;
-    label.textContent = config.label;
-    label.style.flex = '1';
-    if (config.tooltip) {
-      label.title = config.tooltip;
-    }
-
-    const colorInput = document.createElement('input');
-    colorInput.type = 'color';
-    colorInput.id = config.id;
-    colorInput.value = config.defaultValue;
-    colorInput.style.width = '50px';
-    colorInput.style.height = '30px';
-    colorInput.style.border = '1px solid var(--border-color, #ccc)';
-    colorInput.style.borderRadius = '4px';
-    colorInput.style.cursor = 'pointer';
-
-    colorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      onChange(color);
-    });
-
-    group.appendChild(label);
-    group.appendChild(colorInput);
-
-    return group;
-  }
-
-  /**
-   * Create a checkbox control element
-   */
-  private createCheckboxControl(
-    config: CheckboxConfig,
-    onChange: (checked: boolean) => void
-  ): HTMLElement {
-    const group = document.createElement('div');
-    group.className = 'control-group';
-    group.style.display = 'flex';
-    group.style.alignItems = 'center';
-    group.style.gap = '8px';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = config.id;
-    checkbox.checked = config.defaultValue;
-
-    const label = document.createElement('label');
-    label.htmlFor = config.id;
-    label.textContent = config.label;
-    label.style.marginBottom = '0';
-    label.style.cursor = 'pointer';
-    if (config.tooltip) {
-      label.title = config.tooltip;
-    }
-
-    checkbox.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      onChange(checked);
-    });
-
-    group.appendChild(checkbox);
-    group.appendChild(label);
-
-    return group;
   }
 
   /**
@@ -700,45 +566,7 @@ export class ControlPanel {
   private updateBiomeConfig(key: string, value: number | boolean): void {
     if (!this.app || !this.currentConfig) return;
 
-    if (ENHANCED_BIOME_FEATURES.has(key)) {
-      // Update enhancedBiomeConfig
-      const currentEnhancedConfig = this.currentConfig.enhancedBiomeConfig || {
-        ...this.currentConfig.biomeConfig,
-        enableTransitions: true,
-        transitionWidth: 10,
-        enableElevationBands: false,
-        snowLineElevation: 0.8,
-        treeLineElevation: 0.75
-      };
-
-      this.applyEngineConfigChange({
-        enhancedBiomeConfig: {
-          ...currentEnhancedConfig,
-          [key]: value
-        }
-      });
-    } else if (key === 'temperatureScale' || key === 'moistureScale') {
-      // Update base biomeConfig (for backward compatibility)
-      this.patchBiomeConfig({ [key]: value });
-
-      // When ClimateSystem is active, scale parameters live inside climateConfig
-      if (this.currentConfig.enhancedBiomeConfig) {
-        const currentEnhanced = this.currentConfig.enhancedBiomeConfig;
-        const climateConfigKey = key === 'temperatureScale' ? 'climateScale' : 'detailScale';
-        this.applyEngineConfigChange({
-          enhancedBiomeConfig: {
-            ...currentEnhanced,
-            climateConfig: {
-              ...DEFAULT_CLIMATE_CONFIG,
-              ...currentEnhanced.climateConfig,
-              [climateConfigKey]: value,
-            },
-          },
-        });
-      }
-    } else {
-      this.patchBiomeConfig({ [key]: value });
-    }
+    this.applyEngineConfigChange(buildBiomeUpdateConfig(this.currentConfig, key, value));
   }
 
   /**
@@ -756,30 +584,8 @@ export class ControlPanel {
   private updateResourceTypeConfig(key: string, enabled: boolean): void {
     if (!this.app || !this.currentConfig) return;
 
-    const resourceTypeIndex = RESOURCE_TYPE_BY_CONTROL_ID[key];
-    if (resourceTypeIndex === undefined) return;
-
-    // Update the resource types array
-    const currentTypes = this.currentConfig.resourceConfig?.types || [];
-    let updatedTypes = [...currentTypes];
-
-    if (enabled) {
-      // Add the resource type if not already present
-      if (!updatedTypes.some(t => t.type === resourceTypeIndex)) {
-        updatedTypes.push({
-          type: resourceTypeIndex,
-          rarity: 0.5,
-          biomes: DEFAULT_RESOURCE_BIOMES[resourceTypeIndex] || [3, 4, 5, 6],
-          minAmount: 1,
-          maxAmount: 5
-        });
-      }
-    } else {
-      // Remove the resource type
-      updatedTypes = updatedTypes.filter(t => t.type !== resourceTypeIndex);
-    }
-
-    this.patchResourceConfig({ types: updatedTypes });
+    const patch = buildResourceTypePatch(this.currentConfig, key, enabled);
+    if (patch) this.patchResourceConfig(patch);
   }
 
   /**
@@ -797,28 +603,8 @@ export class ControlPanel {
   private updateStructureTypeConfig(key: string, enabled: boolean): void {
     if (!this.app || !this.currentConfig) return;
 
-    const structureTypeIndex = STRUCTURE_TYPE_BY_CONTROL_ID[key];
-    if (structureTypeIndex === undefined) return;
-
-    // Update the structure types array
-    const currentTypes = this.currentConfig.structureConfig?.types || [];
-    let updatedTypes = [...currentTypes];
-
-    if (enabled) {
-      // Add the structure type if not already present
-      if (!updatedTypes.some(t => t.type === structureTypeIndex)) {
-        updatedTypes.push({
-          type: structureTypeIndex,
-          rarity: 1.0,
-          rules: [] // Will use default rules
-        });
-      }
-    } else {
-      // Remove the structure type
-      updatedTypes = updatedTypes.filter(t => t.type !== structureTypeIndex);
-    }
-
-    this.patchStructureConfig({ types: updatedTypes });
+    const patch = buildStructureTypePatch(this.currentConfig, key, enabled);
+    if (patch) this.patchStructureConfig(patch);
   }
 
   /**
@@ -884,19 +670,7 @@ export class ControlPanel {
    */
   private updateFromState(state: AppState): void {
     this.currentConfig = state.config;
-    // Sync visibility toggles to current app state
-    const vs = state.viewerSettings;
-    this.updateCheckboxValue('showTerrain', vs.showTerrain);
-    this.updateCheckboxValue('showFoliage', vs.showFoliage);
-    this.updateCheckboxValue('showBiomes', vs.showBiomes);
-    this.updateCheckboxValue('showTemperature', vs.showTemperature);
-    this.updateCheckboxValue('showWater', vs.showWater);
-    this.updateCheckboxValue('showResources', vs.showResources);
-    this.updateCheckboxValue('showStructures', vs.showStructures);
-    this.updateCheckboxValue('showChunkBoundaries', vs.showChunkBoundaries);
-    this.updateCheckboxValue('showWireframe', vs.showWireframe);
-    this.updateCheckboxValue('terrainTexturesEnabled', vs.terrainTexturesEnabled);
-    this.updateCheckboxValue('fogOfWarEnabled', vs.fogOfWarEnabled);
+    syncVisibilityControls(state.viewerSettings);
   }
 
   /**
@@ -918,88 +692,37 @@ export class ControlPanel {
   private patchTerrainConfig(patch: Record<string, number | boolean>): void {
     if (!this.currentConfig) return;
 
-    this.applyEngineConfigChange({
-      terrainConfig: {
-        ...this.currentConfig.terrainConfig,
-        ...patch,
-      },
-    });
+    this.applyEngineConfigChange(buildTerrainConfigPatch(this.currentConfig, patch));
   }
 
   private patchBiomeConfig(patch: Record<string, number | boolean>): void {
     if (!this.currentConfig) return;
 
-    const newConfig: WorldConfigOverrides = {
-      biomeConfig: {
-        ...this.currentConfig.biomeConfig,
-        ...patch,
-      },
-    };
-
-    if (this.currentConfig.enhancedBiomeConfig) {
-      newConfig.enhancedBiomeConfig = {
-        ...this.currentConfig.enhancedBiomeConfig,
-        ...patch,
-      };
-    }
-
-    this.applyEngineConfigChange(newConfig);
+    this.applyEngineConfigChange(buildBiomeConfigPatch(this.currentConfig, patch));
   }
 
   private patchResourceConfig(patch: Record<string, unknown>): void {
     if (!this.currentConfig) return;
 
-    this.applyEngineConfigChange({
-      resourceConfig: {
-        ...this.currentConfig.resourceConfig,
-        ...patch,
-      },
-    });
+    this.applyEngineConfigChange(buildResourceConfigPatch(this.currentConfig, patch));
   }
 
   private patchStructureConfig(patch: Record<string, unknown>): void {
     if (!this.currentConfig) return;
 
-    this.applyEngineConfigChange({
-      structureConfig: {
-        ...this.currentConfig.structureConfig,
-        ...patch,
-      },
-    });
+    this.applyEngineConfigChange(buildStructureConfigPatch(this.currentConfig, patch));
   }
 
   private patchLakeConfig(patch: Record<string, boolean>): void {
     if (!this.currentConfig) return;
 
-    const currentLakeConfig = this.currentConfig.lakeConfig || {
-      enabled: true,
-      useMultiChunk: false,
-      noiseScale: 0.01,
-      noiseThreshold: 0.62,
-      minElevation: 0.32,
-      maxElevation: 0.72,
-      allowedBiomes: [3, 4, 5, 6, 7, 8, 9],
-      maxLakeTiles: 80,
-      maxFillDepth: 0.06,
-    };
-
-    this.applyEngineConfigChange({
-      lakeConfig: {
-        ...currentLakeConfig,
-        ...patch,
-      },
-    });
+    this.applyEngineConfigChange(buildLakeConfigPatch(this.currentConfig, patch));
   }
 
   private patchRiverConfig(patch: Record<string, boolean | number>): void {
     if (!this.currentConfig) return;
 
-    this.applyEngineConfigChange({
-      riverConfig: {
-        ...(this.currentConfig.riverConfig || DEFAULT_RIVER_CONFIG),
-        ...patch,
-      },
-    });
+    this.applyEngineConfigChange(buildRiverConfigPatch(this.currentConfig, patch));
   }
 
   /**
@@ -1045,146 +768,11 @@ export class ControlPanel {
       this.currentConfig = preset.config;
       
       // Update all UI controls to reflect preset values
-      this.syncUIWithConfig(preset.config);
+      syncControlsWithConfig(preset.config);
       
       // Notify callbacks
       for (const callback of this.presetSelectCallbacks) {
         callback(preset);
-      }
-    }
-  }
-
-  /**
-   * Synchronize UI controls with configuration
-   */
-  private syncUIWithConfig(config: WorldConfig): void {
-    // Sync terrain controls
-    if (config.terrainConfig) {
-      this.updateSliderValue('baseScale', config.terrainConfig.baseScale);
-      this.updateSliderValue('octaves', config.terrainConfig.octaves);
-      this.updateSliderValue('persistence', config.terrainConfig.persistence);
-      this.updateSliderValue('lacunarity', config.terrainConfig.lacunarity);
-      this.updateSliderValue('warpStrength', config.terrainConfig.warpStrength);
-      this.updateSliderValue('heightMultiplier', config.terrainConfig.heightMultiplier);
-      
-      if (config.terrainConfig.enable3D !== undefined) {
-        this.updateCheckboxValue('enable3D', config.terrainConfig.enable3D);
-      }
-      if (config.terrainConfig.zScale !== undefined) {
-        this.updateSliderValue('zScale', config.terrainConfig.zScale);
-      }
-      if (config.terrainConfig.enableContinentalness !== undefined) {
-        this.updateCheckboxValue('enableContinentalness', config.terrainConfig.enableContinentalness);
-        const scaleCtrl    = document.getElementById('continentalScale-group');
-        const strengthCtrl = document.getElementById('continentalStrength-group');
-        if (scaleCtrl)    scaleCtrl.style.display    = config.terrainConfig.enableContinentalness ? 'block' : 'none';
-        if (strengthCtrl) strengthCtrl.style.display = config.terrainConfig.enableContinentalness ? 'block' : 'none';
-      }
-      if (config.terrainConfig.continentalScale !== undefined) {
-        this.updateSliderValue('continentalScale', config.terrainConfig.continentalScale);
-      }
-      if (config.terrainConfig.continentalStrength !== undefined) {
-        this.updateSliderValue('continentalStrength', config.terrainConfig.continentalStrength);
-      }
-    }
-
-    // Sync biome controls
-    if (config.biomeConfig) {
-      this.updateSliderValue('temperatureScale', config.biomeConfig.temperatureScale);
-      this.updateSliderValue('moistureScale', config.biomeConfig.moistureScale);
-      this.updateSliderValue('blendRadius', config.biomeConfig.blendRadius);
-    }
-
-    // Sync enhanced biome controls
-    if (config.enhancedBiomeConfig) {
-      const ebc = config.enhancedBiomeConfig;
-      if (ebc.worldTemperatureOffset !== undefined) {
-        this.updateSliderValue('worldTemperatureOffset', ebc.worldTemperatureOffset);
-      }
-      if (ebc.worldMoistureOffset !== undefined) {
-        this.updateSliderValue('worldMoistureOffset', ebc.worldMoistureOffset);
-      }
-      if (ebc.enableTransitions !== undefined) {
-        this.updateCheckboxValue('enableTransitions', ebc.enableTransitions);
-      }
-      if (ebc.transitionWidth !== undefined) {
-        this.updateSliderValue('transitionWidth', ebc.transitionWidth);
-      }
-      if (ebc.enableElevationBands !== undefined) {
-        this.updateCheckboxValue('enableElevationBands', ebc.enableElevationBands);
-      }
-      if (ebc.snowLineElevation !== undefined) {
-        this.updateSliderValue('snowLineElevation', ebc.snowLineElevation);
-      }
-    }
-
-    // Sync resource controls
-    if (config.resourceConfig) {
-      if (config.resourceConfig.densityThreshold !== undefined) {
-        this.updateSliderValue('densityThreshold', config.resourceConfig.densityThreshold);
-      }
-    }
-
-    // Sync structure controls
-    if (config.structureConfig) {
-      if (config.structureConfig.minDistance !== undefined) {
-        this.updateSliderValue('minDistance', config.structureConfig.minDistance);
-      }
-    }
-  }
-
-  /**
-   * Update slider value and display
-   */
-  private updateSliderValue(id: string, value: number): void {
-    const slider = document.getElementById(id) as HTMLInputElement;
-    if (!slider) return;
-    
-    slider.value = value.toString();
-    
-    // Update value display
-    const label = slider.parentElement?.querySelector('label');
-    const valueDisplay = label?.querySelector('.slider-value');
-    if (valueDisplay) {
-      const step = parseFloat(slider.step);
-      const decimalPlaces = this.getDecimalPlaces(step);
-      valueDisplay.textContent = value.toFixed(decimalPlaces);
-    }
-  }
-
-  /**
-   * Update checkbox value without triggering engine config updates.
-   * Also updates dependent UI elements (e.g. conditional sliders).
-   */
-  private updateCheckboxValue(id: string, checked: boolean): void {
-    const checkbox = document.getElementById(id) as HTMLInputElement;
-    if (!checkbox) return;
-
-    checkbox.checked = checked;
-
-    // Update dependent conditional controls without going through updateBiomeConfig
-    switch (id) {
-      case 'enableTransitions': {
-        const ctrl = document.getElementById('transitionWidth-group');
-        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
-        break;
-      }
-      case 'enableElevationBands': {
-        const ctrl = document.getElementById('snowLineElevation-group');
-        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
-        break;
-      }
-      case 'enable3D': {
-        const ctrl = document.getElementById('zScale-group');
-        if (ctrl) ctrl.style.display = checked ? 'block' : 'none';
-        break;
-      }
-      case 'enableContinentalness': {
-        const scaleCtrl    = document.getElementById('continentalScale-group');
-        const strengthCtrl = document.getElementById('continentalStrength-group');
-        if (scaleCtrl)    scaleCtrl.style.display    = checked ? 'block' : 'none';
-        if (strengthCtrl) strengthCtrl.style.display = checked ? 'block' : 'none';
-        break;
       }
     }
   }
@@ -1282,3 +870,4 @@ export class ControlPanel {
     this.container?.classList.toggle('collapsed');
   }
 }
+

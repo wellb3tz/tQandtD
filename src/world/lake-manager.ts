@@ -9,37 +9,19 @@ import { NoiseEngine, type NoiseConfig } from '../core/noise';
 import { BiomeType } from './chunk';
 import type { LakeConfig } from '../gen/lakes';
 import { logger, LogCategory } from '../utils/logger';
+import { evictOldLakeCacheEntries, type LakeCacheState } from './lake-cache-eviction';
+import type { WorldLakeData } from './lake-manager-types';
+import {
+  decodeLakeTile,
+  encodeLakeTile,
+  getAffectedLakeChunkBounds,
+  getLakeChunkKey,
+  indexLakeTiles,
+  registerLakeChunks,
+  unindexLakeTiles,
+} from './lake-spatial-index';
 
-export type LakeState = 'filled' | 'frozen' | 'dry';
-
-/**
- * A lake body that can span multiple chunks.
- * Uses world-space coordinates instead of chunk-local coordinates.
- */
-export interface WorldLakeData {
-  /** Unique identifier for this lake */
-  id: string;
-  /** Water surface elevation in [0, 1] heightmap space */
-  waterLevel: number;
-  /**
-   * Set of world tile positions (encoded as "worldX,worldY" strings).
-   * Each tile is in world coordinates, not chunk-local.
-   */
-  tiles: Set<string>;
-  /** Maximum depth of the lake (waterLevel - min terrain height inside lake) */
-  maxDepth: number;
-  /** Minimum terrain height inside the lake (for consistent water positioning) */
-  minTerrainHeight: number;
-  /** Bounding box in world coordinates */
-  bounds: {
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
-  };
-  /** Climate-driven lake state; undefined when climate system is disabled. */
-  state?: LakeState;
-}
+export type { LakeState, WorldLakeData } from './lake-manager-types';
 
 /**
  * Manages lakes across multiple chunks.
@@ -120,26 +102,16 @@ export class LakeManager {
     this.getBiomeAt = getBiomeAt;
   }
 
-  /**
-   * Generate chunk key from coordinates.
-   */
   private getChunkKey(chunkX: number, chunkY: number): string {
-    return `${chunkX},${chunkY}`;
+    return getLakeChunkKey(chunkX, chunkY);
   }
 
-  /**
-   * Encode world tile position as string key.
-   */
   private encodeTile(worldX: number, worldY: number): string {
-    return `${worldX},${worldY}`;
+    return encodeLakeTile(worldX, worldY);
   }
 
-  /**
-   * Decode world tile position from string key.
-   */
   private decodeTile(key: string): [number, number] {
-    const [x, y] = key.split(',').map(Number);
-    return [x, y];
+    return decodeLakeTile(key);
   }
 
   /**
@@ -525,7 +497,7 @@ export class LakeManager {
    */
   private addLake(lake: WorldLakeData, chunkSize: number): void {
     // Evict old lakes if we're at capacity
-    this.evictOldLakesIfNeeded();
+    evictOldLakeCacheEntries(this.getCacheState());
     // Find all existing lakes that share tiles or are 4-adjacent to the new lake.
     const toMerge: WorldLakeData[] = [];
 
@@ -621,89 +593,6 @@ export class LakeManager {
   }
 
   /**
-   * Evict least recently used lakes if we exceed capacity.
-   * Uses LRU strategy to prevent unbounded memory growth.
-   */
-  private evictOldLakesIfNeeded(): void {
-    // Evict lakes if we're over capacity
-    while (this.lakes.size >= this.maxLakes) {
-      let oldestLakeId: string | null = null;
-      let oldestTime = Infinity;
-
-      for (const [lakeId, accessTime] of this.lakeAccessTime.entries()) {
-        if (accessTime < oldestTime) {
-          oldestTime = accessTime;
-          oldestLakeId = lakeId;
-        }
-      }
-
-      if (oldestLakeId) {
-        this.evictLake(oldestLakeId);
-      } else {
-        // Fallback: evict first lake if no access time found
-        const firstLakeId = this.lakes.keys().next().value;
-        if (firstLakeId) {
-          this.evictLake(firstLakeId);
-        } else {
-          break; // No lakes to evict
-        }
-      }
-    }
-
-    // Evict chunk entries if we're over capacity
-    while (this.chunkToLakes.size >= this.maxChunkEntries) {
-      let oldestChunkKey: string | null = null;
-      let oldestTime = Infinity;
-
-      for (const [chunkKey, accessTime] of this.chunkAccessTime.entries()) {
-        if (accessTime < oldestTime) {
-          oldestTime = accessTime;
-          oldestChunkKey = chunkKey;
-        }
-      }
-
-      if (oldestChunkKey) {
-        this.chunkToLakes.delete(oldestChunkKey);
-        this.chunkAccessTime.delete(oldestChunkKey);
-      } else {
-        // Fallback: evict first chunk entry if no access time found
-        const firstChunkKey = this.chunkToLakes.keys().next().value;
-        if (firstChunkKey) {
-          this.chunkToLakes.delete(firstChunkKey);
-          this.chunkAccessTime.delete(firstChunkKey);
-        } else {
-          break; // No chunk entries to evict
-        }
-      }
-    }
-  }
-
-  /**
-   * Evict a specific lake and clean up all references.
-   */
-  private evictLake(lakeId: string): void {
-    const lake = this.lakes.get(lakeId);
-    if (!lake) return;
-
-    // Remove tile index entries for this lake
-    this._unindexTiles(lake);
-
-    // Remove lake from all chunk registrations
-    for (const [chunkKey, lakeIds] of this.chunkToLakes.entries()) {
-      lakeIds.delete(lakeId);
-      // Clean up empty sets
-      if (lakeIds.size === 0) {
-        this.chunkToLakes.delete(chunkKey);
-        this.chunkAccessTime.delete(chunkKey);
-      }
-    }
-
-    // Remove lake data
-    this.lakes.delete(lakeId);
-    this.lakeAccessTime.delete(lakeId);
-  }
-
-  /**
    * Notify that a chunk has been evicted from ChunkManager cache.
    * Marks the chunk entry as the oldest in the LRU so it will be the first
    * candidate for eviction when the chunk-entry limit is reached.
@@ -744,9 +633,7 @@ export class LakeManager {
    * Must be called whenever a lake is stored in `this.lakes`.
    */
   private _indexTiles(lake: WorldLakeData): void {
-    for (const tileKey of lake.tiles) {
-      this.tileToLakeId.set(tileKey, lake.id);
-    }
+    indexLakeTiles(this.tileToLakeId, lake);
   }
 
   /**
@@ -754,46 +641,32 @@ export class LakeManager {
    * Must be called before a lake is removed from `this.lakes`.
    */
   private _unindexTiles(lake: WorldLakeData): void {
-    for (const tileKey of lake.tiles) {
-      // Only delete if this lake still owns the tile (a merge may have
-      // already re-assigned the tile to the merged lake's id).
-      if (this.tileToLakeId.get(tileKey) === lake.id) {
-        this.tileToLakeId.delete(tileKey);
-      }
-    }
+    unindexLakeTiles(this.tileToLakeId, lake);
   }
 
   /** Register a lake's chunk intersections in chunkToLakes. */
   private _registerChunks(lake: WorldLakeData, chunkSize: number): void {
-    const { minChunkX, maxChunkX, minChunkY, maxChunkY } = this.getAffectedChunkBounds(lake, chunkSize);
-
-    for (let cy = minChunkY; cy <= maxChunkY; cy++) {
-      for (let cx = minChunkX; cx <= maxChunkX; cx++) {
-        const chunkKey = this.getChunkKey(cx, cy);
-        if (!this.chunkToLakes.has(chunkKey)) {
-          this.chunkToLakes.set(chunkKey, new Set());
-        }
-        this.chunkToLakes.get(chunkKey)!.add(lake.id);
-        // Update access time for LRU tracking
-        this.chunkAccessTime.set(chunkKey, ++this.accessCounter);
-      }
-    }
+    registerLakeChunks(this.chunkToLakes, lake, chunkSize, chunkKey => {
+      this.chunkAccessTime.set(chunkKey, ++this.accessCounter);
+    });
   }
 
-  /**
-   * Chunks affected by a lake's terrain carving. Lake tiles affect their four
-   * corner vertices; vertices on chunk borders are duplicated by adjacent chunk
-   * meshes, so registration and invalidation must include neighbouring chunks.
-   */
   private getAffectedChunkBounds(
     lake: WorldLakeData,
     chunkSize: number
   ): { minChunkX: number; maxChunkX: number; minChunkY: number; maxChunkY: number } {
+    return getAffectedLakeChunkBounds(lake, chunkSize);
+  }
+
+  private getCacheState(): LakeCacheState {
     return {
-      minChunkX: Math.floor((lake.bounds.minX - 1) / chunkSize),
-      maxChunkX: Math.floor((lake.bounds.maxX + 1) / chunkSize),
-      minChunkY: Math.floor((lake.bounds.minY - 1) / chunkSize),
-      maxChunkY: Math.floor((lake.bounds.maxY + 1) / chunkSize),
+      lakes: this.lakes,
+      chunkToLakes: this.chunkToLakes,
+      lakeAccessTime: this.lakeAccessTime,
+      chunkAccessTime: this.chunkAccessTime,
+      tileToLakeId: this.tileToLakeId,
+      maxLakes: this.maxLakes,
+      maxChunkEntries: this.maxChunkEntries,
     };
   }
 
