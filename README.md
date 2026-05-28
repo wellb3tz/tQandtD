@@ -1,6 +1,6 @@
 # tQandtD project
 
-A TypeScript procedural world engine with a browser demo client. It generates deterministic terrain chunks, biomes, rivers, lakes, resources, structures, and renderer-neutral data for Three.js or custom renderers.
+A TypeScript procedural world engine with a browser app client. It generates deterministic terrain chunks, biomes, rivers, lakes, resources, structures, and renderer-neutral data for Three.js or custom renderers.
 
 ## Quick Start
 
