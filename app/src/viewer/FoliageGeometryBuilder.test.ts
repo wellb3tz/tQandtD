@@ -63,6 +63,6 @@ describe('FoliageGeometryBuilder', () => {
     expect(scale.z).toBeCloseTo(0.5);
     expect(mesh.boundingBox).not.toBeNull();
     expect(mesh.boundingSphere).not.toBeNull();
-    expect((mesh.material as THREE.MeshLambertMaterial).vertexColors).toBe(true);
+    expect((mesh.material as THREE.MeshStandardMaterial).vertexColors).toBe(true);
   });
 });

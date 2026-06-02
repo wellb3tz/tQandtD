@@ -19,13 +19,13 @@ describe('WorldSceneSetup', () => {
 
     expect(renderer.shadowMap.enabled).toBe(true);
     expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
-    expect(renderer.toneMappingExposure).toBe(0.9);
+    expect(renderer.toneMappingExposure).toBe(1.15);
+    expect(renderer.outputColorSpace).toBe(THREE.SRGBColorSpace);
     expect(scene.children).toContain(objects.ambientLight);
     expect(scene.children).toContain(objects.directionalLight);
-    expect(objects.ambientLight.intensity).toBe(0.45);
+    expect(objects.ambientLight.intensity).toBe(0.70);
     expect(objects.ambientLight.color.getHex()).toBe(0xb5cad6);
-    expect(objects.directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
-    expect(objects.directionalLight.intensity).toBeLessThanOrEqual(1.16);
+    expect(objects.directionalLight.intensity).toBe(1.00);
     expect(objects.directionalLight.color.getHex()).toBe(0xffe2b8);
     expect(objects.directionalLight.position.y).toBeGreaterThan(0);
     expect(objects.directionalLight.position.y).toBeGreaterThan(TERRAIN_HEIGHT_SCALE_METERS * 2);
@@ -39,7 +39,7 @@ describe('WorldSceneSetup', () => {
   });
 });
 
-function createRendererStub(): Pick<THREE.WebGLRenderer, 'shadowMap' | 'toneMapping' | 'toneMappingExposure'> {
+function createRendererStub(): Pick<THREE.WebGLRenderer, 'shadowMap' | 'toneMapping' | 'toneMappingExposure' | 'outputColorSpace'> {
   return {
     shadowMap: {
       enabled: false,
@@ -47,5 +47,6 @@ function createRendererStub(): Pick<THREE.WebGLRenderer, 'shadowMap' | 'toneMapp
     },
     toneMapping: THREE.NoToneMapping,
     toneMappingExposure: 1,
-  } as Pick<THREE.WebGLRenderer, 'shadowMap' | 'toneMapping' | 'toneMappingExposure'>;
+    outputColorSpace: THREE.NoColorSpace,
+  } as Pick<THREE.WebGLRenderer, 'shadowMap' | 'toneMapping' | 'toneMappingExposure' | 'outputColorSpace'>;
 }

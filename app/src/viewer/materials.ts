@@ -20,7 +20,7 @@ export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
 export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v2.png';
 export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v1.png';
-const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 2.08;
+const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 1.45;
 
 export interface TerrainTextureSet {
   albedo: THREE.Texture;
@@ -308,10 +308,10 @@ export function createTexturedTerrainMaterial(
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
     ),
-    normalScale: new THREE.Vector2(0.35, 0.35),
+    normalScale: new THREE.Vector2(0.65, 0.65),
     vertexColors: true,
     wireframe,
-    roughness: 0.85,
+    roughness: 0.72,
     metalness: 0.0,
   });
 
@@ -323,7 +323,7 @@ export function createBiomeColorTerrainMaterial(wireframe: boolean = false): THR
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     wireframe,
-    roughness: 0.85,
+    roughness: 0.72,
     metalness: 0.0,
   });
 
@@ -381,10 +381,10 @@ export function createTerrainBlendMaterial(
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
     ),
-    normalScale: new THREE.Vector2(0.35, 0.35),
+    normalScale: new THREE.Vector2(0.65, 0.65),
     vertexColors: true,
     wireframe,
-    roughness: 0.85,
+    roughness: 0.72,
     metalness: 0.0,
   });
 
@@ -565,15 +565,15 @@ diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetGlossTint, wetTer
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverBankSiltTint, siltPatch * 0.28);
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * riverBankSandTint), paleSandPatch * 0.20);
 vec3 cliffTint = vec3(0.64, 0.63, 0.60);
-vec3 snowPeakTint = vec3(1.18, 1.19, 1.20);
+vec3 snowPeakTint = vec3(1.06, 1.08, 1.12);
 vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54);
 vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
-float cliffAccent = smoothstep(0.08, 1.0, vTerrainDetailBlend.x);
-float snowAccent = smoothstep(0.04, 1.0, vTerrainDetailBlend.y);
-float shorelineAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.z);
-float riverbedAccent = smoothstep(0.02, 1.0, vTerrainDetailBlend.w);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.56);
-diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.62);
+float cliffAccent = smoothstep(0.08, 0.70, vTerrainDetailBlend.x);
+float snowAccent = smoothstep(0.0, 0.55, vTerrainDetailBlend.y);
+float shorelineAccent = smoothstep(0.02, 0.60, vTerrainDetailBlend.z);
+float riverbedAccent = smoothstep(0.02, 0.55, vTerrainDetailBlend.w);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.40);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.45);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.54);`,
       )

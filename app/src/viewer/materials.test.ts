@@ -131,12 +131,12 @@ describe('terrain texture materials', () => {
     expect(material.roughnessMap).toBe(textures.roughness);
     expect(material.vertexColors).toBe(true);
     expect(material.wireframe).toBe(true);
-    expect(material.color.r).toBeGreaterThan(2);
-    expect(material.color.g).toBeGreaterThan(2);
-    expect(material.color.b).toBeGreaterThan(2);
+    expect(material.color.r).toBeGreaterThan(1.2);
+    expect(material.color.g).toBeGreaterThan(1.2);
+    expect(material.color.b).toBeGreaterThan(1.2);
     expect(material.normalScale.x).toBeLessThan(1);
     expect(material.normalScale.y).toBeLessThan(1);
-    expect(material.roughness).toBe(0.85);
+    expect(material.roughness).toBe(0.72);
     expect(material.metalness).toBe(0);
     expect(material.userData.terrainTexturesEnabled).toBe(true);
   });
@@ -150,7 +150,7 @@ describe('terrain texture materials', () => {
     expect(material.roughnessMap).toBeNull();
     expect(material.vertexColors).toBe(true);
     expect(material.wireframe).toBe(true);
-    expect(material.roughness).toBe(0.85);
+    expect(material.roughness).toBe(0.72);
     expect(material.metalness).toBe(0);
     expect(material.userData.terrainTexturesEnabled).toBe(false);
   });
@@ -214,7 +214,7 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('wetShorelineTint');
     expect(shader.fragmentShader).toContain('riverbedTint');
     expect(shader.fragmentShader).toContain('vec3 cliffTint = vec3(0.64, 0.63, 0.60)');
-    expect(shader.fragmentShader).toContain('vec3 snowPeakTint = vec3(1.18, 1.19, 1.20)');
+    expect(shader.fragmentShader).toContain('vec3 snowPeakTint = vec3(1.06, 1.08, 1.12)');
     expect(shader.fragmentShader).toContain('vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54)');
     expect(shader.fragmentShader).toContain('forestFloorTint');
     expect(shader.fragmentShader).toContain('macroGroundNoise');

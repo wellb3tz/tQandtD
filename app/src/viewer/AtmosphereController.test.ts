@@ -17,7 +17,7 @@ describe('AtmosphereController', () => {
     // Sky is always active - background is a dark colour so the Sky dome is visible
     const defaultBackground = scene.background as THREE.Color;
     expect(defaultBackground).toBeInstanceOf(THREE.Color);
-    expect(defaultBackground.getHex()).toBe(0x050810);
+    expect(defaultBackground.getHex()).toBe(0x87ceeb);
     expect(scene.fog).toBeNull();
 
     camera.position.set(320, 80, -240);

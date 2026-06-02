@@ -299,10 +299,9 @@ describe('WorldViewer lifecycle', () => {
     const ambientLight = getSceneAmbientLight(viewer);
     const directionalLight = getSceneSunLight(viewer);
 
-    expect(ambientLight.intensity).toBe(0.45);
+    expect(ambientLight.intensity).toBe(0.70);
     expect(ambientLight.color.getHex()).toBe(0xb5cad6);
-    expect(directionalLight.intensity).toBeGreaterThanOrEqual(1.08);
-    expect(directionalLight.intensity).toBeLessThanOrEqual(1.16);
+    expect(directionalLight.intensity).toBe(1.00);
     expect(directionalLight.color.getHex()).toBe(0xffe2b8);
     expect(directionalLight.position.y).toBeGreaterThan(0);
     expect(directionalLight.castShadow).toBe(true);
@@ -719,7 +718,7 @@ describe('WorldViewer lifecycle', () => {
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
     const tree = treeMeshes[0];
-    const material = tree.material as THREE.MeshLambertMaterial;
+    const material = tree.material as THREE.MeshStandardMaterial;
     const geometry = tree.geometry as THREE.BufferGeometry;
     const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute;

@@ -85,7 +85,7 @@ export class AtmosphereController {
 
     this.updateSkySunPosition();
 
-    this.scene.background = new THREE.Color(0x050810);
+    this.scene.background = new THREE.Color(0x87CEEB);
     this.scene.fog = null;
   }
 

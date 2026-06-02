@@ -49,7 +49,7 @@ export const VIEWER_CAMERA_NEAR_METERS = 0.5;
 export const VIEWER_CAMERA_FAR_METERS = 10000;
 export const DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS = 3;
 export const DEFAULT_STREAMING_CHUNK_SIZE_TILES = 32;
-export const TERRAIN_FOG_COLOR = 0x8fa6b0;
+export const TERRAIN_FOG_COLOR = 0xaaccff;
 export const HORIZON_FILL_PLANE_NAME = 'terrain-horizon-fill';
 
 /**
