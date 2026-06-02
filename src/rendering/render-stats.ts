@@ -12,7 +12,7 @@ export interface RenderStatsGeometry {
 }
 
 export interface RenderStatsObject {
-  visible: boolean;
+  visible?: boolean;
 }
 
 export interface RenderStatsMesh extends RenderStatsObject {
@@ -70,7 +70,7 @@ export function calculateRenderStats(chunks: Iterable<RenderStatsChunk>): Render
   let drawCalls = 0;
 
   for (const chunk of chunks) {
-    if (chunk.terrain.visible) {
+    if (isVisible(chunk.terrain)) {
       const position = chunk.terrain.geometry.getAttribute('position');
       if (position) {
         vertexCount += position.count;
@@ -78,19 +78,19 @@ export function calculateRenderStats(chunks: Iterable<RenderStatsChunk>): Render
       drawCalls++;
     }
 
-    if (chunk.foliage?.visible) {
+    if (chunk.foliage && isVisible(chunk.foliage)) {
       drawCalls += countVisibleDrawObjects(chunk.foliage);
     }
 
-    if (chunk.resources?.visible) {
+    if (chunk.resources && isVisible(chunk.resources)) {
       drawCalls += countVisibleDrawObjects(chunk.resources);
     }
 
-    if (chunk.structures?.visible) {
+    if (chunk.structures && isVisible(chunk.structures)) {
       drawCalls += countVisibleDrawObjects(chunk.structures);
     }
 
-    if (chunk.boundaries?.visible) {
+    if (chunk.boundaries && isVisible(chunk.boundaries)) {
       drawCalls++;
     }
   }
@@ -102,12 +102,12 @@ function countVisibleDrawObjects(group: RenderStatsGroup): number {
   let count = 0;
 
   for (const child of group.children) {
-    if (!isRenderStatsObject(child) || !child.visible) continue;
+    if (!isVisible(child)) continue;
 
-    if (isRenderStatsGroup(child)) {
-      count += countVisibleDrawObjects(child);
-    } else if (isRenderStatsMesh(child)) {
+    if (isRenderStatsMesh(child)) {
       count++;
+    } else if (isRenderStatsGroup(child)) {
+      count += countVisibleDrawObjects(child);
     }
   }
 
@@ -115,7 +115,7 @@ function countVisibleDrawObjects(group: RenderStatsGroup): number {
 }
 
 function isRenderStatsObject(value: unknown): value is RenderStatsObject {
-  return typeof value === 'object' && value !== null && 'visible' in value;
+  return typeof value === 'object' && value !== null;
 }
 
 function isRenderStatsGroup(value: unknown): value is RenderStatsGroup {
@@ -124,4 +124,8 @@ function isRenderStatsGroup(value: unknown): value is RenderStatsGroup {
 
 function isRenderStatsMesh(value: unknown): value is RenderStatsMesh {
   return isRenderStatsObject(value) && 'geometry' in value;
+}
+
+function isVisible(value: unknown): value is RenderStatsObject {
+  return isRenderStatsObject(value) && value.visible !== false;
 }

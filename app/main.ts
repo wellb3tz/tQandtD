@@ -963,7 +963,7 @@ async function requestBrowserFullscreen(): Promise<void> {
 function waitForFullscreenLayout(): Promise<void> {
   return new Promise(resolve => {
     requestAnimationFrame(() => {
-      requestAnimationFrame(resolve);
+      requestAnimationFrame(() => resolve());
     });
   });
 }

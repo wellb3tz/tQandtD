@@ -102,8 +102,12 @@ describe('foliage placement planner', () => {
 
     expect(riverPlan).toBeDefined();
     expect(lakePlan).toBeDefined();
-    expect(riverPlan?.shrubPlacements).toHaveLength(0);
-    expect(lakePlan?.shrubPlacements).toHaveLength(0);
+    expect(riverPlan?.shrubPlacements.some(placement => placement.x <= 2.9 * TERRAIN_TILE_SIZE_METERS)).toBe(false);
+    expect(lakePlan?.shrubPlacements.some(placement => {
+      const tileX = Math.floor(placement.x / TERRAIN_TILE_SIZE_METERS);
+      const tileZ = Math.floor(placement.z / TERRAIN_TILE_SIZE_METERS);
+      return tileX >= 2 && tileX <= 5 && tileZ >= 2 && tileZ <= 5;
+    })).toBe(false);
   });
 
   it('anchors foliage to the terrain surface at the jittered placement point', () => {

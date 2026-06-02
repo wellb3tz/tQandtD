@@ -1,5 +1,6 @@
 import type { ChunkData } from './chunk.js';
-import type { SerializedChunkData, WorkerResponse } from '../worker';
+import type { WorkerResponse } from '../worker';
+import { deserializeChunkData } from '../worker-codec';
 import type { WorldConfig } from './world-config';
 import { logger, LogCategory } from '../utils/logger';
 
@@ -379,9 +380,7 @@ export class WorkerPool {
     // Remove from active tasks
     this.activeTasks.delete(task.id);
 
-    // Deserialize chunk data from worker
-    // The worker sends serialized chunk data that needs to be converted back
-    const chunkData = this.deserializeChunkData(result.chunk);
+    const chunkData = deserializeChunkData(result.chunk);
 
     // Call completion callback
     try {
@@ -392,45 +391,6 @@ export class WorkerPool {
 
     // Assign next task if available
     this.assignNextTask();
-  }
-
-  /**
-   * Deserializes chunk data received from worker
-   * @param serialized - Serialized chunk data from worker
-   * @returns Deserialized ChunkData
-   */
-  private deserializeChunkData(serialized: SerializedChunkData): ChunkData {
-    return {
-      x: serialized.x,
-      y: serialized.y,
-      size: serialized.size,
-      heightmap: new Float32Array(serialized.heightmap),
-      biomeMap: new Uint8Array(serialized.biomeMap),
-      sparseBiomeTypes: new Uint8Array(serialized.sparseBiomeTypes),
-      sparseBiomeWeights: new Float32Array(serialized.sparseBiomeWeights),
-      sparseBiomeOffsets: new Uint16Array(serialized.sparseBiomeOffsets),
-      climateSnowLine: serialized.climateSnowLine,
-      climateTreeLine: serialized.climateTreeLine,
-      worldTemperatureOffset: serialized.worldTemperatureOffset,
-      temperatureMap: serialized.temperatureMap ? new Float32Array(serialized.temperatureMap) : undefined,
-      lakes: (serialized.lakes ?? []).map(lake => ({
-        waterLevel: lake.waterLevel,
-        tiles: new Set<number>(lake.tiles),
-        maxDepth: lake.maxDepth,
-        minTerrainHeight: lake.minTerrainHeight,
-        state: lake.state,
-      })),
-      rivers: (serialized.rivers ?? []).map(river => ({
-        riverId: river.riverId,
-        pathId: river.pathId,
-        isTributary: river.isTributary,
-        state: river.state,
-        points: river.points.map(point => ({ ...point })),
-        bounds: river.bounds,
-      })),
-      resources: serialized.resources,
-      structures: serialized.structures,
-    };
   }
 
   getInitializationError(): Error | null {

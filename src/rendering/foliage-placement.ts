@@ -2,7 +2,7 @@ import { BiomeType, type ChunkData, getBiomeWeightForTile } from '../world/chunk
 import { getRiverChannelWidth, type RiverPoint } from '../gen/rivers';
 import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '../config/world-units';
 
-const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 4096;
+const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 2048;
 const MAX_SHRUB_INSTANCES_PER_CHUNK = 1536;
 const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
 const TREE_CANDIDATES_PER_TILE = 6;
@@ -134,7 +134,7 @@ export function planFoliagePlacements(
         0.72,
         profile.density * clusterDensity * 0.36 * slopeDensityScale * Math.max(0, 1 - waterInfluence.bank * 1.15) * (1 - clearingInfluence.strength * 0.55),
       );
-      if (shrubChance <= shrubDensity) {
+      if (shrubChance <= shrubDensity && shouldPlaceShrubs(slope, waterInfluence.bank)) {
         const shrubJitterX = 0.10 + deterministic01(worldTileX, worldTileZ, 149) * 0.80;
         const shrubJitterZ = 0.10 + deterministic01(worldTileX, worldTileZ, 151) * 0.80;
         const shrubElevation = sampleTerrainElevationAtTilePoint(
@@ -263,6 +263,11 @@ function capPlacements(placements: FoliagePlacement[], cap: number): void {
   if (placements.length <= cap) return;
   placements.sort((a, b) => a.rank - b.rank);
   placements.length = cap;
+}
+
+function shouldPlaceShrubs(slope: number, bankInfluence: number): boolean {
+  if (bankInfluence > 0) return false;
+  return slope < 0.001;
 }
 
 function getFoliageWaterInfluence(
