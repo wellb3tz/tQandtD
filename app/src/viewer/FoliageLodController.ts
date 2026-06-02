@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import type { ChunkMesh } from './ChunkMesh';
-import { FOLIAGE_LOD_DISTANCE_METERS, type FoliageLodLevel } from './FoliageLayerBuilder';
+import {
+  disposeInactiveFoliageLods,
+  ensureFoliageLodBuilt,
+  FOLIAGE_LOD_DISTANCE_METERS,
+  setBuiltFoliageLodVisibility,
+  type FoliageLodLevel,
+} from './FoliageLayerBuilder';
 import { isRenderLayerVisible, RenderLayer, type RenderLayerVisibilityState } from './RenderLayerVisibility';
 
 const LOD_UPDATE_EPSILON_METERS = 8;
@@ -70,13 +76,20 @@ function getHorizontalDistanceToFoliage(foliage: THREE.Group, cameraPosition: TH
 function setFoliageLodVisibility(foliage: THREE.Group, level: FoliageLodLevel | undefined): void {
   const previousLevel = foliage.userData.activeLod as FoliageLodLevel | undefined;
   if (previousLevel === level) {
+    if (level) {
+      ensureFoliageLodBuilt(foliage, level);
+    }
+    setBuiltFoliageLodVisibility(foliage, level);
     return;
   }
 
-  foliage.userData.activeLod = level;
-  for (const child of foliage.children) {
-    child.visible = child.userData.foliageLod === level;
+  if (level) {
+    ensureFoliageLodBuilt(foliage, level);
   }
+
+  foliage.userData.activeLod = level;
+  setBuiltFoliageLodVisibility(foliage, level);
+  disposeInactiveFoliageLods(foliage, level);
 }
 
 export function shouldUpdateFoliageLod(

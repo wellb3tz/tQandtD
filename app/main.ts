@@ -39,6 +39,7 @@ let chunkLoadTimer: ReturnType<typeof setTimeout> | null = null;
 let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
 const HORIZON_STREAMING_BUFFER_CHUNKS = 2;
+const VIEWER_READY_CLASS = 'viewer-ready';
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
@@ -109,12 +110,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initialize application core
   try {
+    setWorldGenerationLoading(true);
     app = new WorldApp();
     await app.initialize();
     
     // Initialize WorldViewer
     const viewerContainer = document.getElementById('viewer');
     if (viewerContainer) {
+      setViewerReady(false);
       worldViewer = new WorldViewer();
       worldViewer.initialize(viewerContainer, app!.getSeed());
       worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
@@ -123,6 +126,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Apply initial visibility state from application core
       worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
       worldViewer.setStreamingViewDistance(app.getViewDistance(), app.getConfigSnapshot().chunkSize);
+      await warmUpInitialTerrain(app, worldViewer);
+      setViewerReady(true);
+      setWorldGenerationLoading(false);
       
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
@@ -316,6 +322,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
         }
       });
+    } else {
+      setWorldGenerationLoading(false);
     }
     
     // Initialize ControlPanel
@@ -413,21 +421,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!app || !worldViewer) return;
 
       // Start dive transition back to terrain first
-      worldViewer.startLandingTransition(detail.lat, detail.lon);
+      await worldViewer.startLandingTransition(detail.lat, detail.lon);
       planetModeBtn?.classList.remove('active');
 
       errorHandler.showSuccessToast('Landing on new world...');
-      const planetLoading = document.getElementById('loading-indicator');
-      if (planetLoading) planetLoading.classList.remove('hidden');
+      setWorldGenerationLoading(true);
+      setViewerReady(false);
 
       try {
         await app.landOnPlanet(detail.lat, detail.lon);
+        await warmUpInitialTerrain(app, worldViewer);
+        setViewerReady(true);
         errorHandler.showSuccessToast(`Landed on new world! Seed: ${app.getSeed()}`);
       } catch (error) {
         console.error('Planet landing failed:', error);
         errorHandler.showErrorToast('Failed to land on planet. Please try again.');
       } finally {
-        if (planetLoading) planetLoading.classList.add('hidden');
+        setWorldGenerationLoading(false);
+        setViewerReady(true);
       }
     });
 
@@ -498,6 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
   } catch (error) {
     console.error('Failed to initialize application core:', error);
+    setWorldGenerationLoading(false);
     
     // Clean up any timers that might have been created
     if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
@@ -692,10 +704,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     seedInput?.classList.remove('validation-error');
     
     // Show loading indicator (requirement 2.4)
-    const loadingIndicator = document.getElementById('loading-indicator');
-    if (loadingIndicator) {
-      loadingIndicator.classList.remove('hidden');
-    }
+    setWorldGenerationLoading(true);
     
     // Show progress bar for long operation (requirement 18.6)
     const progressId = errorHandler.showProgress('Generating world...', 0);
@@ -709,6 +718,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let progressInterval: ReturnType<typeof setInterval> | null = null;
 
     try {
+      setViewerReady(false);
+
       // Simulate progress updates
       let progress = 0;
       progressInterval = setInterval(() => {
@@ -718,6 +729,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Generate world with deterministic seed (requirement 2.6, 2.7)
       await app.generateWorld(seed);
+      if (worldViewer) {
+        await warmUpInitialTerrain(app, worldViewer);
+      }
+      setViewerReady(true);
       
       // Complete progress
       clearInterval(progressInterval);
@@ -739,15 +754,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         'Failed to generate world. Please try again with a different seed or configuration.',
         error instanceof Error ? error : undefined
       ));
+      setViewerReady(true);
     } finally {
       if (progressInterval !== null) {
         clearInterval(progressInterval);
       }
 
       // Hide loading indicator
-      if (loadingIndicator) {
-        loadingIndicator.classList.add('hidden');
-      }
+      setWorldGenerationLoading(false);
       
       // Re-enable generate button
       if (generateBtn) {
@@ -775,5 +789,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function getBufferedStreamingRadius(visualRadius: number): number {
   return visualRadius + HORIZON_STREAMING_BUFFER_CHUNKS;
+}
+
+function setViewerReady(ready: boolean): void {
+  document.getElementById('viewer')?.classList.toggle(VIEWER_READY_CLASS, ready);
+}
+
+function setWorldGenerationLoading(visible: boolean): void {
+  document.getElementById('loading-indicator')?.classList.toggle('hidden', !visible);
+}
+
+async function warmUpInitialTerrain(app: WorldApp, viewer: WorldViewer): Promise<void> {
+  const cameraPos = viewer.getCameraPosition();
+  const chunkSize = app.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
+  const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
+  const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
+  const loadRadius = getBufferedStreamingRadius(app.getViewDistance());
+
+  await app.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
+  await viewer.flushPendingChunkBuilds();
 }
 

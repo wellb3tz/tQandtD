@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import type { ChunkData } from '@engine/index';
+import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import { createChunkBoundaries } from './ChunkBoundaryBuilder';
 import { getChunkKey, type ChunkMesh } from './ChunkMesh';
-import { createFoliageLayer } from './FoliageLayerBuilder';
+import { createFoliageLayer, type FoliageLodLevel } from './FoliageLayerBuilder';
+import { selectFoliageLodLevel } from './FoliageLodController';
 import { createResourceMarkers, createStructureMarkers } from './MarkerBuilder';
 import { isRenderLayerVisible, RenderLayer } from './RenderLayerVisibility';
 import { createTerrainMesh } from './TerrainMeshBuilder';
@@ -34,6 +35,7 @@ export interface AddChunkToSceneOptions {
   terrainTextures: TerrainSurfaceTextureLibrary;
   terrainTexturesEnabled: boolean;
   wireframeMode: boolean;
+  foliageCameraPosition?: { x: number; z: number };
 }
 
 export interface RemoveChunkFromSceneOptions {
@@ -141,7 +143,9 @@ async function createChunkMesh(
     }
   }
 
-  const foliage = createFoliageLayer(chunkX, chunkY, data, waterConfig.seaLevel);
+  const foliage = createFoliageLayer(chunkX, chunkY, data, waterConfig.seaLevel, {
+    initialLod: selectInitialFoliageLod(chunkX, chunkY, data.size, options.foliageCameraPosition),
+  });
   if (foliage) {
     foliage.visible = isRenderLayerVisible(layerVisibility, RenderLayer.FOLIAGE);
     chunkMesh.foliage = foliage;
@@ -168,6 +172,20 @@ async function createChunkMesh(
   chunkMesh.boundaries.visible = isRenderLayerVisible(layerVisibility, RenderLayer.CHUNK_BOUNDARIES);
   scene.add(chunkMesh.boundaries);
   return chunkMesh;
+}
+
+function selectInitialFoliageLod(
+  chunkX: number,
+  chunkY: number,
+  chunkSize: number,
+  cameraPosition: { x: number; z: number } | undefined,
+): FoliageLodLevel {
+  if (!cameraPosition) return 'far';
+
+  const centerX = (chunkX * chunkSize + chunkSize * 0.5) * TERRAIN_TILE_SIZE_METERS;
+  const centerZ = (chunkY * chunkSize + chunkSize * 0.5) * TERRAIN_TILE_SIZE_METERS;
+  const distance = Math.hypot(cameraPosition.x - centerX, cameraPosition.z - centerZ);
+  return selectFoliageLodLevel(distance) ?? 'far';
 }
 
 function removeAndDisposeChunkMesh(scene: THREE.Scene, chunkMesh: ChunkMesh): void {

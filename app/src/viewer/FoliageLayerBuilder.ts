@@ -9,11 +9,14 @@ import {
 import {
   planFoliagePlacements,
   type FoliagePlacement,
+  type FoliagePlacementPlan,
   type TreePlacement,
   type TreeVariant,
 } from './FoliagePlacementPlanner';
+import { disposeGroup } from './ThreeDisposal';
 
 export type FoliageLodLevel = 'near' | 'mid' | 'far';
+export const FOLIAGE_LOD_LEVELS: readonly FoliageLodLevel[] = ['near', 'mid', 'far'];
 
 export const FOLIAGE_LOD_DISTANCE_METERS = {
   mid: 540,
@@ -37,16 +40,22 @@ const FOLIAGE_LOD_DETAIL: Record<FoliageLodLevel, FoliagePrototypeDetail> = {
   far: 'simple',
 };
 
+export interface FoliageLayerOptions {
+  initialLod?: FoliageLodLevel;
+}
+
 export function createFoliageLayer(
   chunkX: number,
   chunkY: number,
   data: ChunkData,
   seaLevel: number,
+  options: FoliageLayerOptions = {},
 ): THREE.Group | undefined {
   const plan = planFoliagePlacements(chunkX, chunkY, data, seaLevel, data.worldTemperatureOffset);
   if (!plan) return undefined;
 
   const { treePlacements, shrubPlacements, terrainPropPlacements, clearingCount, clearingSample } = plan;
+  const initialLod = options.initialLod ?? 'near';
   const group = new THREE.Group();
   group.name = `foliage-${chunkX},${chunkY}`;
   group.userData.treeCount = treePlacements.length;
@@ -55,31 +64,73 @@ export function createFoliageLayer(
   group.userData.foliageCount = treePlacements.length + shrubPlacements.length + terrainPropPlacements.length;
   group.userData.clearingCount = clearingCount;
   group.userData.lodEnabled = true;
-  group.userData.activeLod = 'near';
+  group.userData.activeLod = initialLod;
+  group.userData.foliagePlan = plan;
   group.userData.chunkCenterX = (chunkX * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
   group.userData.chunkCenterZ = (chunkY * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
   if (clearingSample) group.userData.clearingSample = clearingSample;
 
-  for (const lod of ['near', 'mid', 'far'] as const) {
-    const lodGroup = new THREE.Group();
-    lodGroup.name = `foliage-lod-${lod}`;
-    lodGroup.userData.foliageLod = lod;
-    lodGroup.visible = lod === 'near';
-
-    const fractions = FOLIAGE_LOD_INSTANCE_FRACTION[lod];
-    const detail = FOLIAGE_LOD_DETAIL[lod];
-    addTreeLayers(lodGroup, selectStableSubset(treePlacements, fractions.trees), detail);
-    addPlacementLayer(lodGroup, 'foliage-shrubs', 'shrub', selectStableSubset(shrubPlacements, fractions.shrubs), false, detail);
-    if (terrainPropPlacements.length > 0) {
-      addPlacementLayer(lodGroup, 'foliage-props-stumps', 'stump', selectStableSubset(terrainPropPlacements, fractions.terrainProps), false, detail);
-      group.userData.terrainPropKindCount = 1;
-    }
-
-    lodGroup.userData.drawLayerCount = lodGroup.children.length;
-    group.add(lodGroup);
-  }
+  ensureFoliageLodBuilt(group, initialLod);
+  setBuiltFoliageLodVisibility(group, initialLod);
 
   return group;
+}
+
+export function ensureFoliageLodBuilt(group: THREE.Group, lod: FoliageLodLevel): THREE.Group | undefined {
+  const existing = findFoliageLodGroup(group, lod);
+  if (existing) return existing;
+
+  const plan = group.userData.foliagePlan as FoliagePlacementPlan | undefined;
+  if (!plan) return undefined;
+
+  const lodGroup = buildFoliageLodGroup(group, plan, lod);
+  group.add(lodGroup);
+  return lodGroup;
+}
+
+export function setBuiltFoliageLodVisibility(group: THREE.Group, activeLod: FoliageLodLevel | undefined): void {
+  for (const child of group.children) {
+    child.visible = activeLod !== undefined && child.userData.foliageLod === activeLod;
+  }
+}
+
+export function disposeInactiveFoliageLods(group: THREE.Group, activeLod: FoliageLodLevel | undefined): void {
+  const inactive = group.children.filter(child => child.userData.foliageLod !== activeLod);
+  for (const child of inactive) {
+    group.remove(child);
+    if (child instanceof THREE.Group) {
+      disposeGroup(child);
+    }
+  }
+}
+
+function findFoliageLodGroup(group: THREE.Group, lod: FoliageLodLevel): THREE.Group | undefined {
+  return group.children.find(
+    child => child instanceof THREE.Group && child.userData.foliageLod === lod,
+  ) as THREE.Group | undefined;
+}
+
+function buildFoliageLodGroup(
+  owner: THREE.Group,
+  plan: FoliagePlacementPlan,
+  lod: FoliageLodLevel,
+): THREE.Group {
+  const lodGroup = new THREE.Group();
+  lodGroup.name = `foliage-lod-${lod}`;
+  lodGroup.userData.foliageLod = lod;
+  lodGroup.visible = false;
+
+  const fractions = FOLIAGE_LOD_INSTANCE_FRACTION[lod];
+  const detail = FOLIAGE_LOD_DETAIL[lod];
+  addTreeLayers(lodGroup, selectStableSubset(plan.treePlacements, fractions.trees), detail);
+  addPlacementLayer(lodGroup, 'foliage-shrubs', 'shrub', selectStableSubset(plan.shrubPlacements, fractions.shrubs), false, detail);
+  if (plan.terrainPropPlacements.length > 0) {
+    addPlacementLayer(lodGroup, 'foliage-props-stumps', 'stump', selectStableSubset(plan.terrainPropPlacements, fractions.terrainProps), false, detail);
+    owner.userData.terrainPropKindCount = 1;
+  }
+
+  lodGroup.userData.drawLayerCount = lodGroup.children.length;
+  return lodGroup;
 }
 
 function addTreeLayers(

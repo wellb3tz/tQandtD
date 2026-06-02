@@ -73,6 +73,7 @@ export class WorldViewer {
   private planetRenderer: PlanetRenderer | null = null;
   private spaceViewManager: SpaceViewManager | null = null;
   private orbitalTransitionController: OrbitalTransitionController | null = null;
+  private readonly transitionCompleteResolvers: Array<(state: OrbitalState) => void> = [];
 
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
@@ -207,6 +208,7 @@ export class WorldViewer {
       atmosphereController: this.atmosphereController,
       waterLayerManager: this.waterLayerManager,
       getChunkMeshes: () => this.chunkMeshes.values(),
+      onTransitionComplete: state => this.handleOrbitalTransitionComplete(state),
       onPlanetClicked: (lat, lon) => {
         this.handlePlanetClicked(lat, lon);
       },
@@ -233,8 +235,20 @@ export class WorldViewer {
   /**
    * Begin the dive transition from orbit to a specific point on the planet.
    */
-  startLandingTransition(lat: number, lon: number): void {
-    this.orbitalTransitionController?.startTransitionToSurface(lat, lon);
+  startLandingTransition(lat: number, lon: number): Promise<void> {
+    if (!this.orbitalTransitionController || this.orbitalTransitionController.getState() !== OrbitalState.ORBIT) {
+      return Promise.resolve();
+    }
+
+    const transition = new Promise<void>(resolve => {
+      this.transitionCompleteResolvers.push(state => {
+        if (state === OrbitalState.TERRAIN) {
+          resolve();
+        }
+      });
+    });
+    this.orbitalTransitionController.startTransitionToSurface(lat, lon);
+    return transition;
   }
 
   /**
@@ -254,6 +268,13 @@ export class WorldViewer {
     });
     window.dispatchEvent(event);
   }
+
+  private handleOrbitalTransitionComplete(state: OrbitalState): void {
+    const resolvers = this.transitionCompleteResolvers.splice(0);
+    for (const resolve of resolvers) {
+      resolve(state);
+    }
+  }
   
   private updateSunAndShadowFocus(): void {
     this.atmosphereController?.updateSunAndShadowFocus(this.cameraViewController.getActiveCamera());
@@ -271,7 +292,9 @@ export class WorldViewer {
    * Useful in tests; in production the render loop calls update() each frame.
    */
   async flushPendingChunkBuilds(): Promise<void> {
-    await this.chunkController.update();
+    const activeCamera = this.cameraViewController.getActiveCamera();
+    this.chunkController.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
+    await this.chunkController.flushPendingBuilds();
   }
 
   /**

@@ -16,7 +16,7 @@ describe('FoliageLodController', () => {
     expect(selectFoliageLodLevel(FOLIAGE_LOD_DISTANCE_METERS.hidden)).toBeUndefined();
   });
 
-  it('shows only the active foliage LOD group', () => {
+  it('keeps only the active foliage LOD group', () => {
     const foliage = createFoliageGroup(FOLIAGE_LOD_DISTANCE_METERS.far, 0);
     const chunk = { terrain: new THREE.Mesh(), foliage, visible: true } as ChunkMesh;
     const stats = updateFoliageLodForChunks(
@@ -26,7 +26,8 @@ describe('FoliageLodController', () => {
     );
 
     expect(stats).toEqual({ near: 0, mid: 0, far: 1, hidden: 0 });
-    expect(foliage.children.map(child => child.visible)).toEqual([false, false, true]);
+    expect(foliage.children.map(child => child.userData.foliageLod)).toEqual(['far']);
+    expect(foliage.children.map(child => child.visible)).toEqual([true]);
     expect(foliage.userData.activeLod).toBe('far');
   });
 
@@ -42,7 +43,7 @@ describe('FoliageLodController', () => {
     );
 
     expect(stats.hidden).toBe(1);
-    expect(foliage.children.every(child => child.visible === false)).toBe(true);
+    expect(foliage.children).toHaveLength(0);
   });
 
   it('keeps the active LOD intact while a chunk is hidden by frustum culling', () => {

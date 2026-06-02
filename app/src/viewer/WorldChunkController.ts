@@ -68,6 +68,8 @@ export class WorldChunkController {
   private chunkSize: number | null = null;
   private cameraChunkX = 0;
   private cameraChunkY = 0;
+  private cameraWorldX = 0;
+  private cameraWorldZ = 0;
 
   constructor(options: WorldChunkControllerOptions) {
     this.scene = options.scene;
@@ -106,6 +108,8 @@ export class WorldChunkController {
   }
 
   setCameraPosition(worldX: number, worldZ: number): void {
+    this.cameraWorldX = worldX;
+    this.cameraWorldZ = worldZ;
     if (this.chunkSize === null) return;
     const scaledChunkSize = this.chunkSize * TERRAIN_TILE_SIZE_METERS;
     this.cameraChunkX = Math.floor(worldX / scaledChunkSize);
@@ -127,6 +131,12 @@ export class WorldChunkController {
       await this.updateInProgress;
     } finally {
       this.updateInProgress = null;
+    }
+  }
+
+  async flushPendingBuilds(): Promise<void> {
+    while (this.pendingBuilds.length > 0) {
+      await this.processPendingBuilds();
     }
   }
 
@@ -204,6 +214,10 @@ export class WorldChunkController {
       terrainTextures: this.viewSettings.getTerrainTextures(),
       terrainTexturesEnabled: this.viewSettings.getTerrainTexturesEnabled(),
       wireframeMode: this.viewSettings.getWireframeMode(),
+      foliageCameraPosition: {
+        x: this.cameraWorldX,
+        z: this.cameraWorldZ,
+      },
     });
 
     if (!this.isBuildCurrent(build)) {
