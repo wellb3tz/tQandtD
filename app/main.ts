@@ -40,6 +40,11 @@ let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
 const HORIZON_STREAMING_BUFFER_CHUNKS = 2;
 const VIEWER_READY_CLASS = 'viewer-ready';
+const MODE_SELECT_ACTIVE_CLASS = 'mode-select-active';
+const EDITOR_MODE_CLASS = 'world-editor-mode';
+const JOURNEY_MODE_CLASS = 'journey-mode';
+
+type AppMode = 'world-editor' | 'journey';
 
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
@@ -80,6 +85,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const controlPanel = document.getElementById('control-panel');
   const rightPanel = document.getElementById('right-panel');
   const appHeader = document.querySelector('.app-header') as HTMLElement;
+  const modeSelect = document.getElementById('mode-select');
+  const worldEditorModeBtn = document.getElementById('world-editor-mode-btn') as HTMLButtonElement | null;
+  const journeyModeBtn = document.getElementById('journey-mode-btn') as HTMLButtonElement | null;
 
   // Camera control buttons
   const resetCameraBtn = document.getElementById('reset-btn');
@@ -371,6 +379,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     helpModal = new HelpModal();
     helpModal.initialize();
+
+    worldEditorModeBtn?.removeAttribute('disabled');
+    journeyModeBtn?.removeAttribute('disabled');
     
     // Subscribe to state changes and update performance monitor
     app.subscribeToState((state) => {
@@ -784,8 +795,91 @@ document.addEventListener('DOMContentLoaded', async () => {
       seedInput.title = '';
     }
   });
+
+  worldEditorModeBtn?.addEventListener('click', async () => {
+    await enterAppMode('world-editor');
+  });
+
+  journeyModeBtn?.addEventListener('click', async () => {
+    await enterAppMode('journey');
+  });
+
+  async function enterAppMode(mode: AppMode): Promise<void> {
+    if (!app || !worldViewer) {
+      errorHandler.showErrorToast('Application not initialized');
+      return;
+    }
+
+    worldEditorModeBtn?.setAttribute('disabled', 'true');
+    journeyModeBtn?.setAttribute('disabled', 'true');
+
+    try {
+      if (mode === 'world-editor') {
+        await requestBrowserFullscreen();
+        document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active');
+        document.body.classList.add(EDITOR_MODE_CLASS);
+        modeSelect?.classList.add('hidden');
+        worldViewer.setFirstPersonMode(false);
+        setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
+        return;
+      }
+
+      worldViewer.resetCamera();
+      worldViewer.setFirstPersonMode(true);
+      await requestBrowserFullscreen();
+
+      document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS, EDITOR_MODE_CLASS);
+      document.body.classList.add(JOURNEY_MODE_CLASS, 'first-person-active');
+      modeSelect?.classList.add('hidden');
+
+      const randomSeed = Math.floor(Math.random() * 999999999) + 1;
+      if (seedInput) seedInput.value = randomSeed.toString();
+      if (statusSeed) statusSeed.textContent = randomSeed.toString();
+
+      setWorldGenerationLoading(true);
+      setViewerReady(false);
+
+      await app.generateWorld(randomSeed);
+      await warmUpInitialTerrain(app, worldViewer);
+
+      worldViewer.resetCamera();
+      worldViewer.setFirstPersonMode(true);
+      setViewerReady(true);
+      setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
+    } catch (error) {
+      console.error('Failed to enter app mode:', error);
+      document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
+      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active');
+      modeSelect?.classList.remove('hidden');
+      errorHandler.handleError(new AppError(
+        'Mode launch failed',
+        ErrorCategory.INITIALIZATION,
+        ErrorSeverity.ERROR,
+        true,
+        'Failed to start the selected mode. Please try again.',
+        error instanceof Error ? error : undefined
+      ));
+    } finally {
+      setWorldGenerationLoading(false);
+      worldEditorModeBtn?.removeAttribute('disabled');
+      journeyModeBtn?.removeAttribute('disabled');
+    }
+  }
   
 });
+
+async function requestBrowserFullscreen(): Promise<void> {
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) {
+    return;
+  }
+
+  try {
+    await document.documentElement.requestFullscreen();
+  } catch {
+    // Browsers can deny fullscreen depending on permissions or embedding.
+    // The app shell still occupies the full viewport.
+  }
+}
 
 function getBufferedStreamingRadius(visualRadius: number): number {
   return visualRadius + HORIZON_STREAMING_BUFFER_CHUNKS;

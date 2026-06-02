@@ -68,6 +68,96 @@ body {
   opacity: 1;
 }
 
+.mode-select {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(2, 6, 10, 0.42), rgba(2, 6, 10, 0.82)),
+    radial-gradient(circle at 50% 38%, rgba(59, 130, 246, 0.14), transparent 34%);
+}
+
+.mode-select-panel {
+  width: min(420px, 100%);
+  padding: 28px;
+  background: rgba(18, 23, 26, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.mode-select-kicker {
+  margin-bottom: 8px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.mode-select h1 {
+  margin-bottom: 22px;
+  color: var(--text-1);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.05;
+}
+
+.mode-select-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.mode-select-btn {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-1);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.mode-select-btn.primary {
+  color: #fff;
+  background: linear-gradient(180deg, #4388f5, #2f6ed7);
+  border-color: rgba(116, 166, 255, 0.62);
+}
+
+.mode-select-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(191, 219, 254, 0.48);
+}
+
+.mode-select-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+body.mode-select-active .app-header,
+body.mode-select-active .control-panel,
+body.mode-select-active .right-panel,
+body.mode-select-active .top-toolbar,
+body.mode-select-active .compass-container,
+body.mode-select-active .camera-position-display,
+body.mode-select-active .minimap-container,
+body.mode-select-active .status-bar {
+  display: none !important;
+}
+
 /* ==========================================
    GLASS HELPER
    ========================================== */
@@ -782,6 +872,20 @@ body.fullscreen-mode .camera-position-display,
 body.fullscreen-mode .minimap-container,
 body.fullscreen-mode .performance-graph,
 body.fullscreen-mode .status-bar { display: none !important; }
+
+body.journey-mode .app-header,
+body.journey-mode .control-panel,
+body.journey-mode .right-panel,
+body.journey-mode .top-toolbar,
+body.journey-mode .compass-container,
+body.journey-mode .camera-position-display,
+body.journey-mode .minimap-container,
+body.journey-mode .performance-graph,
+body.journey-mode .status-bar,
+body.journey-mode .toast-container,
+body.journey-mode .progress-container {
+  display: none !important;
+}
 
 /* ==========================================
    VALIDATION
