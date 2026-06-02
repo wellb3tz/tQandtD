@@ -46,6 +46,7 @@ const VIEWER_READY_CLASS = 'viewer-ready';
 const MODE_SELECT_ACTIVE_CLASS = 'mode-select-active';
 const EDITOR_MODE_CLASS = 'world-editor-mode';
 const JOURNEY_MODE_CLASS = 'journey-mode';
+const FULLSCREEN_TRANSITION_CLASS = 'fullscreen-transitioning';
 
 type AppMode = 'world-editor' | 'journey';
 
@@ -203,10 +204,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Handle window resize for responsive layout (requirement 17.5, 17.8)
   window.addEventListener('resize', () => {
     handleResponsiveLayout();
-    const viewerContainer = document.getElementById('viewer');
-    if (viewerContainer && worldViewer) {
-      worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
-    }
+    resizeViewerToContainer();
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    isFullscreen = document.fullscreenElement !== null;
+    requestAnimationFrame(() => resizeViewerToContainer());
   });
   
   // Camera control buttons (requirement 14.5, 14.6, 14.7)
@@ -683,7 +686,9 @@ async function initEngine(): Promise<void> {
         // Update status bar seed
         const statusSeed = document.getElementById('status-seed');
         if (statusSeed) statusSeed.textContent = data.seed.toString();
-        errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
+        if (!document.body.classList.contains(JOURNEY_MODE_CLASS)) {
+          errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
+        }
       });
 
       app.on(AppEvent.PLANET_LANDED, (data) => {
@@ -863,9 +868,12 @@ async function enterAppMode(mode: AppMode): Promise<void> {
     }
 
     // Journey mode
-    setWorldGenerationLoading(true);
+    document.body.classList.add(FULLSCREEN_TRANSITION_CLASS);
     setViewerReady(false);
     await requestBrowserFullscreen();
+    await waitForFullscreenLayout();
+    resizeViewerToContainer();
+    setWorldGenerationLoading(true);
     await initEngine();
 
     if (!app || !worldViewer) throw new Error('Engine not initialized');
@@ -885,14 +893,16 @@ async function enterAppMode(mode: AppMode): Promise<void> {
     const spawnPos = findSpawnPosition(app);
     worldViewer.setCameraPosition(spawnPos);
     worldViewer.setFirstPersonMode(true);
+    await waitForFullscreenLayout();
+    resizeViewerToContainer();
+    document.body.classList.remove(FULLSCREEN_TRANSITION_CLASS);
     setViewerReady(true);
-    setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
     document.title = 'Journey — tQandtD';
   } catch (error) {
     console.error('Failed to enter app mode:', error);
     cleanupEngine();
     document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-    document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active');
+    document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active', FULLSCREEN_TRANSITION_CLASS);
     modeSelect?.classList.remove('hidden');
     document.title = 'Project tQandtD';
     errorHandler.handleError(new AppError(
@@ -948,6 +958,23 @@ async function requestBrowserFullscreen(): Promise<void> {
     // Browsers can deny fullscreen depending on permissions or embedding.
     // The app shell still occupies the full viewport.
   }
+}
+
+function waitForFullscreenLayout(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
+}
+
+function resizeViewerToContainer(): void {
+  const viewerContainer = document.getElementById('viewer');
+  if (!viewerContainer || !worldViewer) {
+    return;
+  }
+
+  worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
 }
 
 function getBufferedStreamingRadius(visualRadius: number): number {

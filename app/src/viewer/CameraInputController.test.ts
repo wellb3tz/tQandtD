@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
+import { FIRST_PERSON_EYE_HEIGHT_METERS } from '@engine/index';
 import { CameraInputController } from './CameraInputController';
 import type { ChunkMesh } from './ChunkMesh';
 
@@ -113,6 +114,19 @@ describe('CameraInputController', () => {
     expect(firstDrop).toBeCloseTo(0.012);
     expect(secondDrop).toBeGreaterThan(firstDrop * 2);
   });
+
+  it('keeps the first-person camera clear of nearby steep terrain', () => {
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 1, 0);
+    const container = document.createElement('div');
+    const terrain = createRampTerrain();
+    const controller = createController(camera, container, [terrain]);
+    controller.setFirstPersonMode(true);
+
+    controller.updateFirstPersonPhysics();
+
+    expect(camera.position.y).toBeGreaterThan(FIRST_PERSON_EYE_HEIGHT_METERS + 2);
+  });
 });
 
 function createController(camera: THREE.PerspectiveCamera, container: HTMLElement, terrains: THREE.Mesh[] = []): CameraInputController {
@@ -145,6 +159,41 @@ function createContainer(): HTMLElement {
   });
   document.body.appendChild(container);
   return container;
+}
+
+function createRampTerrain(): THREE.Mesh {
+  const geometry = new THREE.BufferGeometry();
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const size = 6;
+  const steps = 6;
+
+  for (let z = 0; z <= steps; z++) {
+    for (let x = 0; x <= steps; x++) {
+      const worldX = -size / 2 + (x / steps) * size;
+      const worldZ = -size / 2 + (z / steps) * size;
+      const height = Math.max(0, worldZ) * 3;
+      positions.push(worldX, height, worldZ);
+    }
+  }
+
+  for (let z = 0; z < steps; z++) {
+    for (let x = 0; x < steps; x++) {
+      const a = z * (steps + 1) + x;
+      const b = a + 1;
+      const c = a + steps + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const terrain = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
+  terrain.updateMatrixWorld(true);
+  return terrain;
 }
 
 function createTouchEvent(

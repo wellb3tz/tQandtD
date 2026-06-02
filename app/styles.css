@@ -825,7 +825,7 @@ button {
    LOADING INDICATOR - System Boot
    ========================================== */
 .loading-indicator {
-  position: absolute;
+  position: fixed;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
   z-index: 130;
@@ -921,6 +921,21 @@ body.journey-mode .minimap-container {
   right: 14px;
   bottom: 14px;
   z-index: 40;
+}
+
+body.fullscreen-transitioning {
+  background: #071013;
+}
+
+body.fullscreen-transitioning .mode-select.hidden {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+body.fullscreen-transitioning .minimap-container,
+body.fullscreen-transitioning .crosshair-overlay {
+  visibility: hidden;
 }
 
 /* ==========================================

@@ -17,6 +17,9 @@ const FIRST_PERSON_MOVE_SPEED = 0.18;
 const FREE_CAMERA_SPRINT_MULTIPLIER = 4;
 const FIRST_PERSON_SPRINT_MULTIPLIER = 3.5;
 const TOUCH_JOYSTICK_RADIUS_PX = 72;
+const FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS = 0.8;
+const FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS =
+  FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS * Math.SQRT1_2;
 
 export interface CameraInputControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -53,6 +56,20 @@ export class CameraInputController {
   private isOnGround = false;
   private readonly gravity = 0.012;
   private readonly jumpForce = 0.10;
+  private readonly terrainRaycaster = new THREE.Raycaster();
+  private readonly terrainRayOrigin = new THREE.Vector3();
+  private readonly terrainRayDirection = new THREE.Vector3(0, -1, 0);
+  private readonly terrainSampleOffsets = [
+    new THREE.Vector2(0, 0),
+    new THREE.Vector2(FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS, 0),
+    new THREE.Vector2(-FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS, 0),
+    new THREE.Vector2(0, FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS),
+    new THREE.Vector2(0, -FIRST_PERSON_TERRAIN_CLEARANCE_RADIUS_METERS),
+    new THREE.Vector2(FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS, FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS),
+    new THREE.Vector2(FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS, -FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS),
+    new THREE.Vector2(-FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS, FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS),
+    new THREE.Vector2(-FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS, -FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS),
+  ];
 
   /** Callback for orbit drag + scroll, set by OrbitalTransitionController. */
   private onOrbitInput: ((deltaX: number, deltaY: number, scrollDelta: number) => void) | null = null;
@@ -146,14 +163,6 @@ export class CameraInputController {
   updateFirstPersonPhysics(): void {
     if (!this.firstPersonMode || !this.getChunkMeshes) return;
 
-    const raycaster = new THREE.Raycaster();
-    const x = this.camera.position.x;
-    const z = this.camera.position.z;
-    raycaster.set(
-      new THREE.Vector3(x, 2000, z),
-      new THREE.Vector3(0, -1, 0),
-    );
-
     const terrainMeshes: THREE.Mesh[] = [];
     for (const chunkMesh of this.getChunkMeshes()) {
       terrainMeshes.push(chunkMesh.terrain);
@@ -161,10 +170,9 @@ export class CameraInputController {
 
     if (terrainMeshes.length === 0) return;
 
-    const intersects = raycaster.intersectObjects(terrainMeshes);
-    if (intersects.length === 0) return;
+    const terrainHeight = this.sampleFirstPersonTerrainHeight(terrainMeshes);
+    if (terrainHeight === null) return;
 
-    const terrainHeight = intersects[0].point.y;
     const groundLevel = terrainHeight + this.eyeHeight;
 
     if (this.isOnGround) {
@@ -325,6 +333,31 @@ export class CameraInputController {
     camera.top *= scale;
     camera.bottom *= scale;
     camera.updateProjectionMatrix();
+  }
+
+  private sampleFirstPersonTerrainHeight(terrainMeshes: THREE.Mesh[]): number | null {
+    let highestTerrainHeight: number | null = null;
+
+    for (const offset of this.terrainSampleOffsets) {
+      this.terrainRayOrigin.set(
+        this.camera.position.x + offset.x,
+        2000,
+        this.camera.position.z + offset.y,
+      );
+      this.terrainRaycaster.set(this.terrainRayOrigin, this.terrainRayDirection);
+      const intersects = this.terrainRaycaster.intersectObjects(terrainMeshes);
+
+      if (intersects.length === 0) {
+        continue;
+      }
+
+      const terrainHeight = intersects[0].point.y;
+      highestTerrainHeight = highestTerrainHeight === null
+        ? terrainHeight
+        : Math.max(highestTerrainHeight, terrainHeight);
+    }
+
+    return highestTerrainHeight;
   }
 
   private hasTouchMovement(): boolean {
