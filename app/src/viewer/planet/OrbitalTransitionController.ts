@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import {
+  DEFAULT_CAMERA_POSITION_METERS,
+  TERRAIN_HEIGHT_SCALE_METERS,
+} from '@engine/index';
 import type { PlanetRenderer } from './PlanetRenderer';
 import type { SpaceViewManager } from './SpaceViewManager';
 import type { CameraViewController } from '../CameraViewController';
@@ -31,6 +35,7 @@ export interface OrbitalTransitionControllerOptions {
 const TRANSITION_DURATION = 1200;
 const PLANET_RADIUS = 150;
 const ORBIT_CAMERA_DISTANCE = 600;
+const SURFACE_RETURN_CLEARANCE_METERS = 120;
 
 /** Phase split for the transition timeline (0..1) */
 const CHUNK_FADE_END = 0.42; // chunks fully invisible by 42%
@@ -306,11 +311,14 @@ export class OrbitalTransitionController {
     this.applyChunkOpacity(1);
     this.applyChunkScale(1);
 
-    // Ensure camera is above terrain, not underground
+    // Ensure camera is above the actual terrain, not just above an arbitrary
+    // world Y threshold. Terrain can reach TERRAIN_HEIGHT_SCALE_METERS.
     const camera = this.cameraViewController.getActiveCamera() as THREE.PerspectiveCamera;
-    if (camera.position.y < 50) {
-      camera.position.y = 100;
-    }
+    const terrainHeight = this.sampleTerrainHeightBelow(camera.position.x, camera.position.z);
+    const safeHeight = terrainHeight !== null
+      ? terrainHeight + SURFACE_RETURN_CLEARANCE_METERS
+      : DEFAULT_CAMERA_POSITION_METERS.y;
+    camera.position.y = Math.max(camera.position.y, safeHeight);
 
     this.onTransitionComplete?.(OrbitalState.TERRAIN);
   }
@@ -432,6 +440,28 @@ export class OrbitalTransitionController {
         (c.water.group as THREE.Object3D).visible = false;
       }
     }
+  }
+
+  private sampleTerrainHeightBelow(x: number, z: number): number | null {
+    const raycaster = new THREE.Raycaster();
+    const originY = Math.max(
+      DEFAULT_CAMERA_POSITION_METERS.y,
+      TERRAIN_HEIGHT_SCALE_METERS + SURFACE_RETURN_CLEARANCE_METERS,
+    );
+    raycaster.set(new THREE.Vector3(x, originY, z), new THREE.Vector3(0, -1, 0));
+
+    const terrainMeshes: THREE.Mesh[] = [];
+    for (const chunk of this.getChunkMeshes()) {
+      chunk.terrain.updateMatrixWorld(true);
+      terrainMeshes.push(chunk.terrain);
+    }
+
+    if (terrainMeshes.length === 0) {
+      return null;
+    }
+
+    const intersects = raycaster.intersectObjects(terrainMeshes, false);
+    return intersects[0]?.point.y ?? null;
   }
 
   private easeInOutCubic(t: number): number {
