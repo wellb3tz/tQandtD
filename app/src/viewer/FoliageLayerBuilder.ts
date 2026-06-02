@@ -19,9 +19,9 @@ export type FoliageLodLevel = 'near' | 'mid' | 'far';
 export const FOLIAGE_LOD_LEVELS: readonly FoliageLodLevel[] = ['near', 'mid', 'far'];
 
 export const FOLIAGE_LOD_DISTANCE_METERS = {
-  mid: 540,
-  far: 1080,
-  hidden: 1860,
+  mid: 720,
+  far: 1500,
+  hidden: 2700,
 } as const;
 
 const FOLIAGE_LOD_INSTANCE_FRACTION: Record<FoliageLodLevel, {
@@ -30,8 +30,8 @@ const FOLIAGE_LOD_INSTANCE_FRACTION: Record<FoliageLodLevel, {
   terrainProps: number;
 }> = {
   near: { trees: 1, shrubs: 1, terrainProps: 1 },
-  mid: { trees: 0.46, shrubs: 0.28, terrainProps: 0.35 },
-  far: { trees: 0.16, shrubs: 0, terrainProps: 0 },
+  mid: { trees: 0.62, shrubs: 0.42, terrainProps: 0.38 },
+  far: { trees: 0.34, shrubs: 0.10, terrainProps: 0 },
 };
 
 const FOLIAGE_LOD_DETAIL: Record<FoliageLodLevel, FoliagePrototypeDetail> = {
@@ -85,6 +85,9 @@ export function ensureFoliageLodBuilt(group: THREE.Group, lod: FoliageLodLevel):
 
   const lodGroup = buildFoliageLodGroup(group, plan, lod);
   group.add(lodGroup);
+  if (lodGroup.userData.treeVariantCount !== undefined) {
+    group.userData.treeVariantCount = lodGroup.userData.treeVariantCount;
+  }
   return lodGroup;
 }
 

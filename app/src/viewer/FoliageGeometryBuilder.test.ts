@@ -58,9 +58,12 @@ describe('FoliageGeometryBuilder', () => {
     expect(mesh).toBeInstanceOf(THREE.InstancedMesh);
     expect(mesh.count).toBe(1);
     expect(position.toArray()).toEqual([2, 3, 4]);
-    expect(scale.x).toBeCloseTo(0.5);
+    expect(scale.x).toBeGreaterThan(0.43);
+    expect(scale.x).toBeLessThan(0.57);
     expect(scale.y).toBeCloseTo(0.8);
-    expect(scale.z).toBeCloseTo(0.5);
+    expect(scale.z).toBeGreaterThan(0.44);
+    expect(scale.z).toBeLessThan(0.56);
+    expect(mesh.instanceColor).toBeDefined();
     expect(mesh.boundingBox).not.toBeNull();
     expect(mesh.boundingSphere).not.toBeNull();
     expect((mesh.material as THREE.MeshStandardMaterial).vertexColors).toBe(true);

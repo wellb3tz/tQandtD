@@ -20,17 +20,32 @@ export function createFoliageInstancedMesh(
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   const rotation = new THREE.Euler();
+  const color = new THREE.Color();
 
   placements.forEach((placement, index) => {
+    const rank = Number.isFinite(placement.rank) ? placement.rank : deterministic01(index, placements.length);
+    const aspect = 0.86 + deterministic01(index, Math.floor(rank * 1000) + 17) * 0.28;
+    const depthAspect = 0.90 + deterministic01(index, Math.floor(rank * 1000) + 31) * 0.20;
     position.set(placement.x, placement.y, placement.z);
     rotation.set(0, placement.rotation, 0);
     quaternion.setFromEuler(rotation);
-    scale.set(placement.radius, placement.height, placement.radius);
+    scale.set(placement.radius * aspect, placement.height, placement.radius * depthAspect);
     matrix.compose(position, quaternion, scale);
     mesh.setMatrixAt(index, matrix);
+
+    color.setHex(placement.color ?? 0xffffff);
+    color.offsetHSL(
+      (deterministic01(index, 53) - 0.5) * 0.035,
+      (deterministic01(index, 59) - 0.5) * 0.18,
+      (deterministic01(index, 61) - 0.5) * 0.16,
+    );
+    mesh.setColorAt(index, color);
   });
 
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) {
+    mesh.instanceColor.needsUpdate = true;
+  }
   mesh.computeBoundingBox();
   mesh.computeBoundingSphere();
   return mesh;
@@ -208,4 +223,11 @@ function addConeLayer(
     }
     indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
   }
+}
+
+function deterministic01(a: number, b: number): number {
+  let h = Math.imul(Math.trunc(a) + 0x9e3779b9, 374761393) ^ Math.imul(Math.trunc(b) + 0x85ebca6b, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h / 4294967296;
 }

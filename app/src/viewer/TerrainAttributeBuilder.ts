@@ -236,7 +236,9 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
   const lakeTiles = collectLakeTileIndices(data);
 
   for (let i = 0; i < normals.count; i++) {
+    const nx = normals.getX(i);
     const ny = normals.getY(i);
+    const nz = normals.getZ(i);
     const vi = i * 3;
     const rawHeight = vertices[vi + 1] / heightScale;
 
@@ -245,9 +247,9 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const bmIdx = Math.max(0, bvY) * chunkSize + Math.max(0, bvX);
 
     const slopeFactor = Math.max(0, 1.0 - ny * ny);
-    const steepness = Math.pow(slopeFactor, 1.5);
-    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.14) / 0.54));
-    const altitudeBrightness = 0.92 + rawHeight * 0.12;
+    const steepness = Math.pow(slopeFactor, 1.22);
+    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.08) / 0.46));
+    const altitudeBrightness = 0.88 + rawHeight * 0.17;
 
     let r = colorAttr.getX(i);
     let g = colorAttr.getY(i);
@@ -274,8 +276,18 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       : 0;
     const temperatureFactor = Math.max(0, Math.min(1, 1 - tileTemperature / 0.5));
     const snowLine = data.climateSnowLine ?? 0.76;
+    const worldX = vertices[vi];
+    const worldZ = vertices[vi + 2];
+    const rockBreakup = valueNoise2D(worldX * 0.030 + 3.0, worldZ * 0.030 - 11.0) * 0.55 +
+      valueNoise2D(worldX * 0.090 - 5.0, worldZ * 0.090 + 17.0) * 0.45;
+    const snowBreakup = valueNoise2D(worldX * 0.020, worldZ * 0.020) * 0.62 +
+      valueNoise2D(worldX * 0.055 + 19.0, worldZ * 0.055 - 7.0) * 0.38;
+    const snowEdgeLift = (snowBreakup - 0.5) * 0.095;
+    const aspectShelter = clamp01(0.52 - nx * 0.35 - nz * 0.22);
+    const snowPocket = clamp01(1.0 - rockBreakup * 0.82 + aspectShelter * 0.26);
+    const visualSnowLine = snowLine + 0.055;
     const snowDetail = (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER))
-      ? Math.min(1, Math.max(0, (rawHeight - snowLine) / 0.14) * (1.0 - steepness * 0.35)) * temperatureFactor
+      ? Math.min(1, Math.max(0, (rawHeight - visualSnowLine + snowEdgeLift * 1.26) / 0.095) * (0.48 - steepness * 0.30 + snowPocket * 0.28)) * temperatureFactor
       : 0;
     const riverbedDetail = riverbedInfluence;
 
@@ -285,6 +297,21 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       r = Math.min(1.0, r * wetShade * (1.0 - wetBand * 0.03));
       g = Math.min(1.0, g * wetShade * wetSaturation);
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
+    }
+
+    const mountainSurface = data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER)
+      ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
+      : cliffDetail;
+    if (mountainSurface > 0.08) {
+      const coolRock = {
+        r: 0.34 + rockBreakup * 0.18,
+        g: 0.35 + rockBreakup * 0.17,
+        b: 0.34 + rockBreakup * 0.15,
+      };
+      const rockFactor = Math.min(0.82, mountainSurface * (1 - snowDetail * 0.42));
+      r = blend(r, coolRock.r, rockFactor);
+      g = blend(g, coolRock.g, rockFactor);
+      b = blend(b, coolRock.b, rockFactor);
     }
 
     colorAttr.setXYZ(
@@ -329,4 +356,23 @@ function clamp01(value: number): number {
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = clamp01((x - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
+}
+
+function hash2D(x: number, y: number): number {
+  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+  return n - Math.floor(n);
+}
+
+function valueNoise2D(x: number, y: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash2D(ix, iy);
+  const b = hash2D(ix + 1, iy);
+  const c = hash2D(ix, iy + 1);
+  const d = hash2D(ix + 1, iy + 1);
+  return blend(blend(a, b, ux), blend(c, d, ux), uy);
 }

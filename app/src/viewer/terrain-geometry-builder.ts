@@ -319,8 +319,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
   const count = normals.length / 3;
   const terrainDetailBlend = new Float32Array(count * 4);
 
-  const rock = { r: 0.38, g: 0.36, b: 0.34 };
-  const snow = { r: 0.92, g: 0.93, b: 0.95 };
+  const rock = { r: 0.42, g: 0.42, b: 0.39 };
+  const snow = { r: 0.88, g: 0.91, b: 0.93 };
   const lava = { r: 0.72, g: 0.12, b: 0.04 };
   const wetSand = { r: 0.55, g: 0.48, b: 0.32 };
   const coastalCliff = { r: 0.46, g: 0.42, b: 0.36 };
@@ -337,9 +337,15 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const vertexBiome = data.biomeMap ? data.biomeMap[Math.min(bmIdx, data.biomeMap.length - 1)] : -1;
 
     const slopeFactor = Math.max(0, 1.0 - ny * ny);
-    const steepness = Math.pow(slopeFactor, 1.5);
-    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.14) / 0.54));
-    const altitudeBrightness = 0.92 + rawHeight * 0.12;
+    const steepness = Math.pow(slopeFactor, 1.22);
+    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.08) / 0.46));
+    const altitudeBrightness = 0.88 + rawHeight * 0.17;
+    const worldX = positions[vi];
+    const worldZ = positions[vi + 2];
+    const rockBreakup = valueNoise2D(worldX * 0.030 + 3.0, worldZ * 0.030 - 11.0) * 0.55 +
+      valueNoise2D(worldX * 0.090 - 5.0, worldZ * 0.090 + 17.0) * 0.45;
+    const snowBreakup = valueNoise2D(worldX * 0.020, worldZ * 0.020) * 0.62 +
+      valueNoise2D(worldX * 0.055 + 19.0, worldZ * 0.055 - 7.0) * 0.38;
 
     let r = colors[i * 3];
     let g = colors[i * 3 + 1];
@@ -375,8 +381,11 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       : 0;
     const temperatureFactor = Math.max(0, Math.min(1, 1 - tileTemperature / 0.5));
 
+    const aspectShelter = clamp01(0.52 - normals[i * 3] * 0.35 - normals[i * 3 + 2] * 0.22);
+    const snowPocket = clamp01(1.0 - rockBreakup * 0.82 + aspectShelter * 0.26);
+    const visualSnowLine = snowLine + 0.055;
     const snowDetail = (isMountain || isGlacier)
-      ? Math.min(1, Math.max(0, (rawHeight - snowLine) / 0.14) * (1.0 - steepness * 0.35)) * temperatureFactor
+      ? Math.min(1, Math.max(0, (rawHeight - visualSnowLine + (snowBreakup - 0.5) * 0.12) / 0.095) * (0.48 - steepness * 0.30 + snowPocket * 0.28)) * temperatureFactor
       : 0;
     const riverbedDetail = riverbedInfluence;
 
@@ -410,8 +419,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       g = blend(g, rock.g, steepness);
       b = blend(b, rock.b, steepness);
 
-      if ((isMountain || isGlacier) && rawHeight > snowLine) {
-        const snowFactor = Math.min(1.0, (rawHeight - snowLine) / 0.10) * (1.0 - steepness * 0.7) * temperatureFactor;
+      if ((isMountain || isGlacier) && rawHeight > visualSnowLine) {
+        const snowFactor = Math.min(1.0, (rawHeight - visualSnowLine + (snowBreakup - 0.5) * 0.12) / 0.08) * (0.44 - steepness * 0.34 + snowPocket * 0.24) * temperatureFactor;
         if (snowFactor > 0) {
           r = blend(r, snow.r, snowFactor);
           g = blend(g, snow.g, snowFactor);
@@ -426,6 +435,21 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       r = Math.min(1.0, r * wetShade * (1.0 - wetBand * 0.03));
       g = Math.min(1.0, g * wetShade * wetSaturation);
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
+    }
+
+    const mountainSurface = (isMountain || isGlacier)
+      ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
+      : cliffDetail;
+    if (mountainSurface > 0.08) {
+      const coolRock = {
+        r: 0.34 + rockBreakup * 0.18,
+        g: 0.35 + rockBreakup * 0.17,
+        b: 0.34 + rockBreakup * 0.15,
+      };
+      const rockFactor = Math.min(0.82, mountainSurface * (1 - snowDetail * 0.42));
+      r = blend(r, coolRock.r, rockFactor);
+      g = blend(g, coolRock.g, rockFactor);
+      b = blend(b, coolRock.b, rockFactor);
     }
 
     if (riverBankWetness > 0) {
@@ -518,6 +542,25 @@ function calculateLakeWetness(
 
 function blend(from: number, to: number, factor: number): number {
   return from + (to - from) * factor;
+}
+
+function hash2D(x: number, y: number): number {
+  const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+  return n - Math.floor(n);
+}
+
+function valueNoise2D(x: number, y: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash2D(ix, iy);
+  const b = hash2D(ix + 1, iy);
+  const c = hash2D(ix, iy + 1);
+  const d = hash2D(ix + 1, iy + 1);
+  return blend(blend(a, b, ux), blend(c, d, ux), uy);
 }
 
 function getPartialGenerationStyle(partial: boolean, stage: number | undefined): {

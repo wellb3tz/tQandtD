@@ -18,9 +18,9 @@ export { clamp01, selectTerrainSurfaceKey, type TerrainSurfaceKey } from './terr
 export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
-export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v2.png';
-export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v1.png';
-const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 1.45;
+export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v3.png';
+export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v2.png';
+const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 1.34;
 
 export interface TerrainTextureSet {
   albedo: THREE.Texture;
@@ -50,9 +50,9 @@ export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainText
     roughness: '/textures/terrain-beach-roughness-v1.png',
   },
   mountainRock: {
-    albedo: '/textures/terrain-mountain-rock-albedo-v1.png',
-    normal: '/textures/terrain-mountain-rock-normal-v1.png',
-    roughness: '/textures/terrain-mountain-rock-roughness-v1.png',
+    albedo: '/textures/terrain-mountain-rock-albedo-v2.png',
+    normal: '/textures/terrain-mountain-rock-normal-v2.png',
+    roughness: '/textures/terrain-mountain-rock-roughness-v2.png',
   },
   snow: {
     albedo: '/textures/terrain-snow-albedo-v1.png',
@@ -308,10 +308,10 @@ export function createTexturedTerrainMaterial(
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
     ),
-    normalScale: new THREE.Vector2(0.65, 0.65),
+    normalScale: new THREE.Vector2(0.95, 0.95),
     vertexColors: true,
     wireframe,
-    roughness: 0.72,
+    roughness: 0.78,
     metalness: 0.0,
   });
 
@@ -323,7 +323,7 @@ export function createBiomeColorTerrainMaterial(wireframe: boolean = false): THR
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     wireframe,
-    roughness: 0.72,
+    roughness: 0.78,
     metalness: 0.0,
   });
 
@@ -381,10 +381,10 @@ export function createTerrainBlendMaterial(
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
       TERRAIN_TEXTURE_VERTEX_COLOR_BOOST,
     ),
-    normalScale: new THREE.Vector2(0.65, 0.65),
+    normalScale: new THREE.Vector2(0.95, 0.95),
     vertexColors: true,
     wireframe,
-    roughness: 0.72,
+    roughness: 0.78,
     metalness: 0.0,
   });
 
@@ -393,6 +393,8 @@ export function createTerrainBlendMaterial(
   material.onBeforeCompile = (shader) => {
     shader.uniforms.terrainAlbedoAtlas = { value: textures.albedoAtlas };
     shader.uniforms.terrainNormalAtlas = { value: textures.normalAtlas };
+    shader.uniforms.terrainMountainRockAlbedo = { value: textures.mountainRock.albedo };
+    shader.uniforms.terrainMountainRockNormal = { value: textures.mountainRock.normal };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -421,6 +423,8 @@ vTerrainDetailBlend = terrainDetailBlend;`,
         `#include <common>
 uniform sampler2D terrainAlbedoAtlas;
 uniform sampler2D terrainNormalAtlas;
+uniform sampler2D terrainMountainRockAlbedo;
+uniform sampler2D terrainMountainRockNormal;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
@@ -449,7 +453,7 @@ vec4 sampleTerrainNormalAtlasTile(float tileIndex, vec2 uv) {
 }
 
 vec2 terrainSurfaceUv(vec2 uv) {
-  return uv * vec2(3.25, 3.25);
+  return uv * vec2(8.5, 8.5);
 }
 
 float terrainValueHash(vec2 p) {
@@ -469,6 +473,16 @@ float terrainValueNoise(vec2 p) {
 
 float macroGroundNoise(vec2 uv) {
   return terrainValueNoise(uv * 0.085) * 0.62 + terrainValueNoise(uv * 0.032 + vec2(19.0, 47.0)) * 0.38;
+}
+
+float microGroundNoise(vec2 uv) {
+  return terrainValueNoise(uv * 1.70) * 0.50 + terrainValueNoise(uv * 3.40 + vec2(11.0, 5.0)) * 0.30 + terrainValueNoise(uv * 6.80 + vec2(37.0, 23.0)) * 0.20;
+}
+
+float rockStrataNoise(vec2 uv) {
+  float bands = abs(sin((uv.x * 0.62 + uv.y * 1.85) + terrainValueNoise(uv * 0.22) * 3.1));
+  float fineCuts = terrainValueNoise(uv * 2.4 + vec2(23.0, 41.0));
+  return smoothstep(0.42, 0.92, bands) * 0.68 + fineCuts * 0.32;
 }
 
 void considerTerrainAtlasTile(
@@ -527,7 +541,9 @@ vec4 blendedTerrainMap = (
   sampleTerrainAtlasTile(secondarySurfaceTile, terrainSurfaceUv(vMapUv)) * secondaryTerrainWeight +
   sampleTerrainAtlasTile(tertiarySurfaceTile, terrainSurfaceUv(vMapUv)) * tertiaryTerrainWeight
 ) / terrainSurfaceWeightSum;
-vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.53)) * 2.85 + vec3(0.72), vec3(0.28), vec3(1.55));
+float microGroundNoiseValue = microGroundNoise(terrainSurfaceUv(vMapUv));
+vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.50)) * 3.35 + vec3(0.72), vec3(0.24), vec3(1.68));
+terrainDetailContrast *= 0.90 + microGroundNoiseValue * 0.22;
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * terrainDetailContrast, 0.98);
 diffuseColor.a *= blendedTerrainMap.a;
 vec3 blendedTerrainNormalRaw = (
@@ -564,16 +580,45 @@ diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetLowlandTint, wetT
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetGlossTint, wetTerrainWeight * 0.12);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverBankSiltTint, siltPatch * 0.28);
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * riverBankSandTint), paleSandPatch * 0.20);
-vec3 cliffTint = vec3(0.64, 0.63, 0.60);
-vec3 snowPeakTint = vec3(1.06, 1.08, 1.12);
+float mountainRockWeight = clamp(vSurfaceBlendA.w + vTerrainDetailBlend.x * 0.72, 0.0, 1.0);
+float mountainSnowWeight = clamp(vSurfaceBlendB.x + vTerrainDetailBlend.y, 0.0, 1.0);
+float mountainStrata = rockStrataNoise(terrainSurfaceUv(vMapUv) * 0.58 + vec2(3.0, 17.0));
+float mountainCracks = smoothstep(0.54, 0.88, rockStrataNoise(terrainSurfaceUv(vMapUv) * 1.25 + vec2(41.0, 9.0)));
+float exposedRockWeight = mountainRockWeight * (1.0 - mountainSnowWeight * 0.42);
+float talusBeltWeight = mountainRockWeight * (1.0 - mountainSnowWeight * 0.76) * smoothstep(0.06, 0.56, vTerrainDetailBlend.x);
+vec2 mountainRockUv = mirrorTerrainAtlasUv(vMapUv * vec2(2.35, 2.35));
+vec3 directMountainRock = texture2D(terrainMountainRockAlbedo, mountainRockUv).rgb;
+vec3 directMountainNormal = texture2D(terrainMountainRockNormal, mountainRockUv).rgb * 2.0 - 1.0;
+blendedTerrainNormal = normalize(mix(blendedTerrainNormal, directMountainNormal, exposedRockWeight * 0.86));
+vec3 alpineRockBase = mix(vec3(0.40, 0.405, 0.39), vec3(0.57, 0.57, 0.53), mountainStrata * 0.45 + microGroundNoiseValue * 0.25);
+vec3 alpineRockCool = vec3(0.44, 0.49, 0.50);
+vec3 alpineRockWarm = vec3(0.58, 0.54, 0.46);
+vec3 alpineRockTint = mix(alpineRockBase, alpineRockCool, mountainCracks * 0.20);
+alpineRockTint = mix(alpineRockTint, alpineRockWarm, smoothstep(0.18, 0.72, 1.0 - mountainStrata) * 0.08);
+vec3 alpineTexturedRock = mix(directMountainRock * alpineRockTint * 1.46, directMountainRock, 0.48);
+diffuseColor.rgb = mix(diffuseColor.rgb, alpineTexturedRock, exposedRockWeight * 0.92);
+vec3 talusBeltTint = mix(vec3(0.48, 0.47, 0.42), vec3(0.62, 0.58, 0.47), microGroundNoiseValue);
+diffuseColor.rgb = mix(diffuseColor.rgb, directMountainRock * talusBeltTint * 1.42, talusBeltWeight * 0.38);
+vec3 cliffTint = vec3(0.50, 0.50, 0.47);
+vec3 snowPeakTint = vec3(0.96, 1.00, 1.03);
 vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54);
 vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
-float cliffAccent = smoothstep(0.08, 0.70, vTerrainDetailBlend.x);
-float snowAccent = smoothstep(0.0, 0.55, vTerrainDetailBlend.y);
+float cliffAccent = smoothstep(0.04, 0.62, vTerrainDetailBlend.x);
+float snowAccent = smoothstep(0.20, 0.74, vTerrainDetailBlend.y);
 float shorelineAccent = smoothstep(0.02, 0.60, vTerrainDetailBlend.z);
 float riverbedAccent = smoothstep(0.02, 0.55, vTerrainDetailBlend.w);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.40);
-diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), snowAccent * 0.45);
+float rockStrata = rockStrataNoise(terrainSurfaceUv(vMapUv) * 0.74);
+float talusAccent = smoothstep(0.18, 0.72, rockStrata) * cliffAccent * (1.0 - snowAccent * 0.55);
+vec3 rockShadowTint = vec3(0.58, 0.57, 0.52);
+vec3 rockHighlightTint = vec3(1.18, 1.13, 1.02);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * cliffTint, cliffAccent * 0.42);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * rockShadowTint, talusAccent * 0.18);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * rockHighlightTint), (1.0 - rockStrata) * cliffAccent * 0.18);
+float snowBreakup = smoothstep(0.22, 0.80, rockStrataNoise(terrainSurfaceUv(vMapUv) * 0.45 + vec2(29.0, 12.0)));
+float windScouredSnow = snowAccent * smoothstep(0.18, 0.92, 1.0 - mountainCracks * 0.55 - rockStrata * 0.22);
+float brokenSnowAccent = windScouredSnow * (0.40 + snowBreakup * 0.28);
+diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), brokenSnowAccent * 0.26);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.76, 0.82, 0.84), windScouredSnow * cliffAccent * rockStrata * 0.10);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.54);`,
       )

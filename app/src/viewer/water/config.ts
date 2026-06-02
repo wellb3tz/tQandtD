@@ -26,11 +26,11 @@ export const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
 export const DEFAULT_OCEAN_CONFIG = {
   enabled: true,
   color: 0x0d4f66,
-  opacity: 0.66,
-  shininess: 95,
+  opacity: 0.72,
+  shininess: 100,
   enableWaves: true,
-  waveHeight: 0.65,
-  waveSpeed: 1.05,
+  waveHeight: 0.82,
+  waveSpeed: 0.86,
 };
 
 /**

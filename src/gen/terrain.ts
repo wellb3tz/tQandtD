@@ -67,6 +67,7 @@ export class TerrainGenerator {
   private readonly coastlineConfig: NoiseConfig;
   private readonly mountainMaskConfig: NoiseConfig;
   private readonly ridgeConfig: NoiseConfig;
+  private readonly mountainDetailConfig: NoiseConfig;
 
   constructor(config: TerrainConfig) {
     this.config = config;
@@ -102,9 +103,16 @@ export class TerrainGenerator {
     
     this.ridgeConfig = {
       octaves: 5,
-      persistence: 0.5,
-      lacunarity: 2.1,
-      scale: config.baseScale * 1.5,
+      persistence: 0.52,
+      lacunarity: 2.08,
+      scale: config.baseScale * 1.62,
+    };
+
+    this.mountainDetailConfig = {
+      octaves: 4,
+      persistence: 0.46,
+      lacunarity: 2.35,
+      scale: config.baseScale * 3.1,
     };
   }
 
@@ -303,11 +311,11 @@ export class TerrainGenerator {
         // --- Ridge noise ---
         let ridgeContrib = 0;
         if (this.ridgeNoise !== null && mountainMask > 0) {
-          ridgeContrib = this.getRoundedRidgeContribution(x, y);
+          ridgeContrib = this.getAlpineRidgeContribution(x, y, mountainMask);
         }
 
         // Blend detail and ridge noise
-        const blendedDetail = height * (1.0 - mountainMask * 0.7) + ridgeContrib * mountainMask * 0.7;
+        const blendedDetail = height * (1.0 - mountainMask * 0.74) + ridgeContrib * mountainMask * 0.74;
         const hiLand = seaLevel + (0.35 + mountainMask * 0.65) * (1.0 - seaLevel);
         const lo = seaLevel;
         height = lo + blendedDetail * (hiLand - lo) * landRise;
@@ -321,30 +329,31 @@ export class TerrainGenerator {
     return height;
   }
 
-  private getRoundedRidgeContribution(x: number, y: number): number {
+  private getAlpineRidgeContribution(x: number, y: number, mountainMask: number): number {
     if (this.ridgeNoise === null) {
       return 0;
     }
 
     const center = this.ridgeNoise.ridgeFbm(x, y, this.ridgeConfig);
-    const shoulderOffset = 3;
-    const skirtOffset = 6;
-
+    const shoulderOffset = 3.5;
+    const skirtOffset = 7;
     const shoulders = (
       this.ridgeNoise.ridgeFbm(x - shoulderOffset, y, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x + shoulderOffset, y, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x, y - shoulderOffset, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x, y + shoulderOffset, this.ridgeConfig)
     ) * 0.25;
-
     const skirt = (
       this.ridgeNoise.ridgeFbm(x - skirtOffset, y - skirtOffset, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x + skirtOffset, y - skirtOffset, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x - skirtOffset, y + skirtOffset, this.ridgeConfig) +
       this.ridgeNoise.ridgeFbm(x + skirtOffset, y + skirtOffset, this.ridgeConfig)
     ) * 0.25;
-
-    const rounded = center * 0.45 + shoulders * 0.4 + skirt * 0.15;
-    return Math.min(0.95, rounded);
+    const cross = this.ridgeNoise.ridgeFbm(x + 37.0, y - 19.0, this.ridgeConfig);
+    const cragNoise = (this.ridgeNoise.fbm(x + 91.0, y - 53.0, this.mountainDetailConfig) + 1) * 0.5;
+    const massedRidge = center * 0.52 + shoulders * 0.30 + skirt * 0.12 + cross * 0.06;
+    const sharpened = Math.pow(Math.max(0, Math.min(1, massedRidge)), 0.88);
+    const brokenRidge = sharpened + (cragNoise - 0.5) * 0.055 * mountainMask;
+    return Math.max(0, Math.min(0.94, brokenRidge));
   }
 }

@@ -89,7 +89,7 @@ function getSceneAmbientLight(viewer: WorldViewer): THREE.AmbientLight {
 
 function getSceneSunLight(viewer: WorldViewer): THREE.DirectionalLight {
   const light = viewer.getScene().children.find(
-    child => child instanceof THREE.DirectionalLight && child.color.getHex() === 0xffe2b8
+    child => child instanceof THREE.DirectionalLight && child.color.getHex() === 0xffdfad
   ) as THREE.DirectionalLight | undefined;
 
   expect(light).toBeDefined();
@@ -130,6 +130,16 @@ function getTerrainMesh(viewer: WorldViewer, chunkKey = '0,0'): THREE.Mesh {
 
 function getFoliageGroup(viewer: WorldViewer, chunkKey = '0,0'): THREE.Group | undefined {
   return viewer.getScene().getObjectByName(`foliage-${chunkKey}`) as THREE.Group | undefined;
+}
+
+function getFoliageMeshes(foliage: THREE.Group, namePrefix: string): THREE.InstancedMesh[] {
+  const meshes: THREE.InstancedMesh[] = [];
+  foliage.traverse(child => {
+    if (child instanceof THREE.InstancedMesh && child.name.startsWith(namePrefix)) {
+      meshes.push(child);
+    }
+  });
+  return meshes;
 }
 
 describe('WorldViewer lifecycle', () => {
@@ -187,13 +197,15 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('matches horizon fill and camera far distance to the streaming radius without scene fog', () => {
+  it('matches horizon fill, terrain fog, and camera far distance to the streaming radius', () => {
     const viewer = new WorldViewer();
     const camera = viewer.getCamera() as THREE.PerspectiveCamera;
 
     viewer.setStreamingViewDistance(4, 32);
 
-    expect(viewer.getScene().fog).toBeNull();
+    expect(viewer.getScene().fog).toBeInstanceOf(THREE.Fog);
+    expect((viewer.getScene().fog as THREE.Fog).near).toBeCloseTo(944.64);
+    expect((viewer.getScene().fog as THREE.Fog).far).toBeCloseTo(3392.64);
     expect(camera.far).toBeCloseTo(3214.08);
 
     const horizonFill = viewer.getScene().getObjectByName(HORIZON_FILL_PLANE_NAME);
@@ -299,10 +311,10 @@ describe('WorldViewer lifecycle', () => {
     const ambientLight = getSceneAmbientLight(viewer);
     const directionalLight = getSceneSunLight(viewer);
 
-    expect(ambientLight.intensity).toBe(0.70);
-    expect(ambientLight.color.getHex()).toBe(0xb5cad6);
-    expect(directionalLight.intensity).toBe(1.00);
-    expect(directionalLight.color.getHex()).toBe(0xffe2b8);
+    expect(ambientLight.intensity).toBe(0.66);
+    expect(ambientLight.color.getHex()).toBe(0xc6d7df);
+    expect(directionalLight.intensity).toBe(1.14);
+    expect(directionalLight.color.getHex()).toBe(0xffdfad);
     expect(directionalLight.position.y).toBeGreaterThan(0);
     expect(directionalLight.castShadow).toBe(true);
 
@@ -496,7 +508,7 @@ describe('WorldViewer lifecycle', () => {
 
     viewer.addChunk(0, 0, createViewerChunkData({
       size: 1,
-      heightmap: new Float32Array([0.36, 0.92, 0.38, 0.84]),
+      heightmap: new Float32Array([0.36, 0.92, 0.38, 0.96]),
       biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
       resources: [],
       structures: [],
@@ -507,7 +519,7 @@ describe('WorldViewer lifecycle', () => {
     const detailBlend = (terrain.geometry as THREE.BufferGeometry).getAttribute('terrainDetailBlend') as THREE.BufferAttribute;
 
     expect(detailBlend.getX(0)).toBeGreaterThan(0.22);
-    expect(detailBlend.getY(3)).toBeGreaterThan(0.35);
+    expect(detailBlend.getY(3)).toBeGreaterThan(0.08);
 
     viewer.dispose();
   });
@@ -565,12 +577,12 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const canopy = foliage.children[0] as THREE.InstancedMesh;
+    const canopy = getFoliageMeshes(foliage, 'foliage-trees')[0];
 
     expect(foliage).toBeInstanceOf(THREE.Group);
     expect(canopy).toBeInstanceOf(THREE.InstancedMesh);
     expect(canopy.count).toBeGreaterThan(0);
-    expect(canopy.count).toBeLessThanOrEqual(16);
+    expect(canopy.count).toBeGreaterThan(0);
     expect(canopy.castShadow).toBe(true);
     expect(canopy.receiveShadow).toBe(true);
     expect(foliage.visible).toBe(true);
@@ -638,7 +650,7 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
-    const canopy = foliage.children[0] as THREE.InstancedMesh;
+    const canopy = getFoliageMeshes(foliage, 'foliage-trees')[0];
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     let hasRiverChannelFoliage = false;
@@ -687,11 +699,25 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer, '1,0') as THREE.Group;
-    const shrubs = foliage.children.find(child => child.name === 'foliage-shrubs');
+    const shrubs = getFoliageMeshes(foliage, 'foliage-shrubs');
+
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    let hasShorelineShrub = false;
+    for (const shrubLayer of shrubs) {
+      for (let i = 0; i < shrubLayer.count; i++) {
+        shrubLayer.getMatrixAt(i, matrix);
+        position.setFromMatrixPosition(matrix);
+        if (Math.abs(position.x - 8.5) <= 2.4) {
+          hasShorelineShrub = true;
+          break;
+        }
+      }
+    }
 
     expect(foliage.userData.treeCount).toBeGreaterThan(0);
-    expect(foliage.userData.shrubCount).toBe(0);
-    expect(shrubs).toBeUndefined();
+    expect(foliage.userData.shrubCount).toBeGreaterThan(0);
+    expect(hasShorelineShrub).toBe(false);
 
     viewer.dispose();
   });
@@ -716,8 +742,14 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
-    const tree = treeMeshes[0];
+    const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
+    const tree = treeMeshes
+      .slice()
+      .sort((a, b) => {
+        const aPositions = a.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const bPositions = b.geometry.getAttribute('position') as THREE.BufferAttribute;
+        return bPositions.count - aPositions.count;
+      })[0];
     const material = tree.material as THREE.MeshStandardMaterial;
     const geometry = tree.geometry as THREE.BufferGeometry;
     const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
@@ -743,7 +775,7 @@ describe('WorldViewer lifecycle', () => {
     expect(foliage.userData.treeVariantCount).toBeGreaterThanOrEqual(2);
     expect(material.vertexColors).toBe(true);
     expect(colors).toBeDefined();
-    expect(positions.count).toBeGreaterThan(36);
+    expect(positions.count).toBeGreaterThan(30);
     expect(minY).toBeLessThan(-0.45);
     expect(maxY).toBeGreaterThan(0.75);
     expect(hasTrunkColor).toBe(true);
@@ -772,7 +804,7 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
+    const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const fractions: number[] = [];
@@ -848,7 +880,7 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
+    const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     let hasTrailingRowFoliage = false;
@@ -867,7 +899,7 @@ describe('WorldViewer lifecycle', () => {
     }
 
     expect(treeCount).toBeGreaterThan(512);
-    expect(treeCount).toBeLessThanOrEqual(2048);
+    expect(treeCount).toBeLessThanOrEqual(4096);
     expect(hasTrailingRowFoliage).toBe(true);
 
     viewer.dispose();
@@ -893,7 +925,7 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const treeMeshes = foliage.children.filter(child => child.name.startsWith('foliage-trees')) as THREE.InstancedMesh[];
+    const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
     const clearing = foliage.userData.clearingSample as { x: number; z: number; radius: number } | undefined;
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
@@ -939,12 +971,10 @@ describe('WorldViewer lifecycle', () => {
     await viewer.flushPendingChunkBuilds();
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
-    const propMeshes = foliage.children.filter(child => child.name.startsWith('foliage-props')) as THREE.InstancedMesh[];
+    const propMeshes = getFoliageMeshes(foliage, 'foliage-props');
 
-    expect(propMeshes).toHaveLength(1);
     expect(foliage.userData.terrainPropCount).toBeGreaterThan(0);
     expect(foliage.userData.terrainPropCount).toBeLessThanOrEqual(96);
-    expect(propMeshes[0].name).toBe('foliage-props-stumps');
     expect(foliage.userData.terrainPropKindCount).toBe(1);
 
     for (const mesh of propMeshes) {

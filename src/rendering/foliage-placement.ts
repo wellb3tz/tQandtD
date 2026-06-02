@@ -2,9 +2,10 @@ import { BiomeType, type ChunkData, getBiomeWeightForTile } from '../world/chunk
 import { getRiverChannelWidth, type RiverPoint } from '../gen/rivers';
 import { TERRAIN_HEIGHT_SCALE_METERS, TERRAIN_TILE_SIZE_METERS } from '../config/world-units';
 
-const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 2048;
+const MAX_FOLIAGE_INSTANCES_PER_CHUNK = 4096;
+const MAX_SHRUB_INSTANCES_PER_CHUNK = 1536;
 const MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK = 96;
-const TREE_CANDIDATES_PER_TILE = 4;
+const TREE_CANDIDATES_PER_TILE = 6;
 const FOLIAGE_BANK_WIDTH = 2.4;
 const TREE_AND_PROP_PROTOTYPE_MIN_Y = -0.50;
 export const SHRUB_PROTOTYPE_MIN_Y = -0.30;
@@ -127,6 +128,38 @@ export function planFoliagePlacements(
 
       const clusterDensity = getForestClusterDensity(worldTileX, worldTileZ);
       const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
+      const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
+      const shrubChance = deterministic01(worldTileX, worldTileZ, 139);
+      const shrubDensity = Math.min(
+        0.72,
+        profile.density * clusterDensity * 0.36 * slopeDensityScale * Math.max(0, 1 - waterInfluence.bank * 1.15) * (1 - clearingInfluence.strength * 0.55),
+      );
+      if (shrubChance <= shrubDensity) {
+        const shrubJitterX = 0.10 + deterministic01(worldTileX, worldTileZ, 149) * 0.80;
+        const shrubJitterZ = 0.10 + deterministic01(worldTileX, worldTileZ, 151) * 0.80;
+        const shrubElevation = sampleTerrainElevationAtTilePoint(
+          data.heightmap,
+          verticesPerSide,
+          tileX,
+          tileY,
+          shrubJitterX,
+          shrubJitterZ
+        );
+        const shrubScale = 0.62 + deterministic01(worldTileX, worldTileZ, 157) * 0.72;
+        const shrubHeight = profile.height * 0.30 * shrubScale * TREE_HEIGHT_METERS_SCALE;
+        const shrubRadius = profile.radius * 0.62 * shrubScale * TREE_HEIGHT_METERS_SCALE;
+        shrubPlacements.push({
+          x: (worldTileX + shrubJitterX) * horizontalScale,
+          y: shrubElevation * heightScale - SHRUB_PROTOTYPE_MIN_Y * shrubHeight,
+          z: (worldTileZ + shrubJitterZ) * horizontalScale,
+          radius: shrubRadius,
+          height: shrubHeight,
+          rotation: deterministic01(worldTileX, worldTileZ, 163) * Math.PI * 2,
+          color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
+          rank: deterministic01(worldTileX, worldTileZ, 173),
+        });
+      }
+
       const propChance = deterministic01(worldTileX, worldTileZ, 181);
       const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
       if (propChance <= propDensity) {
@@ -146,11 +179,10 @@ export function planFoliagePlacements(
         });
       }
 
-      const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
       for (let candidate = 0; candidate < TREE_CANDIDATES_PER_TILE; candidate++) {
-        const localCellX = candidate % 2;
-        const localCellZ = Math.floor(candidate / 2);
-        const treeJitterX = (localCellX + 0.10 + deterministic01(worldTileX, worldTileZ, 23 + candidate * 11) * 0.80) * 0.5;
+        const localCellX = candidate % 3;
+        const localCellZ = Math.floor(candidate / 3);
+        const treeJitterX = (localCellX + 0.14 + deterministic01(worldTileX, worldTileZ, 23 + candidate * 11) * 0.72) / 3;
         const treeJitterZ = (localCellZ + 0.10 + deterministic01(worldTileX, worldTileZ, 31 + candidate * 11) * 0.80) * 0.5;
         const treeX = worldTileX + treeJitterX;
         const treeZ = worldTileZ + treeJitterZ;
@@ -169,7 +201,7 @@ export function planFoliagePlacements(
         const treeClearingInfluence = getClearingInfluence(treeX, treeZ);
         const bankTreeScale = Math.max(0, 1 - treeWaterInfluence.bank);
         const clearingTreeScale = 1 - treeClearingInfluence.strength;
-        const treeDensity = Math.min(1, profile.density * clusterDensity * 1.08 * slopeDensityScale * bankTreeScale * clearingTreeScale);
+        const treeDensity = Math.min(1, profile.density * clusterDensity * 1.22 * slopeDensityScale * bankTreeScale * clearingTreeScale);
         if (deterministic01(worldTileX, worldTileZ, 17 + candidate * 11) > treeDensity) continue;
 
         const treeScaleJitter = 0.82 + deterministic01(worldTileX, worldTileZ, 43 + candidate * 11) * 0.46;
@@ -194,6 +226,7 @@ export function planFoliagePlacements(
   if (treePlacements.length === 0 && shrubPlacements.length === 0 && terrainPropPlacements.length === 0) return undefined;
 
   capPlacements(treePlacements, MAX_FOLIAGE_INSTANCES_PER_CHUNK);
+  capPlacements(shrubPlacements, MAX_SHRUB_INSTANCES_PER_CHUNK);
   capPlacements(terrainPropPlacements, MAX_TERRAIN_PROP_INSTANCES_PER_CHUNK);
 
   return {
@@ -346,13 +379,13 @@ function closestRiverRenderSample(
 function getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
   switch (biome) {
     case BiomeType.FOREST:
-      return { density: 0.72, height: 1.35, radius: 0.48, color: 0x2f6f28, maxSlope: 0.16 };
+      return { density: 0.86, height: 1.42, radius: 0.50, color: 0x285f24, maxSlope: 0.18 };
     case BiomeType.RAINFOREST:
-      return { density: 0.88, height: 1.55, radius: 0.56, color: 0x1d5f25, maxSlope: 0.18 };
+      return { density: 0.96, height: 1.62, radius: 0.58, color: 0x185623, maxSlope: 0.20 };
     case BiomeType.TAIGA:
-      return { density: 0.58, height: 1.75, radius: 0.44, color: 0x2a5a43, maxSlope: 0.14 };
+      return { density: 0.72, height: 1.86, radius: 0.46, color: 0x254f3e, maxSlope: 0.17 };
     case BiomeType.SWAMP:
-      return { density: 0.42, height: 1.10, radius: 0.50, color: 0x3f6230, maxSlope: 0.10 };
+      return { density: 0.50, height: 1.14, radius: 0.52, color: 0x375a2b, maxSlope: 0.12 };
     default:
       return undefined;
   }

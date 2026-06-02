@@ -81,6 +81,7 @@ describe('WaterMaterialFactory', () => {
     expect(shader.vertexShader).toContain('varying float vOceanWaterDepth');
     expect(shader.vertexShader).toContain('vOceanWaterDepth = waterDepth');
     expect(shader.fragmentShader).toContain('smoothstep(1.5, 14.0, vOceanWaterDepth)');
+    expect(shader.fragmentShader).toContain('oceanSkyGlint');
     expect(shader.fragmentShader).toContain('diffuseColor.a = max(diffuseColor.a');
     expect(shader.vertexShader).toContain('smoothstep(uOceanWaveShoreFadeStart');
     expect(shader.vertexShader).toContain('oceanWaveSafeTrough');
@@ -140,6 +141,6 @@ describe('WaterMaterialFactory', () => {
     expect(material.color.getHex()).toBe(0xffffff);
     expect(material.opacity).toBeLessThanOrEqual(0.68);
     expect(material.shininess).toBeGreaterThanOrEqual(95);
-    expect(material.specular.getHex()).toBe(0xa8e6ff);
+    expect(material.specular.getHex()).toBe(0xd7f3ff);
   });
 });

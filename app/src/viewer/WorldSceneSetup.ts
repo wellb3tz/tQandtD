@@ -20,7 +20,7 @@ export function setupWorldScene(
 ): WorldSceneObjects {
   configureRenderer(renderer);
 
-  const ambientLight = new THREE.AmbientLight(0xb5cad6, 0.70);
+  const ambientLight = new THREE.AmbientLight(0xc6d7df, 0.66);
   scene.add(ambientLight);
 
   const directionalLight = createSunLight();
@@ -28,7 +28,10 @@ export function setupWorldScene(
 
   const atmosphereController = new AtmosphereController(scene, ambientLight, directionalLight);
 
-  const fillLight = new THREE.DirectionalLight(0xc2d7eb, 0.35);
+  const bounceLight = new THREE.HemisphereLight(0xc8e1ef, 0x7a704f, 0.34);
+  scene.add(bounceLight);
+
+  const fillLight = new THREE.DirectionalLight(0xc2d7eb, 0.36);
   fillLight.position.set(-60, 40, -40);
   scene.add(fillLight);
 
@@ -39,12 +42,12 @@ function configureRenderer(renderer: THREE.WebGLRenderer): void {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.16;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 }
 
 function createSunLight(): THREE.DirectionalLight {
-  const light = new THREE.DirectionalLight(0xffe2b8, 1.00);
+  const light = new THREE.DirectionalLight(0xffdfad, 1.14);
 
   const phi = THREE.MathUtils.degToRad(90 - DEFAULT_SKY_PARAMS.elevation);
   const theta = THREE.MathUtils.degToRad(DEFAULT_SKY_PARAMS.azimuth);

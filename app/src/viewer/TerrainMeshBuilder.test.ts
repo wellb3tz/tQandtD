@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '@engine/index';
+import { BiomeType, TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import { createTerrainMesh } from './TerrainMeshBuilder';
 import { DEFAULT_WATER_CONFIG } from './water/config';
@@ -56,6 +56,32 @@ describe('TerrainMeshBuilder', () => {
     expect(material.transparent).toBe(true);
     expect(material.opacity).toBe(0.5);
     expect(material.wireframe).toBe(true);
+  });
+
+  it('keeps high alpine mesh geometry free of needle-like displacement', async () => {
+    const size = 4;
+    const mesh = await createTerrainMesh({
+      chunkX: 1,
+      chunkY: 2,
+      data: createChunkData({
+        size,
+        heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.84),
+        biomeMap: new Uint8Array(size * size).fill(BiomeType.MOUNTAIN),
+      }),
+      waterConfig: DEFAULT_WATER_CONFIG,
+      terrainTextures: createEmptyTerrainTextures(),
+      terrainTexturesEnabled: false,
+      wireframeMode: false,
+    });
+
+    const position = mesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const baseHeight = 0.84 * TERRAIN_HEIGHT_SCALE_METERS;
+    const deviations: number[] = [];
+    for (let i = 0; i < position.count; i++) {
+      deviations.push(Math.abs(position.getY(i) - baseHeight));
+    }
+
+    expect(Math.max(...deviations)).toBeLessThan(0.001);
   });
 });
 

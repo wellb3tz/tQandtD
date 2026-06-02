@@ -27,20 +27,20 @@ describe('AtmosphereController', () => {
     expect(directionalLight.target.position.x).toBeCloseTo(320);
     expect(directionalLight.target.position.z).toBeCloseTo(-240);
 
-    // Light position should be derived from default elevation (30 deg) and azimuth (0 deg)
+    // Light position should be derived from default elevation (18 deg) and azimuth (315 deg)
     const offset = new THREE.Vector3().subVectors(
       directionalLight.position,
       directionalLight.target.position
     );
     expect(offset.length()).toBeCloseTo(SUN_DISTANCE);
 
-    // Default elevation = 30 deg => sun is lower, Y offset is half of the sun distance.
-    expect(offset.y).toBeGreaterThan(SUN_DISTANCE * 0.49);
-    expect(offset.y).toBeLessThan(SUN_DISTANCE * 0.51);
+    // Default elevation = 18 deg => sun is low enough for long mountain shadows.
+    expect(offset.y).toBeGreaterThan(SUN_DISTANCE * 0.30);
+    expect(offset.y).toBeLessThan(SUN_DISTANCE * 0.32);
 
-    // Default azimuth = 0 deg => sun is toward North (0 deg)
-    expect(Math.abs(offset.x)).toBeLessThan(1);
-    expect(offset.z).toBeGreaterThan(SUN_DISTANCE * 0.85);
+    // Default azimuth = 315 deg => warm diagonal side light.
+    expect(offset.x).toBeLessThan(-SUN_DISTANCE * 0.65);
+    expect(offset.z).toBeGreaterThan(SUN_DISTANCE * 0.65);
 
     atmosphere.dispose();
   });

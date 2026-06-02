@@ -49,7 +49,7 @@ export const VIEWER_CAMERA_NEAR_METERS = 0.5;
 export const VIEWER_CAMERA_FAR_METERS = 10000;
 export const DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS = 3;
 export const DEFAULT_STREAMING_CHUNK_SIZE_TILES = 32;
-export const TERRAIN_FOG_COLOR = 0xaaccff;
+export const TERRAIN_FOG_COLOR = 0xb9d5e6;
 export const HORIZON_FILL_PLANE_NAME = 'terrain-horizon-fill';
 
 /**
@@ -394,7 +394,11 @@ export class WorldViewer {
       orthographicCamera.updateProjectionMatrix();
     }
 
-    this.atmosphereController?.setTerrainFog(null);
+    this.atmosphereController?.setTerrainFog({
+      color: TERRAIN_FOG_COLOR,
+      near: fadeStart * 0.82,
+      far: fadeEnd * 1.14,
+    });
 
     this.resizeHorizonFillPlane(cameraFar * 2.4);
   }

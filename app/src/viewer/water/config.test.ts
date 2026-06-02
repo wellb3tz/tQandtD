@@ -288,8 +288,10 @@ describe('Water Configuration', () => {
       expect(DEFAULT_WATER_CONFIG.ocean).toBeDefined();
       expect(DEFAULT_WATER_CONFIG.ocean.enabled).toBe(true);
       expect(DEFAULT_WATER_CONFIG.ocean.color).toBe(0x0d4f66);
-      expect(DEFAULT_WATER_CONFIG.ocean.opacity).toBe(0.66);
-      expect(DEFAULT_WATER_CONFIG.ocean.shininess).toBe(95);
+      expect(DEFAULT_WATER_CONFIG.ocean.opacity).toBe(0.72);
+      expect(DEFAULT_WATER_CONFIG.ocean.shininess).toBe(100);
+      expect(DEFAULT_WATER_CONFIG.ocean.waveHeight).toBe(0.82);
+      expect(DEFAULT_WATER_CONFIG.ocean.waveSpeed).toBe(0.86);
     });
 
     it('should have valid default values', () => {

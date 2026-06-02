@@ -21,12 +21,12 @@ export interface TerrainFogParams {
 }
 
 export const DEFAULT_SKY_PARAMS: SkyParams = {
-  turbidity: 1.0,
-  rayleigh: 0.1,
-  mieCoefficient: 0.005,
-  mieDirectionalG: 0.7,
-  elevation: 30,
-  azimuth: 0,
+  turbidity: 1.8,
+  rayleigh: 0.26,
+  mieCoefficient: 0.012,
+  mieDirectionalG: 0.82,
+  elevation: 18,
+  azimuth: 315,
 };
 
 export class AtmosphereController {

@@ -11,8 +11,8 @@ import type { OceanConfig } from './types';
 
 export const WATER_NORMAL_TEXTURE_URL = '/textures/water-normal-v1.png';
 export const WATER_NORMAL_SCALE = {
-  x: 0.11,
-  y: 0.16,
+  x: 0.18,
+  y: 0.24,
 } as const;
 export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v5';
 
@@ -71,7 +71,7 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     shininess: config.shininess,
     side: THREE.DoubleSide,
     // Slight specular highlight - gives water a wet look
-    specular: new THREE.Color(0xa8e6ff),
+    specular: new THREE.Color(0xd7f3ff),
   });
 
   if (config.normalMap) {
@@ -131,13 +131,32 @@ transformed.y += max(oceanWaveOffset, -oceanWaveSafeTrough);`
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <common>',
       `#include <common>
-varying float vOceanWaterDepth;`
+varying float vOceanWaterDepth;
+
+float oceanFragmentHash(vec2 p) {
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+
+float oceanFragmentNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = oceanFragmentHash(i);
+  float b = oceanFragmentHash(i + vec2(1.0, 0.0));
+  float c = oceanFragmentHash(i + vec2(0.0, 1.0));
+  float d = oceanFragmentHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}`
     );
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `#include <color_fragment>
 float oceanDepthOpacity = smoothstep(1.5, 14.0, vOceanWaterDepth);
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.11, 0.15), oceanDepthOpacity * 0.62);
+float oceanSkyGlint = smoothstep(0.08, 0.72, oceanFragmentNoise(gl_FragCoord.xy * 0.018 + vec2(vOceanWaterDepth * 0.07)));
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.50, 0.78, 0.88), oceanSkyGlint * (1.0 - oceanDepthOpacity * 0.42) * 0.20);
 diffuseColor.a = max(diffuseColor.a, mix(0.76, 0.97, oceanDepthOpacity));`
     );
   };

@@ -19,14 +19,15 @@ describe('WorldSceneSetup', () => {
 
     expect(renderer.shadowMap.enabled).toBe(true);
     expect(renderer.toneMapping).toBe(THREE.ACESFilmicToneMapping);
-    expect(renderer.toneMappingExposure).toBe(1.15);
+    expect(renderer.toneMappingExposure).toBe(1.16);
     expect(renderer.outputColorSpace).toBe(THREE.SRGBColorSpace);
     expect(scene.children).toContain(objects.ambientLight);
     expect(scene.children).toContain(objects.directionalLight);
-    expect(objects.ambientLight.intensity).toBe(0.70);
-    expect(objects.ambientLight.color.getHex()).toBe(0xb5cad6);
-    expect(objects.directionalLight.intensity).toBe(1.00);
-    expect(objects.directionalLight.color.getHex()).toBe(0xffe2b8);
+    expect(objects.ambientLight.intensity).toBe(0.66);
+    expect(objects.ambientLight.color.getHex()).toBe(0xc6d7df);
+    expect(objects.directionalLight.intensity).toBe(1.14);
+    expect(objects.directionalLight.color.getHex()).toBe(0xffdfad);
+    expect(scene.children.some(child => child instanceof THREE.HemisphereLight)).toBe(true);
     expect(objects.directionalLight.position.y).toBeGreaterThan(0);
     expect(objects.directionalLight.position.y).toBeGreaterThan(TERRAIN_HEIGHT_SCALE_METERS * 2);
     expect(objects.directionalLight.castShadow).toBe(true);
