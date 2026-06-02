@@ -167,17 +167,20 @@ export class CameraInputController {
     const terrainHeight = intersects[0].point.y;
     const groundLevel = terrainHeight + this.eyeHeight;
 
-    // Apply gravity
-    this.velocityY -= this.gravity;
-    this.camera.position.y += this.velocityY;
-
-    // Ground collision
-    if (this.camera.position.y <= groundLevel) {
+    if (this.isOnGround) {
+      // Snap to terrain while walking so downhill movement stays smooth
       this.camera.position.y = groundLevel;
-      this.velocityY = 0;
-      this.isOnGround = true;
     } else {
-      this.isOnGround = false;
+      // Apply gravity while airborne
+      this.velocityY -= this.gravity;
+      this.camera.position.y += this.velocityY;
+
+      // Ground collision
+      if (this.camera.position.y <= groundLevel) {
+        this.camera.position.y = groundLevel;
+        this.velocityY = 0;
+        this.isOnGround = true;
+      }
     }
   }
 

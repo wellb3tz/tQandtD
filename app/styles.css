@@ -911,10 +911,16 @@ body.journey-mode .right-panel,
 body.journey-mode .top-toolbar,
 body.journey-mode .compass-container,
 body.journey-mode .camera-position-display,
-body.journey-mode .minimap-container,
 body.journey-mode .performance-graph,
 body.journey-mode .status-bar {
   display: none !important;
+}
+
+body.journey-mode .minimap-container {
+  left: auto;
+  right: 14px;
+  bottom: 14px;
+  z-index: 40;
 }
 
 /* ==========================================

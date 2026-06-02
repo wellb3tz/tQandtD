@@ -8,7 +8,7 @@
 // Import styles
 import './styles.css';
 
-import { TERRAIN_TILE_SIZE_METERS } from '@engine/index';
+import { TERRAIN_TILE_SIZE_METERS, FIRST_PERSON_EYE_HEIGHT_METERS, TERRAIN_HEIGHT_SCALE_METERS, BiomeType } from '@engine/index';
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
 import { WorldApp, AppEvent } from './src/core/WorldApp';
 import { ControlPanel } from './src/ui/ControlPanel';
@@ -428,11 +428,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-async function initEngine(mode: AppMode): Promise<void> {
+async function initEngine(): Promise<void> {
   if (app) return; // Already initialized
 
   try {
-    setWorldGenerationLoading(true);
     app = new WorldApp();
     await app.initialize();
     
@@ -448,9 +447,6 @@ async function initEngine(mode: AppMode): Promise<void> {
       // Apply initial visibility state from application core
       worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
       worldViewer.setStreamingViewDistance(app.getViewDistance(), app.getConfigSnapshot().chunkSize);
-      await warmUpInitialTerrain(app, worldViewer);
-      setViewerReady(true);
-      setWorldGenerationLoading(false);
       
       // Render loop for FPS tracking and performance updates
       startRenderLoop();
@@ -849,9 +845,17 @@ async function enterAppMode(mode: AppMode): Promise<void> {
     modeSelect?.classList.add('hidden');
     document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS);
 
-    await initEngine(mode);
+    if (mode === 'journey') {
+      document.body.classList.add(JOURNEY_MODE_CLASS);
+    }
 
     if (mode === 'world-editor') {
+      setWorldGenerationLoading(true);
+      setViewerReady(false);
+      await initEngine();
+      await warmUpInitialTerrain(app!, worldViewer!);
+      setViewerReady(true);
+      setWorldGenerationLoading(false);
       document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active');
       document.body.classList.add(EDITOR_MODE_CLASS);
       document.title = 'World Editor — tQandtD';
@@ -859,14 +863,15 @@ async function enterAppMode(mode: AppMode): Promise<void> {
     }
 
     // Journey mode
+    setWorldGenerationLoading(true);
+    setViewerReady(false);
+    await requestBrowserFullscreen();
+    await initEngine();
+
     if (!app || !worldViewer) throw new Error('Engine not initialized');
 
-    worldViewer.resetCamera();
-    worldViewer.setFirstPersonMode(true);
-    await requestBrowserFullscreen();
-
     document.body.classList.remove(EDITOR_MODE_CLASS);
-    document.body.classList.add(JOURNEY_MODE_CLASS, 'first-person-active');
+    document.body.classList.add('first-person-active');
 
     const seedInput = document.getElementById('seed-input') as HTMLInputElement | null;
     const statusSeed = document.getElementById('status-seed');
@@ -874,13 +879,11 @@ async function enterAppMode(mode: AppMode): Promise<void> {
     if (seedInput) seedInput.value = randomSeed.toString();
     if (statusSeed) statusSeed.textContent = randomSeed.toString();
 
-    setWorldGenerationLoading(true);
-    setViewerReady(false);
-
     await app.generateWorld(randomSeed);
     await warmUpInitialTerrain(app, worldViewer);
 
-    worldViewer.resetCamera();
+    const spawnPos = findSpawnPosition(app);
+    worldViewer.setCameraPosition(spawnPos);
     worldViewer.setFirstPersonMode(true);
     setViewerReady(true);
     setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
@@ -908,6 +911,9 @@ async function enterAppMode(mode: AppMode): Promise<void> {
 }
 
 function returnToMenu(): void {
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
   cleanupEngine();
   
   document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
@@ -954,6 +960,53 @@ function setViewerReady(ready: boolean): void {
 
 function setWorldGenerationLoading(visible: boolean): void {
   document.getElementById('loading-indicator')?.classList.toggle('hidden', !visible);
+}
+
+function findSpawnPosition(app: WorldApp): { x: number; y: number; z: number } {
+  const loadedChunks = app.getLoadedChunksSnapshot();
+  const config = app.getConfigSnapshot();
+  const chunkSizeTiles = config.chunkSize;
+  const seaLevelNorm = 0.3;
+  const minHeight = seaLevelNorm + 0.05; // slightly above sea level
+  const maxHeight = 0.75; // not on a mountain peak
+
+  let best: { x: number; z: number; h: number } | null = null;
+  let bestDistSq = Infinity;
+
+  for (const [, chunk] of loadedChunks) {
+    const size = chunk.size;
+    const vertexSize = size + 1;
+    for (let localY = 0; localY < size; localY++) {
+      for (let localX = 0; localX < size; localX++) {
+        const biome = chunk.biomeMap[localY * size + localX];
+        if (biome === BiomeType.OCEAN) continue;
+        const heightNorm = chunk.heightmap[localY * vertexSize + localX];
+        if (heightNorm < minHeight || heightNorm > maxHeight) continue;
+        const worldX = (chunk.x * size + localX) * TERRAIN_TILE_SIZE_METERS;
+        const worldZ = (chunk.y * size + localY) * TERRAIN_TILE_SIZE_METERS;
+        const distSq = worldX * worldX + worldZ * worldZ;
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          best = { x: worldX, z: worldZ, h: heightNorm };
+        }
+      }
+    }
+  }
+
+  if (!best) {
+    // Fallback to center, slightly above sea level
+    return {
+      x: 0,
+      y: (seaLevelNorm + 0.1) * TERRAIN_HEIGHT_SCALE_METERS + FIRST_PERSON_EYE_HEIGHT_METERS,
+      z: 0,
+    };
+  }
+
+  return {
+    x: best.x,
+    y: best.h * TERRAIN_HEIGHT_SCALE_METERS + FIRST_PERSON_EYE_HEIGHT_METERS,
+    z: best.z,
+  };
 }
 
 async function warmUpInitialTerrain(app: WorldApp, viewer: WorldViewer): Promise<void> {
