@@ -1,15 +1,17 @@
 import type { WorldApp } from '../core/WorldApp';
 import type { AppModeLifecycle } from '../core/AppModeLifecycle';
-import { MODE_SELECT_ACTIVE_CLASS } from '../core/AppModeLifecycle';
+import { JOURNEY_MODE_CLASS, MODE_SELECT_ACTIVE_CLASS } from '../core/AppModeLifecycle';
 import { warmUpInitialTerrain } from '../core/worldStartup';
 import type { WorldViewer } from '../viewer/WorldViewer';
 import type { HelpModal } from './HelpModal';
+import type { TerrainTooltip } from './TerrainTooltip';
 import { AppError, ErrorCategory, ErrorSeverity, errorHandler } from '../utils/ErrorHandler';
 
 export interface AppDomBindingsOptions {
   getApp: () => WorldApp | null;
   getViewer: () => WorldViewer | null;
   getHelpModal: () => HelpModal | null;
+  getTerrainTooltip: () => TerrainTooltip | null;
   getModeLifecycle: () => AppModeLifecycle | null;
   cleanupEngine: () => void;
   resizeViewerToContainer: () => void;
@@ -57,6 +59,12 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
     if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       if (!document.body.classList.contains(MODE_SELECT_ACTIVE_CLASS)) {
         options.getModeLifecycle()?.returnToMenu();
+      }
+    }
+    if (e.code === 'Digit1' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+      if (document.body.classList.contains(JOURNEY_MODE_CLASS)) {
+        e.preventDefault();
+        options.getTerrainTooltip()?.toggleEnabled();
       }
     }
     if (e.key === 'Escape') {

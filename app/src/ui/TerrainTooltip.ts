@@ -4,6 +4,7 @@
  */
 
 import { WorldApp } from '../core/WorldApp';
+import { JOURNEY_MODE_CLASS } from '../core/AppModeLifecycle';
 import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
 import { calculateVertexSurfaceWeights, type TerrainSurfaceWeights } from '../viewer/TerrainAttributeBuilder';
@@ -11,6 +12,8 @@ import type { TerrainSurfaceKey } from '../viewer/terrain-geometry-types';
 
 const LAKE_NAME  = 'Lake';
 const LAKE_COLOR = '#4fc3d4'; // matches DEFAULT_LAKE_RENDER_CONFIG shallow color
+const MINIMAP_TOOLTIP_GAP_PX = 10;
+const MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX = 14;
 
 const SURFACE_DISPLAY_NAMES: Record<TerrainSurfaceKey, string> = {
   plains: 'Plains',
@@ -75,6 +78,7 @@ export class TerrainTooltip {
   private app: WorldApp | null = null;
   private viewer: any = null;
   private visible = false;
+  private enabled = true;
   private rafId: number | null = null;
   private lastX = 0;
   private lastY = 0;
@@ -119,6 +123,11 @@ export class TerrainTooltip {
   }
 
   private onMouseMove(e: MouseEvent): void {
+    if (!this.enabled) {
+      this.hide();
+      return;
+    }
+
     this.lastX = e.clientX;
     this.lastY = e.clientY;
     this.dirty = true;
@@ -131,7 +140,9 @@ export class TerrainTooltip {
 
   private startLoop(): void {
     const loop = () => {
-      if (this.dirty) {
+      if (this.enabled && this.shouldTrackViewerCenter()) {
+        this.updateAtViewerCenter();
+      } else if (this.dirty) {
         this.dirty = false;
         this.update(this.lastX, this.lastY);
       }
@@ -149,7 +160,20 @@ export class TerrainTooltip {
     }
   }
 
+  private updateAtViewerCenter(): void {
+    const viewerEl = this.viewerEl ?? document.getElementById('viewer');
+    if (!viewerEl) return;
+
+    const rect = viewerEl.getBoundingClientRect();
+    this.update(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  private shouldTrackViewerCenter(): boolean {
+    return document.body.classList.contains(JOURNEY_MODE_CLASS) || document.pointerLockElement === this.viewerEl;
+  }
+
   private _update(clientX: number, clientY: number): void {
+    if (!this.enabled) { this.hide(); return; }
     if (!this.viewer || !this.app) return;
 
     const viewerEl = document.getElementById('viewer');
@@ -161,6 +185,11 @@ export class TerrainTooltip {
 
     const hit = this.viewer.raycastTerrain(canvasX, canvasY);
     if (!hit) { this.hide(); return; }
+
+    if (this.shouldTrackViewerCenter() && !this.getVisibleMinimapRect()) {
+      this.hide();
+      return;
+    }
 
     const state = this.app.getState();
     const key   = `${hit.chunkX},${hit.chunkY}`;
@@ -209,22 +238,77 @@ export class TerrainTooltip {
       </div>
     `;
 
-    const margin = 16;
-    const tw = 180, th = 100;
-    let tx = clientX + margin;
-    let ty = clientY + margin;
-    if (tx + tw > window.innerWidth)  tx = clientX - tw - margin;
-    if (ty + th > window.innerHeight) ty = clientY - th - margin;
-
-    this.el!.style.left    = `${tx}px`;
-    this.el!.style.top     = `${ty}px`;
     this.el!.style.display = 'block';
+    this.positionNearMinimap();
     this.visible = true;
+  }
+
+  private positionNearMinimap(): void {
+    if (!this.el) return;
+
+    this.el.style.transform = 'none';
+    const tooltipWidth = this.el.offsetWidth || 180;
+    const tooltipHeight = this.el.offsetHeight || 100;
+    const minimapRect = this.getVisibleMinimapRect();
+
+    if (minimapRect) {
+      const left = Math.max(
+        MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX,
+        minimapRect.left - tooltipWidth - MINIMAP_TOOLTIP_GAP_PX
+      );
+      const top = clamp(
+        minimapRect.top,
+        MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX,
+        window.innerHeight - tooltipHeight - MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX
+      );
+
+      this.el.style.left = `${left}px`;
+      this.el.style.top = `${top}px`;
+      return;
+    }
+
+    this.el.style.left = `${MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX}px`;
+    this.el.style.top = `${Math.max(
+      MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX,
+      window.innerHeight - tooltipHeight - MINIMAP_TOOLTIP_VIEWPORT_MARGIN_PX
+    )}px`;
+  }
+
+  private getVisibleMinimapRect(): DOMRect | null {
+    const minimapEl = document.querySelector('.minimap-container') as HTMLElement | null;
+    if (!minimapEl) return null;
+
+    const style = window.getComputedStyle(minimapEl);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return null;
+    }
+
+    const rect = minimapEl.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 ? rect : null;
   }
 
   private hide(): void {
     if (this.el) this.el.style.display = 'none';
     this.visible = false;
+  }
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.hide();
+      this.dirty = false;
+    } else if (this.shouldTrackViewerCenter()) {
+      this.updateAtViewerCenter();
+    }
+  }
+
+  toggleEnabled(): boolean {
+    this.setEnabled(!this.enabled);
+    return this.enabled;
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
   }
 
   dispose(): void {
@@ -239,4 +323,8 @@ export class TerrainTooltip {
     this.app = null;
     this.viewer = null;
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }

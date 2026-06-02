@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     getApp: () => app,
     getViewer: () => engineRuntime?.viewer ?? null,
     getHelpModal: () => helpModal,
+    getTerrainTooltip: () => engineRuntime?.terrainTooltip ?? null,
     getModeLifecycle: () => modeLifecycle,
     cleanupEngine,
     resizeViewerToContainer,
