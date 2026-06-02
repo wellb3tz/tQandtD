@@ -3,7 +3,7 @@ import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import { createChunkBoundaries } from './ChunkBoundaryBuilder';
 import { getChunkKey, type ChunkMesh } from './ChunkMesh';
-import { createFoliageLayer, type FoliageLodLevel } from './FoliageLayerBuilder';
+import { createFoliageLayer, ensureFoliageLodBuilt, setBuiltFoliageLodVisibility, type FoliageLodLevel } from './FoliageLayerBuilder';
 import { selectFoliageLodLevel } from './FoliageLodController';
 import { createResourceMarkers, createStructureMarkers } from './MarkerBuilder';
 import { isRenderLayerVisible, RenderLayer } from './RenderLayerVisibility';
@@ -36,6 +36,7 @@ export interface AddChunkToSceneOptions {
   terrainTexturesEnabled: boolean;
   wireframeMode: boolean;
   foliageCameraPosition?: { x: number; z: number };
+  foliageLodEnabled?: boolean;
 }
 
 export interface RemoveChunkFromSceneOptions {
@@ -148,6 +149,11 @@ async function createChunkMesh(
   });
   if (foliage) {
     foliage.visible = isRenderLayerVisible(layerVisibility, RenderLayer.FOLIAGE);
+    foliage.userData.lodEnabled = options.foliageLodEnabled ?? true;
+    if (!foliage.userData.lodEnabled) {
+      ensureFoliageLodBuilt(foliage, 'near');
+      setBuiltFoliageLodVisibility(foliage, 'near');
+    }
     chunkMesh.foliage = foliage;
     scene.add(foliage);
   }

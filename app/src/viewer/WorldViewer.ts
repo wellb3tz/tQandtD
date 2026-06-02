@@ -342,6 +342,7 @@ export class WorldViewer {
     this.setWireframeMode(settings.showWireframe);
     this.setTerrainTexturesEnabled(settings.terrainTexturesEnabled);
     this.setFogOfWarVisibility(settings.fogOfWarEnabled);
+    this.setFoliageLodEnabled(settings.foliageLodEnabled);
 
     if (settings.waterView) {
       const currentWaterConfig = this.getWaterConfig();
@@ -459,6 +460,13 @@ export class WorldViewer {
 
   areTerrainTexturesEnabled(): boolean {
     return this.viewSettings.areTerrainTexturesEnabled();
+  }
+
+  /**
+   * Enable or disable distance-based foliage LOD.
+   */
+  setFoliageLodEnabled(enabled: boolean): void {
+    this.viewSettings.setFoliageLodEnabled(enabled);
   }
 
   /**

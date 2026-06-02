@@ -204,4 +204,5 @@ export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
   { id: 'showWireframe', label: 'Wireframe View', defaultValue: false },
   { id: 'terrainTexturesEnabled', label: 'Surface Textures', defaultValue: true, tooltip: 'Toggle terrain texture maps while keeping the underlying colors' },
   { id: 'fogOfWarEnabled', label: 'Exploration Mask', defaultValue: false },
+  { id: 'foliageLodEnabled', label: 'Foliage LOD', defaultValue: true, tooltip: 'Enable distance-based level of detail for foliage (improves performance)' },
 ];

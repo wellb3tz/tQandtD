@@ -33,6 +33,7 @@ describe('WorldChunkController', () => {
       terrainTextures: context.terrainTextures,
       terrainTexturesEnabled: true,
       wireframeMode: false,
+      foliageLodEnabled: true,
     }));
     expect(onChunksChanged).toHaveBeenCalledTimes(1);
   });
@@ -228,6 +229,7 @@ function createContext(overrides: {
     getTerrainTextures: () => terrainTextures,
     getTerrainTexturesEnabled: () => true,
     getWireframeMode: () => false,
+    getFoliageLodEnabled: () => true,
   };
   const controller = new WorldChunkController({
     scene,

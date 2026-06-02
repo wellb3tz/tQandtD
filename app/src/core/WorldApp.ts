@@ -129,6 +129,7 @@ export interface ViewerSettings {
   showWireframe: boolean;
   terrainTexturesEnabled: boolean;
   fogOfWarEnabled: boolean;
+  foliageLodEnabled: boolean;
   waterView?: WaterViewSettings;
   sky?: SkyViewSettings;
 }
@@ -160,6 +161,7 @@ export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
   showWireframe: false,
   terrainTexturesEnabled: true,
   fogOfWarEnabled: false,
+  foliageLodEnabled: true,
 };
 
 /**

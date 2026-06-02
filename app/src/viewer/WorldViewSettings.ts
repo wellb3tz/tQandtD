@@ -10,6 +10,7 @@ import {
   applyRenderLayerVisibility,
   RenderLayer,
 } from './RenderLayerVisibility';
+import { ensureFoliageLodBuilt, setBuiltFoliageLodVisibility } from './FoliageLayerBuilder';
 import type { ChunkMesh } from './ChunkMesh';
 import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
@@ -22,6 +23,7 @@ export class WorldViewSettings {
   private waterConfig: WaterConfig;
   private wireframeMode = false;
   private terrainTexturesEnabled = true;
+  private foliageLodEnabled = true;
 
   constructor(options: {
     chunkMeshes: Map<string, ChunkMesh>;
@@ -96,6 +98,26 @@ export class WorldViewSettings {
 
   areTerrainTexturesEnabled(): boolean {
     return this.terrainTexturesEnabled;
+  }
+
+  setFoliageLodEnabled(enabled: boolean): void {
+    if (this.foliageLodEnabled === enabled) return;
+    this.foliageLodEnabled = enabled;
+
+    for (const chunkMesh of this.chunkMeshes.values()) {
+      if (chunkMesh.foliage) {
+        chunkMesh.foliage.userData.lodEnabled = enabled;
+        if (!enabled) {
+          // When LOD is disabled, force full-detail (near) visibility
+          ensureFoliageLodBuilt(chunkMesh.foliage, 'near');
+          setBuiltFoliageLodVisibility(chunkMesh.foliage, 'near');
+        }
+      }
+    }
+  }
+
+  getFoliageLodEnabled(): boolean {
+    return this.foliageLodEnabled;
   }
 
   getTerrainTextures(): TerrainSurfaceTextureLibrary {

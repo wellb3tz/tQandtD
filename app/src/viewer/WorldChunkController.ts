@@ -20,6 +20,7 @@ export interface WorldChunkViewSettings {
   getTerrainTextures(): TerrainSurfaceTextureLibrary;
   getTerrainTexturesEnabled(): boolean;
   getWireframeMode(): boolean;
+  getFoliageLodEnabled(): boolean;
 }
 
 export interface WorldChunkControllerOptions {
@@ -218,6 +219,7 @@ export class WorldChunkController {
         x: this.cameraWorldX,
         z: this.cameraWorldZ,
       },
+      foliageLodEnabled: this.viewSettings.getFoliageLodEnabled(),
     });
 
     if (!this.isBuildCurrent(build)) {
