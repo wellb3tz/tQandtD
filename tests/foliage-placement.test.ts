@@ -51,6 +51,18 @@ describe('foliage placement planner', () => {
     expect(plan).toBeUndefined();
   });
 
+  it('skips every foliage type below ocean level', () => {
+    const plan = planFoliagePlacements(0, 0, {
+      size: 4,
+      heightmap: new Float32Array(25).fill(0.28),
+      biomeMap: new Uint8Array(16).fill(BiomeType.FOREST),
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeUndefined();
+  });
+
   it('caps dense forest while preserving placements from trailing rows', () => {
     const plan = planFoliagePlacements(0, 0, {
       size: 32,
@@ -102,12 +114,19 @@ describe('foliage placement planner', () => {
 
     expect(riverPlan).toBeDefined();
     expect(lakePlan).toBeDefined();
+    const isInRiverChannel = (placement: { x: number }) => placement.x <= 1.3 * TERRAIN_TILE_SIZE_METERS;
+    expect(riverPlan?.treePlacements.some(isInRiverChannel)).toBe(false);
+    expect(riverPlan?.shrubPlacements.some(isInRiverChannel)).toBe(false);
+    expect(riverPlan?.terrainPropPlacements.some(isInRiverChannel)).toBe(false);
     expect(riverPlan?.shrubPlacements.some(placement => placement.x <= 2.9 * TERRAIN_TILE_SIZE_METERS)).toBe(false);
-    expect(lakePlan?.shrubPlacements.some(placement => {
+    const isOnLakeWall = (placement: { x: number; z: number }) => {
       const tileX = Math.floor(placement.x / TERRAIN_TILE_SIZE_METERS);
       const tileZ = Math.floor(placement.z / TERRAIN_TILE_SIZE_METERS);
       return tileX >= 2 && tileX <= 5 && tileZ >= 2 && tileZ <= 5;
-    })).toBe(false);
+    };
+    expect(lakePlan?.treePlacements.some(isOnLakeWall)).toBe(false);
+    expect(lakePlan?.shrubPlacements.some(isOnLakeWall)).toBe(false);
+    expect(lakePlan?.terrainPropPlacements.some(isOnLakeWall)).toBe(false);
   });
 
   it('anchors foliage to the terrain surface at the jittered placement point', () => {

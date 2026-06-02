@@ -47,6 +47,11 @@ type FoliageWaterInfluence = {
   bank: number;
 };
 
+type LakeWaterInfluence = {
+  inWater: boolean;
+  bank: number;
+};
+
 type FoliageClearingInfluence = {
   strength: number;
   centerX: number;
@@ -292,7 +297,11 @@ function getFoliageWaterInfluence(
   let bank = riverEdgeDistance !== undefined
     ? Math.max(0, 1 - riverEdgeDistance / FOLIAGE_BANK_WIDTH)
     : 0;
-  bank = Math.max(bank, getLakeBankInfluence(data, localX, localZ));
+  const lakeInfluence = getLakeWaterInfluence(data, tileIndex, localX, localZ);
+  if (lakeInfluence.inWater) {
+    return { inWater: true, bank: 1 };
+  }
+  bank = Math.max(bank, lakeInfluence.bank);
 
   return { inWater: false, bank };
 }
@@ -318,29 +327,32 @@ function getRiverChannelEdgeDistance(data: ChunkData, localX: number, localZ: nu
   return closest;
 }
 
-function getLakeBankInfluence(data: ChunkData, localX: number, localZ: number): number {
+function getLakeWaterInfluence(data: ChunkData, tileIndex: number, localX: number, localZ: number): LakeWaterInfluence {
   const lakes = data.lakes ?? [];
-  if (lakes.length === 0) return 0;
+  if (lakes.length === 0) return { inWater: false, bank: 0 };
 
+  const tileX = tileIndex % data.size;
+  const tileZ = Math.floor(tileIndex / data.size);
   let bank = 0;
   for (const lake of lakes) {
     for (const lakeTileIndex of lake.tiles) {
       const lakeTileX = lakeTileIndex % data.size;
       const lakeTileZ = Math.floor(lakeTileIndex / data.size);
+      // Treat tiles directly adjacent to a lake tile (including diagonals) as
+      // lake walls, preventing all foliage there just like on the lake bottom.
+      if (Math.abs(tileX - lakeTileX) <= 1 && Math.abs(tileZ - lakeTileZ) <= 1) {
+        return { inWater: true, bank: 1 };
+      }
+
       const dx = localX - lakeTileX;
       const dz = localZ - lakeTileZ;
-      // Treat tiles directly adjacent to a lake tile (including diagonals) as full bank,
-      // preventing trees from spawning on the pit walls just like on the lake bottom.
-      if (Math.abs(dx) <= 1 && Math.abs(dz) <= 1) {
-        return 1;
-      }
       const edgeDistance = Math.hypot(dx, dz) - 0.72;
       if (edgeDistance <= 0) continue;
       bank = Math.max(bank, 1 - edgeDistance / FOLIAGE_BANK_WIDTH);
     }
   }
 
-  return Math.max(0, Math.min(1, bank));
+  return { inWater: false, bank: Math.max(0, Math.min(1, bank)) };
 }
 
 function closestRiverRenderSample(
