@@ -41,6 +41,8 @@ export interface WorkerTask {
   timeoutId?: ReturnType<typeof setTimeout>;
   /** Optional abort signal for cancellation support */
   signal?: AbortSignal;
+  /** Removes the abort listener registered for this task, if any */
+  abortCleanup?: () => void;
 }
 
 /**
@@ -186,6 +188,7 @@ export class WorkerPool {
         return '';
       }
       task.signal.addEventListener('abort', onAbort, { once: true });
+      task.abortCleanup = () => task.signal?.removeEventListener('abort', onAbort);
     }
 
     // Insert into queue maintaining priority order (binary insertion - O(n) shift
@@ -226,6 +229,7 @@ export class WorkerPool {
     const queueIndex = this.taskQueue.findIndex(t => t.id === taskId);
     if (queueIndex !== -1) {
       this.taskQueue.splice(queueIndex, 1);
+      this.cleanupTaskAbort(task);
       this.activeTasks.delete(taskId);
       return true;
     }
@@ -235,6 +239,7 @@ export class WorkerPool {
     // But we can remove it from active tasks so the result is ignored
     const workerState = this.workers.find(w => w.currentTask?.id === taskId);
     if (workerState) {
+      this.cleanupTaskAbort(task);
       this.activeTasks.delete(taskId);
       return true;
     }
@@ -275,6 +280,7 @@ export class WorkerPool {
         if (timeoutId !== undefined) {
           clearTimeout(timeoutId);
         }
+        this.cleanupTaskAbort(workerState.currentTask);
       }
     }
     // Cancel timeouts for queued tasks (they may have been assigned timeouts
@@ -284,6 +290,7 @@ export class WorkerPool {
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId);
       }
+      this.cleanupTaskAbort(task);
     }
 
     for (const workerState of this.workers) {
@@ -378,6 +385,7 @@ export class WorkerPool {
     workerState.completedTasks++;
 
     // Remove from active tasks
+    this.cleanupTaskAbort(task);
     this.activeTasks.delete(task.id);
 
     const chunkData = deserializeChunkData(result.chunk);
@@ -431,6 +439,7 @@ export class WorkerPool {
     workerState.currentTask = null;
 
     // Remove from active tasks
+    this.cleanupTaskAbort(task);
     this.activeTasks.delete(task.id);
 
     // Call error callback
@@ -442,5 +451,10 @@ export class WorkerPool {
 
     // Assign next task if available
     this.assignNextTask();
+  }
+
+  private cleanupTaskAbort(task: WorkerTask): void {
+    task.abortCleanup?.();
+    task.abortCleanup = undefined;
   }
 }

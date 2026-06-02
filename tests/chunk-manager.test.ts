@@ -69,6 +69,17 @@ describe('ChunkManager cache', () => {
     expect(a).toBe(c);
   });
 
+  it('generateChunkWithMetrics does not mutate the manager config', () => {
+    const config = makeMinimalConfig(1);
+    config.enablePerformanceMetrics = false;
+    const manager = new ChunkManager(config);
+
+    const result = manager.generateChunkWithMetrics(0, 0);
+
+    expect(result.metrics.totalTime).toBeGreaterThanOrEqual(0);
+    expect(manager.config.enablePerformanceMetrics).toBe(false);
+  });
+
   it('clearCache removes all entries', async () => {
     const manager = new ChunkManager(makeMinimalConfig(1));
     await manager.getChunk(0, 0);

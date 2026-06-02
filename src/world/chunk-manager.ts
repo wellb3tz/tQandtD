@@ -168,21 +168,22 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * Useful for profiling and benchmarking.
    */
   generateChunkWithMetrics(chunkX: number, chunkY: number): { chunk: ChunkData; metrics: ChunkPerformanceMetrics } {
-    const previousValue = this.config.enablePerformanceMetrics;
-    this.config.enablePerformanceMetrics = true;
-    try {
-      return this.generateChunkInternal(chunkX, chunkY);
-    } finally {
-      this.config.enablePerformanceMetrics = previousValue;
-    }
+    return this.generateChunkInternal(chunkX, chunkY, {
+      ...this.config,
+      enablePerformanceMetrics: true,
+    });
   }
 
   /**
    * Internal chunk generation with granular error handling
    */
-  private generateChunkInternal(chunkX: number, chunkY: number): { chunk: ChunkData; metrics: ChunkPerformanceMetrics } {
+  private generateChunkInternal(
+    chunkX: number,
+    chunkY: number,
+    config: WorldConfig = this.config
+  ): { chunk: ChunkData; metrics: ChunkPerformanceMetrics } {
     return generateChunkThroughPipeline(chunkX, chunkY, {
-      config: this.config,
+      config,
       terrainGenerator: this.terrainGenerator,
       biomeSystem: this.biomeSystem,
       resourceGenerator: this.resourceGenerator,

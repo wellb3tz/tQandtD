@@ -239,4 +239,45 @@ describe('WorkerPool', () => {
 
     pool.shutdown();
   });
+
+  it('removes abort listeners after a task completes', async () => {
+    const workers: ManualWorker[] = [];
+    const controller = new AbortController();
+    let errorCalls = 0;
+    const pool = new WorkerPool({
+      maxWorkers: 1,
+      workerScriptUrl: 'ignored-by-factory.js',
+      taskTimeout: 1000,
+      worldConfig: makeMinimalConfig(42),
+      createWorker: () => {
+        const worker = new ManualWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+    });
+
+    const result = new Promise((resolve, reject) => {
+      pool.submitTask({
+        id: '',
+        chunkX: 3,
+        chunkY: 0,
+        lodLevel: 0,
+        priority: 1,
+        signal: controller.signal,
+        onComplete: resolve,
+        onError: error => {
+          errorCalls++;
+          reject(error);
+        },
+      });
+    });
+
+    workers[0].sendChunkReady(3, 0);
+    await expect(result).resolves.toMatchObject({ x: 3, y: 0 });
+
+    controller.abort();
+
+    expect(errorCalls).toBe(0);
+    pool.shutdown();
+  });
 });
