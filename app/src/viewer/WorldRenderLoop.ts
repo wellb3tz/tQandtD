@@ -3,6 +3,11 @@ import type { CameraInputController } from './CameraInputController';
 import type { CameraViewController } from './CameraViewController';
 import type { ChunkMesh } from './ChunkMesh';
 import {
+  shouldUpdateFoliageLod,
+  updateFoliageLodForChunks,
+  type FoliageLodStats,
+} from './FoliageLodController';
+import {
   calculateFrustumCullingStats,
   restoreChunkVisibility,
   updateFrustumCulledChunks,
@@ -45,6 +50,9 @@ export class WorldRenderLoop {
   private enableFrustumCulling = true;
   private readonly cullingCheckInterval = 16;
   private lastCullingCheck = 0;
+  private lastFoliageLodCameraPosition: THREE.Vector3 | undefined;
+  private lastFoliageLodChunkCount = -1;
+  private foliageLodStats: FoliageLodStats = { near: 0, mid: 0, far: 0, hidden: 0 };
 
   constructor(options: WorldRenderLoopOptions) {
     this.scene = options.scene;
@@ -92,10 +100,13 @@ export class WorldRenderLoop {
 
       if (this.enableFrustumCulling && !isOrbital && !isTransitioning && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();
+        this.updateFoliageLod(activeCamera);
         this.lastCullingCheck = now;
         if (waterConfig.performance.enableFrustumCulling) {
           this.waterLayerManager.applyFrustumCulling(this.cameraViewController.getActiveCamera(), waterConfig);
         }
+      } else if (!isOrbital && !isTransitioning) {
+        this.updateFoliageLod(activeCamera);
       }
 
       // Orbital transition controller update (must run after camera positioning)
@@ -132,6 +143,10 @@ export class WorldRenderLoop {
     return calculateFrustumCullingStats(this.chunkMeshes.values(), this.enableFrustumCulling);
   }
 
+  getFoliageLodStats(): FoliageLodStats {
+    return this.foliageLodStats;
+  }
+
   private updateFrustumCulling(): void {
     if (!this.enableFrustumCulling) return;
 
@@ -139,5 +154,23 @@ export class WorldRenderLoop {
     this.frustumMatrix.multiplyMatrices(activeCamera.projectionMatrix, activeCamera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.frustumMatrix);
     updateFrustumCulledChunks(this.chunkMeshes.values(), this.frustum, this.layerVisibility);
+  }
+
+  private updateFoliageLod(activeCamera: THREE.Camera): void {
+    const chunkCount = this.chunkMeshes.size;
+    if (
+      chunkCount === this.lastFoliageLodChunkCount &&
+      !shouldUpdateFoliageLod(this.lastFoliageLodCameraPosition, activeCamera.position)
+    ) {
+      return;
+    }
+
+    this.foliageLodStats = updateFoliageLodForChunks(
+      this.chunkMeshes.values(),
+      activeCamera.position,
+      this.layerVisibility,
+    );
+    this.lastFoliageLodCameraPosition = activeCamera.position.clone();
+    this.lastFoliageLodChunkCount = chunkCount;
   }
 }

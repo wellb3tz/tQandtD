@@ -79,15 +79,15 @@ export function calculateRenderStats(chunks: Iterable<RenderStatsChunk>): Render
     }
 
     if (chunk.foliage?.visible) {
-      drawCalls += chunk.foliage.children.length;
+      drawCalls += countVisibleDrawObjects(chunk.foliage);
     }
 
     if (chunk.resources?.visible) {
-      drawCalls += chunk.resources.children.length;
+      drawCalls += countVisibleDrawObjects(chunk.resources);
     }
 
     if (chunk.structures?.visible) {
-      drawCalls += chunk.structures.children.length;
+      drawCalls += countVisibleDrawObjects(chunk.structures);
     }
 
     if (chunk.boundaries?.visible) {
@@ -96,4 +96,32 @@ export function calculateRenderStats(chunks: Iterable<RenderStatsChunk>): Render
   }
 
   return { vertexCount, drawCalls };
+}
+
+function countVisibleDrawObjects(group: RenderStatsGroup): number {
+  let count = 0;
+
+  for (const child of group.children) {
+    if (!isRenderStatsObject(child) || !child.visible) continue;
+
+    if (isRenderStatsGroup(child)) {
+      count += countVisibleDrawObjects(child);
+    } else if (isRenderStatsMesh(child)) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+function isRenderStatsObject(value: unknown): value is RenderStatsObject {
+  return typeof value === 'object' && value !== null && 'visible' in value;
+}
+
+function isRenderStatsGroup(value: unknown): value is RenderStatsGroup {
+  return isRenderStatsObject(value) && Array.isArray((value as RenderStatsGroup).children);
+}
+
+function isRenderStatsMesh(value: unknown): value is RenderStatsMesh {
+  return isRenderStatsObject(value) && 'geometry' in value;
 }

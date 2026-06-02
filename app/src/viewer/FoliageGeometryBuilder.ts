@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import type { FoliagePlacement } from './FoliagePlacementPlanner';
 
 export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'shrub' | 'stump';
+export type FoliagePrototypeDetail = 'full' | 'simple';
 
-const prototypeGeometryCache = new Map<FoliagePrototypeKind, THREE.BufferGeometry>();
+const prototypeGeometryCache = new Map<string, THREE.BufferGeometry>();
 
 const defaultFoliageMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
 defaultFoliageMaterial.userData.sharedFoliageResource = true;
@@ -35,11 +36,22 @@ export function createFoliageInstancedMesh(
   return mesh;
 }
 
-export function createFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THREE.BufferGeometry {
-  const cached = prototypeGeometryCache.get(kind);
+export function createFoliagePrototypeGeometry(
+  kind: FoliagePrototypeKind,
+  detail: FoliagePrototypeDetail = 'full',
+): THREE.BufferGeometry {
+  const cacheKey = `${kind}:${detail}`;
+  const cached = prototypeGeometryCache.get(cacheKey);
   if (cached) return cached;
 
   let geometry: THREE.BufferGeometry;
+  if (detail === 'simple') {
+    geometry = createSimpleFoliagePrototypeGeometry(kind);
+    prototypeGeometryCache.set(cacheKey, geometry);
+    geometry.userData.sharedFoliageResource = true;
+    return geometry;
+  }
+
   switch (kind) {
     case 'spire':
       geometry = buildGeometry([
@@ -80,7 +92,7 @@ export function createFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THRE
       break;
   }
 
-  prototypeGeometryCache.set(kind, geometry);
+  prototypeGeometryCache.set(cacheKey, geometry);
   geometry.userData.sharedFoliageResource = true;
   return geometry;
 }
@@ -95,6 +107,34 @@ export function clearFoliageGeometryCache(): void {
 type LayerSpec =
   | ['prism', number, number, number, number, THREE.Color]
   | ['cone', number, number, number, number, THREE.Color];
+
+function createSimpleFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THREE.BufferGeometry {
+  switch (kind) {
+    case 'spire':
+      return buildGeometry([
+        ['prism', 0.10, -0.50, -0.04, 5, new THREE.Color(0.40, 0.23, 0.10)],
+        ['cone', 0.52, -0.20, 0.86, 5, new THREE.Color(0.10, 0.40, 0.15)],
+      ]);
+    case 'compact':
+      return buildGeometry([
+        ['prism', 0.12, -0.50, -0.02, 5, new THREE.Color(0.40, 0.22, 0.10)],
+        ['cone', 0.56, -0.18, 0.70, 5, new THREE.Color(0.12, 0.42, 0.16)],
+      ]);
+    case 'broad':
+      return buildGeometry([
+        ['prism', 0.13, -0.50, 0.08, 5, new THREE.Color(0.43, 0.25, 0.12)],
+        ['cone', 0.68, -0.02, 0.76, 5, new THREE.Color(0.16, 0.46, 0.18)],
+      ]);
+    case 'shrub':
+      return buildGeometry([
+        ['cone', 0.46, -0.30, 0.42, 5, new THREE.Color(0.27, 0.50, 0.20)],
+      ]);
+    case 'stump':
+      return buildGeometry([
+        ['prism', 0.30, -0.50, 0.36, 5, new THREE.Color(0.42, 0.26, 0.13)],
+      ]);
+  }
+}
 
 function buildGeometry(layers: LayerSpec[]): THREE.BufferGeometry {
   const vertices: number[] = [];

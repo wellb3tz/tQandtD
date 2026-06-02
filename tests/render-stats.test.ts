@@ -9,18 +9,31 @@ import {
 describe('render stats helpers', () => {
   it('counts visible terrain vertices and layer draw calls', () => {
     const chunk = createChunk(4);
-    chunk.foliage = { visible: true, children: [{}, {}] };
-    chunk.resources = { visible: true, children: [{}] };
-    chunk.structures = { visible: false, children: [{}] };
+    chunk.foliage = { visible: true, children: [createDrawObject(), createDrawObject()] };
+    chunk.resources = { visible: true, children: [createDrawObject()] };
+    chunk.structures = { visible: false, children: [createDrawObject()] };
     chunk.boundaries = { visible: true };
 
     expect(calculateRenderStats([chunk])).toEqual({ vertexCount: 4, drawCalls: 5 });
   });
 
+  it('counts nested visible layer draw calls', () => {
+    const chunk = createChunk(4);
+    chunk.foliage = {
+      visible: true,
+      children: [
+        { visible: false, children: [createDrawObject()] },
+        { visible: true, children: [createDrawObject(), createDrawObject()] },
+      ],
+    };
+
+    expect(calculateRenderStats([chunk])).toEqual({ vertexCount: 4, drawCalls: 3 });
+  });
+
   it('ignores hidden terrain vertices and hidden layer draw calls', () => {
     const chunk = createChunk(4);
     chunk.terrain.visible = false;
-    chunk.resources = { visible: false, children: [{}] };
+    chunk.resources = { visible: false, children: [createDrawObject()] };
 
     expect(calculateRenderStats([chunk])).toEqual({ vertexCount: 0, drawCalls: 0 });
   });
@@ -53,6 +66,15 @@ function createChunk(vertexCount: number): RenderStatsChunk {
         getAttribute: (name: string) => name === 'position' ? attribute : undefined,
       },
       userData: {},
+    },
+  };
+}
+
+function createDrawObject() {
+  return {
+    visible: true,
+    geometry: {
+      getAttribute: () => undefined,
     },
   };
 }
