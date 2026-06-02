@@ -75,7 +75,7 @@ export class CameraViewController {
         frustumSize / 2,
         -frustumSize / 2,
         0.1,
-        10000,
+        this.camera.far,
       );
     }
 

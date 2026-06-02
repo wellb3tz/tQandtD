@@ -6,7 +6,7 @@
  */
 
 import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings, type SkyViewSettings } from '../core/WorldApp';
-import { type WorldConfig, type WorldConfigOverrides } from '@engine/index';
+import { TERRAIN_TILE_SIZE_METERS, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
   BIOME_SLIDERS,
@@ -24,6 +24,7 @@ import {
   createCheckboxControl,
   createColorControl,
   createSliderControl,
+  updateSliderValue,
 } from './control-panel/controlElements';
 import {
   buildBiomeConfigPatch,
@@ -451,6 +452,8 @@ export class ControlPanel {
 
     const viewDistanceControl = createSliderControl(VIEW_DISTANCE_SLIDER, (value) => {
       this.app?.updateAppSettings({ viewDistance: value });
+    }, {
+      formatValue: value => formatMeters(value * this.getChunkWorldSizeMeters()),
     });
     advancedContainer.appendChild(viewDistanceControl);
 
@@ -670,6 +673,7 @@ export class ControlPanel {
    */
   private updateFromState(state: AppState): void {
     this.currentConfig = state.config;
+    updateSliderValue('viewDistance', state.appSettings.viewDistance);
     syncVisibilityControls(state.viewerSettings);
   }
 
@@ -723,6 +727,10 @@ export class ControlPanel {
     if (!this.currentConfig) return;
 
     this.applyEngineConfigChange(buildRiverConfigPatch(this.currentConfig, patch));
+  }
+
+  private getChunkWorldSizeMeters(): number {
+    return (this.currentConfig?.chunkSize ?? 32) * TERRAIN_TILE_SIZE_METERS;
   }
 
   /**
@@ -869,5 +877,9 @@ export class ControlPanel {
   toggle(): void {
     this.container?.classList.toggle('collapsed');
   }
+}
+
+function formatMeters(value: number): string {
+  return `${Math.round(value).toLocaleString('en-US')} m`;
 }
 

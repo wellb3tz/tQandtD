@@ -14,6 +14,12 @@ export interface SkyParams {
   azimuth: number;
 }
 
+export interface TerrainFogParams {
+  color: number;
+  near: number;
+  far: number;
+}
+
 export const DEFAULT_SKY_PARAMS: SkyParams = {
   turbidity: 1.0,
   rayleigh: 0.1,
@@ -30,6 +36,8 @@ export class AtmosphereController {
   private skyParams: SkyParams = { ...DEFAULT_SKY_PARAMS };
 
   private originalBackground: THREE.Color | null = null;
+  private terrainFogParams: TerrainFogParams | null = null;
+  private spaceMode = false;
   private readonly shadowFocus = new THREE.Vector3();
   private readonly stableShadowFocus = new THREE.Vector3();
   private readonly shadowFocusSnapDelta = new THREE.Vector3();
@@ -79,6 +87,11 @@ export class AtmosphereController {
 
     this.scene.background = new THREE.Color(0x050810);
     this.scene.fog = null;
+  }
+
+  setTerrainFog(params: TerrainFogParams | null): void {
+    this.terrainFogParams = params ? { ...params } : null;
+    this.applyTerrainFog();
   }
 
   setSkyParams(params: Partial<SkyParams>): void {
@@ -178,6 +191,7 @@ export class AtmosphereController {
    * Toggle space mode: hide sky dome and darken background.
    */
   setSpaceMode(enabled: boolean): void {
+    this.spaceMode = enabled;
     if (enabled) {
       if (this.sky) this.sky.visible = false;
       this.originalBackground = this.scene.background instanceof THREE.Color
@@ -189,8 +203,26 @@ export class AtmosphereController {
       if (this.originalBackground) {
         this.scene.background = this.originalBackground;
       }
-      this.scene.fog = null;
+      this.applyTerrainFog();
     }
+  }
+
+  private applyTerrainFog(): void {
+    if (this.spaceMode) {
+      this.scene.fog = null;
+      return;
+    }
+
+    if (!this.terrainFogParams) {
+      this.scene.fog = null;
+      return;
+    }
+
+    this.scene.fog = new THREE.Fog(
+      this.terrainFogParams.color,
+      this.terrainFogParams.near,
+      this.terrainFogParams.far,
+    );
   }
 
   dispose(): void {

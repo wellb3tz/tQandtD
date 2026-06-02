@@ -7,7 +7,12 @@
  */
 
 import * as THREE from 'three';
-import { DEFAULT_CAMERA_POSITION_METERS, type ChunkData } from '@engine/index';
+import {
+  DEFAULT_CAMERA_POSITION_METERS,
+  TERRAIN_HEIGHT_SCALE_METERS,
+  TERRAIN_TILE_SIZE_METERS,
+  type ChunkData,
+} from '@engine/index';
 import type { ViewerSettings } from '../core/WorldApp';
 import { createTerrainSurfaceTextureLibrary } from './materials';
 import type { RaycastHit, Vector3 } from '../utils/coordinates';
@@ -42,6 +47,10 @@ export { OrbitalState } from './planet/OrbitalTransitionController';
 
 export const VIEWER_CAMERA_NEAR_METERS = 0.5;
 export const VIEWER_CAMERA_FAR_METERS = 10000;
+export const DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS = 3;
+export const DEFAULT_STREAMING_CHUNK_SIZE_TILES = 32;
+export const TERRAIN_FOG_COLOR = 0x8fa6b0;
+export const HORIZON_FILL_PLANE_NAME = 'terrain-horizon-fill';
 
 /**
  * WorldViewer - Manages 3D visualization of the procedural world
@@ -60,6 +69,7 @@ export class WorldViewer {
   private chunkController: WorldChunkController;
   
   private atmosphereController: AtmosphereController | null = null;
+  private horizonFillPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
   private planetRenderer: PlanetRenderer | null = null;
   private spaceViewManager: SpaceViewManager | null = null;
   private orbitalTransitionController: OrbitalTransitionController | null = null;
@@ -132,7 +142,10 @@ export class WorldViewer {
       layerVisibility: this.viewSettings.getLayerVisibility(),
       waterLayerManager: this.waterLayerManager,
       getWaterConfig: () => this.viewSettings.getWaterConfigReference(),
-      beforeRender: activeCamera => this.atmosphereController?.updateSunAndShadowFocus(activeCamera),
+      beforeRender: activeCamera => {
+        this.updateHorizonFill(activeCamera);
+        this.atmosphereController?.updateSunAndShadowFocus(activeCamera);
+      },
       chunkController: this.chunkController,
     });
     this.renderStatsCache = new ViewerRenderStatsCache(this.chunkMeshes.values());
@@ -160,6 +173,8 @@ export class WorldViewer {
 
     const { atmosphereController } = setupWorldScene(this.scene, this.renderer);
     this.atmosphereController = atmosphereController;
+    this.createHorizonFillPlane();
+    this.setStreamingViewDistance(DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS, DEFAULT_STREAMING_CHUNK_SIZE_TILES);
     this.updateSunAndShadowFocus();
 
     // Initialize space view elements
@@ -331,6 +346,33 @@ export class WorldViewer {
     if (settings.sky && this.atmosphereController) {
       this.atmosphereController.setSkyParams(settings.sky);
     }
+  }
+
+  /**
+   * Match camera clipping and atmospheric fade to the active chunk streaming radius.
+   */
+  setStreamingViewDistance(viewDistanceChunks: number, chunkSizeTiles: number = DEFAULT_STREAMING_CHUNK_SIZE_TILES): void {
+    const safeViewDistance = Math.max(1, viewDistanceChunks);
+    const safeChunkSizeTiles = Math.max(1, chunkSizeTiles);
+    const chunkWorldSizeMeters = safeChunkSizeTiles * TERRAIN_TILE_SIZE_METERS;
+    const visibleRadiusMeters = safeViewDistance * chunkWorldSizeMeters;
+
+    const fadeStart = clamp(visibleRadiusMeters * 0.45, 650, 4200);
+    const fadeEnd = clamp((safeViewDistance + 0.65) * chunkWorldSizeMeters, fadeStart + 450, VIEWER_CAMERA_FAR_METERS * 0.85);
+    const cameraFar = clamp(fadeEnd * 1.08, 1000, VIEWER_CAMERA_FAR_METERS);
+
+    this.camera.far = cameraFar;
+    this.camera.updateProjectionMatrix();
+
+    const orthographicCamera = this.cameraViewController.getOrthographicCamera();
+    if (orthographicCamera) {
+      orthographicCamera.far = cameraFar;
+      orthographicCamera.updateProjectionMatrix();
+    }
+
+    this.atmosphereController?.setTerrainFog(null);
+
+    this.resizeHorizonFillPlane(cameraFar * 2.4);
   }
 
   /**
@@ -557,6 +599,13 @@ export class WorldViewer {
     // Dispose water layer manager
     this.waterLayerManager.dispose();
 
+    if (this.horizonFillPlane) {
+      this.scene.remove(this.horizonFillPlane);
+      this.horizonFillPlane.geometry.dispose();
+      this.horizonFillPlane.material.dispose();
+      this.horizonFillPlane = null;
+    }
+
     this.atmosphereController?.dispose();
     this.atmosphereController = null;
 
@@ -573,4 +622,45 @@ export class WorldViewer {
 
     this.canvasHost.detachFromContainer(this.container);
   }
+
+  private createHorizonFillPlane(): void {
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    const material = new THREE.MeshBasicMaterial({
+      color: TERRAIN_FOG_COLOR,
+      depthTest: true,
+      depthWrite: false,
+      fog: false,
+      side: THREE.DoubleSide,
+    });
+    this.horizonFillPlane = new THREE.Mesh(geometry, material);
+    this.horizonFillPlane.name = HORIZON_FILL_PLANE_NAME;
+    this.horizonFillPlane.rotation.x = -Math.PI / 2;
+    this.horizonFillPlane.renderOrder = -100;
+    this.scene.add(this.horizonFillPlane);
+  }
+
+  private resizeHorizonFillPlane(sizeMeters: number): void {
+    if (!this.horizonFillPlane) return;
+    this.horizonFillPlane.scale.set(sizeMeters, sizeMeters, 1);
+  }
+
+  private updateHorizonFill(activeCamera: THREE.Camera): void {
+    if (!this.horizonFillPlane) return;
+    const isOrbital = this.orbitalTransitionController?.isOrbital() ?? false;
+    const isTransitioning = this.orbitalTransitionController?.isTransitioning() ?? false;
+    this.horizonFillPlane.visible = !isOrbital && !isTransitioning;
+    if (!this.horizonFillPlane.visible) return;
+
+    const waterConfig = this.viewSettings.getWaterConfigReference();
+    const seaLevelMeters = waterConfig.seaLevel * TERRAIN_HEIGHT_SCALE_METERS;
+    this.horizonFillPlane.position.set(
+      activeCamera.position.x,
+      seaLevelMeters - 2,
+      activeCamera.position.z,
+    );
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

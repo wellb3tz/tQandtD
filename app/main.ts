@@ -38,6 +38,8 @@ let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
 let chunkLoadTimer: ReturnType<typeof setTimeout> | null = null;
 let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
+const HORIZON_STREAMING_BUFFER_CHUNKS = 2;
+
 // Basic initialization
 document.addEventListener('DOMContentLoaded', async () => {
   // Check WebGL compatibility first (Requirement 18.4)
@@ -120,6 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Apply initial visibility state from application core
       worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
+      worldViewer.setStreamingViewDistance(app.getViewDistance(), app.getConfigSnapshot().chunkSize);
       
       // Track camera position for LOD updates and dynamic chunk loading
       let lastCameraUpdate = 0;
@@ -234,8 +237,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Run chunk loading asynchronously to avoid blocking rendering.
             setTimeout(() => {
-              const chunkSize = 32 * TERRAIN_TILE_SIZE_METERS;
-              const loadRadius = app!.getViewDistance();
+              const chunkSize = app!.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
+              const visualRadius = app!.getViewDistance();
+              const loadRadius = getBufferedStreamingRadius(visualRadius);
               const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
               const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
               app!.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
@@ -362,6 +366,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Subscribe to state changes and update performance monitor
     app.subscribeToState((state) => {
+      worldViewer?.setStreamingViewDistance(state.appSettings.viewDistance, state.config.chunkSize);
+
       if (performanceMonitor && app) {
         // Update generation time with breakdown
         const breakdown = {
@@ -766,4 +772,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   
 });
+
+function getBufferedStreamingRadius(visualRadius: number): number {
+  return visualRadius + HORIZON_STREAMING_BUFFER_CHUNKS;
+}
 

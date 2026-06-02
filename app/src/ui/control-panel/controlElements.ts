@@ -1,8 +1,11 @@
-import type { CheckboxConfig, SliderConfig } from './controlSchemas';
+import type { CheckboxConfig, SliderConfig, SliderDisplayOptions } from './controlSchemas';
+
+const sliderValueFormatters = new Map<string, (value: number) => string>();
 
 export function createSliderControl(
   config: SliderConfig,
   onChange: (value: number) => void,
+  displayOptions: SliderDisplayOptions = {},
 ): HTMLElement {
   const group = document.createElement('div');
   group.className = 'control-group';
@@ -16,8 +19,12 @@ export function createSliderControl(
 
   const valueDisplay = document.createElement('span');
   valueDisplay.className = 'slider-value';
-  const decimalPlaces = getDecimalPlaces(config.step);
-  valueDisplay.textContent = config.defaultValue.toFixed(decimalPlaces);
+  if (displayOptions.formatValue) {
+    sliderValueFormatters.set(config.id, displayOptions.formatValue);
+  } else {
+    sliderValueFormatters.delete(config.id);
+  }
+  valueDisplay.textContent = formatSliderValue(config.id, config.defaultValue, config.step);
 
   const slider = document.createElement('input');
   slider.type = 'range';
@@ -29,8 +36,7 @@ export function createSliderControl(
 
   slider.addEventListener('input', (e) => {
     const value = parseFloat((e.target as HTMLInputElement).value);
-    const decimalPlaces = getDecimalPlaces(config.step);
-    valueDisplay.textContent = value.toFixed(decimalPlaces);
+    valueDisplay.textContent = formatSliderValue(config.id, value, config.step);
     onChange(value);
   });
 
@@ -126,8 +132,7 @@ export function updateSliderValue(id: string, value: number): void {
   const valueDisplay = label?.querySelector('.slider-value');
   if (valueDisplay) {
     const step = parseFloat(slider.step);
-    const decimalPlaces = getDecimalPlaces(step);
-    valueDisplay.textContent = value.toFixed(decimalPlaces);
+    valueDisplay.textContent = formatSliderValue(id, value, step);
   }
 }
 
@@ -164,6 +169,10 @@ function getDecimalPlaces(step: number): number {
   const stepStr = step.toString();
   const decimalIndex = stepStr.indexOf('.');
   return decimalIndex !== -1 ? stepStr.length - decimalIndex - 1 : 0;
+}
+
+function formatSliderValue(id: string, value: number, step: number): string {
+  return sliderValueFormatters.get(id)?.(value) ?? value.toFixed(getDecimalPlaces(step));
 }
 
 function setControlDisplay(id: string, visible: boolean): void {

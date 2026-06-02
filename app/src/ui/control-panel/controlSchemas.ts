@@ -8,6 +8,10 @@ export interface SliderConfig {
   tooltip?: string;
 }
 
+export interface SliderDisplayOptions {
+  formatValue?: (value: number) => string;
+}
+
 export interface CheckboxConfig {
   id: string;
   label: string;
@@ -70,12 +74,12 @@ export const STRUCTURE_TYPE_BY_CONTROL_ID: Record<string, number> = {
 
 export const VIEW_DISTANCE_SLIDER: SliderConfig = {
   id: 'viewDistance',
-  label: 'Chunk Radius',
+  label: 'Terrain Radius',
   min: 1,
   max: 8,
   step: 1,
   defaultValue: 3,
-  tooltip: 'Number of chunks to keep active around the camera (higher = more visible terrain, lower performance)',
+  tooltip: 'Visible terrain radius around the camera in meters. Higher values reveal more terrain and cost more performance.',
 };
 
 export const CACHE_SIZE_SLIDER: SliderConfig = {

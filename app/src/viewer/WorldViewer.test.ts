@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { BiomeType, createSparseBiomeWeights, type ChunkData } from '@engine/index';
 import {
+  HORIZON_FILL_PLANE_NAME,
   VIEWER_CAMERA_FAR_METERS,
   VIEWER_CAMERA_NEAR_METERS,
   WorldViewer,
@@ -180,8 +181,24 @@ describe('WorldViewer lifecycle', () => {
     const camera = viewer.getCamera();
 
     expect(camera.near).toBe(VIEWER_CAMERA_NEAR_METERS);
-    expect(camera.far).toBe(VIEWER_CAMERA_FAR_METERS);
+    expect(camera.far).toBeLessThanOrEqual(VIEWER_CAMERA_FAR_METERS);
     expect(camera.far / camera.near).toBeLessThanOrEqual(20000);
+
+    viewer.dispose();
+  });
+
+  it('matches horizon fill and camera far distance to the streaming radius without scene fog', () => {
+    const viewer = new WorldViewer();
+    const camera = viewer.getCamera() as THREE.PerspectiveCamera;
+
+    viewer.setStreamingViewDistance(4, 32);
+
+    expect(viewer.getScene().fog).toBeNull();
+    expect(camera.far).toBeCloseTo(3214.08);
+
+    const horizonFill = viewer.getScene().getObjectByName(HORIZON_FILL_PLANE_NAME);
+    expect(horizonFill).toBeInstanceOf(THREE.Mesh);
+    expect(horizonFill?.scale.x).toBeCloseTo(camera.far * 2.4);
 
     viewer.dispose();
   });
