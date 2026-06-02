@@ -101,6 +101,20 @@ export class ControlPanel {
       this.updateFromState(state);
     });
 
+    // Clear existing controls to prevent duplication on re-initialization
+    const containers = [
+      ELEMENT_IDS.TERRAIN_CONTROLS,
+      ELEMENT_IDS.BIOME_CONTROLS,
+      ELEMENT_IDS.RESOURCE_CONTROLS,
+      ELEMENT_IDS.WATER_CONTROLS,
+      ELEMENT_IDS.ADVANCED_CONTROLS,
+      ELEMENT_IDS.VISIBILITY_CONTROLS,
+    ];
+    containers.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    });
+
     // Create all control sections
     this.createTerrainControls();
     this.createBiomeControls();

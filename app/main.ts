@@ -38,6 +38,9 @@ let uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
 let chunkLoadTimer: ReturnType<typeof setTimeout> | null = null;
 let performanceTimer: ReturnType<typeof setInterval> | null = null;
 
+let engineRunning = false;
+let rafId: number | null = null;
+
 const HORIZON_STREAMING_BUFFER_CHUNKS = 2;
 const VIEWER_READY_CLASS = 'viewer-ready';
 const MODE_SELECT_ACTIVE_CLASS = 'mode-select-active';
@@ -47,7 +50,11 @@ const JOURNEY_MODE_CLASS = 'journey-mode';
 type AppMode = 'world-editor' | 'journey';
 
 // Basic initialization
+let isFullscreen = false;
+
 document.addEventListener('DOMContentLoaded', async () => {
+  document.title = 'Project tQandtD';
+
   // Check WebGL compatibility first (Requirement 18.4)
   const webglCheck = errorHandler.checkWebGLCompatibility();
   if (!webglCheck.supported) {
@@ -96,448 +103,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   const firstPersonBtn = document.getElementById('first-person-btn');
   const planetModeBtn = document.getElementById('planet-mode-btn');
 
-  // Camera position display elements
-  const cameraXDisplay = document.getElementById('camera-x');
-  const cameraYDisplay = document.getElementById('camera-y');
-  const cameraZDisplay = document.getElementById('camera-z');
-
-  // Status bar elements
-  const statusSeed     = document.getElementById('status-seed');
-  const statusChunks   = document.getElementById('status-chunks');
-  const statusBiome    = document.getElementById('status-biome');
-  const statusPosition = document.getElementById('status-position');
-
-  // Compass needle
-  const compassNeedle = document.getElementById('compass-needle');
-
   // Random seed button
   document.getElementById('random-seed-btn')?.addEventListener('click', () => {
     const randomSeed = Math.floor(Math.random() * 999999) + 1;
     if (seedInput) seedInput.value = randomSeed.toString();
   });
-  
-  // Initialize application core
-  try {
-    setWorldGenerationLoading(true);
-    app = new WorldApp();
-    await app.initialize();
-    
-    // Initialize WorldViewer
-    const viewerContainer = document.getElementById('viewer');
-    if (viewerContainer) {
-      setViewerReady(false);
-      worldViewer = new WorldViewer();
-      worldViewer.initialize(viewerContainer, app!.getSeed());
-      worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
-      app.setRenderer(worldRenderer);
-      
-      // Apply initial visibility state from application core
-      worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
-      worldViewer.setStreamingViewDistance(app.getViewDistance(), app.getConfigSnapshot().chunkSize);
-      await warmUpInitialTerrain(app, worldViewer);
-      setViewerReady(true);
-      setWorldGenerationLoading(false);
-      
-      // Track camera position for LOD updates and dynamic chunk loading
-      let lastCameraUpdate = 0;
-      let lastChunkLoadCheck = 0;
-      let lastPerformanceUpdate = 0;
-      let lastUIUpdate = 0;
-      let lastChunkLoadCameraPos: { x: number; z: number } | null = null;
-      const cameraUpdateInterval = 100; // Update LOD every 100ms (requirement 7.6)
-      const performanceUpdateInterval = 1000; // Update performance metrics every 1000ms.
-      const uiUpdateInterval = 100; // Update UI every 100ms
-      
-      // FPS tracking
-      let frameCount = 0;
-      let lastFPSUpdate = performance.now();
-      let currentFPS = 60;
-      
-      // Render loop for FPS tracking and performance updates
-      const renderLoop = () => {
-        frameCount++;
-        const now = performance.now();
-        
-        // Calculate FPS every second
-        if (now - lastFPSUpdate >= 1000) {
-          currentFPS = Math.round((frameCount * 1000) / (now - lastFPSUpdate));
-          frameCount = 0;
-          lastFPSUpdate = now;
-          
-          // Update FPS in app state
-          if (app) {
-            app.updateState({ fps: currentFPS });
-          }
-        }
-        
-        requestAnimationFrame(renderLoop);
-      };
-      renderLoop();
-      
-      // Split work across intervals to avoid frame-time spikes.
-      
-      // 1. UI update interval (every 100ms)
-      uiUpdateTimer = setInterval(() => {
-        if (worldViewer && app) {
-          const cameraPos = worldViewer.getCameraPosition();
-          const now = performance.now();
-          
-          // Update camera position in app state.
-          if (now - lastCameraUpdate >= cameraUpdateInterval) {
-            app.updateCameraPosition(cameraPos);
-            lastCameraUpdate = now;
-          }
-          
-          // Update lightweight UI elements.
-          if (now - lastUIUpdate >= uiUpdateInterval) {
-            // Update camera position display
-            if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
-              cameraXDisplay.textContent = cameraPos.x.toFixed(2);
-              cameraYDisplay.textContent = cameraPos.y.toFixed(2);
-              cameraZDisplay.textContent = cameraPos.z.toFixed(2);
-            }
-            // Update status bar position
-            if (statusPosition) {
-              statusPosition.textContent = `${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)}`;
-            }
-            // Update status bar chunks
-            if (statusChunks && app) {
-              statusChunks.textContent = app.getLoadedChunkCount().toString();
-            }
-            // Update compass: rotate needle opposite to camera yaw.
-            if (compassNeedle) {
-              const heading = worldViewer.getCameraHeading();
-              compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
-            }
-            
-            lastUIUpdate = now;
-          }
-        }
-      }, uiUpdateInterval);
-      
-      // 2. Adaptive chunk loading - faster when moving, slower when idle.
-      // Paused while in orbit / transition to avoid loading chunks for space positions.
-      const scheduleChunkLoad = (delay = 100) => {
-        chunkLoadTimer = setTimeout(() => {
-          let nextInterval = 100;
 
-          if (worldViewer && app) {
-            // Skip chunk loading while in orbit or transitioning
-            if (worldViewer.isOrbitalOrTransitioning()) {
-              scheduleChunkLoad(200);
-              return;
-            }
+  // Initialize help modal early (no engine dependency)
+  helpModal = new HelpModal();
+  helpModal.initialize();
 
-            const cameraPos = worldViewer.getCameraPosition();
+  // Enable mode buttons now that basic checks passed
+  worldEditorModeBtn?.removeAttribute('disabled');
+  journeyModeBtn?.removeAttribute('disabled');
 
-            // Determine how fast the camera is moving
-            let distance = 0;
-            if (lastChunkLoadCameraPos) {
-              distance = Math.hypot(
-                cameraPos.x - lastChunkLoadCameraPos.x,
-                cameraPos.z - lastChunkLoadCameraPos.z
-              );
-            }
-            lastChunkLoadCameraPos = { x: cameraPos.x, z: cameraPos.z };
+  // Mode selection handlers
+  worldEditorModeBtn?.addEventListener('click', async () => {
+    await enterAppMode('world-editor');
+  });
 
-            // Adaptive interval: fast movement -> 50ms, walking -> 100ms, idle -> 300ms
-            if (distance > 0.15) {
-              nextInterval = 50;   // Running
-            } else if (distance > 0.03) {
-              nextInterval = 100;  // Walking
-            } else {
-              nextInterval = 300;  // Idle
-            }
+  journeyModeBtn?.addEventListener('click', async () => {
+    await enterAppMode('journey');
+  });
 
-            // Run chunk loading asynchronously to avoid blocking rendering.
-            setTimeout(() => {
-              const chunkSize = app!.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
-              const visualRadius = app!.getViewDistance();
-              const loadRadius = getBufferedStreamingRadius(visualRadius);
-              const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
-              const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
-              app!.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
-              const unloadDistance = loadRadius + 2;
-              app!.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
-            }, 0);
-
-            lastChunkLoadCheck = performance.now();
-          }
-
-          scheduleChunkLoad(nextInterval);
-        }, delay);
-      };
-      scheduleChunkLoad();
-      
-      // 3. Performance metrics interval (every 1000ms), executed asynchronously.
-      performanceTimer = setInterval(() => {
-        if (worldViewer && app) {
-          const now = performance.now();
-          
-          if (now - lastPerformanceUpdate >= performanceUpdateInterval) {
-            // Run on the next event-loop tick.
-            setTimeout(() => {
-              // Get render stats from WorldViewer. This can be moderately expensive.
-              const renderStats = worldViewer!.getRenderStats();
-              
-              // Calculate memory usage (approximate)
-              const memoryUsage = app!.getApproximateMemoryUsage();
-              
-              // Update performance monitor
-              if (performanceMonitor) {
-                performanceMonitor.updateMemoryUsage(memoryUsage);
-                performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
-              }
-              // Update status bar biome only when needed.
-              if (statusBiome && app) {
-                const dominantBiome = app!.getDominantBiomeName();
-                if (dominantBiome) {
-                  statusBiome.textContent = dominantBiome;
-                }
-              }
-              
-              // Redraw minimap only when needed.
-              if (minimap) {
-                minimap.draw();
-              }
-              
-              // Update worker pool statistics if enabled
-              if (app!.isWorkerPoolEnabled()) {
-                app!.updateWorkerPoolStats();
-              }
-            }, 0);
-            
-            lastPerformanceUpdate = now;
-          }
-        }
-      }, performanceUpdateInterval);
-      
-      // Clean up timers when the page closes.
-      window.addEventListener('beforeunload', () => {
-        if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
-        if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
-        if (performanceTimer !== null) clearInterval(performanceTimer);
-        if (terrainTooltip) terrainTooltip.dispose();
-        if (performanceMonitor) performanceMonitor.dispose();
-        if (helpModal) helpModal.dispose();
-        if (worldViewer) worldViewer.dispose();
-        if (app) app.destroy();
-      });
-      
-      // Handle window resize
-      window.addEventListener('resize', () => {
-        if (viewerContainer && worldViewer) {
-          worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
-        }
-      });
-    } else {
-      setWorldGenerationLoading(false);
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+      if (!document.body.classList.contains(MODE_SELECT_ACTIVE_CLASS)) {
+        returnToMenu();
+      }
     }
-    
-    // Initialize ControlPanel
-    const controlPanelContainer = document.getElementById('control-panel');
-    if (controlPanelContainer) {
-      controlPanelInstance = new ControlPanel();
-      controlPanelInstance.initialize(controlPanelContainer, app);
+    if (e.key === 'Escape') {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+        document.body.classList.remove('fullscreen-mode');
+        if (worldViewer) setTimeout(() => worldViewer!.resize(window.innerWidth, window.innerHeight), 100);
+      }
     }
-    
-    // Initialize WorldManager
-    worldManager = new WorldManager();
-    worldManager.initialize(app);
-    
-    // World statistics panel is always visible (part of overlay layout)
-    
-    // Initialize PerformanceMonitor (binds to existing elements by ID)
-    performanceMonitor = new PerformanceMonitor();
-    performanceMonitor.initialize(document.body);
-    
-    // Initialize StatisticsDisplay
-    const statisticsContainer = document.getElementById('statistics-display');
-    if (statisticsContainer) {
-      statisticsDisplay = new StatisticsDisplay();
-      statisticsDisplay.initialize(statisticsContainer);
-      statisticsDisplay.setApp(app);
-    }
+  });
 
-    // Initialize Minimap
-    const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement | null;
-    if (minimapCanvas && worldViewer) {
-      minimap = new Minimap();
-      minimap.initialize(
-        minimapCanvas,
-        app,
-        () => worldViewer!.getCameraHeading(),
-        () => worldViewer!.getCameraPosition()
-      );
-    }
-
-    // Initialize TerrainTooltip
-    if (worldViewer) {
-      terrainTooltip = new TerrainTooltip();
-      terrainTooltip.initialize(app, worldViewer);
-    }
-
-    helpModal = new HelpModal();
-    helpModal.initialize();
-
-    worldEditorModeBtn?.removeAttribute('disabled');
-    journeyModeBtn?.removeAttribute('disabled');
-    
-    // Subscribe to state changes and update performance monitor
-    app.subscribeToState((state) => {
-      worldViewer?.setStreamingViewDistance(state.appSettings.viewDistance, state.config.chunkSize);
-
-      if (performanceMonitor && app) {
-        // Update generation time with breakdown
-        const breakdown = {
-          terrain: state.avgGenerationTime * 0.4, // Approximate breakdown
-          biomes: state.avgGenerationTime * 0.2,
-          resources: state.avgGenerationTime * 0.2,
-          structures: state.avgGenerationTime * 0.2,
-          total: state.avgGenerationTime
-        };
-        performanceMonitor.updateGenerationTime(state.avgGenerationTime, breakdown);
-        
-        // Update cache statistics
-        const cacheStats = app.getCacheStats();
-        performanceMonitor.updateCacheStats(cacheStats.hitRate, cacheStats.size, cacheStats.maxSize);
-        
-        // Update loaded chunks count
-        performanceMonitor.updateLoadedChunks(app.getLoadedChunkCount());
-        
-        // Update worker pool statistics
-        performanceMonitor.updateWorkerStats({
-          activeWorkers: state.activeWorkers,
-          queuedTasks: state.queuedTasks,
-          completedTasks: state.completedTasks,
-          avgWorkerTime: state.avgWorkerTime
-        });
-      }
-    });
-    
-    // Listen to app events
-    app.on(AppEvent.WORLD_GENERATED, (data) => {
-      if (worldViewer) {
-        worldViewer.clearChunks();
-        worldViewer.clearFogOfWar();
-      }
-      // Update status bar seed
-      if (statusSeed) statusSeed.textContent = data.seed.toString();
-      errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
-    });
-
-    // Listen for planet clicked event from WorldViewer orbit mode
-    window.addEventListener('planet-clicked', async (e: Event) => {
-      const detail = (e as CustomEvent).detail as { lat: number; lon: number };
-      if (!app || !worldViewer) return;
-
-      // Start dive transition back to terrain first
-      await worldViewer.startLandingTransition(detail.lat, detail.lon);
-      planetModeBtn?.classList.remove('active');
-
-      errorHandler.showSuccessToast('Landing on new world...');
-      setWorldGenerationLoading(true);
-      setViewerReady(false);
-
-      try {
-        await app.landOnPlanet(detail.lat, detail.lon);
-        await warmUpInitialTerrain(app, worldViewer);
-        setViewerReady(true);
-        errorHandler.showSuccessToast(`Landed on new world! Seed: ${app.getSeed()}`);
-      } catch (error) {
-        console.error('Planet landing failed:', error);
-        errorHandler.showErrorToast('Failed to land on planet. Please try again.');
-      } finally {
-        setWorldGenerationLoading(false);
-        setViewerReady(true);
-      }
-    });
-
-    app.on(AppEvent.PLANET_LANDED, (data) => {
-      if (worldViewer) {
-        worldViewer.clearChunks();
-        worldViewer.clearFogOfWar();
-      }
-      if (statusSeed) statusSeed.textContent = data.seed.toString();
-      errorHandler.showSuccessToast(`New world from lat ${data.lat.toFixed(2)}, lon ${data.lon.toFixed(2)}`);
-    });
-    
-    app.on(AppEvent.CHUNK_LOADED, (data) => {
-      const renderSystem = app?.getWorldSession()?.scene.renderSystem;
-      if (!data.partial && data.stage === undefined && renderSystem) {
-        renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
-      } else if (worldRenderer) {
-        worldRenderer.addChunk(data.chunk, { x: data.chunkX, y: data.chunkY }, {
-          partial: data.partial,
-          stage: data.stage,
-        });
-      }
-    });
-
-    app.on(AppEvent.CHUNK_UPDATED, (data) => {
-      if (worldRenderer) {
-        worldRenderer.updateChunk(data.chunk, { x: data.chunkX, y: data.chunkY });
-      }
-    });
-    
-    app.on(AppEvent.CHUNK_UNLOADED, (data) => {
-      const renderSystem = app?.getWorldSession()?.scene.renderSystem;
-      if (!data.keepFogOfWar && renderSystem) {
-        renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
-      } else if (worldRenderer) {
-        worldRenderer.removeChunk({ x: data.chunkX, y: data.chunkY }, {
-          keepFogOfWar: data.keepFogOfWar || false,
-        });
-      }
-    });
-
-    app.on(AppEvent.VISIBILITY_CHANGED, (visibilityState) => {
-      // Update WorldViewer layer visibility
-      if (worldViewer && app && visibilityState) {
-        const startTime = performance.now();
-        worldViewer.applyViewerSettings(visibilityState, app.getLoadedChunksSnapshot());
-        
-        const endTime = performance.now();
-        const updateTime = endTime - startTime;
-        
-        // Verify update occurred within 50ms (requirement 13.8)
-        if (updateTime > 50) {
-          console.warn(`Visibility update took ${updateTime.toFixed(2)}ms (exceeds 50ms requirement)`);
-        }
-      }
-    });
-    
-    app.on(AppEvent.ERROR, (data) => {
-      errorHandler.handleError(new AppError(
-        data.message,
-        ErrorCategory.GENERATION,
-        ErrorSeverity.ERROR,
-        true,
-        data.message,
-        data.error
-      ));
-    });
-    
-  } catch (error) {
-    console.error('Failed to initialize application core:', error);
-    setWorldGenerationLoading(false);
-    
-    // Clean up any timers that might have been created
-    if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
-    if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
-    if (performanceTimer !== null) clearInterval(performanceTimer);
-    
-    errorHandler.handleError(new AppError(
-      'Application initialization failed',
-      ErrorCategory.INITIALIZATION,
-      ErrorSeverity.CRITICAL,
-      false,
-      'Failed to initialize the application. Please reload the page and try again.',
-      error instanceof Error ? error : undefined
-    ));
-    return;
-  }
-  
   // Toggle control panel
   toggleControlsBtn?.addEventListener('click', () => {
     controlPanel?.classList.toggle('collapsed');
@@ -563,9 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     helpModal?.toggle();
   });
   
-  // Fullscreen button - hide all UI elements (exit with ESC only)
-  let isFullscreen = false;
-  
+  // Fullscreen button
   const toggleFullscreen = () => {
     isFullscreen = !isFullscreen;
     if (isFullscreen) {
@@ -578,13 +180,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
-  
-  // ESC key to exit fullscreen
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isFullscreen) {
-      toggleFullscreen();
-    }
-  });
   
   // Auto-collapse side panels on narrow screens (requirement 17.5)
   const handleResponsiveLayout = () => {
@@ -608,6 +203,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Handle window resize for responsive layout (requirement 17.5, 17.8)
   window.addEventListener('resize', () => {
     handleResponsiveLayout();
+    const viewerContainer = document.getElementById('viewer');
+    if (viewerContainer && worldViewer) {
+      worldViewer.resize(viewerContainer.clientWidth, viewerContainer.clientHeight);
+    }
   });
   
   // Camera control buttons (requirement 14.5, 14.6, 14.7)
@@ -796,77 +395,541 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  worldEditorModeBtn?.addEventListener('click', async () => {
-    await enterAppMode('world-editor');
+  // Listen for planet clicked event from WorldViewer orbit mode
+  window.addEventListener('planet-clicked', async (e: Event) => {
+    const detail = (e as CustomEvent).detail as { lat: number; lon: number };
+    if (!app || !worldViewer) return;
+
+    // Start dive transition back to terrain first
+    await worldViewer.startLandingTransition(detail.lat, detail.lon);
+    planetModeBtn?.classList.remove('active');
+
+    errorHandler.showSuccessToast('Landing on new world...');
+    setWorldGenerationLoading(true);
+    setViewerReady(false);
+
+    try {
+      await app.landOnPlanet(detail.lat, detail.lon);
+      await warmUpInitialTerrain(app, worldViewer);
+      setViewerReady(true);
+      errorHandler.showSuccessToast(`Landed on new world! Seed: ${app.getSeed()}`);
+    } catch (error) {
+      console.error('Planet landing failed:', error);
+      errorHandler.showErrorToast('Failed to land on planet. Please try again.');
+    } finally {
+      setWorldGenerationLoading(false);
+      setViewerReady(true);
+    }
   });
 
-  journeyModeBtn?.addEventListener('click', async () => {
-    await enterAppMode('journey');
+  // Clean up timers when the page closes.
+  window.addEventListener('beforeunload', () => {
+    cleanupEngine();
   });
+});
 
-  async function enterAppMode(mode: AppMode): Promise<void> {
-    if (!app || !worldViewer) {
-      errorHandler.showErrorToast('Application not initialized');
+async function initEngine(mode: AppMode): Promise<void> {
+  if (app) return; // Already initialized
+
+  try {
+    setWorldGenerationLoading(true);
+    app = new WorldApp();
+    await app.initialize();
+    
+    // Initialize WorldViewer
+    const viewerContainer = document.getElementById('viewer');
+    if (viewerContainer) {
+      setViewerReady(false);
+      worldViewer = new WorldViewer();
+      worldViewer.initialize(viewerContainer, app!.getSeed());
+      worldRenderer = new ThreeWorldRendererAdapter({ target: worldViewer });
+      app.setRenderer(worldRenderer);
+      
+      // Apply initial visibility state from application core
+      worldViewer.applyViewerSettings(app.getViewerSettings(), app.getLoadedChunksSnapshot());
+      worldViewer.setStreamingViewDistance(app.getViewDistance(), app.getConfigSnapshot().chunkSize);
+      await warmUpInitialTerrain(app, worldViewer);
+      setViewerReady(true);
+      setWorldGenerationLoading(false);
+      
+      // Render loop for FPS tracking and performance updates
+      startRenderLoop();
+      
+      // State for intervals
+      let lastCameraUpdate = 0;
+      let lastChunkLoadCheck = 0;
+      let lastPerformanceUpdate = 0;
+      let lastUIUpdate = 0;
+      let lastChunkLoadCameraPos: { x: number; z: number } | null = null;
+      
+      // 1. UI update interval (every 100ms)
+      uiUpdateTimer = setInterval(() => {
+        if (worldViewer && app) {
+          const cameraPos = worldViewer.getCameraPosition();
+          const now = performance.now();
+          
+          // Update camera position in app state.
+          if (now - lastCameraUpdate >= 100) {
+            app.updateCameraPosition(cameraPos);
+            lastCameraUpdate = now;
+          }
+          
+          // Update lightweight UI elements.
+          if (now - lastUIUpdate >= 100) {
+            // Update camera position display
+            const cameraXDisplay = document.getElementById('camera-x');
+            const cameraYDisplay = document.getElementById('camera-y');
+            const cameraZDisplay = document.getElementById('camera-z');
+            if (cameraXDisplay && cameraYDisplay && cameraZDisplay) {
+              cameraXDisplay.textContent = cameraPos.x.toFixed(2);
+              cameraYDisplay.textContent = cameraPos.y.toFixed(2);
+              cameraZDisplay.textContent = cameraPos.z.toFixed(2);
+            }
+            // Update status bar position
+            const statusPosition = document.getElementById('status-position');
+            if (statusPosition) {
+              statusPosition.textContent = `${cameraPos.x.toFixed(1)}, ${cameraPos.y.toFixed(1)}, ${cameraPos.z.toFixed(1)}`;
+            }
+            // Update status bar chunks
+            const statusChunks = document.getElementById('status-chunks');
+            if (statusChunks && app) {
+              statusChunks.textContent = app.getLoadedChunkCount().toString();
+            }
+            // Update compass: rotate needle opposite to camera yaw.
+            const compassNeedle = document.getElementById('compass-needle');
+            if (compassNeedle) {
+              const heading = worldViewer.getCameraHeading();
+              compassNeedle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
+            }
+            
+            lastUIUpdate = now;
+          }
+        }
+      }, 100);
+      
+      // 2. Adaptive chunk loading - faster when moving, slower when idle.
+      // Paused while in orbit / transition to avoid loading chunks for space positions.
+      const scheduleChunkLoad = (delay = 100) => {
+        chunkLoadTimer = setTimeout(() => {
+          let nextInterval = 100;
+
+          if (worldViewer && app) {
+            // Skip chunk loading while in orbit or transitioning
+            if (worldViewer.isOrbitalOrTransitioning()) {
+              scheduleChunkLoad(200);
+              return;
+            }
+
+            const cameraPos = worldViewer.getCameraPosition();
+
+            // Determine how fast the camera is moving
+            let distance = 0;
+            if (lastChunkLoadCameraPos) {
+              distance = Math.hypot(
+                cameraPos.x - lastChunkLoadCameraPos.x,
+                cameraPos.z - lastChunkLoadCameraPos.z
+              );
+            }
+            lastChunkLoadCameraPos = { x: cameraPos.x, z: cameraPos.z };
+
+            // Adaptive interval: fast movement -> 50ms, walking -> 100ms, idle -> 300ms
+            if (distance > 0.15) {
+              nextInterval = 50;   // Running
+            } else if (distance > 0.03) {
+              nextInterval = 100;  // Walking
+            } else {
+              nextInterval = 300;  // Idle
+            }
+
+            // Run chunk loading asynchronously to avoid blocking rendering.
+            setTimeout(() => {
+              const chunkSize = app!.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
+              const visualRadius = app!.getViewDistance();
+              const loadRadius = getBufferedStreamingRadius(visualRadius);
+              const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
+              const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
+              app!.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
+              const unloadDistance = loadRadius + 2;
+              app!.unloadDistantChunks(cameraChunkX, cameraChunkY, unloadDistance);
+            }, 0);
+
+            lastChunkLoadCheck = performance.now();
+          }
+
+          scheduleChunkLoad(nextInterval);
+        }, delay);
+      };
+      scheduleChunkLoad();
+      
+      // 3. Performance metrics interval (every 1000ms), executed asynchronously.
+      performanceTimer = setInterval(() => {
+        if (worldViewer && app) {
+          const now = performance.now();
+          
+          if (now - lastPerformanceUpdate >= 1000) {
+            // Run on the next event-loop tick.
+            setTimeout(() => {
+              // Get render stats from WorldViewer. This can be moderately expensive.
+              const renderStats = worldViewer!.getRenderStats();
+              
+              // Calculate memory usage (approximate)
+              const memoryUsage = app!.getApproximateMemoryUsage();
+              
+              // Update performance monitor
+              if (performanceMonitor) {
+                performanceMonitor.updateMemoryUsage(memoryUsage);
+                performanceMonitor.updateRenderStats(renderStats.vertexCount, renderStats.drawCalls);
+              }
+              // Update status bar biome only when needed.
+              const statusBiome = document.getElementById('status-biome');
+              if (statusBiome && app) {
+                const dominantBiome = app!.getDominantBiomeName();
+                if (dominantBiome) {
+                  statusBiome.textContent = dominantBiome;
+                }
+              }
+              
+              // Redraw minimap only when needed.
+              if (minimap) {
+                minimap.draw();
+              }
+              
+              // Update worker pool statistics if enabled
+              if (app!.isWorkerPoolEnabled()) {
+                app!.updateWorkerPoolStats();
+              }
+            }, 0);
+            
+            lastPerformanceUpdate = now;
+          }
+        }
+      }, 1000);
+      
+      // Initialize ControlPanel
+      const controlPanelContainer = document.getElementById('control-panel');
+      if (controlPanelContainer) {
+        controlPanelInstance = new ControlPanel();
+        controlPanelInstance.initialize(controlPanelContainer, app);
+      }
+      
+      // Initialize WorldManager
+      worldManager = new WorldManager();
+      worldManager.initialize(app);
+      
+      // Initialize PerformanceMonitor (binds to existing elements by ID)
+      performanceMonitor = new PerformanceMonitor();
+      performanceMonitor.initialize(document.body);
+      
+      // Initialize StatisticsDisplay
+      const statisticsContainer = document.getElementById('statistics-display');
+      if (statisticsContainer) {
+        statisticsDisplay = new StatisticsDisplay();
+        statisticsDisplay.initialize(statisticsContainer);
+        statisticsDisplay.setApp(app);
+      }
+
+      // Initialize Minimap
+      const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement | null;
+      if (minimapCanvas && worldViewer) {
+        minimap = new Minimap();
+        minimap.initialize(
+          minimapCanvas,
+          app,
+          () => worldViewer!.getCameraHeading(),
+          () => worldViewer!.getCameraPosition()
+        );
+      }
+
+      // Initialize TerrainTooltip
+      if (worldViewer) {
+        terrainTooltip = new TerrainTooltip();
+        terrainTooltip.initialize(app, worldViewer);
+      }
+      
+      // Subscribe to state changes and update performance monitor
+      app.subscribeToState((state) => {
+        worldViewer?.setStreamingViewDistance(state.appSettings.viewDistance, state.config.chunkSize);
+
+        if (performanceMonitor && app) {
+          // Update generation time with breakdown
+          const breakdown = {
+            terrain: state.avgGenerationTime * 0.4, // Approximate breakdown
+            biomes: state.avgGenerationTime * 0.2,
+            resources: state.avgGenerationTime * 0.2,
+            structures: state.avgGenerationTime * 0.2,
+            total: state.avgGenerationTime
+          };
+          performanceMonitor.updateGenerationTime(state.avgGenerationTime, breakdown);
+          
+          // Update cache statistics
+          const cacheStats = app.getCacheStats();
+          performanceMonitor.updateCacheStats(cacheStats.hitRate, cacheStats.size, cacheStats.maxSize);
+          
+          // Update loaded chunks count
+          performanceMonitor.updateLoadedChunks(app.getLoadedChunkCount());
+          
+          // Update worker pool statistics
+          performanceMonitor.updateWorkerStats({
+            activeWorkers: state.activeWorkers,
+            queuedTasks: state.queuedTasks,
+            completedTasks: state.completedTasks,
+            avgWorkerTime: state.avgWorkerTime
+          });
+        }
+      });
+      
+      // Listen to app events
+      app.on(AppEvent.WORLD_GENERATED, (data) => {
+        if (worldViewer) {
+          worldViewer.clearChunks();
+          worldViewer.clearFogOfWar();
+        }
+        // Update status bar seed
+        const statusSeed = document.getElementById('status-seed');
+        if (statusSeed) statusSeed.textContent = data.seed.toString();
+        errorHandler.showSuccessToast(`World generated with seed: ${data.seed}`);
+      });
+
+      app.on(AppEvent.PLANET_LANDED, (data) => {
+        if (worldViewer) {
+          worldViewer.clearChunks();
+          worldViewer.clearFogOfWar();
+        }
+        const statusSeed = document.getElementById('status-seed');
+        if (statusSeed) statusSeed.textContent = data.seed.toString();
+        errorHandler.showSuccessToast(`New world from lat ${data.lat.toFixed(2)}, lon ${data.lon.toFixed(2)}`);
+      });
+      
+      app.on(AppEvent.CHUNK_LOADED, (data) => {
+        const renderSystem = app?.getWorldSession()?.scene.renderSystem;
+        if (!data.partial && data.stage === undefined && renderSystem) {
+          renderSystem.onChunkLoaded(data.chunk, { x: data.chunkX, y: data.chunkY });
+        } else if (worldRenderer) {
+          worldRenderer.addChunk(data.chunk, { x: data.chunkX, y: data.chunkY }, {
+            partial: data.partial,
+            stage: data.stage,
+          });
+        }
+      });
+
+      app.on(AppEvent.CHUNK_UPDATED, (data) => {
+        if (worldRenderer) {
+          worldRenderer.updateChunk(data.chunk, { x: data.chunkX, y: data.chunkY });
+        }
+      });
+      
+      app.on(AppEvent.CHUNK_UNLOADED, (data) => {
+        const renderSystem = app?.getWorldSession()?.scene.renderSystem;
+        if (!data.keepFogOfWar && renderSystem) {
+          renderSystem.onChunkRemoved({ x: data.chunkX, y: data.chunkY });
+        } else if (worldRenderer) {
+          worldRenderer.removeChunk({ x: data.chunkX, y: data.chunkY }, {
+            keepFogOfWar: data.keepFogOfWar || false,
+          });
+        }
+      });
+
+      app.on(AppEvent.VISIBILITY_CHANGED, (visibilityState) => {
+        // Update WorldViewer layer visibility
+        if (worldViewer && app && visibilityState) {
+          const startTime = performance.now();
+          worldViewer.applyViewerSettings(visibilityState, app.getLoadedChunksSnapshot());
+          
+          const endTime = performance.now();
+          const updateTime = endTime - startTime;
+          
+          // Verify update occurred within 50ms (requirement 13.8)
+          if (updateTime > 50) {
+            console.warn(`Visibility update took ${updateTime.toFixed(2)}ms (exceeds 50ms requirement)`);
+          }
+        }
+      });
+      
+      app.on(AppEvent.ERROR, (data) => {
+        errorHandler.handleError(new AppError(
+          data.message,
+          ErrorCategory.GENERATION,
+          ErrorSeverity.ERROR,
+          true,
+          data.message,
+          data.error
+        ));
+      });
+    }
+  } catch (error) {
+    console.error('Failed to initialize application core:', error);
+    setWorldGenerationLoading(false);
+    cleanupEngine();
+    
+    errorHandler.handleError(new AppError(
+      'Application initialization failed',
+      ErrorCategory.INITIALIZATION,
+      ErrorSeverity.CRITICAL,
+      false,
+      'Failed to initialize the application. Please reload the page and try again.',
+      error instanceof Error ? error : undefined
+    ));
+    throw error;
+  }
+}
+
+function cleanupEngine(): void {
+  stopRenderLoop();
+  
+  if (uiUpdateTimer !== null) clearInterval(uiUpdateTimer);
+  uiUpdateTimer = null;
+  if (chunkLoadTimer !== null) clearTimeout(chunkLoadTimer);
+  chunkLoadTimer = null;
+  if (performanceTimer !== null) clearInterval(performanceTimer);
+  performanceTimer = null;
+  
+  if (terrainTooltip) { terrainTooltip.dispose(); terrainTooltip = null; }
+  if (performanceMonitor) { performanceMonitor.dispose(); performanceMonitor = null; }
+  if (worldViewer) { worldViewer.dispose(); worldViewer = null; }
+  if (app) { app.destroy(); app = null; }
+  
+  worldRenderer = null;
+  controlPanelInstance = null;
+  worldManager = null;
+  statisticsDisplay = null;
+  minimap = null;
+  
+  setViewerReady(false);
+  setWorldGenerationLoading(false);
+}
+
+function startRenderLoop(): void {
+  if (engineRunning) return;
+  engineRunning = true;
+  
+  let frameCount = 0;
+  let lastFPSUpdate = performance.now();
+  let currentFPS = 60;
+  
+  const renderLoop = () => {
+    if (!engineRunning) return;
+    frameCount++;
+    const now = performance.now();
+    
+    // Calculate FPS every second
+    if (now - lastFPSUpdate >= 1000) {
+      currentFPS = Math.round((frameCount * 1000) / (now - lastFPSUpdate));
+      frameCount = 0;
+      lastFPSUpdate = now;
+      
+      // Update FPS in app state
+      if (app) {
+        app.updateState({ fps: currentFPS });
+      }
+    }
+    
+    rafId = requestAnimationFrame(renderLoop);
+  };
+  rafId = requestAnimationFrame(renderLoop);
+}
+
+function stopRenderLoop(): void {
+  engineRunning = false;
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+}
+
+async function enterAppMode(mode: AppMode): Promise<void> {
+  const modeSelect = document.getElementById('mode-select');
+  const worldEditorModeBtn = document.getElementById('world-editor-mode-btn') as HTMLButtonElement | null;
+  const journeyModeBtn = document.getElementById('journey-mode-btn') as HTMLButtonElement | null;
+
+  worldEditorModeBtn?.setAttribute('disabled', 'true');
+  journeyModeBtn?.setAttribute('disabled', 'true');
+
+  try {
+    // Hide menu immediately so loading indicator is visible
+    modeSelect?.classList.add('hidden');
+    document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS);
+
+    await initEngine(mode);
+
+    if (mode === 'world-editor') {
+      document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active');
+      document.body.classList.add(EDITOR_MODE_CLASS);
+      document.title = 'World Editor — tQandtD';
       return;
     }
 
-    worldEditorModeBtn?.setAttribute('disabled', 'true');
-    journeyModeBtn?.setAttribute('disabled', 'true');
+    // Journey mode
+    if (!app || !worldViewer) throw new Error('Engine not initialized');
 
-    try {
-      if (mode === 'world-editor') {
-        await requestBrowserFullscreen();
-        document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active');
-        document.body.classList.add(EDITOR_MODE_CLASS);
-        modeSelect?.classList.add('hidden');
-        worldViewer.setFirstPersonMode(false);
-        setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
-        return;
-      }
+    worldViewer.resetCamera();
+    worldViewer.setFirstPersonMode(true);
+    await requestBrowserFullscreen();
 
-      worldViewer.resetCamera();
-      worldViewer.setFirstPersonMode(true);
-      await requestBrowserFullscreen();
+    document.body.classList.remove(EDITOR_MODE_CLASS);
+    document.body.classList.add(JOURNEY_MODE_CLASS, 'first-person-active');
 
-      document.body.classList.remove(MODE_SELECT_ACTIVE_CLASS, EDITOR_MODE_CLASS);
-      document.body.classList.add(JOURNEY_MODE_CLASS, 'first-person-active');
-      modeSelect?.classList.add('hidden');
+    const seedInput = document.getElementById('seed-input') as HTMLInputElement | null;
+    const statusSeed = document.getElementById('status-seed');
+    const randomSeed = Math.floor(Math.random() * 999999999) + 1;
+    if (seedInput) seedInput.value = randomSeed.toString();
+    if (statusSeed) statusSeed.textContent = randomSeed.toString();
 
-      const randomSeed = Math.floor(Math.random() * 999999999) + 1;
-      if (seedInput) seedInput.value = randomSeed.toString();
-      if (statusSeed) statusSeed.textContent = randomSeed.toString();
+    setWorldGenerationLoading(true);
+    setViewerReady(false);
 
-      setWorldGenerationLoading(true);
-      setViewerReady(false);
+    await app.generateWorld(randomSeed);
+    await warmUpInitialTerrain(app, worldViewer);
 
-      await app.generateWorld(randomSeed);
-      await warmUpInitialTerrain(app, worldViewer);
-
-      worldViewer.resetCamera();
-      worldViewer.setFirstPersonMode(true);
-      setViewerReady(true);
-      setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
-    } catch (error) {
-      console.error('Failed to enter app mode:', error);
-      document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active');
-      modeSelect?.classList.remove('hidden');
-      errorHandler.handleError(new AppError(
-        'Mode launch failed',
-        ErrorCategory.INITIALIZATION,
-        ErrorSeverity.ERROR,
-        true,
-        'Failed to start the selected mode. Please try again.',
-        error instanceof Error ? error : undefined
-      ));
-    } finally {
-      setWorldGenerationLoading(false);
-      worldEditorModeBtn?.removeAttribute('disabled');
-      journeyModeBtn?.removeAttribute('disabled');
-    }
+    worldViewer.resetCamera();
+    worldViewer.setFirstPersonMode(true);
+    setViewerReady(true);
+    setTimeout(() => worldViewer?.resize(window.innerWidth, window.innerHeight), 100);
+    document.title = 'Journey — tQandtD';
+  } catch (error) {
+    console.error('Failed to enter app mode:', error);
+    cleanupEngine();
+    document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
+    document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active');
+    modeSelect?.classList.remove('hidden');
+    document.title = 'Project tQandtD';
+    errorHandler.handleError(new AppError(
+      'Mode launch failed',
+      ErrorCategory.INITIALIZATION,
+      ErrorSeverity.ERROR,
+      true,
+      'Failed to start the selected mode. Please try again.',
+      error instanceof Error ? error : undefined
+    ));
+  } finally {
+    setWorldGenerationLoading(false);
+    worldEditorModeBtn?.removeAttribute('disabled');
+    journeyModeBtn?.removeAttribute('disabled');
   }
+}
+
+function returnToMenu(): void {
+  cleanupEngine();
   
-});
+  document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
+  document.body.classList.remove(EDITOR_MODE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active');
+  
+  const modeSelect = document.getElementById('mode-select');
+  modeSelect?.classList.remove('hidden');
+  
+  // If fullscreen, exit
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  document.body.classList.remove('fullscreen-mode');
+  
+  document.title = 'Project tQandtD';
+  
+  // Reset button states
+  const worldEditorModeBtn = document.getElementById('world-editor-mode-btn') as HTMLButtonElement | null;
+  const journeyModeBtn = document.getElementById('journey-mode-btn') as HTMLButtonElement | null;
+  worldEditorModeBtn?.removeAttribute('disabled');
+  journeyModeBtn?.removeAttribute('disabled');
+}
 
 async function requestBrowserFullscreen(): Promise<void> {
   if (document.fullscreenElement || !document.documentElement.requestFullscreen) {
@@ -903,4 +966,3 @@ async function warmUpInitialTerrain(app: WorldApp, viewer: WorldViewer): Promise
   await app.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
   await viewer.flushPendingChunkBuilds();
 }
-
