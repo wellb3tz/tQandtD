@@ -101,6 +101,18 @@ export function validateTerrainConfig(config: TerrainConfig): void {
       validatePositive('terrainConfig.cliffScale', config.cliffScale);
     }
   }
+
+  if (config.enableCanyons !== false) {
+    if (config.canyonStrength !== undefined) {
+      validateRange('terrainConfig.canyonStrength', config.canyonStrength, 0, 1);
+    }
+    if (config.canyonDepth !== undefined) {
+      validateRange('terrainConfig.canyonDepth', config.canyonDepth, 0, 0.5);
+    }
+    if (config.canyonScale !== undefined) {
+      validatePositive('terrainConfig.canyonScale', config.canyonScale);
+    }
+  }
 }
 
 /**

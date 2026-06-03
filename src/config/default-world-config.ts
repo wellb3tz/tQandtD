@@ -187,6 +187,9 @@ function createBaseWorldConfig(): WorldConfig {
       enableCliffs: true,
       cliffStrength: 0.42,
       cliffElevationStart: 0.52,
+      enableCanyons: true,
+      canyonStrength: 0.9,
+      canyonDepth: 0.28,
     },
     biomeConfig: {
       temperatureScale: 0.001,

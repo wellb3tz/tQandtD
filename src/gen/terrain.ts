@@ -56,6 +56,23 @@ export interface TerrainConfig {
    * Noise scale for cliff belts and broken escarpment fields (default: continentalScale * 9).
    */
   cliffScale?: number;
+  /**
+   * Enable deterministic canyon carving on land (default: true).
+   * This subtractive layer is applied after mountain/cliff shaping.
+   */
+  enableCanyons?: boolean;
+  /**
+   * Overall canyon carving strength (default: 0.55).
+   */
+  canyonStrength?: number;
+  /**
+   * Maximum normalized depth removed by major canyon corridors (default: 0.28).
+   */
+  canyonDepth?: number;
+  /**
+   * Noise scale for large canyon corridors (default: continentalScale * 2.4).
+   */
+  canyonScale?: number;
 }
 
 /**
@@ -76,6 +93,10 @@ export class TerrainGenerator {
   private cliffNoise: NoiseEngine | null = null;
   /** Fine fracture noise for broken cliff faces (seed offset +4444). */
   private cliffFractureNoise: NoiseEngine | null = null;
+  /** Regional mask that makes canyons appear in clusters (seed offset +2222). */
+  private canyonRegionNoise: NoiseEngine | null = null;
+  /** Long linear canyon corridor noise (seed offset +3333). */
+  private canyonNoise: NoiseEngine | null = null;
   /**
    * Cached primary noise engine keyed by world seed.
    * Avoids allocating a new NoiseEngine on every getHeightAt() call -
@@ -93,6 +114,8 @@ export class TerrainGenerator {
   private readonly mountainDetailConfig: NoiseConfig;
   private readonly cliffConfig: NoiseConfig;
   private readonly cliffFractureConfig: NoiseConfig;
+  private readonly canyonRegionConfig: NoiseConfig;
+  private readonly canyonConfig: NoiseConfig;
 
   constructor(config: TerrainConfig) {
     this.config = config;
@@ -153,6 +176,21 @@ export class TerrainGenerator {
       lacunarity: 2.3,
       scale: (config.cliffScale ?? (config.continentalScale ?? 0.002) * 9) * 3.6,
     };
+
+    const canyonScale = config.canyonScale ?? (config.continentalScale ?? 0.002) * 2.4;
+    this.canyonRegionConfig = {
+      octaves: 2,
+      persistence: 0.5,
+      lacunarity: 2.0,
+      scale: canyonScale * 0.42,
+    };
+
+    this.canyonConfig = {
+      octaves: 4,
+      persistence: 0.54,
+      lacunarity: 2.12,
+      scale: canyonScale,
+    };
   }
 
   /**
@@ -168,6 +206,8 @@ export class TerrainGenerator {
       this.ridgeNoise        = new NoiseEngine(worldSeed + 6666);
       this.cliffNoise        = new NoiseEngine(worldSeed + 5555);
       this.cliffFractureNoise = new NoiseEngine(worldSeed + 4444);
+      this.canyonRegionNoise = new NoiseEngine(worldSeed + 2222);
+      this.canyonNoise       = new NoiseEngine(worldSeed + 3333);
     }
   }
 
@@ -362,6 +402,7 @@ export class TerrainGenerator {
         height = lo + blendedDetail * (hiLand - lo) * landRise;
         height = Math.max(seaLevel + 0.001, height);
         height = this.applyCliffLandforms(x, y, height, mountainMask, shoreFactor, seaLevel);
+        height = this.applyCanyonLandforms(x, y, height, mountainMask, shoreFactor, seaLevel);
       }
     }
 
@@ -448,6 +489,57 @@ export class TerrainGenerator {
     const terraceBlendFactor = Math.min(1, cliffMask * cliffStrength * 1.65);
     const terraceBlend = height + (shaped - height) * terraceBlendFactor;
     return Math.max(seaLevel + 0.001, Math.min(1, terraceBlend));
+  }
+
+  private applyCanyonLandforms(
+    x: number,
+    y: number,
+    height: number,
+    mountainMask: number,
+    shoreFactor: number,
+    seaLevel: number,
+  ): number {
+    if (this.config.enableCanyons === false || this.canyonNoise === null || this.canyonRegionNoise === null) {
+      return height;
+    }
+
+    const strength = Math.max(0, Math.min(1, this.config.canyonStrength ?? 0.55));
+    if (strength <= 0) {
+      return height;
+    }
+
+    const elevationFactor = smoothstep(seaLevel + 0.12, 0.76, height);
+    const shoreSuppression = 1 - Math.max(0, Math.min(1, shoreFactor * 1.2));
+    if (elevationFactor <= 0 || shoreSuppression <= 0) {
+      return height;
+    }
+
+    const region = (this.canyonRegionNoise.fbm(x, y, this.canyonRegionConfig) + 1) * 0.5;
+    const regionMask = 0.42 + smoothstep(0.40, 0.76, region) * 0.58;
+    const majorLine = this.canyonNoise.ridgeFbm(x, y, this.canyonConfig);
+
+    const canyonFloor = smoothstep(0.58, 0.84, majorLine);
+    const canyonWall = smoothstep(0.34, 0.68, majorLine) * (1 - canyonFloor * 0.22);
+    const canyonProfile = Math.max(canyonFloor, canyonWall * 0.58);
+
+    const highlandBoost = 0.86 + mountainMask * 0.42;
+    const canyonDepth = this.config.canyonDepth ?? 0.28;
+    const downwardPull = canyonProfile *
+      canyonDepth *
+      highlandBoost *
+      regionMask *
+      elevationFactor *
+      shoreSuppression *
+      strength;
+
+    if (downwardPull <= 0.0005) {
+      return height;
+    }
+
+    const floorHeight = seaLevel + 0.035 + mountainMask * 0.018;
+    const antiMountainTarget = floorHeight + (height - floorHeight) * (1 - Math.min(0.92, canyonFloor * strength));
+    const carved = height + (antiMountainTarget - height) * Math.min(1, canyonProfile * regionMask * strength * 1.18);
+    return Math.max(floorHeight, Math.min(height - downwardPull * 0.18, carved));
   }
 }
 

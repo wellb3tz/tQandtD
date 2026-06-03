@@ -645,6 +645,10 @@ export class WorldManager {
           const value = parseFloat(params.get('cliffStrength')!);
           if (!isNaN(value)) config.terrainConfig.cliffStrength = value;
         }
+        if (params.has('canyonStrength')) {
+          const value = parseFloat(params.get('canyonStrength')!);
+          if (!isNaN(value)) config.terrainConfig.canyonStrength = value;
+        }
       }
 
       if (config.biomeConfig) {
@@ -739,6 +743,7 @@ export class WorldManager {
       params.set('warpStrength', config.terrainConfig.warpStrength.toString());
       params.set('heightMultiplier', config.terrainConfig.heightMultiplier.toString());
       params.set('cliffStrength', (config.terrainConfig.cliffStrength ?? 0.42).toString());
+      params.set('canyonStrength', (config.terrainConfig.canyonStrength ?? 0.55).toString());
     }
 
     if (config.biomeConfig) {

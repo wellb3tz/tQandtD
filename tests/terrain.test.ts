@@ -202,6 +202,58 @@ describe('Terrain', () => {
       expect(strongestMaxDelta).toBeLessThanOrEqual(0.30);
       expect(strongestSteepEdges).toBeGreaterThan(0);
     });
+
+    it('carves prominent canyons as anti-mountain landforms', () => {
+      const baseConfig = createDefaultWorldConfig({
+        seed: 13579,
+        chunkSize: 32,
+        terrainConfig: {
+          cliffStrength: 0,
+          enableCanyons: false,
+        },
+      });
+      const canyonConfig = createDefaultWorldConfig({
+        seed: 13579,
+        chunkSize: 32,
+        terrainConfig: {
+          cliffStrength: 0,
+          canyonStrength: 1,
+          canyonDepth: 0.32,
+        },
+      });
+      const baseGen = new TerrainGenerator(baseConfig.terrainConfig);
+      const canyonGen = new TerrainGenerator(canyonConfig.terrainConfig);
+
+      let carvedVertices = 0;
+      let maxCut = 0;
+      let strongestMaxDelta = 0;
+
+      for (let chunkY = -3; chunkY <= 3; chunkY++) {
+        for (let chunkX = -3; chunkX <= 3; chunkX++) {
+          const base = baseGen.generateHeightmap(baseConfig.seed, baseConfig.chunkSize, chunkX, chunkY);
+          const canyons = canyonGen.generateHeightmap(canyonConfig.seed, canyonConfig.chunkSize, chunkX, chunkY);
+
+          for (let i = 0; i < canyons.length; i++) {
+            expect(canyons[i]).toBeGreaterThanOrEqual(0);
+            expect(canyons[i]).toBeLessThanOrEqual(1);
+            const cut = base[i] - canyons[i];
+            if (base[i] > 0.44 && cut > 0.04) {
+              carvedVertices++;
+              maxCut = Math.max(maxCut, cut);
+            }
+          }
+
+          strongestMaxDelta = Math.max(
+            strongestMaxDelta,
+            getMaxAdjacentHeightDelta(canyons, canyonConfig.chunkSize),
+          );
+        }
+      }
+
+      expect(carvedVertices).toBeGreaterThan(40);
+      expect(maxCut).toBeGreaterThan(0.12);
+      expect(strongestMaxDelta).toBeLessThanOrEqual(0.42);
+    });
   });
 });
 

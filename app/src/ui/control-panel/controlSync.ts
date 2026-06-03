@@ -28,6 +28,9 @@ export function syncControlsWithConfig(config: WorldConfig): void {
     if (config.terrainConfig.cliffStrength !== undefined) {
       updateSliderValue('cliffStrength', config.terrainConfig.cliffStrength);
     }
+    if (config.terrainConfig.canyonStrength !== undefined) {
+      updateSliderValue('canyonStrength', config.terrainConfig.canyonStrength);
+    }
 
     if (config.terrainConfig.enable3D !== undefined) {
       updateCheckboxValue('enable3D', config.terrainConfig.enable3D);
