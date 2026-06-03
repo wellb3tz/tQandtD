@@ -85,9 +85,9 @@ export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainText
     roughness: '/textures/terrain-ice-roughness-v1.png',
   },
   riverbed: {
-    albedo: '/textures/terrain-riverbed-albedo-v1.png',
-    normal: '/textures/terrain-riverbed-normal-v1.png',
-    roughness: '/textures/terrain-riverbed-roughness-v1.png',
+    albedo: '/textures/terrain-riverbed-albedo-v2.png',
+    normal: '/textures/terrain-riverbed-normal-v2.png',
+    roughness: '/textures/terrain-riverbed-roughness-v2.png',
   },
 };
 
@@ -395,6 +395,8 @@ export function createTerrainBlendMaterial(
     shader.uniforms.terrainNormalAtlas = { value: textures.normalAtlas };
     shader.uniforms.terrainMountainRockAlbedo = { value: textures.mountainRock.albedo };
     shader.uniforms.terrainMountainRockNormal = { value: textures.mountainRock.normal };
+    shader.uniforms.terrainRiverbedAlbedo = { value: textures.riverbed.albedo };
+    shader.uniforms.terrainRiverbedNormal = { value: textures.riverbed.normal };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -425,6 +427,8 @@ uniform sampler2D terrainAlbedoAtlas;
 uniform sampler2D terrainNormalAtlas;
 uniform sampler2D terrainMountainRockAlbedo;
 uniform sampler2D terrainMountainRockNormal;
+uniform sampler2D terrainRiverbedAlbedo;
+uniform sampler2D terrainRiverbedNormal;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
@@ -607,6 +611,13 @@ float cliffAccent = smoothstep(0.04, 0.62, vTerrainDetailBlend.x);
 float snowAccent = smoothstep(0.20, 0.74, vTerrainDetailBlend.y);
 float shorelineAccent = smoothstep(0.02, 0.60, vTerrainDetailBlend.z);
 float riverbedAccent = smoothstep(0.02, 0.55, vTerrainDetailBlend.w);
+float directRiverbedWeight = clamp(vSurfaceBlendC.z * 0.72 + riverbedAccent * 0.58, 0.0, 1.0);
+vec2 riverbedUv = mirrorTerrainAtlasUv(vMapUv * vec2(3.10, 3.10) + vec2(0.17, 0.41));
+vec3 directRiverbed = texture2D(terrainRiverbedAlbedo, riverbedUv).rgb;
+vec3 directRiverbedNormal = texture2D(terrainRiverbedNormal, riverbedUv).rgb * 2.0 - 1.0;
+vec3 riverbedTextureTint = vec3(0.78, 0.88, 0.78);
+diffuseColor.rgb = mix(diffuseColor.rgb, directRiverbed * riverbedTextureTint * 1.28, directRiverbedWeight * 0.48);
+blendedTerrainNormal = normalize(mix(blendedTerrainNormal, directRiverbedNormal, directRiverbedWeight * 0.46));
 float rockStrata = rockStrataNoise(terrainSurfaceUv(vMapUv) * 0.74);
 float talusAccent = smoothstep(0.18, 0.72, rockStrata) * cliffAccent * (1.0 - snowAccent * 0.55);
 vec3 rockShadowTint = vec3(0.58, 0.57, 0.52);

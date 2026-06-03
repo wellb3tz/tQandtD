@@ -184,6 +184,8 @@ describe('terrain texture materials', () => {
     expect(shader.uniforms.terrainNormalAtlas.value).toBe(library.normalAtlas);
     expect(shader.uniforms.terrainMountainRockAlbedo.value).toBe(library.mountainRock.albedo);
     expect(shader.uniforms.terrainMountainRockNormal.value).toBe(library.mountainRock.normal);
+    expect(shader.uniforms.terrainRiverbedAlbedo.value).toBe(library.riverbed.albedo);
+    expect(shader.uniforms.terrainRiverbedNormal.value).toBe(library.riverbed.normal);
     expect(shader.uniforms.terrainAlbedoPlains).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoSnow).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoForestFloor).toBeUndefined();
@@ -206,6 +208,8 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend');
     expect(shader.fragmentShader).toContain('terrainMountainRockAlbedo');
     expect(shader.fragmentShader).toContain('terrainMountainRockNormal');
+    expect(shader.fragmentShader).toContain('terrainRiverbedAlbedo');
+    expect(shader.fragmentShader).toContain('terrainRiverbedNormal');
     expect(shader.fragmentShader).not.toContain('terrainRoughnessMountainRock');
     expect(shader.fragmentShader).not.toContain('blendedTerrainRoughness');
     expect(shader.fragmentShader).toContain('tertiarySurfaceWeight');
@@ -239,12 +243,14 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).not.toContain('forestCanopyTexture');
     expect(shader.fragmentShader).not.toContain('smoothstep(0.46, 0.08');
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend.w');
+    expect(shader.fragmentShader).toContain('directRiverbedWeight');
+    expect(shader.fragmentShader).toContain('riverbedTextureTint');
     expect(shader.fragmentShader).toContain('roughnessFactor = mix');
     expect(shader.fragmentShader).toContain('vSurfaceBlendB');
     expect(material.vertexColors).toBe(true);
     expect(material.userData.terrainTexturesEnabled).toBe(true);
     const samplerCount = (shader.fragmentShader.match(/uniform sampler2D/g) ?? []).length;
-    expect(samplerCount).toBeLessThanOrEqual(5);
+    expect(samplerCount).toBeLessThanOrEqual(6);
     const atlasSampleCallCount = (shader.fragmentShader.match(/sampleTerrainAtlasTile\(/g) ?? []).length - 1;
     expect(atlasSampleCallCount).toBeLessThanOrEqual(3);
   });
