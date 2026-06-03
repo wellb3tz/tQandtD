@@ -10,9 +10,14 @@ import * as THREE from 'three';
 import type { OceanConfig } from './types';
 
 export const WATER_NORMAL_TEXTURE_URL = '/textures/water-normal-v1.png';
+export const RIVER_WATER_NORMAL_TEXTURE_URL = '/textures/water-river-normal-v1.png';
 export const WATER_NORMAL_SCALE = {
   x: 0.18,
   y: 0.24,
+} as const;
+export const RIVER_WATER_NORMAL_SCALE = {
+  x: 0.10,
+  y: 0.34,
 } as const;
 export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v5';
 
@@ -37,6 +42,18 @@ export function createWaterNormalTexture(
   texture.repeat.set(3.7, 5.3);
   texture.colorSpace = THREE.NoColorSpace;
   texture.anisotropy = 4;
+  return texture;
+}
+
+export function createRiverWaterNormalTexture(
+  loader: THREE.TextureLoader = new THREE.TextureLoader(),
+): THREE.Texture {
+  const texture = loader.load(RIVER_WATER_NORMAL_TEXTURE_URL);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2.2, 10.5);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 8;
   return texture;
 }
 

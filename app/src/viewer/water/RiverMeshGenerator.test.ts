@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData, type RiverData } from '@engine/index';
 import { HEIGHT_SCALE } from './config';
-import { buildRiverGeometry, createRiverMaterial } from './RiverMeshGenerator';
-import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
+import {
+  RIVER_SURFACE_SHADER_KEY,
+  buildRiverGeometry,
+  createRiverMaterial,
+  updateRiverMaterialFlow,
+} from './RiverMeshGenerator';
+import { RIVER_WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
 function river(points: RiverData['points'], state?: RiverData['state']): RiverData {
   return {
@@ -190,11 +195,37 @@ describe('RiverMeshGenerator', () => {
     });
 
     expect(material.normalMap).toBe(normalMap);
-    expect(material.normalScale.x).toBeCloseTo(WATER_NORMAL_SCALE.x);
-    expect(material.normalScale.y).toBeCloseTo(WATER_NORMAL_SCALE.y);
+    expect(material.normalScale.x).toBeCloseTo(RIVER_WATER_NORMAL_SCALE.x);
+    expect(material.normalScale.y).toBeCloseTo(RIVER_WATER_NORMAL_SCALE.y);
     expect(material.vertexColors).toBe(true);
-    expect(material.depthWrite).toBe(true);
+    expect(material.depthWrite).toBe(false);
     expect(material.depthFunc).toBe(THREE.LessDepth);
+  });
+
+  it('injects close-up river surface shading with soft edges and flow streaks', () => {
+    const material = createRiverMaterial({
+      enabled: true,
+      color: 0x0d4f66,
+      opacity: 0.66,
+      shininess: 95,
+      normalMap: new THREE.Texture(),
+    });
+    const shader = {
+      uniforms: {},
+      vertexShader: '#include <common>\nvoid main() {\n#include <uv_vertex>\n}',
+      fragmentShader: '#include <common>\nvoid main() {\nvec4 diffuseColor = vec4(1.0);\n#include <color_fragment>\n#include <roughnessmap_fragment>\n}',
+    } as unknown as THREE.Shader;
+
+    material.onBeforeCompile(shader);
+    updateRiverMaterialFlow(material, 12);
+
+    expect(material.customProgramCacheKey()).toBe(`${RIVER_SURFACE_SHADER_KEY}:flowing`);
+    expect(shader.uniforms.uRiverFlowTime.value).toBe(12);
+    expect(shader.vertexShader).toContain('varying vec2 vRiverSurfaceUv');
+    expect(shader.fragmentShader).toContain('riverEdgeFade');
+    expect(shader.fragmentShader).toContain('riverBrokenStreaks');
+    expect(shader.fragmentShader).toContain('diffuseColor.a *= mix(0.36, 1.0, riverEdgeFade)');
+    expect(shader.fragmentShader).toContain('roughnessFactor = mix(0.34, 0.10');
   });
 
   it('clips river mesh to lake shape', () => {

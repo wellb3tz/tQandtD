@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
   OCEAN_WAVE_SHADER_KEY,
+  RIVER_WATER_NORMAL_TEXTURE_URL,
   WATER_NORMAL_SCALE,
   WATER_NORMAL_TEXTURE_URL,
   createOceanMaterial,
+  createRiverWaterNormalTexture,
   createWaterNormalTexture,
   updateOceanMaterialWaves,
 } from './WaterMaterialFactory';
@@ -28,6 +30,26 @@ describe('WaterMaterialFactory', () => {
     expect(texture.repeat.y).toBe(5.3);
     expect(texture.colorSpace).toBe(THREE.NoColorSpace);
     expect(texture.version).toBe(0);
+  });
+
+  it('loads a denser repeatable river water normal texture', () => {
+    const loader = {
+      load: (url: string) => {
+        const texture = new THREE.Texture();
+        texture.userData.loadedUrl = url;
+        return texture;
+      },
+    } as unknown as THREE.TextureLoader;
+
+    const texture = createRiverWaterNormalTexture(loader);
+
+    expect(texture.userData.loadedUrl).toBe(RIVER_WATER_NORMAL_TEXTURE_URL);
+    expect(texture.wrapS).toBe(THREE.RepeatWrapping);
+    expect(texture.wrapT).toBe(THREE.RepeatWrapping);
+    expect(texture.repeat.x).toBeCloseTo(2.2);
+    expect(texture.repeat.y).toBeCloseTo(10.5);
+    expect(texture.colorSpace).toBe(THREE.NoColorSpace);
+    expect(texture.anisotropy).toBe(8);
   });
 
   it('applies water normal maps without tinting depth vertex colors', () => {

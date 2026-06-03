@@ -11,7 +11,7 @@ import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
 import { identifyLakeTiles, buildLakeGeometry, createLakeMaterialForState } from './LakeMeshGenerator';
-import { buildRiverGeometry, createRiverMaterialForState } from './RiverMeshGenerator';
+import { buildRiverGeometry, createRiverMaterialForState, updateRiverMaterialFlow } from './RiverMeshGenerator';
 import { createOceanMaterial, updateOceanMaterialWaves } from './WaterMaterialFactory';
 
 /**
@@ -480,11 +480,12 @@ export class WaterLayerManager {
         if (mat.userData.riverState === 'frozen') {
           continue;
         }
+        updateRiverMaterialFlow(mat, elapsedSeconds);
         if (mat.normalMap) {
-          const speed = 0.18;
+          const speed = 0.46;
           mat.normalMap.offset.set(
-            (elapsedSeconds * speed * 0.008) % 1,
-            (elapsedSeconds * speed * 0.022) % 1,
+            (elapsedSeconds * speed * 0.006) % 1,
+            (elapsedSeconds * speed * 0.038) % 1,
           );
         }
       }

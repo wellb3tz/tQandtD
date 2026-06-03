@@ -9,7 +9,7 @@ import {
 import type { RiverRenderConfig } from './types';
 import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
-import { WATER_NORMAL_SCALE } from './WaterMaterialFactory';
+import { RIVER_WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
 const TERRAIN_DRAPED_RIVER_OFFSET = 0.5;
 const RIVER_CROSS_SECTION_OFFSETS = [
@@ -21,6 +21,16 @@ const RIVER_MIN_SURFACE_RADIUS = 0.01;
 const RIVER_UV_DISTANCE_SCALE = 0.22;
 const RIVER_SURFACE_VERTEX_COLOR = [0.31, 0.76, 0.83] as const;
 const FROZEN_RIVER_SURFACE_VERTEX_COLOR = [0.74, 0.88, 0.98] as const;
+export const RIVER_SURFACE_SHADER_KEY = 'river-surface-v2';
+
+interface RiverSurfaceUniforms {
+  uRiverFlowTime: { value: number };
+}
+
+interface RiverSurfaceUserData {
+  riverState?: RiverState;
+  riverSurfaceUniforms?: RiverSurfaceUniforms;
+}
 
 interface RiverSurfaceSample {
   point: RiverPoint;
@@ -530,27 +540,103 @@ export function createRiverMaterialForState(
   state: RiverState = 'flowing',
 ): THREE.MeshStandardMaterial {
   const frozen = state === 'frozen';
+  const riverUniforms: RiverSurfaceUniforms = {
+    uRiverFlowTime: { value: 0 },
+  };
   const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     vertexColors: true,
     transparent: true,
     opacity: frozen ? Math.min(1, Math.max(config.opacity, 0.86)) : config.opacity,
-    roughness: frozen ? 0.68 : 0.22,
-    metalness: frozen ? 0 : 0.05,
+    roughness: frozen ? 0.68 : 0.15,
+    metalness: frozen ? 0 : 0.02,
     side: THREE.DoubleSide,
-    depthWrite: true,
+    depthWrite: frozen,
     depthFunc: THREE.LessDepth,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
   });
 
-  material.userData.riverState = state;
+  (material.userData as RiverSurfaceUserData).riverState = state;
+  (material.userData as RiverSurfaceUserData).riverSurfaceUniforms = riverUniforms;
 
   if (!frozen && config.normalMap) {
     material.normalMap = config.normalMap;
-    material.normalScale = new THREE.Vector2(WATER_NORMAL_SCALE.x, WATER_NORMAL_SCALE.y);
+    material.normalScale = new THREE.Vector2(RIVER_WATER_NORMAL_SCALE.x, RIVER_WATER_NORMAL_SCALE.y);
   }
 
+  material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, riverUniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform float uRiverFlowTime;
+varying vec2 vRiverSurfaceUv;`,
+      )
+      .replace(
+        '#include <uv_vertex>',
+        `#include <uv_vertex>
+vRiverSurfaceUv = uv;`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+uniform float uRiverFlowTime;
+varying vec2 vRiverSurfaceUv;
+
+float riverSurfaceHash(vec2 p) {
+  p = fract(p * vec2(234.34, 435.345));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+float riverSurfaceNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = riverSurfaceHash(i);
+  float b = riverSurfaceHash(i + vec2(1.0, 0.0));
+  float c = riverSurfaceHash(i + vec2(0.0, 1.0));
+  float d = riverSurfaceHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}`,
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+float riverEdgeFade = smoothstep(0.015, 0.18, vRiverSurfaceUv.x) * (1.0 - smoothstep(0.82, 0.985, vRiverSurfaceUv.x));
+float riverCenter = 1.0 - abs(vRiverSurfaceUv.x - 0.5) * 2.0;
+vec2 riverFlowUv = vec2(vRiverSurfaceUv.x, vRiverSurfaceUv.y - uRiverFlowTime * 0.16);
+float riverFine = riverSurfaceNoise(riverFlowUv * vec2(18.0, 95.0));
+float riverLong = riverSurfaceNoise(riverFlowUv * vec2(4.0, 28.0) + vec2(17.0, 3.0));
+float riverBrokenStreaks = smoothstep(0.58, 0.92, riverFine * 0.58 + riverLong * 0.42);
+float riverFoam = riverBrokenStreaks * smoothstep(0.18, 0.88, riverCenter) * riverEdgeFade;
+vec3 riverDeepTint = vec3(0.07, 0.34, 0.39);
+vec3 riverSkyTint = vec3(0.46, 0.78, 0.86);
+diffuseColor.rgb = mix(diffuseColor.rgb, riverDeepTint, 0.26);
+diffuseColor.rgb = mix(diffuseColor.rgb, riverSkyTint, riverFoam * 0.28);
+diffuseColor.a *= mix(0.36, 1.0, riverEdgeFade);`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `float roughnessFactor = roughness;
+float riverEdgeFadeRoughness = smoothstep(0.015, 0.18, vRiverSurfaceUv.x) * (1.0 - smoothstep(0.82, 0.985, vRiverSurfaceUv.x));
+float riverGlintNoise = riverSurfaceNoise(vec2(vRiverSurfaceUv.x * 14.0, vRiverSurfaceUv.y * 80.0 - uRiverFlowTime * 9.0));
+roughnessFactor = mix(0.34, 0.10, smoothstep(0.45, 0.95, riverGlintNoise) * riverEdgeFadeRoughness);`,
+      );
+  };
+  material.customProgramCacheKey = () => `${RIVER_SURFACE_SHADER_KEY}:${state}`;
+
   return material;
+}
+
+export function updateRiverMaterialFlow(material: THREE.Material, elapsedSeconds: number): void {
+  const uniforms = (material.userData as RiverSurfaceUserData).riverSurfaceUniforms;
+  if (uniforms) {
+    uniforms.uRiverFlowTime.value = elapsedSeconds;
+  }
 }
