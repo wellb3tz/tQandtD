@@ -9,15 +9,21 @@
 import * as THREE from 'three';
 import type { OceanConfig } from './types';
 
-export const WATER_NORMAL_TEXTURE_URL = '/textures/water-normal-v1.png';
+export const WATER_NORMAL_TEXTURE_URL = '/textures/water-ocean-normal-v2.png';
 export const RIVER_WATER_NORMAL_TEXTURE_URL = '/textures/water-river-normal-v1.png';
+export const LAKE_WATER_NORMAL_TEXTURE_URL = '/textures/water-lake-normal-v1.png';
 export const WATER_NORMAL_SCALE = {
   x: 0.18,
   y: 0.24,
 } as const;
+export const OCEAN_MAX_TEXTURE_PREVIEW_SHININESS = 18;
 export const RIVER_WATER_NORMAL_SCALE = {
   x: 0.10,
   y: 0.34,
+} as const;
+export const LAKE_WATER_NORMAL_SCALE = {
+  x: 0.08,
+  y: 0.10,
 } as const;
 export const OCEAN_WAVE_SHADER_KEY = 'ocean-waves-v5';
 
@@ -57,6 +63,18 @@ export function createRiverWaterNormalTexture(
   return texture;
 }
 
+export function createLakeWaterNormalTexture(
+  loader: THREE.TextureLoader = new THREE.TextureLoader(),
+): THREE.Texture {
+  const texture = loader.load(LAKE_WATER_NORMAL_TEXTURE_URL);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4.2, 4.2);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
 /**
  * Create ocean water material with depth-based vertex colors.
  *
@@ -85,10 +103,9 @@ export function createOceanMaterial(config: OceanConfig): THREE.MeshPhongMateria
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -4,
     opacity: config.opacity,
-    shininess: config.shininess,
+    shininess: Math.min(config.shininess, OCEAN_MAX_TEXTURE_PREVIEW_SHININESS),
     side: THREE.DoubleSide,
-    // Slight specular highlight - gives water a wet look
-    specular: new THREE.Color(0xd7f3ff),
+    specular: new THREE.Color(0x061b20),
   });
 
   if (config.normalMap) {
@@ -172,8 +189,11 @@ float oceanFragmentNoise(vec2 p) {
       `#include <color_fragment>
 float oceanDepthOpacity = smoothstep(1.5, 14.0, vOceanWaterDepth);
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.018, 0.11, 0.15), oceanDepthOpacity * 0.62);
-float oceanSkyGlint = smoothstep(0.08, 0.72, oceanFragmentNoise(gl_FragCoord.xy * 0.018 + vec2(vOceanWaterDepth * 0.07)));
-diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.50, 0.78, 0.88), oceanSkyGlint * (1.0 - oceanDepthOpacity * 0.42) * 0.20);
+float oceanSkyGlint = smoothstep(0.18, 0.88, oceanFragmentNoise(gl_FragCoord.xy * 0.018 + vec2(vOceanWaterDepth * 0.07)));
+float oceanChop = oceanFragmentNoise(gl_FragCoord.xy * 0.045 + vec2(vOceanWaterDepth * 0.11, -vOceanWaterDepth * 0.03));
+float oceanFoamFleck = smoothstep(0.86, 0.99, oceanSkyGlint * 0.50 + oceanChop * 0.50) * (1.0 - oceanDepthOpacity * 0.64);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.66, 0.74), oceanSkyGlint * (1.0 - oceanDepthOpacity * 0.42) * 0.08);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.64, 0.82, 0.84), oceanFoamFleck * 0.10);
 diffuseColor.a = max(diffuseColor.a, mix(0.76, 0.97, oceanDepthOpacity));`
     );
   };

@@ -166,6 +166,8 @@ export interface LakeRenderConfig {
   opacity: number;
   /** Material shininess (default: 60) */
   shininess: number;
+  /** Optional normal map for calm lake ripples */
+  normalMap?: THREE.Texture;
 }
 
 /**

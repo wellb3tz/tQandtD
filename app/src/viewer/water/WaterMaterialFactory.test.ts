@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import {
+  LAKE_WATER_NORMAL_TEXTURE_URL,
+  OCEAN_MAX_TEXTURE_PREVIEW_SHININESS,
   OCEAN_WAVE_SHADER_KEY,
   RIVER_WATER_NORMAL_TEXTURE_URL,
   WATER_NORMAL_SCALE,
   WATER_NORMAL_TEXTURE_URL,
+  createLakeWaterNormalTexture,
   createOceanMaterial,
   createRiverWaterNormalTexture,
   createWaterNormalTexture,
@@ -30,6 +33,26 @@ describe('WaterMaterialFactory', () => {
     expect(texture.repeat.y).toBe(5.3);
     expect(texture.colorSpace).toBe(THREE.NoColorSpace);
     expect(texture.version).toBe(0);
+  });
+
+  it('loads a calm repeatable lake water normal texture', () => {
+    const loader = {
+      load: (url: string) => {
+        const texture = new THREE.Texture();
+        texture.userData.loadedUrl = url;
+        return texture;
+      },
+    } as unknown as THREE.TextureLoader;
+
+    const texture = createLakeWaterNormalTexture(loader);
+
+    expect(texture.userData.loadedUrl).toBe(LAKE_WATER_NORMAL_TEXTURE_URL);
+    expect(texture.wrapS).toBe(THREE.RepeatWrapping);
+    expect(texture.wrapT).toBe(THREE.RepeatWrapping);
+    expect(texture.repeat.x).toBeCloseTo(4.2);
+    expect(texture.repeat.y).toBeCloseTo(4.2);
+    expect(texture.colorSpace).toBe(THREE.NoColorSpace);
+    expect(texture.anisotropy).toBe(8);
   });
 
   it('loads a denser repeatable river water normal texture', () => {
@@ -104,6 +127,7 @@ describe('WaterMaterialFactory', () => {
     expect(shader.vertexShader).toContain('vOceanWaterDepth = waterDepth');
     expect(shader.fragmentShader).toContain('smoothstep(1.5, 14.0, vOceanWaterDepth)');
     expect(shader.fragmentShader).toContain('oceanSkyGlint');
+    expect(shader.fragmentShader).toContain('oceanFoamFleck');
     expect(shader.fragmentShader).toContain('diffuseColor.a = max(diffuseColor.a');
     expect(shader.vertexShader).toContain('smoothstep(uOceanWaveShoreFadeStart');
     expect(shader.vertexShader).toContain('oceanWaveSafeTrough');
@@ -148,7 +172,7 @@ describe('WaterMaterialFactory', () => {
     expect(normalMap.offset.y).toBeCloseTo(0.21);
   });
 
-  it('uses a darker glossier water profile while preserving cheap vertex-color depth gradients', () => {
+  it('uses a muted low-reflection ocean profile while preserving cheap vertex-color depth gradients', () => {
     const material = createOceanMaterial({
       enabled: true,
       color: 0x0d4f66,
@@ -162,7 +186,7 @@ describe('WaterMaterialFactory', () => {
     expect(material.vertexColors).toBe(true);
     expect(material.color.getHex()).toBe(0xffffff);
     expect(material.opacity).toBeLessThanOrEqual(0.68);
-    expect(material.shininess).toBeGreaterThanOrEqual(95);
-    expect(material.specular.getHex()).toBe(0xd7f3ff);
+    expect(material.shininess).toBe(OCEAN_MAX_TEXTURE_PREVIEW_SHININESS);
+    expect(material.specular.getHex()).toBe(0x061b20);
   });
 });

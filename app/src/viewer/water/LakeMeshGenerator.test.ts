@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData } from '@engine/index';
 import type { LakeTile } from './types';
-import { buildLakeGeometry, createLakeMaterialForState } from './LakeMeshGenerator';
+import {
+  LAKE_SURFACE_SHADER_KEY,
+  LAKE_SURFACE_UV_SCALE,
+  buildLakeGeometry,
+  createLakeMaterialForState,
+  updateLakeMaterialSurface,
+} from './LakeMeshGenerator';
+import { LAKE_WATER_NORMAL_SCALE } from './WaterMaterialFactory';
 
 function createChunk(size = 4): ChunkData {
   const vertexSize = size + 1;
@@ -110,5 +118,51 @@ describe('LakeMeshGenerator contour mesh', () => {
     expect(material.userData.lakeState).toBe('frozen');
     expect(material.opacity).toBeGreaterThanOrEqual(0.88);
     expect(material.shininess).toBeGreaterThanOrEqual(82);
+  });
+
+  it('applies calm lake normal maps and shader surface glints', () => {
+    const normalMap = new THREE.Texture();
+    const material = createLakeMaterialForState({
+      enabled: true,
+      color: 0x4fc3d4,
+      opacity: 0.8,
+      shininess: 60,
+      normalMap,
+    });
+    const shader = {
+      uniforms: {},
+      vertexShader: '#include <common>\nvoid main() {\n#include <uv_vertex>\n}',
+      fragmentShader: '#include <common>\nvoid main() {\nvec4 diffuseColor = vec4(1.0);\n#include <color_fragment>\n}',
+    } as unknown as THREE.Shader;
+
+    material.onBeforeCompile(shader);
+    updateLakeMaterialSurface(material, 8);
+
+    expect(material.normalMap).toBe(normalMap);
+    expect(material.normalScale.x).toBeCloseTo(LAKE_WATER_NORMAL_SCALE.x);
+    expect(material.normalScale.y).toBeCloseTo(LAKE_WATER_NORMAL_SCALE.y);
+    expect(material.customProgramCacheKey()).toBe(`${LAKE_SURFACE_SHADER_KEY}:filled`);
+    expect(shader.uniforms.uLakeSurfaceTime.value).toBe(8);
+    expect(shader.vertexShader).toContain('varying vec2 vLakeSurfaceUv');
+    expect(shader.fragmentShader).toContain('lakeGlint');
+    expect(shader.fragmentShader).toContain('diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.58, 0.88, 0.88)');
+  });
+
+  it('uses world-space lake UVs so normal maps continue across chunks', () => {
+    const chunk = createChunk(1);
+    chunk.x = 3;
+    chunk.y = -2;
+    lowerTileCorners(chunk, 0, 0);
+
+    const lake = createLake([0]);
+    const geometry = buildGeometry(lake, chunk);
+    const position = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv');
+
+    expect(uv.count).toBe(position.count);
+    for (let i = 0; i < position.count; i++) {
+      expect(uv.getX(i)).toBeCloseTo(position.getX(i) * LAKE_SURFACE_UV_SCALE);
+      expect(uv.getY(i)).toBeCloseTo(position.getZ(i) * LAKE_SURFACE_UV_SCALE);
+    }
   });
 });

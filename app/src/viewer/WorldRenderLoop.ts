@@ -95,6 +95,7 @@ export class WorldRenderLoop {
 
       if (!isOrbital && !isTransitioning) {
         this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
+        this.waterLayerManager.updateLakeSurfaces(elapsedSeconds);
         this.waterLayerManager.updateRiverFlows(elapsedSeconds);
       }
 

@@ -19,7 +19,7 @@ import type { RaycastHit, Vector3 } from '../utils/coordinates';
 import { WaterLayerManager } from './water/WaterLayerManager';
 import { DEFAULT_WATER_CONFIG } from './water/config';
 import type { WaterConfig } from './water/types';
-import { createRiverWaterNormalTexture, createWaterNormalTexture } from './water/WaterMaterialFactory';
+import { createLakeWaterNormalTexture, createRiverWaterNormalTexture, createWaterNormalTexture } from './water/WaterMaterialFactory';
 import { AtmosphereController } from './AtmosphereController';
 import { RenderLayer } from './RenderLayerVisibility';
 import { type RenderStats } from './RenderStatsCalculator';
@@ -123,6 +123,10 @@ export class WorldViewer {
         river: {
           ...DEFAULT_WATER_CONFIG.river,
           normalMap: createRiverWaterNormalTexture(),
+        },
+        lake: {
+          ...DEFAULT_WATER_CONFIG.lake,
+          normalMap: createLakeWaterNormalTexture(),
         },
       },
     });

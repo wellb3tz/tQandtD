@@ -309,6 +309,40 @@ describe('WaterLayerManager - Integration Tests', () => {
       expect((frozen!.mesh.geometry.getAttribute('color') as THREE.BufferAttribute).getZ(0)).toBeGreaterThan(0.96);
       expect(frozen!.material.opacity).toBeGreaterThanOrEqual(0.88);
     });
+
+    it('animates filled lake surfaces but skips frozen lakes', () => {
+      const normalMap = new THREE.Texture();
+      normalMap.offset.set(0, 0);
+      const frozenNormalMap = normalMap.clone();
+      const config = {
+        ...DEFAULT_WATER_CONFIG,
+        lake: {
+          ...DEFAULT_WATER_CONFIG.lake,
+          normalMap,
+        },
+      };
+      const chunkData = createMockChunkWithLakes([
+        createMockLake(0),
+        createMockLake(1, 'frozen'),
+      ]);
+
+      manager.addWaterToChunk('0,0', chunkData, scene, config);
+
+      const waterLayer = manager.getWaterLayer('0,0');
+      const filled = waterLayer!.lake.find(mesh => mesh.material.userData.lakeState === 'filled');
+      const frozen = waterLayer!.lake.find(mesh => mesh.material.userData.lakeState === 'frozen');
+      expect(filled).toBeDefined();
+      expect(frozen).toBeDefined();
+      expect(filled!.material.normalMap).toBe(normalMap);
+      expect(frozen!.material.normalMap).toBeNull();
+
+      frozen!.material.normalMap = frozenNormalMap;
+      manager.updateLakeSurfaces(10);
+
+      expect(filled!.material.normalMap!.offset.x).not.toBe(0);
+      expect(frozenNormalMap.offset.x).toBe(0);
+      expect(frozenNormalMap.offset.y).toBe(0);
+    });
   });
 
   describe('removeWaterFromChunk - Ocean Only', () => {

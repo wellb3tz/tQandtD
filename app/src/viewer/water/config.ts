@@ -145,6 +145,7 @@ export function validateWaterConfig(config: Partial<WaterConfig> = {}): WaterCon
         100,
         'Lake shininess'
       ),
+      normalMap: config.lake?.normalMap,
     },
     river: {
       enabled: config.river?.enabled ?? DEFAULT_RIVER_RENDER_CONFIG.enabled,

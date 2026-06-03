@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import type { OceanConfig, WaterConfig, WaterLayerData, WaterMesh } from './types';
 import { identifyOceanTiles, buildOceanGeometry } from './OceanMeshGenerator';
-import { identifyLakeTiles, buildLakeGeometry, createLakeMaterialForState } from './LakeMeshGenerator';
+import { identifyLakeTiles, buildLakeGeometry, createLakeMaterialForState, updateLakeMaterialSurface } from './LakeMeshGenerator';
 import { buildRiverGeometry, createRiverMaterialForState, updateRiverMaterialFlow } from './RiverMeshGenerator';
 import { createOceanMaterial, updateOceanMaterialWaves } from './WaterMaterialFactory';
 
@@ -466,6 +466,27 @@ export class WaterLayerManager {
     for (const waterLayer of this.waterLayers.values()) {
       for (const waterMesh of waterLayer.ocean) {
         updateOceanMaterialWaves(waterMesh.material, config, elapsedSeconds);
+      }
+    }
+  }
+
+  /**
+   * Advance calm lake surface animation for all loaded chunks.
+   */
+  updateLakeSurfaces(elapsedSeconds: number): void {
+    for (const waterLayer of this.waterLayers.values()) {
+      for (const waterMesh of waterLayer.lake) {
+        if (waterMesh.material.userData.lakeState === 'frozen') {
+          continue;
+        }
+        updateLakeMaterialSurface(waterMesh.material, elapsedSeconds);
+        if (waterMesh.material.normalMap) {
+          const speed = 0.18;
+          waterMesh.material.normalMap.offset.set(
+            (elapsedSeconds * speed * 0.006) % 1,
+            (elapsedSeconds * speed * 0.004) % 1,
+          );
+        }
       }
     }
   }

@@ -48,6 +48,8 @@ describe('WorldRenderLoop', () => {
       DEFAULT_WATER_CONFIG.ocean,
     );
     expect(waterLayerManager.updateRiverFlows).toHaveBeenCalledOnce();
+    expect(waterLayerManager.updateLakeSurfaces).toHaveBeenCalledOnce();
+    expect(waterLayerManager.updateLakeSurfaces).toHaveBeenCalledWith(expect.any(Number));
     expect(waterLayerManager.updateRiverFlows).toHaveBeenCalledWith(expect.any(Number));
     expect(beforeRender).toHaveBeenCalledWith(cameraViewController.getActiveCamera());
     expect(render).toHaveBeenCalledOnce();
@@ -97,6 +99,7 @@ function createWaterLayerManager(): WaterLayerManager {
   return {
     applyFrustumCulling: vi.fn(),
     updateOceanWaves: vi.fn(),
+    updateLakeSurfaces: vi.fn(),
     updateRiverFlows: vi.fn(),
   } as unknown as WaterLayerManager;
 }

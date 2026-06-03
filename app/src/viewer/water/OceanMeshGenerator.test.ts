@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import { DEFAULT_WATER_CONFIG } from './config';
-import { buildOceanGeometry, identifyOceanTiles } from './OceanMeshGenerator';
+import { OCEAN_SURFACE_UV_SCALE, buildOceanGeometry, identifyOceanTiles } from './OceanMeshGenerator';
 
 function createChunk(size = 2, fillHeight = 0.5): ChunkData {
   const vertexSize = size + 1;
@@ -60,5 +60,24 @@ describe('OceanMeshGenerator contour mesh', () => {
     expect(box.max.x).toBeLessThan(1 * TERRAIN_TILE_SIZE_METERS);
     expect(box.max.z).toBeGreaterThan(0);
     expect(box.max.z).toBeLessThan(1 * TERRAIN_TILE_SIZE_METERS);
+  });
+
+  it('uses world-space ocean UVs so wave normals continue across chunks', () => {
+    const chunk = createChunk(1, 0.1);
+    chunk.x = -4;
+    chunk.y = 5;
+
+    const oceanTiles = identifyOceanTiles(chunk, DEFAULT_WATER_CONFIG.seaLevel);
+    const geometry = buildOceanGeometry(oceanTiles, chunk, DEFAULT_WATER_CONFIG);
+    expect(geometry).not.toBeNull();
+
+    const position = geometry!.getAttribute('position');
+    const uv = geometry!.getAttribute('uv');
+
+    expect(uv.count).toBe(position.count);
+    for (let i = 0; i < position.count; i++) {
+      expect(uv.getX(i)).toBeCloseTo(position.getX(i) * OCEAN_SURFACE_UV_SCALE);
+      expect(uv.getY(i)).toBeCloseTo(position.getZ(i) * OCEAN_SURFACE_UV_SCALE);
+    }
   });
 });

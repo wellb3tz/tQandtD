@@ -15,6 +15,8 @@ import type { WaterConfig, OceanTile } from './types';
 import { HEIGHT_SCALE, HORIZONTAL_SCALE } from './config';
 import { createBufferGeometry } from '../BufferGeometryFactory';
 
+export const OCEAN_SURFACE_UV_SCALE = 0.0035;
+
 export function identifyOceanTiles(
   chunkData: ChunkData,
   seaLevel: number
@@ -37,12 +39,25 @@ export function buildOceanGeometry(
     return null;
   }
 
+  applyWorldSpaceOceanUvs(geometry);
   geometry.setAttribute(
     'waterDepth',
     new THREE.BufferAttribute(createOceanDepthAttribute(geometry, chunkData, config), 1),
   );
 
   return geometry;
+}
+
+function applyWorldSpaceOceanUvs(geometry: THREE.BufferGeometry): void {
+  const position = geometry.getAttribute('position');
+  const uv = new Float32Array(position.count * 2);
+
+  for (let i = 0; i < position.count; i++) {
+    uv[i * 2] = position.getX(i) * OCEAN_SURFACE_UV_SCALE;
+    uv[i * 2 + 1] = position.getZ(i) * OCEAN_SURFACE_UV_SCALE;
+  }
+
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
 function createOceanDepthAttribute(
