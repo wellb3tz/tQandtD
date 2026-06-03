@@ -38,6 +38,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   const planetModeBtn = document.getElementById('planet-mode-btn');
 
   let isFullscreen = false;
+  let economyConsoleOpen = false;
 
   document.getElementById('random-seed-btn')?.addEventListener('click', () => {
     const randomSeed = Math.floor(Math.random() * 999999) + 1;
@@ -48,16 +49,22 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   journeyModeBtn?.removeAttribute('disabled');
 
   worldEditorModeBtn?.addEventListener('click', async () => {
+    economyConsoleOpen = false;
+    document.body.classList.remove('economy-console-open');
     await options.getModeLifecycle()?.enterAppMode('world-editor');
   });
 
   journeyModeBtn?.addEventListener('click', async () => {
+    economyConsoleOpen = false;
+    document.body.classList.remove('economy-console-open');
     await options.getModeLifecycle()?.enterAppMode('journey');
   });
 
   document.addEventListener('keydown', (e) => {
     if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       if (!document.body.classList.contains(MODE_SELECT_ACTIVE_CLASS)) {
+        economyConsoleOpen = false;
+        document.body.classList.remove('economy-console-open');
         options.getModeLifecycle()?.returnToMenu();
       }
     }
@@ -67,7 +74,23 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
         options.getTerrainTooltip()?.toggleEnabled();
       }
     }
+    if (e.code === 'KeyE' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+      if (document.body.classList.contains(JOURNEY_MODE_CLASS) && !isInteractiveTarget(e.target)) {
+        e.preventDefault();
+        economyConsoleOpen = !economyConsoleOpen;
+        document.body.classList.toggle('economy-console-open', economyConsoleOpen);
+        if (economyConsoleOpen && document.pointerLockElement) {
+          document.exitPointerLock();
+        }
+      }
+    }
     if (e.key === 'Escape') {
+      if (economyConsoleOpen) {
+        economyConsoleOpen = false;
+        document.body.classList.remove('economy-console-open');
+        e.preventDefault();
+        return;
+      }
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
         document.body.classList.remove('fullscreen-mode');
@@ -228,6 +251,14 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
 function clearCameraModeButtons(...buttons: Array<HTMLElement | null>): void {
   buttons.forEach(button => button?.classList.remove('active'));
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return target.closest('input, select, textarea, button') !== null;
 }
 
 function resizeViewerLater(getViewer: () => WorldViewer | null): void {

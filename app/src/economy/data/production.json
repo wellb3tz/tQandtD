@@ -1,0 +1,7 @@
+[
+  { "id": "planks", "inputs": [{ "itemId": "timber", "quantity": 2 }], "outputs": [{ "itemId": "planks", "quantity": 3 }], "workers": 10, "efficiency": 1 },
+  { "id": "bricks", "inputs": [{ "itemId": "stone", "quantity": 2 }, { "itemId": "coal", "quantity": 1 }], "outputs": [{ "itemId": "bricks", "quantity": 4 }], "workers": 12, "efficiency": 0.95 },
+  { "id": "steel", "inputs": [{ "itemId": "iron_ore", "quantity": 2 }, { "itemId": "coal", "quantity": 2 }], "outputs": [{ "itemId": "steel", "quantity": 1 }], "workers": 18, "efficiency": 0.8 },
+  { "id": "tools", "inputs": [{ "itemId": "steel", "quantity": 1 }, { "itemId": "timber", "quantity": 1 }], "outputs": [{ "itemId": "tools", "quantity": 2 }], "workers": 14, "efficiency": 0.9 },
+  { "id": "machinery", "inputs": [{ "itemId": "steel", "quantity": 3 }, { "itemId": "tools", "quantity": 2 }], "outputs": [{ "itemId": "machinery", "quantity": 1 }], "workers": 25, "efficiency": 0.7 }
+]

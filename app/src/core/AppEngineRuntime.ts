@@ -1,5 +1,6 @@
 import { ThreeWorldRendererAdapter } from '@engine/adapters/three';
 import { ControlPanel } from '../ui/ControlPanel';
+import { EconomyPanel } from '../ui/EconomyPanel';
 import { Minimap } from '../ui/Minimap';
 import { PerformanceMonitor } from '../ui/PerformanceMonitor';
 import { StatisticsDisplay } from '../ui/StatisticsDisplay';
@@ -17,6 +18,7 @@ export interface AppEngineRuntime {
   worldManager: WorldManager;
   performanceMonitor: PerformanceMonitor;
   statisticsDisplay: StatisticsDisplay | null;
+  economyPanel: EconomyPanel | null;
   minimap: Minimap | null;
   terrainTooltip: TerrainTooltip;
   runtimeLoop: AppRuntimeLoop;
@@ -64,6 +66,14 @@ export function createAppEngineRuntime(options: AppEngineRuntimeOptions): AppEng
     statisticsDisplay.setApp(app);
   }
 
+  let economyPanel: EconomyPanel | null = null;
+  const economyContainer = document.getElementById('journey-economy-panel')
+    ?? document.getElementById('economy-panel');
+  if (economyContainer) {
+    economyPanel = new EconomyPanel();
+    economyPanel.initialize(economyContainer, app);
+  }
+
   let minimap: Minimap | null = null;
   const minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement | null;
   if (minimapCanvas) {
@@ -101,6 +111,7 @@ export function createAppEngineRuntime(options: AppEngineRuntimeOptions): AppEng
     worldManager,
     performanceMonitor,
     statisticsDisplay,
+    economyPanel,
     minimap,
     terrainTooltip,
     runtimeLoop,

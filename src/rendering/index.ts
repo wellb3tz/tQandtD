@@ -24,6 +24,7 @@ export {
 } from './terrain-geometry';
 export {
   RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateCliffInfluence,
   calculateFrozenRiverInfluence,
   calculateRiverBankInfluence,
   calculateRiverbedInfluence,

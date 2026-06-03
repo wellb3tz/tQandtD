@@ -110,6 +110,7 @@ function cleanupEngine(): void {
   if (engineRuntime) {
     engineRuntime.terrainTooltip.dispose();
     engineRuntime.performanceMonitor.dispose();
+    engineRuntime.economyPanel?.dispose();
     engineRuntime.viewer.dispose();
   }
   if (app) { app.destroy(); app = null; }

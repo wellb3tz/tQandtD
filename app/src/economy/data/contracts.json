@@ -1,0 +1,7 @@
+[
+  { "id": "delivery", "type": "Delivery", "rewardMultiplier": 1.45, "deadlineHours": 36, "risk": 0.18 },
+  { "id": "escort", "type": "Escort", "rewardMultiplier": 1.25, "deadlineHours": 30, "risk": 0.32 },
+  { "id": "procurement", "type": "Procurement", "rewardMultiplier": 1.6, "deadlineHours": 48, "risk": 0.16 },
+  { "id": "construction", "type": "Construction", "rewardMultiplier": 1.75, "deadlineHours": 72, "risk": 0.22 },
+  { "id": "exploration", "type": "Exploration", "rewardMultiplier": 1.35, "deadlineHours": 42, "risk": 0.28 }
+]

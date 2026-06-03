@@ -65,7 +65,7 @@ export class AppModeLifecycle {
       console.error('Failed to enter app mode:', error);
       this.cleanupEngine();
       document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active', FULLSCREEN_TRANSITION_CLASS);
+      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active', FULLSCREEN_TRANSITION_CLASS, 'economy-console-open');
       modeSelect?.classList.remove('hidden');
       document.title = 'Project tQandtD';
       errorHandler.handleError(new AppError(
@@ -90,7 +90,7 @@ export class AppModeLifecycle {
     this.cleanupEngine();
 
     document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-    document.body.classList.remove(EDITOR_MODE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active');
+    document.body.classList.remove(EDITOR_MODE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open');
     document.getElementById('mode-select')?.classList.remove('hidden');
 
     if (document.fullscreenElement) {
@@ -113,13 +113,14 @@ export class AppModeLifecycle {
     await warmUpInitialTerrain(this.requireApp(), this.requireViewer());
     this.setViewerReady(true);
     this.setWorldGenerationLoading(false);
-    document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active');
+    document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open');
     document.body.classList.add(EDITOR_MODE_CLASS);
     document.title = 'World Editor - tQandtD';
   }
 
   private async enterJourneyMode(): Promise<void> {
     document.body.classList.add(FULLSCREEN_TRANSITION_CLASS);
+    document.body.classList.remove('economy-console-open');
     this.setViewerReady(false);
     await requestBrowserFullscreen();
     await waitForFullscreenLayout();

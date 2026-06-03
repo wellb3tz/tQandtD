@@ -26,6 +26,7 @@ export const TERRAIN_SLIDERS: SliderConfig[] = [
   { id: 'lacunarity', label: 'Lacunarity', min: 1.5, max: 3.0, step: 0.1, defaultValue: 2.0, tooltip: 'Frequency multiplier between octaves' },
   { id: 'warpStrength', label: 'Warp Strength', min: 0, max: 100, step: 0.1, defaultValue: 0.2, tooltip: 'Domain warping intensity' },
   { id: 'heightMultiplier', label: 'Height Multiplier', min: 0.5, max: 5.0, step: 0.1, defaultValue: 2.0, tooltip: 'Overall terrain height scaling' },
+  { id: 'cliffStrength', label: 'Cliff Strength', min: 0, max: 1.0, step: 0.01, defaultValue: 0.42, tooltip: 'Strength of geometric cliff and ledge shaping. 0 disables cliff shaping, higher values create sharper escarpments.' },
 ];
 
 export const BIOME_SLIDERS: SliderConfig[] = [

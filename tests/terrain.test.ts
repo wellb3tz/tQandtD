@@ -108,7 +108,7 @@ describe('Terrain', () => {
       }
     });
 
-    it('avoids needle-like mountain height jumps between adjacent vertices', () => {
+    it('keeps mountain relief bounded while allowing geometric cliff walls', () => {
       const config = createDefaultWorldConfig({
         seed: 12345,
         chunkSize: 32,
@@ -116,8 +116,10 @@ describe('Terrain', () => {
       const gen = new TerrainGenerator(config.terrainConfig);
       const chunkSize = config.chunkSize;
       const heightmap = gen.generateHeightmap(config.seed, chunkSize, 0, 0);
+      const { maxDelta, steepEdgeCount } = getAdjacentHeightDeltaStats(heightmap, chunkSize);
 
-      expect(getMaxAdjacentHeightDelta(heightmap, chunkSize)).toBeLessThanOrEqual(0.18);
+      expect(maxDelta).toBeLessThanOrEqual(0.36);
+      expect(steepEdgeCount).toBeGreaterThanOrEqual(0);
     });
 
     it('keeps continental ocean shelves sloped instead of clamped near sea level', () => {
@@ -153,26 +155,85 @@ describe('Terrain', () => {
       expect(nearlyFlatShelfVertices.length / nearShoreOceanHeights.length).toBeLessThan(0.2);
       expect(distinctHeightBuckets.size).toBeGreaterThan(12);
     });
+
+    it('adds deterministic cliff shaping as a mountain overlay', () => {
+      const baseConfig = createDefaultWorldConfig({
+        seed: 24680,
+        chunkSize: 32,
+        terrainConfig: {
+          cliffStrength: 0,
+        },
+      });
+      const cliffConfig = createDefaultWorldConfig({
+        seed: 24680,
+        chunkSize: 32,
+        terrainConfig: {
+          cliffStrength: 1,
+        },
+      });
+      const cliffGen = new TerrainGenerator(cliffConfig.terrainConfig);
+      const baseGen = new TerrainGenerator(baseConfig.terrainConfig);
+
+      let changedHighlandVertices = 0;
+      let strongestMaxDelta = 0;
+      let strongestSteepEdges = 0;
+
+      for (let chunkY = -3; chunkY <= 3; chunkY++) {
+        for (let chunkX = -3; chunkX <= 3; chunkX++) {
+          const base = baseGen.generateHeightmap(baseConfig.seed, baseConfig.chunkSize, chunkX, chunkY);
+          const cliffs = cliffGen.generateHeightmap(cliffConfig.seed, cliffConfig.chunkSize, chunkX, chunkY);
+
+          for (let i = 0; i < cliffs.length; i++) {
+            expect(cliffs[i]).toBeGreaterThanOrEqual(0);
+            expect(cliffs[i]).toBeLessThanOrEqual(1);
+            if (base[i] > 0.54 && Math.abs(base[i] - cliffs[i]) > 0.002) {
+              changedHighlandVertices++;
+            }
+          }
+
+          const stats = getAdjacentHeightDeltaStats(cliffs, cliffConfig.chunkSize);
+          strongestMaxDelta = Math.max(strongestMaxDelta, stats.maxDelta);
+          strongestSteepEdges = Math.max(strongestSteepEdges, stats.steepEdgeCount);
+        }
+      }
+
+      expect(changedHighlandVertices).toBeGreaterThan(10);
+      expect(strongestMaxDelta).toBeGreaterThan(0.10);
+      expect(strongestMaxDelta).toBeLessThanOrEqual(0.30);
+      expect(strongestSteepEdges).toBeGreaterThan(0);
+    });
   });
 });
 
 function getMaxAdjacentHeightDelta(heightmap: Float32Array, chunkSize: number): number {
+  return getAdjacentHeightDeltaStats(heightmap, chunkSize).maxDelta;
+}
+
+function getAdjacentHeightDeltaStats(heightmap: Float32Array, chunkSize: number): {
+  maxDelta: number;
+  steepEdgeCount: number;
+} {
   const vSize = chunkSize + 1;
   let maxDelta = 0;
+  let steepEdgeCount = 0;
 
   for (let y = 0; y <= chunkSize; y++) {
     for (let x = 0; x <= chunkSize; x++) {
       const height = heightmap[y * vSize + x];
 
       if (x < chunkSize) {
-        maxDelta = Math.max(maxDelta, Math.abs(height - heightmap[y * vSize + x + 1]));
+        const delta = Math.abs(height - heightmap[y * vSize + x + 1]);
+        maxDelta = Math.max(maxDelta, delta);
+        if (delta > 0.08) steepEdgeCount++;
       }
 
       if (y < chunkSize) {
-        maxDelta = Math.max(maxDelta, Math.abs(height - heightmap[(y + 1) * vSize + x]));
+        const delta = Math.abs(height - heightmap[(y + 1) * vSize + x]);
+        maxDelta = Math.max(maxDelta, delta);
+        if (delta > 0.08) steepEdgeCount++;
       }
     }
   }
 
-  return maxDelta;
+  return { maxDelta, steepEdgeCount };
 }

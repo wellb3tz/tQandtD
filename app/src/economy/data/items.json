@@ -1,0 +1,22 @@
+[
+  { "id": "grain", "name": "Grain", "category": "raw", "basePrice": 8, "weight": 1 },
+  { "id": "timber", "name": "Timber", "category": "raw", "basePrice": 13, "weight": 2 },
+  { "id": "stone", "name": "Stone", "category": "raw", "basePrice": 9, "weight": 3 },
+  { "id": "iron_ore", "name": "Iron Ore", "category": "raw", "basePrice": 18, "weight": 3 },
+  { "id": "coal", "name": "Coal", "category": "raw", "basePrice": 14, "weight": 2 },
+  { "id": "salt", "name": "Salt", "category": "raw", "basePrice": 11, "weight": 1 },
+  { "id": "fish", "name": "Fish", "category": "raw", "basePrice": 10, "weight": 1 },
+  { "id": "hides", "name": "Hides", "category": "raw", "basePrice": 15, "weight": 1 },
+  { "id": "tools", "name": "Tools", "category": "industrial", "basePrice": 42, "weight": 2 },
+  { "id": "planks", "name": "Planks", "category": "industrial", "basePrice": 28, "weight": 2 },
+  { "id": "bricks", "name": "Bricks", "category": "industrial", "basePrice": 24, "weight": 2 },
+  { "id": "steel", "name": "Steel", "category": "industrial", "basePrice": 65, "weight": 3 },
+  { "id": "machinery", "name": "Machinery", "category": "industrial", "basePrice": 120, "weight": 4 },
+  { "id": "textiles", "name": "Textiles", "category": "industrial", "basePrice": 38, "weight": 1 },
+  { "id": "medicine", "name": "Medicine", "category": "service", "basePrice": 86, "weight": 1 },
+  { "id": "fuel", "name": "Fuel", "category": "industrial", "basePrice": 50, "weight": 2 },
+  { "id": "spices", "name": "Spices", "category": "luxury", "basePrice": 95, "weight": 1 },
+  { "id": "jewelry", "name": "Jewelry", "category": "luxury", "basePrice": 180, "weight": 1 },
+  { "id": "books", "name": "Books", "category": "service", "basePrice": 55, "weight": 1 },
+  { "id": "contracts", "name": "Contract Intel", "category": "service", "basePrice": 72, "weight": 1 }
+]

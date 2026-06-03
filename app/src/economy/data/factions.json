@@ -1,0 +1,42 @@
+[
+  {
+    "id": "free_caravans",
+    "name": "Free Caravans",
+    "wealth": 12000,
+    "influence": 48,
+    "militaryPower": 18,
+    "territory": ["Harrow Gate", "Red Mesa"],
+    "laws": ["open_trade"],
+    "relationships": { "iron_league": -12, "river_compact": 18, "frontier_council": 8 }
+  },
+  {
+    "id": "iron_league",
+    "name": "Iron League",
+    "wealth": 18000,
+    "influence": 62,
+    "militaryPower": 55,
+    "territory": ["Copperfen", "Stoneford"],
+    "laws": ["ore_tariffs"],
+    "relationships": { "free_caravans": -12, "river_compact": -6, "frontier_council": 14 }
+  },
+  {
+    "id": "river_compact",
+    "name": "River Compact",
+    "wealth": 14500,
+    "influence": 51,
+    "militaryPower": 28,
+    "territory": ["North Quay"],
+    "laws": ["harbor_dues"],
+    "relationships": { "free_caravans": 18, "iron_league": -6, "frontier_council": 4 }
+  },
+  {
+    "id": "frontier_council",
+    "name": "Frontier Council",
+    "wealth": 9000,
+    "influence": 38,
+    "militaryPower": 22,
+    "territory": ["Lumen Post"],
+    "laws": ["settler_grants"],
+    "relationships": { "free_caravans": 8, "iron_league": 14, "river_compact": 4 }
+  }
+]

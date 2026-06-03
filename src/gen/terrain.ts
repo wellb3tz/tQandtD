@@ -37,6 +37,25 @@ export interface TerrainConfig {
    * 0 = no effect, 1 = continental layer fully controls ocean/land split.
    */
   continentalStrength?: number;
+  /**
+   * Enable deterministic cliff and escarpment shaping on land (default: true).
+   * This is layered on top of the existing continental/mountain terrain rather
+   * than replacing mountain generation.
+   */
+  enableCliffs?: boolean;
+  /**
+   * Strength of geometric cliff and ledge shaping in highlands and steep coasts
+   * (default: 0.42). Higher values create sharper escarpment walls.
+   */
+  cliffStrength?: number;
+  /**
+   * Elevation where inland cliff shaping starts to become visible (default: 0.52).
+   */
+  cliffElevationStart?: number;
+  /**
+   * Noise scale for cliff belts and broken escarpment fields (default: continentalScale * 9).
+   */
+  cliffScale?: number;
 }
 
 /**
@@ -53,6 +72,10 @@ export class TerrainGenerator {
   private mountainMaskNoise: NoiseEngine | null = null;
   /** Ridge noise engine for mountain ridges (seed offset +6666). */
   private ridgeNoise: NoiseEngine | null = null;
+  /** Cliff belt noise for escarpments and coastal rock faces (seed offset +5555). */
+  private cliffNoise: NoiseEngine | null = null;
+  /** Fine fracture noise for broken cliff faces (seed offset +4444). */
+  private cliffFractureNoise: NoiseEngine | null = null;
   /**
    * Cached primary noise engine keyed by world seed.
    * Avoids allocating a new NoiseEngine on every getHeightAt() call -
@@ -68,6 +91,8 @@ export class TerrainGenerator {
   private readonly mountainMaskConfig: NoiseConfig;
   private readonly ridgeConfig: NoiseConfig;
   private readonly mountainDetailConfig: NoiseConfig;
+  private readonly cliffConfig: NoiseConfig;
+  private readonly cliffFractureConfig: NoiseConfig;
 
   constructor(config: TerrainConfig) {
     this.config = config;
@@ -114,6 +139,20 @@ export class TerrainGenerator {
       lacunarity: 2.35,
       scale: config.baseScale * 3.1,
     };
+
+    this.cliffConfig = {
+      octaves: 4,
+      persistence: 0.52,
+      lacunarity: 2.05,
+      scale: config.cliffScale ?? (config.continentalScale ?? 0.002) * 9,
+    };
+
+    this.cliffFractureConfig = {
+      octaves: 3,
+      persistence: 0.48,
+      lacunarity: 2.3,
+      scale: (config.cliffScale ?? (config.continentalScale ?? 0.002) * 9) * 3.6,
+    };
   }
 
   /**
@@ -127,6 +166,8 @@ export class TerrainGenerator {
       this.coastlineNoise   = new NoiseEngine(worldSeed + 8888);
       this.mountainMaskNoise = new NoiseEngine(worldSeed + 9999);
       this.ridgeNoise        = new NoiseEngine(worldSeed + 6666);
+      this.cliffNoise        = new NoiseEngine(worldSeed + 5555);
+      this.cliffFractureNoise = new NoiseEngine(worldSeed + 4444);
     }
   }
 
@@ -320,6 +361,7 @@ export class TerrainGenerator {
         const lo = seaLevel;
         height = lo + blendedDetail * (hiLand - lo) * landRise;
         height = Math.max(seaLevel + 0.001, height);
+        height = this.applyCliffLandforms(x, y, height, mountainMask, shoreFactor, seaLevel);
       }
     }
 
@@ -356,4 +398,60 @@ export class TerrainGenerator {
     const brokenRidge = sharpened + (cragNoise - 0.5) * 0.055 * mountainMask;
     return Math.max(0, Math.min(0.94, brokenRidge));
   }
+
+  private applyCliffLandforms(
+    x: number,
+    y: number,
+    height: number,
+    mountainMask: number,
+    shoreFactor: number,
+    seaLevel: number,
+  ): number {
+    if (this.config.enableCliffs === false || this.cliffNoise === null || this.cliffFractureNoise === null) {
+      return height;
+    }
+
+    const cliffStrength = Math.max(0, Math.min(1, this.config.cliffStrength ?? 0.42));
+    if (cliffStrength <= 0) {
+      return height;
+    }
+
+    const elevationStart = this.config.cliffElevationStart ?? 0.52;
+    const highlandFactor = smoothstep(elevationStart, 0.82, height);
+    const coastalFactor = shoreFactor * smoothstep(seaLevel + 0.045, seaLevel + 0.20, height);
+    const beltNoise = (this.cliffNoise.fbm(x, y, this.cliffConfig) + 1) * 0.5;
+    const fractureNoise = (this.cliffFractureNoise.fbm(x, y, this.cliffFractureConfig) + 1) * 0.5;
+
+    const mountainCliffFactor = highlandFactor * smoothstep(0.22, 0.62, mountainMask);
+    const coastalCliffFactor = coastalFactor * smoothstep(0.46, 0.82, fractureNoise) * 0.44;
+    const beltMask = smoothstep(0.52, 0.82, beltNoise);
+    const cliffMask = Math.max(
+      beltMask * mountainCliffFactor,
+      coastalCliffFactor,
+    );
+
+    if (cliffMask <= 0.01) {
+      return height;
+    }
+
+    const relative = Math.max(0, height - seaLevel);
+    const ledgeCount = 3 + Math.floor(fractureNoise * 2) + Math.floor(mountainMask * 2);
+    const ledgeStep = (1 - seaLevel) / ledgeCount;
+    const ledgePosition = relative / ledgeStep;
+    const ledgeBase = Math.floor(ledgePosition);
+    const ledgeT = ledgePosition - ledgeBase;
+    const smoothedLedgeT = smoothstep(0.80, 0.90, ledgeT);
+    const terracedHeight = seaLevel + (ledgeBase + smoothedLedgeT) * ledgeStep;
+
+    const fractureOffset = (fractureNoise - 0.5) * 0.012 * (0.35 + mountainMask);
+    const shaped = terracedHeight + fractureOffset * cliffMask;
+    const terraceBlendFactor = Math.min(1, cliffMask * cliffStrength * 1.65);
+    const terraceBlend = height + (shaped - height) * terraceBlendFactor;
+    return Math.max(seaLevel + 0.001, Math.min(1, terraceBlend));
+  }
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }

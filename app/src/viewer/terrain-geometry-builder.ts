@@ -1,5 +1,6 @@
 import {
   BiomeType,
+  calculateCliffInfluence,
   calculateRiverBankInfluence,
   getRiverbedDarkening,
   getRiverTrenchDarkening,
@@ -338,7 +339,6 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
 
     const slopeFactor = Math.max(0, 1.0 - ny * ny);
     const steepness = Math.pow(slopeFactor, 1.22);
-    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.08) / 0.46));
     const altitudeBrightness = 0.88 + rawHeight * 0.17;
     const worldX = positions[vi];
     const worldZ = positions[vi + 2];
@@ -371,6 +371,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const riverbedInfluence = clamp01(
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
+    const cliffInfluence = calculateCliffInfluence(data, bvX, bvY);
+    const cliffDetail = Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
     const frozenBand = clamp01(calculateFrozenRiverInfluence(data, bvX, bvY));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
 

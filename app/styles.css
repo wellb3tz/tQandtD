@@ -190,6 +190,100 @@ body.mode-select-active .status-bar {
   display: none !important;
 }
 
+#economy-panel,
+.journey-economy-panel,
+.journey-economy-readout {
+  display: none;
+}
+
+body.journey-mode.economy-console-open .journey-economy-panel,
+body.journey-mode .journey-economy-readout {
+  display: block;
+}
+
+body.journey-mode.economy-console-open .journey-economy-readout {
+  display: none;
+}
+
+body.journey-mode .tools-section {
+  display: none;
+}
+
+body.world-editor-mode .economy-panel {
+  display: none !important;
+}
+
+.journey-economy-panel {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  bottom: 196px;
+  z-index: 70;
+  width: min(340px, calc(100vw - 28px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: rgba(18, 23, 26, 0.93);
+  border: 1px solid rgba(115, 128, 138, 0.3);
+  border-radius: 5px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.journey-economy-readout {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 70;
+  max-width: min(420px, calc(100vw - 28px));
+  padding: 7px 9px;
+  color: var(--text-1);
+  background: rgba(18, 23, 26, 0.84);
+  border: 1px solid rgba(115, 128, 138, 0.28);
+  border-radius: 5px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+.journey-economy-readout-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-right: 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.journey-economy-readout-item:last-child {
+  margin-right: 0;
+}
+
+.journey-economy-readout-label {
+  color: var(--text-3);
+  font-weight: 700;
+}
+
+.journey-economy-readout-value {
+  color: #dfe8ef;
+  font-weight: 650;
+}
+
+.journey-economy-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.journey-economy-panel::-webkit-scrollbar-track {
+  background: rgba(7, 10, 12, 0.55);
+}
+
+.journey-economy-panel::-webkit-scrollbar-thumb {
+  background: rgba(120, 136, 146, 0.45);
+  border-radius: 999px;
+}
+
 /* ==========================================
    GLASS HELPER
    ========================================== */
@@ -1765,6 +1859,114 @@ body {
 .metric-value,
 .position-value {
   color: #dfe8ef;
+}
+
+.economy-section {
+  border-bottom: 1px solid rgba(115, 128, 138, 0.16);
+}
+
+.economy-field {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.economy-select,
+.economy-number {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 5px 8px;
+  color: var(--text-1);
+  background: rgba(3, 7, 9, 0.58);
+  border: 1px solid rgba(115, 128, 138, 0.24);
+  border-radius: 3px;
+  font: inherit;
+}
+
+.economy-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.economy-action {
+  min-width: 0;
+}
+
+.economy-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.economy-inventory,
+.economy-event {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.economy-intel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.economy-sparkline {
+  height: 32px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 5px 0 0;
+  border-top: 1px solid rgba(115, 128, 138, 0.16);
+}
+
+.economy-sparkline-bar {
+  width: 8px;
+  min-height: 4px;
+  display: inline-block;
+  background: rgba(96, 165, 250, 0.78);
+  border-radius: 2px 2px 0 0;
+}
+
+.economy-market-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+
+.economy-market-row:hover {
+  color: #fff;
+}
+
+.economy-contract {
+  padding: 8px 0;
+  border-top: 1px solid rgba(115, 128, 138, 0.12);
+}
+
+.economy-contract:first-of-type {
+  border-top: 0;
+}
+
+.economy-contract-title {
+  margin-bottom: 6px;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .compass-container,

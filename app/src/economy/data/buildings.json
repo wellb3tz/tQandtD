@@ -1,0 +1,6 @@
+[
+  { "id": "warehouse", "name": "Warehouse", "storageBonus": 600, "taxCost": 12 },
+  { "id": "sawmill", "name": "Sawmill", "productionId": "planks", "taxCost": 20 },
+  { "id": "foundry", "name": "Foundry", "productionId": "steel", "taxCost": 34 },
+  { "id": "clinic", "name": "Clinic", "consumes": ["medicine"], "taxCost": 18 }
+]

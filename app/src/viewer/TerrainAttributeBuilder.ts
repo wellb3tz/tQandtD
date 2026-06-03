@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {
   BiomeType,
   RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateCliffInfluence,
   calculateRiverBankInfluence,
   getRiverbedDarkening,
   getRiverTrenchDarkening,
@@ -51,6 +52,7 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const right = data.heightmap ? data.heightmap[heightIndex + 1] : elevation;
     const down = data.heightmap ? data.heightmap[heightIndex + verticesPerSide] : elevation;
     const slope = Math.min(1, Math.abs(right - elevation) * 8 + Math.abs(down - elevation) * 8);
+    const cliffInfluence = calculateCliffInfluence(data, sample.x, sample.y);
     const riverBankInfluence = calculateRiverBankInfluence(data, sample.x, sample.y);
     const moisture = calculateTerrainMoisture(data, sample.x, sample.y, biome, elevation, slope, lakeTiles, riverBankInfluence);
     const tileTemperature = data.temperatureMap && tileIndex < data.temperatureMap.length
@@ -61,7 +63,9 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
       ? 'riverbed'
       : getRiverbedDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
-      : riverBankSurfaceKey ?? selectTerrainSurfaceKey(biome, elevation, slope, moisture, tileTemperature);
+      : cliffInfluence > 0.42
+        ? 'mountainRock'
+        : riverBankSurfaceKey ?? selectTerrainSurfaceKey(biome, elevation, Math.max(slope, cliffInfluence * 0.88), moisture, tileTemperature);
     weights[surfaceKey] += 1;
     sampleCount++;
   }
@@ -248,7 +252,6 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
 
     const slopeFactor = Math.max(0, 1.0 - ny * ny);
     const steepness = Math.pow(slopeFactor, 1.22);
-    const cliffDetail = Math.max(0, Math.min(1, (steepness - 0.08) / 0.46));
     const altitudeBrightness = 0.88 + rawHeight * 0.17;
 
     let r = colorAttr.getX(i);
@@ -270,6 +273,8 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const riverbedInfluence = clamp01(
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
     );
+    const cliffInfluence = calculateCliffInfluence(data, bvX, bvY);
+    const cliffDetail = Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
     const tileTemperature = data.temperatureMap && bmIdx < data.temperatureMap.length
       ? data.temperatureMap[bmIdx]

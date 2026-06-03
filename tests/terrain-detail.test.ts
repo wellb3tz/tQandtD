@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
   RIVER_TRENCH_DARKEN_STRENGTH,
+  calculateCliffInfluence,
   calculateRiverTrenchInfluence,
   getRiverTrenchDarkening,
   type ChunkData,
@@ -33,6 +34,28 @@ describe('terrain detail helpers', () => {
 
     expect(calculateRiverTrenchInfluence(data, 2, 0.9)).toBeGreaterThan(0);
     expect(calculateRiverTrenchInfluence(data, 0, 0.9)).toBe(0);
+  });
+
+  it('detects cliff influence from sharp heightmap relief', () => {
+    const flat = createRiverChunk({
+      size: 2,
+      heightmap: new Float32Array(9).fill(0.62),
+      biomeMap: new Uint8Array(4).fill(BiomeType.MOUNTAIN),
+      rivers: [],
+    });
+    const cliff = createRiverChunk({
+      size: 2,
+      heightmap: new Float32Array([
+        0.62, 0.62, 0.62,
+        0.62, 0.86, 0.86,
+        0.62, 0.86, 0.86,
+      ]),
+      biomeMap: new Uint8Array(4).fill(BiomeType.MOUNTAIN),
+      rivers: [],
+    });
+
+    expect(calculateCliffInfluence(flat, 1, 1)).toBe(0);
+    expect(calculateCliffInfluence(cliff, 1, 1)).toBeGreaterThan(0.5);
   });
 });
 

@@ -532,6 +532,10 @@ export class CameraInputController {
   };
 
   private readonly handleKeyboardDown = (e: KeyboardEvent): void => {
+    if (isEconomyInteractiveTarget(e.target)) {
+      return;
+    }
+
     const key = KEYBOARD_CODE_MAP[e.code];
     if (key) {
       this.keyboardState.set(key, true);
@@ -546,4 +550,9 @@ export class CameraInputController {
       e.preventDefault();
     }
   };
+}
+
+function isEconomyInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest('.journey-economy-panel input, .journey-economy-panel select, .journey-economy-panel textarea, .journey-economy-panel button') !== null;
 }

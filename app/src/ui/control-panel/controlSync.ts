@@ -25,6 +25,9 @@ export function syncControlsWithConfig(config: WorldConfig): void {
     updateSliderValue('lacunarity', config.terrainConfig.lacunarity);
     updateSliderValue('warpStrength', config.terrainConfig.warpStrength);
     updateSliderValue('heightMultiplier', config.terrainConfig.heightMultiplier);
+    if (config.terrainConfig.cliffStrength !== undefined) {
+      updateSliderValue('cliffStrength', config.terrainConfig.cliffStrength);
+    }
 
     if (config.terrainConfig.enable3D !== undefined) {
       updateCheckboxValue('enable3D', config.terrainConfig.enable3D);

@@ -1,10 +1,49 @@
-import type { ChunkData } from '../world/chunk';
+import { BiomeType, type ChunkData } from '../world/chunk';
 import {
   getRiverChannelWidth,
   type RiverPoint,
 } from '../gen/rivers';
 
 export const RIVER_TRENCH_DARKEN_STRENGTH = 0.35;
+
+export function calculateCliffInfluence(data: ChunkData, x: number, y: number): number {
+  if (!data.heightmap || data.heightmap.length === 0) return 0;
+
+  const size = data.size;
+  const verticesPerSide = size + 1;
+  const cx = Math.max(0, Math.min(size, Math.round(x)));
+  const cy = Math.max(0, Math.min(size, Math.round(y)));
+  const center = data.heightmap[cy * verticesPerSide + cx] ?? 0;
+  if (center < 0.34) return 0;
+
+  const left = data.heightmap[cy * verticesPerSide + Math.max(0, cx - 1)] ?? center;
+  const right = data.heightmap[cy * verticesPerSide + Math.min(size, cx + 1)] ?? center;
+  const up = data.heightmap[Math.max(0, cy - 1) * verticesPerSide + cx] ?? center;
+  const down = data.heightmap[Math.min(size, cy + 1) * verticesPerSide + cx] ?? center;
+  const diagonalA = data.heightmap[Math.max(0, cy - 1) * verticesPerSide + Math.max(0, cx - 1)] ?? center;
+  const diagonalB = data.heightmap[Math.min(size, cy + 1) * verticesPerSide + Math.min(size, cx + 1)] ?? center;
+
+  const gradient = Math.max(
+    Math.abs(right - left) * 0.5,
+    Math.abs(down - up) * 0.5,
+    Math.abs(diagonalB - diagonalA) * 0.35,
+  );
+  const elevationFactor = smoothstep(0.42, 0.72, center);
+  const steepFactor = smoothstep(0.035, 0.135, gradient);
+
+  const tileX = Math.max(0, Math.min(size - 1, Math.floor(cx)));
+  const tileY = Math.max(0, Math.min(size - 1, Math.floor(cy)));
+  const biome = data.biomeMap?.[tileY * size + tileX];
+  const biomeFactor = biome === undefined
+    ? 0.68
+    : biome === BiomeType.MOUNTAIN || biome === BiomeType.VOLCANIC || biome === BiomeType.GLACIER
+      ? 1
+      : biome === BiomeType.BEACH
+        ? 0.76
+        : 0.58;
+
+  return Math.max(0, Math.min(1, steepFactor * (0.45 + elevationFactor * 0.55) * biomeFactor));
+}
 
 export function calculateRiverTrenchInfluence(data: ChunkData, x: number, y: number): number {
   return calculateRiverInfluence(data, x, y, river => river.state !== 'dry');

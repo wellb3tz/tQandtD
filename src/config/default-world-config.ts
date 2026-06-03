@@ -184,6 +184,9 @@ function createBaseWorldConfig(): WorldConfig {
       enableContinentalness: true,
       continentalScale: 0.002,
       continentalStrength: 0.45,
+      enableCliffs: true,
+      cliffStrength: 0.42,
+      cliffElevationStart: 0.52,
     },
     biomeConfig: {
       temperatureScale: 0.001,

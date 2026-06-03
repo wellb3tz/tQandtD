@@ -24,6 +24,7 @@ export class AppRuntimeLoop {
   private readonly getMinimap: () => Minimap | null;
 
   private uiUpdateTimer: ReturnType<typeof setInterval> | null = null;
+  private economyTimer: ReturnType<typeof setInterval> | null = null;
   private chunkLoadTimer: ReturnType<typeof setTimeout> | null = null;
   private performanceTimer: ReturnType<typeof setInterval> | null = null;
   private rafId: number | null = null;
@@ -31,6 +32,7 @@ export class AppRuntimeLoop {
   private lastCameraUpdate = 0;
   private lastPerformanceUpdate = 0;
   private lastUIUpdate = 0;
+  private lastEconomyWorldUpdate = 0;
   private lastChunkLoadCameraPos: { x: number; z: number } | null = null;
 
   constructor(options: AppRuntimeLoopOptions) {
@@ -46,6 +48,7 @@ export class AppRuntimeLoop {
     this.running = true;
     this.startFpsLoop();
     this.startUiLoop();
+    this.startEconomyLoop();
     this.scheduleChunkLoad();
     this.startPerformanceLoop();
   }
@@ -60,6 +63,10 @@ export class AppRuntimeLoop {
     if (this.uiUpdateTimer !== null) {
       clearInterval(this.uiUpdateTimer);
       this.uiUpdateTimer = null;
+    }
+    if (this.economyTimer !== null) {
+      clearInterval(this.economyTimer);
+      this.economyTimer = null;
     }
     if (this.chunkLoadTimer !== null) {
       clearTimeout(this.chunkLoadTimer);
@@ -101,6 +108,10 @@ export class AppRuntimeLoop {
 
       if (now - this.lastCameraUpdate >= 100) {
         this.app.updateCameraPosition(cameraPos);
+        if (document.body.classList.contains('journey-mode') && now - this.lastEconomyWorldUpdate >= 750) {
+          this.app.refreshEconomyWorldContext();
+          this.lastEconomyWorldUpdate = now;
+        }
         this.lastCameraUpdate = now;
       }
 
@@ -120,6 +131,14 @@ export class AppRuntimeLoop {
         this.lastUIUpdate = now;
       }
     }, 100);
+  }
+
+  private startEconomyLoop(): void {
+    this.economyTimer = setInterval(() => {
+      if (!this.running) return;
+      if (!document.body.classList.contains('journey-mode')) return;
+      this.app.advanceEconomy(1);
+    }, 2000);
   }
 
   private scheduleChunkLoad(delay = 100): void {

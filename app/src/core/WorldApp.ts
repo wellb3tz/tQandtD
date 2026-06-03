@@ -9,14 +9,15 @@
 import {
   WorldSession,
   DEFAULT_CAMERA_POSITION_METERS,
+  TERRAIN_TILE_SIZE_METERS,
   configureLogger,
   LogLevel,
   BiomeType,
+  ResourceType,
+  StructureType,
   type ChunkManager,
   type WorldConfig,
   type ChunkData,
-  type ResourceType,
-  type StructureType,
   type SerializationOptions,
   type SerializedWorld,
   type WorldSessionCacheStats,
@@ -30,6 +31,7 @@ import {
 } from '@engine/index';
 import { DEFAULT_CLIMATE_CONFIG } from '@engine/world/climate';
 import { requiresWorldRebuild } from './configChange';
+import { EconomySimulation, type EconomySnapshot, type WorldEconomyContext } from '../economy';
 
 /**
  * 3D vector for camera position and target
@@ -73,6 +75,7 @@ export interface AppState {
   avgHeight: number;
   minHeight: number;
   maxHeight: number;
+  economy: EconomySnapshot;
 }
 
 /**
@@ -203,6 +206,7 @@ export class WorldApp {
   private worldSessionUnsubscribers: Array<() => void>;
   /** AbortController for in-flight chunk loads; replaced on every new load call. */
   private loadChunksAbortController: AbortController | null;
+  private economySimulation: EconomySimulation;
 
   constructor() {
     this.initialized = false;
@@ -213,6 +217,7 @@ export class WorldApp {
     this.worldSession = null;
     this.worldSessionUnsubscribers = [];
     this.loadChunksAbortController = null;
+    this.economySimulation = new EconomySimulation();
     
     this.state = {
       loadedChunks: new Map(),
@@ -244,7 +249,8 @@ export class WorldApp {
       structureCounts: new Map(),
       avgHeight: 0,
       minHeight: 0,
-      maxHeight: 0
+      maxHeight: 0,
+      economy: this.economySimulation.getSnapshot(),
     };
   }
 
@@ -381,6 +387,158 @@ export class WorldApp {
     return this.state.config.seed;
   }
 
+  getEconomySnapshot(): EconomySnapshot {
+    this.syncEconomyWorldContext();
+    return this.economySimulation.getSnapshot();
+  }
+
+  refreshEconomyWorldContext(): EconomySnapshot {
+    const economy = this.syncEconomyWorldContext();
+    this.updateState({ economy });
+    return economy;
+  }
+
+  advanceEconomy(hours = 1): EconomySnapshot {
+    this.syncEconomyWorldContext();
+    const economy = this.economySimulation.tick(hours);
+    this.updateState({ economy });
+    return economy;
+  }
+
+  buyEconomyGoods(settlementId: string, itemId: string, quantity: number): boolean {
+    const bought = this.economySimulation.buy(settlementId, itemId, quantity);
+    if (bought) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return bought;
+  }
+
+  sellEconomyGoods(settlementId: string, itemId: string, quantity: number): boolean {
+    const sold = this.economySimulation.sell(settlementId, itemId, quantity);
+    if (sold) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return sold;
+  }
+
+  depositEconomyGoods(itemId: string, quantity: number): boolean {
+    const deposited = this.economySimulation.depositToWarehouse(itemId, quantity);
+    if (deposited) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return deposited;
+  }
+
+  withdrawEconomyGoods(itemId: string, quantity: number): boolean {
+    const withdrawn = this.economySimulation.withdrawFromWarehouse(itemId, quantity);
+    if (withdrawn) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return withdrawn;
+  }
+
+  charterEconomyAutoRoute(originId: string, itemId: string, quantity: number): boolean {
+    const chartered = this.economySimulation.charterAutoRoute(originId, itemId, quantity);
+    if (chartered) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return chartered;
+  }
+
+  toggleEconomyAutoRoute(routeId: string): boolean {
+    const toggled = this.economySimulation.toggleAutoRoute(routeId);
+    if (toggled) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return toggled;
+  }
+
+  foundEconomyColony(settlementId: string): boolean {
+    const founded = this.economySimulation.foundColony(settlementId);
+    if (founded) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return founded;
+  }
+
+  buildEconomyColonyBuilding(buildingId: string): boolean {
+    const built = this.economySimulation.buildColonyBuilding(buildingId);
+    if (built) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return built;
+  }
+
+  investEconomyFaction(factionId: string, amount = 250): boolean {
+    const invested = this.economySimulation.investInFaction(factionId, amount);
+    if (invested) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return invested;
+  }
+
+  fundEconomyIntelNetwork(): boolean {
+    const funded = this.economySimulation.fundIntelNetwork();
+    if (funded) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return funded;
+  }
+
+  acceptEconomyContract(contractId: string): boolean {
+    const accepted = this.economySimulation.acceptContract(contractId);
+    if (accepted) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return accepted;
+  }
+
+  completeEconomyContract(contractId: string): boolean {
+    const completed = this.economySimulation.completeContract(contractId);
+    if (completed) this.updateState({ economy: this.economySimulation.getSnapshot() });
+    return completed;
+  }
+
+  restoreEconomySnapshot(snapshot: EconomySnapshot): EconomySnapshot {
+    const economy = this.economySimulation.restore(snapshot);
+    this.updateState({ economy });
+    return economy;
+  }
+
+  private syncEconomyWorldContext(): EconomySnapshot {
+    const economy = this.economySimulation.syncWorldContext(this.createEconomyWorldContext());
+    this.state.economy = economy;
+    return economy;
+  }
+
+  private createEconomyWorldContext(): WorldEconomyContext {
+    const position = this.state.cameraPosition;
+    const config = this.state.config;
+    const chunkWorldSize = Math.max(1, config.chunkSize * TERRAIN_TILE_SIZE_METERS);
+    const chunkX = Math.floor(position.x / chunkWorldSize);
+    const chunkY = Math.floor(position.z / chunkWorldSize);
+    const chunk = this.state.loadedChunks.get(this.getChunkKey(chunkX, chunkY));
+    const nearbyResources: Record<string, number> = {};
+    const nearbyStructures: Record<string, number> = {};
+    let localBiome: string | undefined;
+
+    if (chunk) {
+      const localX = clampInt(0, chunk.size - 1, Math.floor((position.x - chunk.x * chunkWorldSize) / TERRAIN_TILE_SIZE_METERS));
+      const localY = clampInt(0, chunk.size - 1, Math.floor((position.z - chunk.y * chunkWorldSize) / TERRAIN_TILE_SIZE_METERS));
+      localBiome = formatEnumName(enumNameFromValue(BiomeType, chunk.biomeMap[localY * chunk.size + localX]));
+
+      for (const resource of chunk.resources ?? []) {
+        const name = enumNameFromValue(ResourceType, resource.type)?.toUpperCase();
+        if (!name) continue;
+        nearbyResources[name] = (nearbyResources[name] ?? 0) + (resource.amount ?? 1);
+      }
+
+      for (const structure of chunk.structures ?? []) {
+        const name = enumNameFromValue(StructureType, structure.type)?.toUpperCase();
+        if (!name) continue;
+        nearbyStructures[name] = (nearbyStructures[name] ?? 0) + 1;
+      }
+    } else {
+      this.state.resourceCounts.forEach((count, type) => {
+        const name = enumNameFromValue(ResourceType, type)?.toUpperCase();
+        if (name) nearbyResources[name] = count;
+      });
+      this.state.structureCounts.forEach((count, type) => {
+        const name = enumNameFromValue(StructureType, type)?.toUpperCase();
+        if (name) nearbyStructures[name] = count;
+      });
+    }
+
+    return {
+      position: { x: position.x, z: position.z },
+      chunk: { x: chunkX, y: chunkY },
+      loadedChunkCount: this.state.loadedChunks.size,
+      exploredChunkCount: this.state.exploredChunks.size,
+      dominantBiome: this.worldSession ? this.getDominantBiomeName() ?? undefined : undefined,
+      localBiome,
+      nearbyResources,
+      nearbyStructures,
+    };
+  }
+
   isWorkerPoolEnabled(): boolean {
     return this.state.workerPoolEnabled;
   }
@@ -494,11 +652,13 @@ export class WorldApp {
       
       this.state.loadedChunks.clear();
       this.state.exploredChunks.clear();
+      this.economySimulation.reset(seed);
       
       this.updateState({
         config: newManager.config,
         loadedChunks: new Map(),
-        exploredChunks: new Set()
+        exploredChunks: new Set(),
+        economy: this.economySimulation.getSnapshot(),
       });
       
       this.emit(AppEvent.WORLD_GENERATED, { seed });
@@ -546,11 +706,13 @@ export class WorldApp {
 
       this.state.loadedChunks.clear();
       this.state.exploredChunks.clear();
+      this.economySimulation.reset(newSeed);
 
       this.updateState({
         config: newManager.config,
         loadedChunks: new Map(),
         exploredChunks: new Set(),
+        economy: this.economySimulation.getSnapshot(),
       });
 
       this.emit(AppEvent.PLANET_LANDED, { seed: newSeed, lat, lon, temperatureOffset });
@@ -610,10 +772,12 @@ export class WorldApp {
       const avgTime = chunksLoaded > 0 ? (endTime - startTime) / chunksLoaded : 0;
 
       if (chunksLoaded > 0) {
+        const economy = this.syncEconomyWorldContext();
         this.updateState({
           loadedChunks: new Map(this.state.loadedChunks),
           loadedChunkCount: this.state.loadedChunks.size,
           avgGenerationTime: avgTime,
+          economy,
         });
       }
     } catch (error) {
@@ -642,14 +806,18 @@ export class WorldApp {
     this.syncLoadedChunksFromSession();
 
     if (chunksUnloaded > 5) {
+      const economy = this.syncEconomyWorldContext();
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
-        loadedChunkCount: this.state.loadedChunks.size
+        loadedChunkCount: this.state.loadedChunks.size,
+        economy,
       });
     } else if (chunksUnloaded > 0) {
+      const economy = this.syncEconomyWorldContext();
       this.updateState({
         loadedChunks: new Map(this.state.loadedChunks),
-        loadedChunkCount: this.state.loadedChunks.size
+        loadedChunkCount: this.state.loadedChunks.size,
+        economy,
       });
     }
   }
@@ -954,9 +1122,30 @@ export class WorldApp {
     this.subscribers.clear();
     this.eventListeners.clear();
     this.state.loadedChunks.clear();
+    this.economySimulation.reset(this.state.config.seed);
     this.detachWorldSessionEvents();
     this.worldSession?.dispose();
     this.worldSession = null;
     this.initialized = false;
   }
+}
+
+function clampInt(min: number, max: number, value: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function enumNameFromValue(enumObject: Record<string, string | number>, value: string | number): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  const name = enumObject[value];
+  return typeof name === 'string' ? name : undefined;
+}
+
+function formatEnumName(name: string | undefined): string | undefined {
+  if (!name) return undefined;
+  return name
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
 }

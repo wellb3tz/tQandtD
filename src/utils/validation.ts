@@ -89,6 +89,18 @@ export function validateTerrainConfig(config: TerrainConfig): void {
       validateRange('terrainConfig.continentalStrength', config.continentalStrength, 0, 1);
     }
   }
+
+  if (config.enableCliffs !== false) {
+    if (config.cliffStrength !== undefined) {
+      validateRange('terrainConfig.cliffStrength', config.cliffStrength, 0, 1);
+    }
+    if (config.cliffElevationStart !== undefined) {
+      validateRange('terrainConfig.cliffElevationStart', config.cliffElevationStart, 0, 1);
+    }
+    if (config.cliffScale !== undefined) {
+      validatePositive('terrainConfig.cliffScale', config.cliffScale);
+    }
+  }
 }
 
 /**
