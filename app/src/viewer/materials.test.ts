@@ -186,6 +186,7 @@ describe('terrain texture materials', () => {
     expect(shader.uniforms.terrainMountainRockNormal.value).toBe(library.mountainRock.normal);
     expect(shader.uniforms.terrainRiverbedAlbedo.value).toBe(library.riverbed.albedo);
     expect(shader.uniforms.terrainRiverbedNormal.value).toBe(library.riverbed.normal);
+    expect(shader.uniforms.terrainRiverbedMask.value).toBeInstanceOf(THREE.DataTexture);
     expect(shader.uniforms.terrainAlbedoPlains).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoSnow).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoForestFloor).toBeUndefined();
@@ -244,13 +245,19 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).not.toContain('smoothstep(0.46, 0.08');
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend.w');
     expect(shader.fragmentShader).toContain('directRiverbedWeight');
+    expect(shader.fragmentShader).toContain('terrainRiverbedMask');
+    expect(shader.fragmentShader).toContain('riverbedAlignedUv');
+    expect(shader.fragmentShader).toContain('float directRiverbedWeight = pixelRiverbedWeight');
+    expect(shader.fragmentShader).not.toContain('vSurfaceBlendC.z * 0.72');
+    expect(shader.fragmentShader).toContain('directRiverbedWeight * 0.82');
+    expect(shader.fragmentShader).toContain('roughnessRiverbedMask');
     expect(shader.fragmentShader).toContain('riverbedTextureTint');
     expect(shader.fragmentShader).toContain('roughnessFactor = mix');
     expect(shader.fragmentShader).toContain('vSurfaceBlendB');
     expect(material.vertexColors).toBe(true);
     expect(material.userData.terrainTexturesEnabled).toBe(true);
     const samplerCount = (shader.fragmentShader.match(/uniform sampler2D/g) ?? []).length;
-    expect(samplerCount).toBeLessThanOrEqual(6);
+    expect(samplerCount).toBeLessThanOrEqual(7);
     const atlasSampleCallCount = (shader.fragmentShader.match(/sampleTerrainAtlasTile\(/g) ?? []).length - 1;
     expect(atlasSampleCallCount).toBeLessThanOrEqual(3);
   });

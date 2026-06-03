@@ -14,6 +14,10 @@ export { RIVER_TRENCH_DARKEN_STRENGTH, getRiverbedDarkening, getRiverTrenchDarke
 
 export type TerrainSurfaceWeights = Record<TerrainSurfaceKey, number>;
 
+export interface TerrainSurfaceWeightOptions {
+  includeRiverbedSurface?: boolean;
+}
+
 export interface TerrainDetailModulationOptions {
   geometry: THREE.BufferGeometry;
   vertices: Float32Array;
@@ -26,11 +30,17 @@ export interface TerrainDetailModulationOptions {
   horizontalScale?: number;
 }
 
-export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, vertexY: number): TerrainSurfaceWeights {
+export function calculateVertexSurfaceWeights(
+  data: ChunkData,
+  vertexX: number,
+  vertexY: number,
+  options: TerrainSurfaceWeightOptions = {},
+): TerrainSurfaceWeights {
   const chunkSize = data.size;
   const verticesPerSide = chunkSize + 1;
   const weights = createEmptySurfaceWeights();
   const lakeTiles = collectLakeTileIndices(data);
+  const includeRiverbedSurface = options.includeRiverbedSurface ?? true;
 
   const samples: Array<{ x: number; y: number }> = [
     { x: vertexX - 1, y: vertexY - 1 },
@@ -61,7 +71,7 @@ export function calculateVertexSurfaceWeights(data: ChunkData, vertexX: number, 
     const riverBankSurfaceKey = selectRiverBankSurfaceKey(biome, elevation, riverBankInfluence);
     const surfaceKey = biome === BiomeType.OCEAN && elevation < 0.3
       ? 'riverbed'
-      : getRiverbedDarkening(data, sample.x, sample.y) < 0.82
+      : includeRiverbedSurface && getRiverbedDarkening(data, sample.x, sample.y) < 0.82
       ? 'riverbed'
       : cliffInfluence > 0.42
         ? 'mountainRock'

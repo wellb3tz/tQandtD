@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {
+  createTerrainBlendMaterial,
   getCachedTerrainMaterial,
   toGrayscale,
   type BiomeColor,
@@ -13,9 +14,18 @@ export interface TerrainMaterialOptions {
   terrainTextures: TerrainSurfaceTextureLibrary;
   terrainTexturesEnabled: boolean;
   wireframeMode: boolean;
+  riverbedMaskTexture?: THREE.Texture;
 }
 
 export function createTerrainMaterial(options: TerrainMaterialOptions): THREE.MeshStandardMaterial {
+  if (options.terrainTexturesEnabled && options.riverbedMaskTexture) {
+    return createTerrainBlendMaterial(
+      options.terrainTextures,
+      options.wireframeMode,
+      options.riverbedMaskTexture,
+    );
+  }
+
   return getCachedTerrainMaterial(
     options.terrainTexturesEnabled ? options.terrainTextures : null,
     options.wireframeMode,
@@ -152,8 +162,9 @@ export function replaceTerrainMaterial(mesh: THREE.Mesh, nextMaterial: THREE.Mes
   if (!Array.isArray(previousMaterial)) {
     nextMaterial.transparent = previousMaterial.transparent;
     nextMaterial.opacity = previousMaterial.opacity;
-    // NOTE: do NOT dispose previousMaterial - terrain materials are
-    // shared across all chunks via getCachedTerrainMaterial().
+    if (previousMaterial.userData.sharedTerrainMaterial !== true) {
+      previousMaterial.dispose();
+    }
   }
 
   mesh.material = nextMaterial;

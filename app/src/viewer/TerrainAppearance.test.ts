@@ -62,6 +62,7 @@ describe('TerrainAppearance', () => {
     const previous = mesh.material as THREE.MeshStandardMaterial;
     previous.transparent = true;
     previous.opacity = 0.5;
+    previous.userData.sharedTerrainMaterial = true;
     previous.dispose = vi.fn();
 
     setTerrainWireframe(mesh, true);
@@ -76,6 +77,17 @@ describe('TerrainAppearance', () => {
     expect(next.transparent).toBe(true);
     expect(next.opacity).toBe(0.5);
     expect(mesh.material).toBe(next);
+  });
+
+  it('disposes per-chunk terrain materials when replacing them', () => {
+    const mesh = createColorMesh(new Float32Array([1, 1, 1]));
+    const previous = mesh.material as THREE.MeshStandardMaterial;
+    previous.userData.sharedTerrainMaterial = false;
+    previous.dispose = vi.fn();
+
+    replaceTerrainMaterial(mesh, new THREE.MeshStandardMaterial());
+
+    expect(previous.dispose).toHaveBeenCalledOnce();
   });
 });
 

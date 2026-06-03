@@ -4,6 +4,7 @@ import type { TerrainSurfaceTextureLibrary } from './materials';
 import type { WaterConfig } from './water/types';
 import { createTerrainMaterial } from './TerrainAppearance';
 import { getGeometryWorkerManager } from './GeometryWorkerManager';
+import { createRiverbedMaskTexture } from './RiverbedMaskTexture';
 
 const HEIGHT_SCALE = TERRAIN_HEIGHT_SCALE_METERS;
 const HORIZONTAL_SCALE = TERRAIN_TILE_SIZE_METERS;
@@ -67,7 +68,13 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
 
   const { partialOpacity } = getPartialGenerationStyle(partial, stage);
 
-  const material = createTerrainMaterial({ terrainTextures, terrainTexturesEnabled, wireframeMode });
+  const riverbedMaskTexture = createRiverbedMaskTexture(buffers.chunkData);
+  const material = createTerrainMaterial({
+    terrainTextures,
+    terrainTexturesEnabled,
+    wireframeMode,
+    riverbedMaskTexture,
+  });
   // Reset shared material opacity - it may have been left transparent by orbit transition
   material.transparent = false;
   material.opacity = 1.0;
@@ -82,6 +89,7 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
   mesh.name = `terrain-${chunkX},${chunkY}`;
   mesh.receiveShadow = true;
   mesh.castShadow = true;
+  mesh.userData.riverbedMaskTexture = riverbedMaskTexture;
   if (partial) {
     mesh.userData.partial = true;
     mesh.userData.stage = stage;

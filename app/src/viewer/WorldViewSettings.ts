@@ -92,6 +92,7 @@ export class WorldViewSettings {
         terrainTextures: this.terrainTextures,
         terrainTexturesEnabled: this.terrainTexturesEnabled,
         wireframeMode: this.wireframeMode,
+        riverbedMaskTexture: chunkMesh.terrain.userData.riverbedMaskTexture,
       }));
     }
   }

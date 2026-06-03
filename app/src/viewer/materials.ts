@@ -21,6 +21,7 @@ export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png
 export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v3.png';
 export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v2.png';
 const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 1.34;
+const EMPTY_RIVERBED_MASK_TEXTURE = createEmptyRiverbedMaskTexture();
 
 export interface TerrainTextureSet {
   albedo: THREE.Texture;
@@ -258,6 +259,17 @@ function configureTerrainNormalAtlasTexture(texture: THREE.Texture): THREE.Textu
   return texture;
 }
 
+function createEmptyRiverbedMaskTexture(): THREE.DataTexture {
+  const texture = new THREE.DataTexture(new Uint8Array([0, 128, 128, 255]), 1, 1, THREE.RGBAFormat);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 export function createTerrainTextureSet(
   loader: THREE.TextureLoader = new THREE.TextureLoader(),
 ): TerrainTextureSet {
@@ -353,6 +365,7 @@ export function getCachedTerrainMaterial(
     material = texturesEnabled
       ? createTerrainBlendMaterial(textures!, wireframe)
       : createBiomeColorTerrainMaterial(wireframe);
+    material.userData.sharedTerrainMaterial = true;
     terrainMaterialCache.set(key, material);
   }
   return material;
@@ -372,6 +385,7 @@ export function clearTerrainMaterialCache(): void {
 export function createTerrainBlendMaterial(
   textures: TerrainSurfaceTextureLibrary,
   wireframe: boolean = false,
+  riverbedMaskTexture: THREE.Texture = EMPTY_RIVERBED_MASK_TEXTURE,
 ): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     map: textures.albedoAtlas,
@@ -389,6 +403,8 @@ export function createTerrainBlendMaterial(
   });
 
   material.userData.terrainTexturesEnabled = true;
+  material.userData.sharedTerrainMaterial = false;
+  material.userData.riverbedMaskTexture = riverbedMaskTexture;
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.terrainAlbedoAtlas = { value: textures.albedoAtlas };
@@ -397,6 +413,8 @@ export function createTerrainBlendMaterial(
     shader.uniforms.terrainMountainRockNormal = { value: textures.mountainRock.normal };
     shader.uniforms.terrainRiverbedAlbedo = { value: textures.riverbed.albedo };
     shader.uniforms.terrainRiverbedNormal = { value: textures.riverbed.normal };
+    shader.uniforms.terrainRiverbedMask = { value: material.userData.riverbedMaskTexture ?? EMPTY_RIVERBED_MASK_TEXTURE };
+    material.userData.terrainShader = shader;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -429,6 +447,7 @@ uniform sampler2D terrainMountainRockAlbedo;
 uniform sampler2D terrainMountainRockNormal;
 uniform sampler2D terrainRiverbedAlbedo;
 uniform sampler2D terrainRiverbedNormal;
+uniform sampler2D terrainRiverbedMask;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
@@ -564,7 +583,9 @@ float macroGroundNoiseValue = macroGroundNoise(terrainSurfaceUv(vMapUv));
 float dryGrassPatch = smoothstep(0.58, 0.86, macroGroundNoiseValue) * clamp(vSurfaceBlendA.x * 0.45 + vSurfaceBlendB.z * 0.95 + forestFloorWeight * 0.24, 0.0, 1.0);
 float freshGrassPatch = smoothstep(0.34, 0.70, 1.0 - abs(macroGroundNoiseValue - 0.42) * 2.35) * vegetatedGroundWeight;
 float wornGroundPatch = smoothstep(0.52, 0.82, 1.0 - abs(macroGroundNoiseValue - 0.52) * 2.05) * forestFloorWeight;
-float shorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.94 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
+vec4 riverbedMaskSample = texture2D(terrainRiverbedMask, fract(vMapUv));
+float pixelRiverbedWeight = smoothstep(0.03, 0.94, riverbedMaskSample.r);
+float shorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.40 + pixelRiverbedWeight * 1.00 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
 float wetLowlandPatch = smoothstep(0.40, 0.84, macroGroundNoiseValue) * shorelineWetness;
 float wetTerrainWeight = clamp(max(shorelineWetness, wetLowlandPatch), 0.0, 1.0);
 float riverBankAccent = clamp((vTerrainDetailBlend.z - vTerrainDetailBlend.w * 0.48) * (0.72 + vSurfaceBlendB.w * 0.45 + vSurfaceBlendA.z * 0.35), 0.0, 1.0);
@@ -611,13 +632,20 @@ float cliffAccent = smoothstep(0.04, 0.62, vTerrainDetailBlend.x);
 float snowAccent = smoothstep(0.20, 0.74, vTerrainDetailBlend.y);
 float shorelineAccent = smoothstep(0.02, 0.60, vTerrainDetailBlend.z);
 float riverbedAccent = smoothstep(0.02, 0.55, vTerrainDetailBlend.w);
-float directRiverbedWeight = clamp(vSurfaceBlendC.z * 0.72 + riverbedAccent * 0.58, 0.0, 1.0);
-vec2 riverbedUv = mirrorTerrainAtlasUv(vMapUv * vec2(3.10, 3.10) + vec2(0.17, 0.41));
+float directRiverbedWeight = pixelRiverbedWeight;
+vec2 riverbedFlow = riverbedMaskSample.gb * 2.0 - 1.0;
+riverbedFlow = length(riverbedFlow) > 0.001 ? normalize(riverbedFlow) : vec2(1.0, 0.0);
+vec2 riverbedCross = vec2(-riverbedFlow.y, riverbedFlow.x);
+vec2 riverbedAlignedUv = vec2(
+  dot(vMapUv * vec2(18.0), riverbedFlow),
+  dot(vMapUv * vec2(18.0), riverbedCross)
+);
+vec2 riverbedUv = mirrorTerrainAtlasUv(riverbedAlignedUv * vec2(0.72, 1.85) + vec2(0.17, 0.41));
 vec3 directRiverbed = texture2D(terrainRiverbedAlbedo, riverbedUv).rgb;
 vec3 directRiverbedNormal = texture2D(terrainRiverbedNormal, riverbedUv).rgb * 2.0 - 1.0;
 vec3 riverbedTextureTint = vec3(0.78, 0.88, 0.78);
-diffuseColor.rgb = mix(diffuseColor.rgb, directRiverbed * riverbedTextureTint * 1.28, directRiverbedWeight * 0.48);
-blendedTerrainNormal = normalize(mix(blendedTerrainNormal, directRiverbedNormal, directRiverbedWeight * 0.46));
+diffuseColor.rgb = mix(diffuseColor.rgb, directRiverbed * riverbedTextureTint * 1.28, directRiverbedWeight * 0.82);
+blendedTerrainNormal = normalize(mix(blendedTerrainNormal, directRiverbedNormal, directRiverbedWeight * 0.72));
 float rockStrata = rockStrataNoise(terrainSurfaceUv(vMapUv) * 0.74);
 float talusAccent = smoothstep(0.18, 0.72, rockStrata) * cliffAccent * (1.0 - snowAccent * 0.55);
 vec3 rockShadowTint = vec3(0.58, 0.57, 0.52);
@@ -631,7 +659,7 @@ float brokenSnowAccent = windScouredSnow * (0.40 + snowBreakup * 0.28);
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), brokenSnowAccent * 0.26);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.76, 0.82, 0.84), windScouredSnow * cliffAccent * rockStrata * 0.10);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, riverbedAccent * 0.54);`,
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, max(riverbedAccent, pixelRiverbedWeight) * 0.54);`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -657,10 +685,11 @@ float surfaceRoughnessBlend =
 roughnessFactor *= max(0.28, surfaceRoughnessBlend);
 roughnessFactor = mix(roughnessFactor, min(1.0, roughnessFactor + 0.12), vTerrainDetailBlend.x * 0.35);
 roughnessFactor = mix(roughnessFactor, 0.72, vTerrainDetailBlend.y * 0.25);
-float roughnessShorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.94 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
+float roughnessRiverbedMask = texture2D(terrainRiverbedMask, fract(vMapUv)).r;
+float roughnessShorelineWetness = clamp(vTerrainDetailBlend.z * 0.78 + vTerrainDetailBlend.w * 0.40 + roughnessRiverbedMask * 1.00 + vSurfaceBlendB.w * 0.50 + vSurfaceBlendC.z * 0.40, 0.0, 1.0);
 roughnessFactor = mix(roughnessFactor, 0.34, roughnessShorelineWetness * 0.68);
 roughnessFactor = mix(roughnessFactor, 0.46, clamp(vTerrainDetailBlend.z - vTerrainDetailBlend.w * 0.35, 0.0, 1.0) * 0.44);
-roughnessFactor = mix(roughnessFactor, 0.42, vTerrainDetailBlend.w * 0.60);`,
+roughnessFactor = mix(roughnessFactor, 0.42, max(vTerrainDetailBlend.w, roughnessRiverbedMask) * 0.60);`,
       );
   };
 

@@ -35,6 +35,7 @@ describe('TerrainMeshBuilder', () => {
     expect(geometry.getIndex()?.count).toBe(24);
     expect(mesh.name).toBe('terrain-2,3');
     expect(mesh.userData.chunkData).toBe(data);
+    expect(mesh.userData.riverbedMaskTexture).toBeInstanceOf(THREE.DataTexture);
   });
 
   it('marks early partial chunks as transparent preview meshes', async () => {
@@ -82,6 +83,35 @@ describe('TerrainMeshBuilder', () => {
     }
 
     expect(Math.max(...deviations)).toBeLessThan(0.001);
+  });
+
+  it('keeps legacy riverbed surface weights out of rendered terrain attributes', async () => {
+    const mesh = await createTerrainMesh({
+      chunkX: 0,
+      chunkY: 0,
+      data: createChunkData({
+        rivers: [{
+          riverId: 'river_1',
+          pathId: 'river_1:main',
+          isTributary: false,
+          points: [
+            { x: 0, y: 0, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+            { x: 2, y: 0, height: 0.5, surfaceLevel: 0.5, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+          ],
+          bounds: { minX: 0, maxX: 2, minY: 0, maxY: 0 },
+        }],
+      }),
+      waterConfig: DEFAULT_WATER_CONFIG,
+      terrainTextures: createEmptyTerrainTextures(),
+      terrainTexturesEnabled: false,
+      wireframeMode: false,
+    });
+
+    const surfaceBlendC = mesh.geometry.getAttribute('surfaceBlendC') as THREE.BufferAttribute;
+
+    for (let i = 0; i < surfaceBlendC.count; i++) {
+      expect(surfaceBlendC.getZ(i)).toBe(0);
+    }
   });
 });
 

@@ -33,11 +33,18 @@ describe('TerrainAttributeBuilder', () => {
     expect(weights.forestFloor).toBeCloseTo(0.25);
   });
 
-  it('marks wide river channels as riverbed surface and detail', () => {
+  it('marks river channels as riverbed surface for tooltip summaries', () => {
     const data = createRiverChunk();
 
     expect(getRiverTrenchDarkening(data, 0, 0)).toBeLessThan(1);
+    expect(getRiverbedDarkening(data, 0, 0)).toBeLessThan(1);
     expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
+  });
+
+  it('can omit legacy riverbed surface weights for terrain rendering', () => {
+    const data = createRiverChunk();
+
+    expect(calculateVertexSurfaceWeights(data, 0, 0, { includeRiverbedSurface: false }).riverbed).toBe(0);
   });
 
   it('paints damp riverbank surfaces outside the channel', () => {

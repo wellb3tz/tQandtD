@@ -196,9 +196,13 @@ function selectInitialFoliageLod(
 
 function removeAndDisposeChunkMesh(scene: THREE.Scene, chunkMesh: ChunkMesh): void {
   scene.remove(chunkMesh.terrain);
-  // NOTE: dispose geometry only - terrain material is shared across all
-  // chunks via getCachedTerrainMaterial() and must not be disposed here.
+  // Cached terrain materials are shared; riverbed-mask terrain materials are per chunk.
   chunkMesh.terrain.geometry.dispose();
+  const terrainMaterial = chunkMesh.terrain.material;
+  if (!Array.isArray(terrainMaterial) && terrainMaterial.userData.sharedTerrainMaterial !== true) {
+    terrainMaterial.dispose();
+  }
+  chunkMesh.terrain.userData.riverbedMaskTexture?.dispose?.();
 
   if (chunkMesh.resources) {
     scene.remove(chunkMesh.resources);

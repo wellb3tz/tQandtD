@@ -121,7 +121,9 @@ export function buildTerrainGeometryBuffers(
       colors[vertexIndex + 1] = color.g * partialTint.g;
       colors[vertexIndex + 2] = color.b * partialTint.b;
 
-      const surfaceWeights = calculateVertexSurfaceWeights(normalizedData, x, y);
+      const surfaceWeights = calculateVertexSurfaceWeights(normalizedData, x, y, {
+        includeRiverbedSurface: false,
+      });
       surfaceBlendA[blendIndex] = surfaceWeights.plains;
       surfaceBlendA[blendIndex + 1] = surfaceWeights.desert;
       surfaceBlendA[blendIndex + 2] = surfaceWeights.beach;
