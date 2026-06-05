@@ -23,13 +23,23 @@ describe('WorldRenderLoop', () => {
     const cameraInputController = { updateMovement: vi.fn(), updateFirstPersonPhysics: vi.fn() } as unknown as CameraInputController;
     const cameraViewController = createCameraViewController();
     const waterLayerManager = createWaterLayerManager();
+    const terrainMaterial = new THREE.MeshStandardMaterial();
+    terrainMaterial.userData.terrainShader = {
+      uniforms: {
+        terrainAnimationTime: { value: 0 },
+      },
+    };
+    const terrain = new THREE.Mesh(new THREE.BoxGeometry(), terrainMaterial);
+    const chunkMeshes = new Map<string, ChunkMesh>([
+      ['0,0', { terrain }],
+    ]);
 
     const loop = new WorldRenderLoop({
       scene: new THREE.Scene(),
       renderer: { render } as unknown as THREE.WebGLRenderer,
       cameraInputController,
       cameraViewController,
-      chunkMeshes: new Map(),
+      chunkMeshes,
       layerVisibility: createLayerVisibility(),
       waterLayerManager,
       getWaterConfig: () => DEFAULT_WATER_CONFIG,
@@ -51,6 +61,7 @@ describe('WorldRenderLoop', () => {
     expect(waterLayerManager.updateLakeSurfaces).toHaveBeenCalledOnce();
     expect(waterLayerManager.updateLakeSurfaces).toHaveBeenCalledWith(expect.any(Number));
     expect(waterLayerManager.updateRiverFlows).toHaveBeenCalledWith(expect.any(Number));
+    expect(terrainMaterial.userData.terrainShader.uniforms.terrainAnimationTime.value).toBeGreaterThan(0);
     expect(beforeRender).toHaveBeenCalledWith(cameraViewController.getActiveCamera());
     expect(render).toHaveBeenCalledOnce();
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7);

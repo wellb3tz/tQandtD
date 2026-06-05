@@ -21,6 +21,7 @@ export interface WorldChunkViewSettings {
   getTerrainTexturesEnabled(): boolean;
   getWireframeMode(): boolean;
   getFoliageLodEnabled(): boolean;
+  applyTerrainColorMode(chunkMesh: ChunkMesh): void;
 }
 
 export interface WorldChunkControllerOptions {
@@ -215,6 +216,7 @@ export class WorldChunkController {
       terrainTextures: this.viewSettings.getTerrainTextures(),
       terrainTexturesEnabled: this.viewSettings.getTerrainTexturesEnabled(),
       wireframeMode: this.viewSettings.getWireframeMode(),
+      applyTerrainColorMode: chunkMesh => this.viewSettings.applyTerrainColorMode(chunkMesh),
       foliageCameraPosition: {
         x: this.cameraWorldX,
         z: this.cameraWorldZ,

@@ -17,6 +17,7 @@ import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
 import type { WorldChunkController } from './WorldChunkController';
 import type { OrbitalTransitionController } from './planet/OrbitalTransitionController';
+import { updateTerrainMaterialAnimation } from './materials';
 
 export interface WorldRenderLoopOptions {
   scene: THREE.Scene;
@@ -94,6 +95,7 @@ export class WorldRenderLoop {
       const waterConfig = this.getWaterConfig();
 
       if (!isOrbital && !isTransitioning) {
+        this.updateTerrainAnimations(elapsedSeconds);
         this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
         this.waterLayerManager.updateLakeSurfaces(elapsedSeconds);
         this.waterLayerManager.updateRiverFlows(elapsedSeconds);
@@ -173,5 +175,19 @@ export class WorldRenderLoop {
     );
     this.lastFoliageLodCameraPosition = activeCamera.position.clone();
     this.lastFoliageLodChunkCount = chunkCount;
+  }
+
+  private updateTerrainAnimations(elapsedSeconds: number): void {
+    const seenMaterials = new Set<THREE.Material>();
+    for (const chunk of this.chunkMeshes.values()) {
+      const materials = Array.isArray(chunk.terrain.material)
+        ? chunk.terrain.material
+        : [chunk.terrain.material];
+      for (const material of materials) {
+        if (seenMaterials.has(material)) continue;
+        seenMaterials.add(material);
+        updateTerrainMaterialAnimation(material, elapsedSeconds);
+      }
+    }
   }
 }

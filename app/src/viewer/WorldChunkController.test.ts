@@ -33,6 +33,7 @@ describe('WorldChunkController', () => {
       terrainTextures: context.terrainTextures,
       terrainTexturesEnabled: true,
       wireframeMode: false,
+      applyTerrainColorMode: expect.any(Function),
       foliageLodEnabled: true,
     }));
     expect(onChunksChanged).toHaveBeenCalledTimes(1);
@@ -230,6 +231,7 @@ function createContext(overrides: {
     getTerrainTexturesEnabled: () => true,
     getWireframeMode: () => false,
     getFoliageLodEnabled: () => true,
+    applyTerrainColorMode: vi.fn(),
   };
   const controller = new WorldChunkController({
     scene,

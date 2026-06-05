@@ -18,8 +18,8 @@ export { clamp01, selectTerrainSurfaceKey, type TerrainSurfaceKey } from './terr
 export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
-export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v3.png';
-export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v2.png';
+export const TERRAIN_ALBEDO_ATLAS_TEXTURE_URL = '/textures/terrain-albedo-atlas-v5.png';
+export const TERRAIN_NORMAL_ATLAS_TEXTURE_URL = '/textures/terrain-normal-atlas-v4.png';
 const TERRAIN_TEXTURE_VERTEX_COLOR_BOOST = 1.34;
 const EMPTY_RIVERBED_MASK_TEXTURE = createEmptyRiverbedMaskTexture();
 
@@ -76,14 +76,14 @@ export const TERRAIN_SURFACE_TEXTURE_URLS: Record<TerrainSurfaceKey, TerrainText
     roughness: '/textures/terrain-swamp-mud-roughness-v1.png',
   },
   volcanicRock: {
-    albedo: '/textures/terrain-volcanic-rock-albedo-v1.png',
-    normal: '/textures/terrain-volcanic-rock-normal-v1.png',
-    roughness: '/textures/terrain-volcanic-rock-roughness-v1.png',
+    albedo: '/textures/terrain-volcanic-rock-albedo-v2.png',
+    normal: '/textures/terrain-volcanic-rock-normal-v2.png',
+    roughness: '/textures/terrain-volcanic-rock-roughness-v2.png',
   },
   ice: {
-    albedo: '/textures/terrain-ice-albedo-v1.png',
-    normal: '/textures/terrain-ice-normal-v1.png',
-    roughness: '/textures/terrain-ice-roughness-v1.png',
+    albedo: '/textures/terrain-ice-albedo-v2.png',
+    normal: '/textures/terrain-ice-normal-v2.png',
+    roughness: '/textures/terrain-ice-roughness-v2.png',
   },
   riverbed: {
     albedo: '/textures/terrain-riverbed-albedo-v2.png',
@@ -409,11 +409,14 @@ export function createTerrainBlendMaterial(
   material.onBeforeCompile = (shader) => {
     shader.uniforms.terrainAlbedoAtlas = { value: textures.albedoAtlas };
     shader.uniforms.terrainNormalAtlas = { value: textures.normalAtlas };
+    shader.uniforms.terrainVolcanicRockAlbedo = { value: textures.volcanicRock.albedo };
+    shader.uniforms.terrainVolcanicRockNormal = { value: textures.volcanicRock.normal };
     shader.uniforms.terrainMountainRockAlbedo = { value: textures.mountainRock.albedo };
     shader.uniforms.terrainMountainRockNormal = { value: textures.mountainRock.normal };
     shader.uniforms.terrainRiverbedAlbedo = { value: textures.riverbed.albedo };
     shader.uniforms.terrainRiverbedNormal = { value: textures.riverbed.normal };
     shader.uniforms.terrainRiverbedMask = { value: material.userData.riverbedMaskTexture ?? EMPTY_RIVERBED_MASK_TEXTURE };
+    shader.uniforms.terrainAnimationTime = { value: 0 };
     material.userData.terrainShader = shader;
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -443,11 +446,14 @@ vTerrainDetailBlend = terrainDetailBlend;`,
         `#include <common>
 uniform sampler2D terrainAlbedoAtlas;
 uniform sampler2D terrainNormalAtlas;
+uniform sampler2D terrainVolcanicRockAlbedo;
+uniform sampler2D terrainVolcanicRockNormal;
 uniform sampler2D terrainMountainRockAlbedo;
 uniform sampler2D terrainMountainRockNormal;
 uniform sampler2D terrainRiverbedAlbedo;
 uniform sampler2D terrainRiverbedNormal;
 uniform sampler2D terrainRiverbedMask;
+uniform float terrainAnimationTime;
 varying vec4 vSurfaceBlendA;
 varying vec4 vSurfaceBlendB;
 varying vec4 vSurfaceBlendC;
@@ -568,6 +574,21 @@ float microGroundNoiseValue = microGroundNoise(terrainSurfaceUv(vMapUv));
 vec3 terrainDetailContrast = clamp((blendedTerrainMap.rgb - vec3(0.50)) * 3.35 + vec3(0.72), vec3(0.24), vec3(1.68));
 terrainDetailContrast *= 0.90 + microGroundNoiseValue * 0.22;
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * terrainDetailContrast, 0.98);
+float volcanicSurfaceWeight = smoothstep(0.18, 0.72, clamp(vSurfaceBlendC.x * 1.35, 0.0, 1.0));
+vec2 directVolcanicUv = terrainSurfaceUv(vMapUv);
+vec3 rawVolcanicAlbedo = texture2D(terrainVolcanicRockAlbedo, directVolcanicUv).rgb;
+float directVolcanicLavaMask = smoothstep(0.12, 0.36, rawVolcanicAlbedo.r - max(rawVolcanicAlbedo.g, rawVolcanicAlbedo.b) * 1.08) * smoothstep(0.20, 0.58, rawVolcanicAlbedo.r);
+vec2 directVolcanicMountainUv = mirrorTerrainAtlasUv(directVolcanicUv * 0.52 + vec2(0.17, 0.31));
+vec3 directVolcanicMountainRock = texture2D(terrainMountainRockAlbedo, directVolcanicMountainUv).rgb;
+float volcanicRockPatch = smoothstep(0.22, 0.82, terrainValueNoise(directVolcanicUv * 0.28 + vec2(9.0, 17.0)));
+float volcanicMountainMix = (0.26 + volcanicRockPatch * 0.24) * (1.0 - directVolcanicLavaMask * 0.90);
+vec3 directVolcanicAlbedo = mix(rawVolcanicAlbedo, directVolcanicMountainRock * vec3(0.64, 0.62, 0.57), volcanicMountainMix);
+float directVolcanicPulse = 0.35 + 0.65 * (0.5 + 0.5 * sin(terrainAnimationTime * 2.45 + terrainValueNoise(directVolcanicUv * 2.2) * 6.283));
+vec3 directVolcanicAnimatedAlbedo = min(vec3(1.0), directVolcanicAlbedo + vec3(0.76, 0.30, 0.07) * directVolcanicLavaMask * directVolcanicPulse);
+float iceSurfaceWeight = clamp(vSurfaceBlendC.y * 1.55, 0.0, 1.0);
+vec3 iceAlbedo = mix(vec3(0.78, 0.93, 1.0), blendedTerrainMap.rgb * vec3(0.94, 1.04, 1.10), 0.38);
+iceAlbedo *= 0.94 + microGroundNoiseValue * 0.10;
+diffuseColor.rgb = mix(diffuseColor.rgb, iceAlbedo, smoothstep(0.12, 0.72, iceSurfaceWeight) * 0.96);
 diffuseColor.a *= blendedTerrainMap.a;
 vec3 blendedTerrainNormalRaw = (
   sampleTerrainNormalAtlasTile(primarySurfaceTile, terrainSurfaceUv(vMapUv)).rgb * primaryTerrainWeight +
@@ -575,9 +596,19 @@ vec3 blendedTerrainNormalRaw = (
   sampleTerrainNormalAtlasTile(tertiarySurfaceTile, terrainSurfaceUv(vMapUv)).rgb * tertiaryTerrainWeight
 ) / terrainSurfaceWeightSum;
 blendedTerrainNormal = blendedTerrainNormalRaw * 2.0 - 1.0;
+vec3 directVolcanicNormal = texture2D(terrainVolcanicRockNormal, directVolcanicUv).rgb * 2.0 - 1.0;
+vec3 directVolcanicMountainNormal = texture2D(terrainMountainRockNormal, directVolcanicMountainUv).rgb * 2.0 - 1.0;
+directVolcanicNormal = normalize(mix(directVolcanicNormal, directVolcanicMountainNormal, volcanicMountainMix * 0.72));
+blendedTerrainNormal = normalize(mix(blendedTerrainNormal, directVolcanicNormal, volcanicSurfaceWeight * 0.98));
 float forestFloorWeight = clamp(vSurfaceBlendB.y + vSurfaceBlendB.w * 0.35, 0.0, 1.0);
 vec3 forestFloorTint = vec3(0.86, 0.96, 0.76);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * forestFloorTint, forestFloorWeight * 0.16);
+float desertSurfaceWeight = clamp(vSurfaceBlendA.y * 1.35, 0.0, 1.0);
+float nonVolcanicSurfaceWeight = 1.0 - volcanicSurfaceWeight;
+float sandySurfaceWeight = clamp(vSurfaceBlendA.z * 1.20 + vSurfaceBlendA.y * 0.85, 0.0, 1.0) * nonVolcanicSurfaceWeight;
+vec3 desertAlbedo = mix(vec3(0.88, 0.76, 0.46), blendedTerrainMap.rgb * vec3(1.10, 0.94, 0.70), 0.42);
+desertAlbedo *= 0.94 + microGroundNoiseValue * 0.12;
+diffuseColor.rgb = mix(diffuseColor.rgb, desertAlbedo, smoothstep(0.16, 0.76, desertSurfaceWeight) * 0.92);
 float vegetatedGroundWeight = clamp(vSurfaceBlendA.x * 0.70 + vSurfaceBlendB.y + vSurfaceBlendB.z * 0.85 + vSurfaceBlendB.w * 0.55, 0.0, 1.0);
 float macroGroundNoiseValue = macroGroundNoise(terrainSurfaceUv(vMapUv));
 float dryGrassPatch = smoothstep(0.58, 0.86, macroGroundNoiseValue) * clamp(vSurfaceBlendA.x * 0.45 + vSurfaceBlendB.z * 0.95 + forestFloorWeight * 0.24, 0.0, 1.0);
@@ -594,8 +625,8 @@ float paleSandPatch = smoothstep(0.55, 0.90, macroGroundNoiseValue) * riverBankA
 vec3 freshGrassPatchTint = vec3(0.90, 1.08, 0.82);
 vec3 dryGrassPatchTint = vec3(1.12, 1.00, 0.70);
 vec3 wornGroundTint = vec3(0.74, 0.67, 0.50);
-vec3 wetLowlandTint = vec3(0.56, 0.67, 0.61);
-vec3 wetGlossTint = vec3(0.95, 1.02, 0.98);
+vec3 wetLowlandTint = mix(vec3(0.56, 0.67, 0.61), vec3(0.88, 0.78, 0.55), sandySurfaceWeight);
+vec3 wetGlossTint = mix(vec3(0.95, 1.02, 0.98), vec3(1.08, 0.98, 0.78), sandySurfaceWeight);
 vec3 riverBankSiltTint = vec3(0.58, 0.62, 0.45);
 vec3 riverBankSandTint = vec3(1.18, 1.08, 0.74);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * freshGrassPatchTint, freshGrassPatch * 0.10);
@@ -626,7 +657,7 @@ vec3 talusBeltTint = mix(vec3(0.48, 0.47, 0.42), vec3(0.62, 0.58, 0.47), microGr
 diffuseColor.rgb = mix(diffuseColor.rgb, directMountainRock * talusBeltTint * 1.42, talusBeltWeight * 0.38);
 vec3 cliffTint = vec3(0.50, 0.50, 0.47);
 vec3 snowPeakTint = vec3(0.96, 1.00, 1.03);
-vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54);
+vec3 wetShorelineTint = mix(vec3(0.40, 0.52, 0.54), vec3(0.82, 0.75, 0.55), sandySurfaceWeight);
 vec3 riverbedTint = vec3(0.42, 0.48, 0.44);
 float cliffAccent = smoothstep(0.04, 0.62, vTerrainDetailBlend.x);
 float snowAccent = smoothstep(0.20, 0.74, vTerrainDetailBlend.y);
@@ -659,7 +690,12 @@ float brokenSnowAccent = windScouredSnow * (0.40 + snowBreakup * 0.28);
 diffuseColor.rgb = mix(diffuseColor.rgb, min(vec3(1.0), diffuseColor.rgb * snowPeakTint), brokenSnowAccent * 0.26);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.76, 0.82, 0.84), windScouredSnow * cliffAccent * rockStrata * 0.10);
 diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * wetShorelineTint, shorelineAccent * 0.72);
-diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, max(riverbedAccent, pixelRiverbedWeight) * 0.54);`,
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * riverbedTint, max(riverbedAccent, pixelRiverbedWeight) * 0.54);
+float sandFinalWeight = smoothstep(0.08, 0.58, sandySurfaceWeight) * (1.0 - max(riverbedAccent, pixelRiverbedWeight) * 0.92);
+vec3 sandAlbedo = mix(vec3(0.84, 0.74, 0.50), blendedTerrainMap.rgb * vec3(1.12, 1.00, 0.74), 0.46);
+sandAlbedo *= 0.94 + microGroundNoiseValue * 0.10;
+diffuseColor.rgb = mix(diffuseColor.rgb, sandAlbedo, sandFinalWeight * 0.88);
+diffuseColor.rgb = mix(diffuseColor.rgb, directVolcanicAnimatedAlbedo, volcanicSurfaceWeight * 0.98);`,
       )
       .replace(
         '#include <normal_fragment_maps>',
@@ -694,6 +730,14 @@ roughnessFactor = mix(roughnessFactor, 0.42, max(vTerrainDetailBlend.w, roughnes
   };
 
   return material;
+}
+
+export function updateTerrainMaterialAnimation(material: THREE.Material, elapsedSeconds: number): void {
+  const shader = material.userData.terrainShader as THREE.Shader | undefined;
+  const uniform = shader?.uniforms.terrainAnimationTime;
+  if (uniform) {
+    uniform.value = elapsedSeconds;
+  }
 }
 
 /**

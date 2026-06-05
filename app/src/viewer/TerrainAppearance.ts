@@ -9,12 +9,21 @@ import {
 import type { ChunkData } from '@engine/index';
 
 type WireframeMaterial = THREE.Material & { wireframe: boolean };
+type TerrainColorUserData = {
+  originalColors?: Float32Array;
+};
 
 export interface TerrainMaterialOptions {
   terrainTextures: TerrainSurfaceTextureLibrary;
   terrainTexturesEnabled: boolean;
   wireframeMode: boolean;
   riverbedMaskTexture?: THREE.Texture;
+}
+
+export interface TerrainColorModeOptions {
+  showBiomes: boolean;
+  showTemperature: boolean;
+  chunkData: ChunkData | null;
 }
 
 export function createTerrainMaterial(options: TerrainMaterialOptions): THREE.MeshStandardMaterial {
@@ -33,81 +42,93 @@ export function createTerrainMaterial(options: TerrainMaterialOptions): THREE.Me
 }
 
 export function updateTerrainBiomeColors(mesh: THREE.Mesh, showBiomes: boolean): void {
+  applyTerrainColorMode(mesh, {
+    showBiomes,
+    showTemperature: false,
+    chunkData: null,
+  });
+}
+
+export function updateTerrainTemperatureColors(mesh: THREE.Mesh, showTemperature: boolean, chunkData: ChunkData | null): void {
+  applyTerrainColorMode(mesh, {
+    showBiomes: true,
+    showTemperature,
+    chunkData,
+  });
+}
+
+export function applyTerrainColorMode(mesh: THREE.Mesh, options: TerrainColorModeOptions): void {
   const geometry = mesh.geometry;
   const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
   if (!colors) return;
 
   const colorArray = colors.array as Float32Array;
+  const userData = mesh.userData as TerrainColorUserData;
+  const originalColors = getOriginalColors(userData, colorArray);
 
-  if (showBiomes) {
-    if (mesh.userData.originalColors) {
-      for (let i = 0; i < colorArray.length; i++) {
-        colorArray[i] = mesh.userData.originalColors[i];
-      }
-    }
+  if (options.showTemperature && options.chunkData?.temperatureMap) {
+    applyTemperatureColors(colorArray, options.chunkData);
+  } else if (options.showBiomes) {
+    restoreColors(colorArray, originalColors);
   } else {
-    if (!mesh.userData.originalColors) {
-      mesh.userData.originalColors = new Float32Array(colorArray);
-    }
-
-    for (let i = 0; i < colorArray.length; i += 3) {
-      const color: BiomeColor = {
-        r: colorArray[i],
-        g: colorArray[i + 1],
-        b: colorArray[i + 2],
-      };
-      const gray = toGrayscale(color);
-      colorArray[i] = gray.r;
-      colorArray[i + 1] = gray.g;
-      colorArray[i + 2] = gray.b;
-    }
+    applyGrayscaleColors(colorArray, originalColors);
   }
 
   colors.needsUpdate = true;
 }
 
-export function updateTerrainTemperatureColors(mesh: THREE.Mesh, showTemperature: boolean, chunkData: ChunkData | null): void {
-  const geometry = mesh.geometry;
-  const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
-  if (!colors) return;
-
-  const colorArray = colors.array as Float32Array;
-
-  if (showTemperature && chunkData?.temperatureMap) {
-    if (!mesh.userData.originalColors) {
-      mesh.userData.originalColors = new Float32Array(colorArray);
-    }
-
-    const temperatureMap = chunkData.temperatureMap;
-    const chunkSize = chunkData.size;
-    const verticesPerSide = chunkSize + 1;
-
-    for (let vy = 0; vy <= chunkSize; vy++) {
-      for (let vx = 0; vx <= chunkSize; vx++) {
-        const vertexIndex = vy * verticesPerSide + vx;
-        const colorIndex = vertexIndex * 3;
-
-        const tileX = Math.min(vx, chunkSize - 1);
-        const tileY = Math.min(vy, chunkSize - 1);
-        const tileIndex = tileY * chunkSize + tileX;
-
-        const temperature = tileIndex < temperatureMap.length ? temperatureMap[tileIndex] : 0;
-        const tempColor = temperatureToColor(temperature);
-
-        colorArray[colorIndex] = tempColor.r;
-        colorArray[colorIndex + 1] = tempColor.g;
-        colorArray[colorIndex + 2] = tempColor.b;
-      }
-    }
-  } else {
-    if (mesh.userData.originalColors) {
-      for (let i = 0; i < colorArray.length; i++) {
-        colorArray[i] = mesh.userData.originalColors[i];
-      }
-    }
+function getOriginalColors(userData: TerrainColorUserData, colorArray: Float32Array): Float32Array {
+  if (!userData.originalColors || userData.originalColors.length !== colorArray.length) {
+    userData.originalColors = new Float32Array(colorArray);
   }
 
-  colors.needsUpdate = true;
+  return userData.originalColors;
+}
+
+function restoreColors(colorArray: Float32Array, originalColors: Float32Array): void {
+  for (let i = 0; i < colorArray.length; i++) {
+    colorArray[i] = originalColors[i];
+  }
+}
+
+function applyGrayscaleColors(colorArray: Float32Array, originalColors: Float32Array): void {
+  for (let i = 0; i < colorArray.length; i += 3) {
+    const color: BiomeColor = {
+      r: originalColors[i],
+      g: originalColors[i + 1],
+      b: originalColors[i + 2],
+    };
+    const gray = toGrayscale(color);
+    colorArray[i] = gray.r;
+    colorArray[i + 1] = gray.g;
+    colorArray[i + 2] = gray.b;
+  }
+}
+
+function applyTemperatureColors(colorArray: Float32Array, chunkData: ChunkData): void {
+  const temperatureMap = chunkData.temperatureMap;
+  if (!temperatureMap) return;
+
+  const chunkSize = chunkData.size;
+  const verticesPerSide = chunkSize + 1;
+
+  for (let vy = 0; vy <= chunkSize; vy++) {
+    for (let vx = 0; vx <= chunkSize; vx++) {
+      const vertexIndex = vy * verticesPerSide + vx;
+      const colorIndex = vertexIndex * 3;
+
+      const tileX = Math.min(vx, chunkSize - 1);
+      const tileY = Math.min(vy, chunkSize - 1);
+      const tileIndex = tileY * chunkSize + tileX;
+
+      const temperature = tileIndex < temperatureMap.length ? temperatureMap[tileIndex] : 0;
+      const tempColor = temperatureToColor(temperature);
+
+      colorArray[colorIndex] = tempColor.r;
+      colorArray[colorIndex + 1] = tempColor.g;
+      colorArray[colorIndex + 2] = tempColor.b;
+    }
+  }
 }
 
 function temperatureToColor(temperature: number): BiomeColor {

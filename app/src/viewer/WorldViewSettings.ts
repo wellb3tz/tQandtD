@@ -1,10 +1,9 @@
 import type { TerrainSurfaceTextureLibrary } from './materials';
 import {
+  applyTerrainColorMode,
   createTerrainMaterial,
   replaceTerrainMaterial,
   setTerrainWireframe,
-  updateTerrainBiomeColors,
-  updateTerrainTemperatureColors,
 } from './TerrainAppearance';
 import {
   applyRenderLayerVisibility,
@@ -24,6 +23,8 @@ export class WorldViewSettings {
   private wireframeMode = false;
   private terrainTexturesEnabled = true;
   private foliageLodEnabled = true;
+  private showBiomes = true;
+  private showTemperature = false;
 
   constructor(options: {
     chunkMeshes: Map<string, ChunkMesh>;
@@ -63,12 +64,15 @@ export class WorldViewSettings {
 
   setVisibility(layer: RenderLayer, visible: boolean): void {
     this.layerVisibility.set(layer, visible);
+    if (layer === RenderLayer.BIOMES) {
+      this.showBiomes = visible;
+    } else if (layer === RenderLayer.TEMPERATURE) {
+      this.showTemperature = visible;
+    }
 
     for (const chunkMesh of this.chunkMeshes.values()) {
-      if (layer === RenderLayer.BIOMES) {
-        updateTerrainBiomeColors(chunkMesh.terrain, visible);
-      } else if (layer === RenderLayer.TEMPERATURE) {
-        updateTerrainTemperatureColors(chunkMesh.terrain, visible, chunkMesh.data ?? null);
+      if (layer === RenderLayer.BIOMES || layer === RenderLayer.TEMPERATURE) {
+        this.applyTerrainColorMode(chunkMesh);
       } else {
         applyRenderLayerVisibility(chunkMesh, layer, this.layerVisibility);
       }
@@ -131,5 +135,21 @@ export class WorldViewSettings {
 
   getWireframeMode(): boolean {
     return this.wireframeMode;
+  }
+
+  getShowBiomes(): boolean {
+    return this.showBiomes;
+  }
+
+  getShowTemperature(): boolean {
+    return this.showTemperature;
+  }
+
+  applyTerrainColorMode(chunkMesh: ChunkMesh): void {
+    applyTerrainColorMode(chunkMesh.terrain, {
+      showBiomes: this.showBiomes,
+      showTemperature: this.showTemperature,
+      chunkData: chunkMesh.data ?? null,
+    });
   }
 }

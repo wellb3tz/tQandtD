@@ -37,6 +37,7 @@ export interface AddChunkToSceneOptions {
   wireframeMode: boolean;
   foliageCameraPosition?: { x: number; z: number };
   foliageLodEnabled?: boolean;
+  applyTerrainColorMode?: (chunkMesh: ChunkMesh) => void;
 }
 
 export interface RemoveChunkFromSceneOptions {
@@ -72,6 +73,7 @@ export async function addChunkToScene(options: AddChunkToSceneOptions): Promise<
   }
 
   const chunkMesh = await createChunkMesh(options, partial, stage);
+  options.applyTerrainColorMode?.(chunkMesh);
   chunkMeshes.set(key, chunkMesh);
   stitchChunkAndNeighbours(chunkMeshes, options.waterLayerManager, chunkX, chunkY, data.size);
   return true;

@@ -13,6 +13,7 @@ import {
   createTerrainBlendMaterial,
   createTerrainSurfaceTextureLibrary,
   createTerrainTextureSet,
+  updateTerrainMaterialAnimation,
 } from './materials';
 import { selectTerrainSurfaceKey } from './terrain-geometry-types';
 
@@ -182,11 +183,14 @@ describe('terrain texture materials', () => {
 
     expect(shader.uniforms.terrainAlbedoAtlas.value).toBe(library.albedoAtlas);
     expect(shader.uniforms.terrainNormalAtlas.value).toBe(library.normalAtlas);
+    expect(shader.uniforms.terrainVolcanicRockAlbedo.value).toBe(library.volcanicRock.albedo);
+    expect(shader.uniforms.terrainVolcanicRockNormal.value).toBe(library.volcanicRock.normal);
     expect(shader.uniforms.terrainMountainRockAlbedo.value).toBe(library.mountainRock.albedo);
     expect(shader.uniforms.terrainMountainRockNormal.value).toBe(library.mountainRock.normal);
     expect(shader.uniforms.terrainRiverbedAlbedo.value).toBe(library.riverbed.albedo);
     expect(shader.uniforms.terrainRiverbedNormal.value).toBe(library.riverbed.normal);
     expect(shader.uniforms.terrainRiverbedMask.value).toBeInstanceOf(THREE.DataTexture);
+    expect(shader.uniforms.terrainAnimationTime.value).toBe(0);
     expect(shader.uniforms.terrainAlbedoPlains).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoSnow).toBeUndefined();
     expect(shader.uniforms.terrainAlbedoForestFloor).toBeUndefined();
@@ -205,10 +209,30 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('considerTerrainAtlasTile');
     expect(shader.fragmentShader).toContain('atlasTilePixels = vec2(256.0, 256.0)');
     expect(shader.fragmentShader).toContain('terrainDetailContrast');
+    expect(shader.fragmentShader).toContain('iceSurfaceWeight');
+    expect(shader.fragmentShader).toContain('vec3 iceAlbedo');
+    expect(shader.fragmentShader).toContain('desertSurfaceWeight');
+    expect(shader.fragmentShader).toContain('sandySurfaceWeight');
+    expect(shader.fragmentShader).toContain('vec3 desertAlbedo');
+    expect(shader.fragmentShader).toContain('sandFinalWeight');
+    expect(shader.fragmentShader).toContain('vec3 sandAlbedo');
+    expect(shader.fragmentShader).toContain('volcanicSurfaceWeight');
+    expect(shader.fragmentShader).toContain('rawVolcanicAlbedo');
+    expect(shader.fragmentShader).toContain('directVolcanicAlbedo');
+    expect(shader.fragmentShader).toContain('directVolcanicMountainRock');
+    expect(shader.fragmentShader).toContain('volcanicMountainMix');
+    expect(shader.fragmentShader).toContain('directVolcanicLavaMask');
+    expect(shader.fragmentShader).toContain('directVolcanicPulse');
+    expect(shader.fragmentShader).toContain('directVolcanicAnimatedAlbedo');
+    expect(shader.fragmentShader).toContain('directVolcanicNormal');
+    expect(shader.fragmentShader).toContain('directVolcanicMountainNormal');
+    expect(shader.fragmentShader).toContain('nonVolcanicSurfaceWeight');
     expect(shader.fragmentShader).toContain('surfaceRoughnessBlend');
     expect(shader.fragmentShader).toContain('vTerrainDetailBlend');
     expect(shader.fragmentShader).toContain('terrainMountainRockAlbedo');
     expect(shader.fragmentShader).toContain('terrainMountainRockNormal');
+    expect(shader.fragmentShader).toContain('terrainVolcanicRockAlbedo');
+    expect(shader.fragmentShader).toContain('terrainVolcanicRockNormal');
     expect(shader.fragmentShader).toContain('terrainRiverbedAlbedo');
     expect(shader.fragmentShader).toContain('terrainRiverbedNormal');
     expect(shader.fragmentShader).not.toContain('terrainRoughnessMountainRock');
@@ -233,7 +257,7 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('mountainRockWeight');
     expect(shader.fragmentShader).toContain('brokenSnowAccent');
     expect(shader.fragmentShader).toContain('vec3 snowPeakTint = vec3(0.96, 1.00, 1.03)');
-    expect(shader.fragmentShader).toContain('vec3 wetShorelineTint = vec3(0.40, 0.52, 0.54)');
+    expect(shader.fragmentShader).toContain('vec3 wetShorelineTint = mix');
     expect(shader.fragmentShader).toContain('forestFloorTint');
     expect(shader.fragmentShader).toContain('macroGroundNoise');
     expect(shader.fragmentShader).toContain('freshGrassPatchTint');
@@ -256,8 +280,10 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('vSurfaceBlendB');
     expect(material.vertexColors).toBe(true);
     expect(material.userData.terrainTexturesEnabled).toBe(true);
+    updateTerrainMaterialAnimation(material, 12.5);
+    expect(shader.uniforms.terrainAnimationTime.value).toBe(12.5);
     const samplerCount = (shader.fragmentShader.match(/uniform sampler2D/g) ?? []).length;
-    expect(samplerCount).toBeLessThanOrEqual(7);
+    expect(samplerCount).toBeLessThanOrEqual(9);
     const atlasSampleCallCount = (shader.fragmentShader.match(/sampleTerrainAtlasTile\(/g) ?? []).length - 1;
     expect(atlasSampleCallCount).toBeLessThanOrEqual(3);
   });

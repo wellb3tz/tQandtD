@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  applyTerrainColorMode,
   createTerrainMaterial,
   replaceTerrainMaterial,
   setTerrainWireframe,
@@ -55,6 +56,30 @@ describe('TerrainAppearance', () => {
     expect(colors.getX(1)).toBeCloseTo(0);
     expect(colors.getY(1)).toBeCloseTo(1);
     expect(colors.getZ(1)).toBeCloseTo(0);
+  });
+
+  it('keeps biome colors hidden when the temperature overlay is off', () => {
+    const mesh = createColorMesh(new Float32Array([
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0,
+      1.0, 1.0, 0.0,
+    ]));
+    const colors = mesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+
+    applyTerrainColorMode(mesh, {
+      showBiomes: false,
+      showTemperature: false,
+      chunkData: {
+        size: 1,
+        temperatureMap: new Float32Array([0.5]),
+      } as any,
+    });
+
+    expect(colors.getX(0)).toBeCloseTo(colors.getY(0));
+    expect(colors.getY(0)).toBeCloseTo(colors.getZ(0));
+    expect(colors.getX(1)).toBeCloseTo(colors.getY(1));
+    expect(colors.getY(1)).toBeCloseTo(colors.getZ(1));
   });
 
   it('updates wireframe and preserves opacity when replacing material', () => {

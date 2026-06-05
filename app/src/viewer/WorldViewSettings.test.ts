@@ -30,6 +30,21 @@ describe('WorldViewSettings', () => {
     expect(terrain.userData.originalColors).toBeInstanceOf(Float32Array);
   });
 
+  it('does not let disabled temperature overlay restore hidden biome colors', () => {
+    const terrain = createTerrainMesh();
+    const chunkMeshes = new Map<string, ChunkMesh>([
+      ['0,0', { terrain, data: { size: 1, temperatureMap: new Float32Array([0.5]) } as any, visible: true }],
+    ]);
+    const settings = createSettings(chunkMeshes);
+    const colors = terrain.geometry.getAttribute('color') as THREE.BufferAttribute;
+
+    settings.setVisibility(RenderLayer.BIOMES, false);
+    settings.setVisibility(RenderLayer.TEMPERATURE, false);
+
+    expect(colors.getX(0)).toBeCloseTo(colors.getY(0));
+    expect(colors.getY(0)).toBeCloseTo(colors.getZ(0));
+  });
+
   it('toggles wireframe and replaces terrain materials when texture mode changes', () => {
     const terrain = createTerrainMesh();
     const chunkMeshes = new Map<string, ChunkMesh>([

@@ -325,8 +325,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
   const rock = { r: 0.42, g: 0.42, b: 0.39 };
   const snow = { r: 0.88, g: 0.91, b: 0.93 };
   const lava = { r: 0.72, g: 0.12, b: 0.04 };
-  const wetSand = { r: 0.55, g: 0.48, b: 0.32 };
-  const coastalCliff = { r: 0.46, g: 0.42, b: 0.36 };
+  const wetSand = { r: 0.74, g: 0.66, b: 0.46 };
+  const coastalCliff = { r: 0.55, g: 0.50, b: 0.40 };
   const lakeTiles = collectLakeTileIndices(data);
 
   for (let i = 0; i < count; i++) {
@@ -403,9 +403,9 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
         b = blend(b, coastalCliff.b, cliffFactor);
       } else if (steepness > 0.15) {
         const wetFactor = (steepness - 0.15) / 0.35;
-        r = blend(r, wetSand.r, wetFactor);
-        g = blend(g, wetSand.g, wetFactor);
-        b = blend(b, wetSand.b, wetFactor);
+        r = blend(r, wetSand.r, wetFactor * 0.64);
+        g = blend(g, wetSand.g, wetFactor * 0.64);
+        b = blend(b, wetSand.b, wetFactor * 0.64);
       }
     } else if (isVolcanic) {
       r = blend(r, rock.r, steepness * 0.6);
@@ -456,11 +456,21 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       b = blend(b, coolRock.b, rockFactor);
     }
 
+    if (isGlacier) {
+      const glacierIce = { r: 0.76, g: 0.90, b: 0.98 };
+      const glacierIceFactor = Math.min(0.74, 0.46 + (1 - steepness) * 0.28);
+      r = blend(r, glacierIce.r, glacierIceFactor);
+      g = blend(g, glacierIce.g, glacierIceFactor);
+      b = blend(b, glacierIce.b, glacierIceFactor);
+    }
+
     if (riverBankWetness > 0) {
-      const silt = isBeach || vertexBiome === BiomeType.DESERT || vertexBiome === BiomeType.SAVANNA
-        ? { r: 0.68, g: 0.57, b: 0.34 }
+      const silt = isGlacier
+        ? { r: 0.70, g: 0.84, b: 0.90 }
+        : isBeach || vertexBiome === BiomeType.DESERT || vertexBiome === BiomeType.SAVANNA
+        ? { r: 0.76, g: 0.66, b: 0.42 }
         : { r: 0.30, g: 0.39, b: 0.25 };
-      const bankTint = riverBankWetness * 0.34;
+      const bankTint = riverBankWetness * (isGlacier ? 0.22 : 0.34);
       r = blend(r, silt.r, bankTint);
       g = blend(g, silt.g, bankTint);
       b = blend(b, silt.b, bankTint);
