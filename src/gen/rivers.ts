@@ -100,7 +100,7 @@ export const DEFAULT_RIVER_CONFIG: RiverConfig = {
 };
 
 const DEFAULT_FLOW = 0.35;
-const SOURCE_TAPER = 0.35;
+const SOURCE_TAPER = 0.08;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -138,7 +138,7 @@ export function createRiverCorridorPoints(points: RiverPoint[]): RiverPoint[] {
     const sourceRamp = clamp(SOURCE_TAPER + progress * 1.5, SOURCE_TAPER, 1);
     const flow = finiteOr(point.flow, clamp(0.2 + progress * 0.8, 0.2, 1));
     const channelWidth = finiteOr(point.channelWidth, point.width * sourceRamp * (0.75 + flow * 0.35));
-    const valleyWidth = finiteOr(point.valleyWidth, Math.max(channelWidth * 4, point.width * (3.2 + flow * 2.4)));
+    const valleyWidth = finiteOr(point.valleyWidth, Math.max(channelWidth * 4, point.width * sourceRamp * (3.2 + flow * 2.4)));
     const channelDepth = finiteOr(point.channelDepth, point.depth * sourceRamp * (2 + flow * 1.2));
     const valleyDepth = finiteOr(point.valleyDepth, channelDepth * (0.45 + flow * 0.15));
     const previous = points[index - 1];

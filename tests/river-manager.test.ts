@@ -27,6 +27,7 @@ describe('RiverManager', () => {
 
     expect(points[1].x).toBe(10);
     expect(points[1].y).toBe(4);
+    expect(getRiverChannelWidth(points[0])).toBeLessThan(0.25);
     expect(getRiverFlow(points.at(-1)!)).toBeGreaterThan(getRiverFlow(points[0]));
     expect(getRiverChannelWidth(points.at(-1)!)).toBeGreaterThan(getRiverChannelWidth(points[0]));
     expect(getRiverChannelDepth(points.at(-1)!)).toBeGreaterThan(getRiverChannelDepth(points[0]));

@@ -15,8 +15,8 @@ const SEA_LEVEL = 0.3;
 const RIVER_MOUTH_TAPER_HEIGHT = 0.1;
 const RIVER_MOUTH_MAX_BELOW_SEA_DEPTH = 0.025;
 const RIVER_TERMINAL_CARVE_EXTENSION = 1;
-const RIVER_MIN_CHANNEL_CARVE_RADIUS = 0.5;
-const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.65;
+const RIVER_MIN_CHANNEL_CARVE_RADIUS = 0.08;
+const RIVER_MIN_CHANNEL_FLOOR_RADIUS = 0.02;
 const RIVER_VALLEY_PROFILE_PADDING = 0.5;
 
 export type RiverClimateSample = { temperature: number; moisture: number } | null | undefined;
