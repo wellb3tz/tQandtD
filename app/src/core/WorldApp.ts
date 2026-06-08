@@ -32,6 +32,15 @@ import {
 import { DEFAULT_CLIMATE_CONFIG } from '@engine/world/climate';
 import { requiresWorldRebuild } from './configChange';
 import { EconomySimulation, type EconomySnapshot, type WorldEconomyContext } from '../economy';
+import {
+  DEFAULT_JOURNEY_WORLD_SIZE_PRESET,
+  createJourneyWorldConfigPatch,
+  getJourneyWorldSizeConfig,
+  isChunkWithinJourneyBounds,
+  type JourneyWorldBounds,
+  type JourneyWorldSizeConfig,
+  type JourneyWorldSizePreset,
+} from './journeyWorldSize';
 
 /**
  * 3D vector for camera position and target
@@ -53,6 +62,7 @@ export interface AppState {
   cameraTarget: Vector3;
   appSettings: AppSettings;
   viewerSettings: ViewerSettings;
+  journeyWorldSize: JourneyWorldSizeConfig | null;
   
   exploredChunks: Set<string>;
   
@@ -230,6 +240,7 @@ export class WorldApp {
       appSettings: { ...DEFAULT_APP_SETTINGS },
       
       viewerSettings: { ...DEFAULT_VIEWER_SETTINGS },
+      journeyWorldSize: null,
       
       exploredChunks: new Set(),
       
@@ -387,6 +398,38 @@ export class WorldApp {
 
   getSeed(): number {
     return this.state.config.seed;
+  }
+
+  getJourneyWorldSize(): JourneyWorldSizeConfig | null {
+    return this.state.journeyWorldSize
+      ? cloneJourneyWorldSizeConfig(this.state.journeyWorldSize)
+      : null;
+  }
+
+  setJourneyWorldSize(preset: JourneyWorldSizePreset | null): JourneyWorldSizeConfig | null {
+    if (preset === null) {
+      this.updateState({ journeyWorldSize: null });
+      return null;
+    }
+
+    const size = getJourneyWorldSizeConfig(preset, this.state.config.chunkSize);
+    const configPatch = createJourneyWorldConfigPatch(this.state.config, size);
+    const nextConfig = prepareWorldConfig(this.state.config, {
+      ...configPatch,
+      onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
+    });
+
+    this.updateState({
+      config: nextConfig,
+      journeyWorldSize: size,
+    });
+    this.emit(AppEvent.CONFIG_CHANGED, nextConfig);
+
+    return cloneJourneyWorldSizeConfig(size);
+  }
+
+  configureDefaultJourneyWorldSize(): JourneyWorldSizeConfig {
+    return this.setJourneyWorldSize(DEFAULT_JOURNEY_WORLD_SIZE_PRESET)!;
   }
 
   getEconomySnapshot(): EconomySnapshot {
@@ -766,7 +809,12 @@ export class WorldApp {
     let chunksLoaded = 0;
 
     try {
-      const result = await this.requireWorldSession().loadChunksAround(centerX, centerY, radius, { signal });
+      const bounds = this.getJourneySessionChunkBounds();
+      if (bounds && !isChunkWithinJourneyBounds(centerX, centerY, this.state.journeyWorldSize?.bounds)) {
+        return;
+      }
+
+      const result = await this.requireWorldSession().loadChunksAround(centerX, centerY, radius, { signal, bounds });
       chunksLoaded = result.loaded.length;
       this.syncLoadedChunksFromSession();
 
@@ -822,6 +870,12 @@ export class WorldApp {
         economy,
       });
     }
+  }
+
+  getJourneyWorldBounds(): JourneyWorldBounds | null {
+    return this.state.journeyWorldSize?.bounds
+      ? { ...this.state.journeyWorldSize.bounds }
+      : null;
   }
 
   /**
@@ -1130,6 +1184,17 @@ export class WorldApp {
     this.worldSession = null;
     this.initialized = false;
   }
+
+  private getJourneySessionChunkBounds(): { minX: number; maxX: number; minY: number; maxY: number } | undefined {
+    const bounds = this.state.journeyWorldSize?.bounds;
+    if (!bounds) return undefined;
+    return {
+      minX: bounds.minChunkX,
+      maxX: bounds.maxChunkX,
+      minY: bounds.minChunkY,
+      maxY: bounds.maxChunkY,
+    };
+  }
 }
 
 function clampInt(min: number, max: number, value: number): number {
@@ -1150,4 +1215,11 @@ function formatEnumName(name: string | undefined): string | undefined {
     .toLowerCase()
     .replace(/_/g, ' ')
     .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function cloneJourneyWorldSizeConfig(config: JourneyWorldSizeConfig): JourneyWorldSizeConfig {
+  return {
+    ...config,
+    bounds: { ...config.bounds },
+  };
 }

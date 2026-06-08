@@ -96,6 +96,36 @@ describe('CameraInputController', () => {
     controller.detach();
   });
 
+  it('clamps camera movement to configured world bounds', () => {
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 0, -3.5);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const controller = createController(camera, container);
+    controller.resetRotation();
+    controller.setMovementBounds({ minX: -5, maxX: 5, minZ: -4, maxZ: 4 });
+    controller.attach();
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    controller.updateMovement();
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+
+    expect(camera.position.z).toBe(-4);
+    controller.detach();
+  });
+
+  it('clamps immediately when bounds are applied', () => {
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(12, 0, -9);
+    const container = document.createElement('div');
+    const controller = createController(camera, container);
+
+    controller.setMovementBounds({ minX: -5, maxX: 5, minZ: -4, maxZ: 4 });
+
+    expect(camera.position.x).toBe(5);
+    expect(camera.position.z).toBe(-4);
+  });
+
   it('pulls a falling first-person camera down firmly in the meter-scale world', () => {
     const camera = new THREE.PerspectiveCamera();
     camera.position.set(0, 10, 0);

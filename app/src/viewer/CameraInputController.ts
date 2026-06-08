@@ -30,6 +30,13 @@ export interface CameraInputControllerOptions {
   getChunkMeshes?: () => Iterable<ChunkMesh>;
 }
 
+export interface CameraMovementBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 export class CameraInputController {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly getContainer: () => HTMLElement | null;
@@ -51,6 +58,7 @@ export class CameraInputController {
   private cameraRotation = { pitch: 0, yaw: 0 };
   private firstPersonMode = false;
   private orbitMode = false;
+  private movementBounds: CameraMovementBounds | null = null;
   private eyeHeight = FIRST_PERSON_EYE_HEIGHT;
   private velocityY = 0;
   private isOnGround = false;
@@ -157,6 +165,7 @@ export class CameraInputController {
     if (movement.length() > 0) {
       movement.normalize().multiplyScalar(moveSpeed);
       activeCamera.position.add(movement);
+      this.clampCameraToMovementBounds(activeCamera);
     }
   }
 
@@ -190,6 +199,8 @@ export class CameraInputController {
         this.isOnGround = true;
       }
     }
+
+    this.clampCameraToMovementBounds(this.camera);
   }
 
   getHeadingDegrees(): number {
@@ -232,6 +243,11 @@ export class CameraInputController {
     this.eyeHeight = height;
   }
 
+  setMovementBounds(bounds: CameraMovementBounds | null): void {
+    this.movementBounds = bounds ? { ...bounds } : null;
+    this.clampCameraToMovementBounds(this.getActiveCamera());
+  }
+
   lockPointer(): void {
     const container = this.getContainer();
     if (!container) return;
@@ -259,6 +275,12 @@ export class CameraInputController {
     );
     const euler = new THREE.Euler(this.cameraRotation.pitch, this.cameraRotation.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(euler);
+  }
+
+  private clampCameraToMovementBounds(camera: THREE.Camera): void {
+    if (!this.movementBounds) return;
+    camera.position.x = clamp(camera.position.x, this.movementBounds.minX, this.movementBounds.maxX);
+    camera.position.z = clamp(camera.position.z, this.movementBounds.minZ, this.movementBounds.maxZ);
   }
 
   private applyOrthographicMovement(movement: THREE.Vector3, moveSpeed: number): void {
@@ -555,4 +577,8 @@ export class CameraInputController {
 function isEconomyInteractiveTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.closest('.journey-economy-panel input, .journey-economy-panel select, .journey-economy-panel textarea, .journey-economy-panel button') !== null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

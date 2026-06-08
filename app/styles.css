@@ -136,6 +136,52 @@ body {
   gap: 12px;
 }
 
+.journey-size-select {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(115, 128, 138, 0.22);
+  border-radius: 10px;
+}
+
+.journey-size-select label {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.journey-size-select input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.journey-size-select span {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9aa7b2;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.journey-size-select label:hover span {
+  color: #e6edf3;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.journey-size-select input:checked + span {
+  color: #fff;
+  background: rgba(67, 136, 245, 0.28);
+  border-color: rgba(116, 166, 255, 0.48);
+}
+
 .mode-select-btn {
   width: 100%;
   min-height: 56px;

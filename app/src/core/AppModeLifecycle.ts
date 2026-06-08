@@ -2,6 +2,11 @@ import { AppError, ErrorCategory, ErrorSeverity, errorHandler } from '../utils/E
 import type { WorldViewer } from '../viewer/WorldViewer';
 import type { WorldApp } from './WorldApp';
 import { findSpawnPosition, warmUpInitialTerrain } from './worldStartup';
+import {
+  DEFAULT_JOURNEY_WORLD_SIZE_PRESET,
+  isJourneyWorldSizePreset,
+  type JourneyWorldSizePreset,
+} from './journeyWorldSize';
 
 export const MODE_SELECT_ACTIVE_CLASS = 'mode-select-active';
 export const EDITOR_MODE_CLASS = 'world-editor-mode';
@@ -116,6 +121,8 @@ export class AppModeLifecycle {
     this.setWorldGenerationLoading(true);
     this.setViewerReady(false);
     await this.initEngine();
+    this.requireApp().setJourneyWorldSize(null);
+    this.getViewer()?.setMovementBounds(null);
     await warmUpInitialTerrain(this.requireApp(), this.requireViewer());
     this.setViewerReady(true);
     this.setWorldGenerationLoading(false);
@@ -136,6 +143,8 @@ export class AppModeLifecycle {
 
     const app = this.requireApp();
     const viewer = this.requireViewer();
+    const journeySize = app.setJourneyWorldSize(getSelectedJourneyWorldSizePreset())
+      ?? app.configureDefaultJourneyWorldSize();
 
     document.body.classList.remove(EDITOR_MODE_CLASS);
     document.body.classList.add('first-person-active');
@@ -149,6 +158,12 @@ export class AppModeLifecycle {
     await app.generateWorld(randomSeed);
     await warmUpInitialTerrain(app, viewer);
 
+    viewer.setMovementBounds({
+      minX: journeySize.bounds.minWorldX,
+      maxX: journeySize.bounds.maxWorldX,
+      minZ: journeySize.bounds.minWorldZ,
+      maxZ: journeySize.bounds.maxWorldZ,
+    });
     viewer.setCameraPosition(findSpawnPosition(app));
     viewer.setFirstPersonMode(true);
     await waitForFullscreenLayout();
@@ -169,6 +184,11 @@ export class AppModeLifecycle {
     if (!viewer) throw new Error('Viewer not initialized');
     return viewer;
   }
+}
+
+function getSelectedJourneyWorldSizePreset(): JourneyWorldSizePreset {
+  const selected = document.querySelector<HTMLInputElement>('input[name="journey-world-size"]:checked')?.value;
+  return isJourneyWorldSizePreset(selected) ? selected : DEFAULT_JOURNEY_WORLD_SIZE_PRESET;
 }
 
 async function requestBrowserFullscreen(): Promise<void> {

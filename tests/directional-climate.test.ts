@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BiomeSystem,
   ClimateSystem,
   DEFAULT_CLIMATE_CONFIG,
   DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
@@ -71,55 +72,45 @@ describe('Directional climate field', () => {
     expect(farSouth.oceanCoverageWeight).toBe(1);
   });
 
-  it('uses the directional preset directly when enabled', () => {
-    const x = 1000;
-    const y = -1000;
+  it('keeps the center on the legacy climate path while edges still reach the preset', () => {
+    const seed = 42;
+    const x = 0;
+    const y = 0;
     const height = 0.5;
     const getHeight = () => 0.5;
 
+    const baseClimate = new ClimateSystem(seed, {
+      ...DEFAULT_CLIMATE_CONFIG,
+    });
     const directionalClimate = new ClimateSystem(42, {
       ...DEFAULT_CLIMATE_CONFIG,
       directionalClimateConfig: directional,
     });
 
-    const sample = sampleDirectionalClimateField(x, y, directional);
+    expect(directionalClimate.getTemperature(x, y, height)).toBeCloseTo(baseClimate.getTemperature(x, y, height), 6);
+    expect(directionalClimate.getMoisture(x, y, height, getHeight)).toBeCloseTo(baseClimate.getMoisture(x, y, height, getHeight), 6);
 
-    expect(directionalClimate.getTemperature(x, y, height)).toBeCloseTo(sample.temperature, 6);
-    expect(directionalClimate.getMoisture(x, y, height, getHeight)).toBeCloseTo(sample.moisture, 6);
+    const northEdge = sampleDirectionalClimateField(0, -10000, directional);
+    expect(directionalClimate.getTemperature(0, -10000, height)).toBeCloseTo(northEdge.temperature, 6);
+    expect(directionalClimate.getMoisture(0, -10000, height, getHeight)).toBeCloseTo(northEdge.moisture, 6);
   });
 
-  it('moves monotonically toward the north preset and saturates beyond the edge', () => {
-    const climate = new ClimateSystem(42, {
-      ...DEFAULT_CLIMATE_CONFIG,
+  it('preserves the legacy biome noise in the center for forests and swamps', () => {
+    const seed = 42;
+    const biomeConfig = {
+      temperatureScale: 0.001,
+      moistureScale: 0.001,
+      blendRadius: 0.5,
+    };
+
+    const baseBiome = new BiomeSystem(seed, biomeConfig);
+    const directionalBiome = new BiomeSystem(seed, {
+      ...biomeConfig,
       directionalClimateConfig: directional,
     });
 
-    const samples = [0, -250, -1000, -4000, -10000, -20000].map((y) => climate.getTemperature(0, y, 0.5));
-
-    for (let i = 1; i < samples.length; i++) {
-      expect(samples[i]).toBeLessThanOrEqual(samples[i - 1]);
-    }
-    expect(samples[samples.length - 1]).toBeCloseTo(-1.00, 6);
-  });
-
-  it('moves monotonically toward the east, south, and west presets as well', () => {
-    const climate = new ClimateSystem(42, {
-      ...DEFAULT_CLIMATE_CONFIG,
-      directionalClimateConfig: directional,
-    });
-
-    const east = [0, 250, 1000, 4000, 10000, 20000].map((x) => climate.getTemperature(x, 0, 0.5));
-    const south = [0, 250, 1000, 4000, 10000, 20000].map((y) => climate.getTemperature(0, y, 0.5));
-    const west = [0, -250, -1000, -4000, -10000, -20000].map((x) => climate.getTemperature(x, 0, 0.5));
-
-    for (let i = 1; i < east.length; i++) {
-      expect(east[i]).toBeGreaterThanOrEqual(east[i - 1]);
-      expect(south[i]).toBeGreaterThanOrEqual(south[i - 1]);
-      expect(west[i]).toBeLessThanOrEqual(west[i - 1]);
-    }
-    expect(east[east.length - 1]).toBeCloseTo(0.20, 6);
-    expect(south[south.length - 1]).toBeCloseTo(1.00, 6);
-    expect(west[west.length - 1]).toBeCloseTo(-0.05, 6);
+    expect(directionalBiome.getTemperature(0, 0)).toBeCloseTo(baseBiome.getTemperature(0, 0), 6);
+    expect(directionalBiome.getMoisture(0, 0)).toBeCloseTo(baseBiome.getMoisture(0, 0), 6);
   });
 
   it('keeps the disabled preset path identical to the legacy climate path', () => {

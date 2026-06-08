@@ -79,6 +79,7 @@ export interface WorldSessionChunkEntry {
 export interface WorldSessionLoadChunksOptions {
   syncRenderer?: boolean;
   signal?: AbortSignal;
+  bounds?: WorldSessionChunkBounds;
 }
 
 export interface WorldSessionLoadChunksResult {
@@ -89,6 +90,13 @@ export interface WorldSessionLoadChunksResult {
 
 export interface WorldSessionUnloadChunksOptions {
   syncRenderer?: boolean;
+}
+
+export interface WorldSessionChunkBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 }
 
 export interface WorldSessionUnloadChunksResult {
@@ -313,6 +321,7 @@ export class WorldSession {
     const skipped: ChunkCoordinate[] = [];
     const syncRenderer = options.syncRenderer ?? true;
     const signal = options.signal;
+    const bounds = options.bounds;
 
     // Build a list of chunk load promises so they can run in parallel.
     const promises: Promise<WorldSessionChunkEntry | null>[] = [];
@@ -323,6 +332,11 @@ export class WorldSession {
       }
 
       const key = this.getChunkKey(coordinate);
+
+      if (bounds && !isWithinChunkBounds(coordinate, bounds)) {
+        skipped.push(coordinate);
+        continue;
+      }
 
       if (this.loadedChunks.has(key)) {
         skipped.push(coordinate);
@@ -562,6 +576,15 @@ export class WorldSession {
 
 function nowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+function isWithinChunkBounds(coordinate: ChunkCoordinate, bounds: WorldSessionChunkBounds): boolean {
+  return (
+    coordinate.x >= bounds.minX &&
+    coordinate.x <= bounds.maxX &&
+    coordinate.y >= bounds.minY &&
+    coordinate.y <= bounds.maxY
+  );
 }
 
 function calculateWorldStats(chunks: ReadonlyMap<string, ChunkData>): WorldSessionWorldStats {

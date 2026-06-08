@@ -207,7 +207,7 @@ describe('TerrainAttributeBuilder', () => {
       size: 1,
       heightmap: new Float32Array([0.28, 0.28, 0.28, 0.28]),
       biomeMap: new Uint8Array([BiomeType.BEACH]),
-      temperatureMap: new Float32Array([-0.7]),
+      temperatureMap: new Float32Array([-0.88]),
       resources: [],
       structures: [],
     } as unknown as ChunkData;

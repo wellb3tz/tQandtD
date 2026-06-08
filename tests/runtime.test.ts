@@ -706,6 +706,38 @@ describe('WorldSession', () => {
     expect(renderer.events).toContain('chunk:0,0');
   });
 
+  it('skips chunk loads outside optional session bounds', async () => {
+    const world = makeFakeWorld(16);
+    const session = new WorldSession({
+      world,
+      scene: {
+        player: false,
+        input: false,
+        movement: false,
+        streaming: false,
+        renderer: false,
+      },
+    });
+
+    const result = await session.loadChunksAround(0, 0, 1, {
+      bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
+    });
+
+    expect(result.loaded.map(entry => [entry.coordinate.x, entry.coordinate.y])).toEqual([
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]);
+    expect(result.skipped).toHaveLength(5);
+    expect(world.requests).toEqual([
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ]);
+  });
+
   it('can attach and replace a renderer after chunks are already loaded', async () => {
     const world = makeFakeWorld(16);
     const session = new WorldSession({

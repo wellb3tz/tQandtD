@@ -1,6 +1,10 @@
 import { NoiseEngine, NoiseConfig } from '../core/noise';
 import { BiomeType } from './chunk';
-import { sampleDirectionalClimateField, type DirectionalClimateConfig } from './climate';
+import {
+  sampleDirectionalClimateBlend,
+  sampleDirectionalClimateField,
+  type DirectionalClimateConfig,
+} from './climate';
 
 /**
  * Configuration for biome generation
@@ -62,12 +66,14 @@ export class BiomeSystem {
    * @returns Temperature value in range [-1, 1]
    */
   getTemperature(x: number, y: number): number {
+    const temperature = this.temperatureNoise.fbm(x, y, this.temperatureNoiseConfig);
     const directional = sampleDirectionalClimateField(x, y, this.config.directionalClimateConfig);
-    if (this.config.directionalClimateConfig?.enabled) {
-      return clamp(directional.temperature, -1, 1);
+    const blend = sampleDirectionalClimateBlend(x, y, this.config.directionalClimateConfig);
+
+    if (blend > 0) {
+      return clamp(temperature * (1 - blend) + directional.temperature * blend, -1, 1);
     }
 
-    const temperature = this.temperatureNoise.fbm(x, y, this.temperatureNoiseConfig);
     return clamp(temperature + directional.temperature, -1, 1);
   }
 
@@ -78,12 +84,14 @@ export class BiomeSystem {
    * @returns Moisture value in range [-1, 1]
    */
   getMoisture(x: number, y: number): number {
+    const moisture = this.moistureNoise.fbm(x, y, this.moistureNoiseConfig);
     const directional = sampleDirectionalClimateField(x, y, this.config.directionalClimateConfig);
-    if (this.config.directionalClimateConfig?.enabled) {
-      return clamp(directional.moisture, -1, 1);
+    const blend = sampleDirectionalClimateBlend(x, y, this.config.directionalClimateConfig);
+
+    if (blend > 0) {
+      return clamp(moisture * (1 - blend) + directional.moisture * blend, -1, 1);
     }
 
-    const moisture = this.moistureNoise.fbm(x, y, this.moistureNoiseConfig);
     return clamp(moisture + directional.moisture, -1, 1);
   }
 

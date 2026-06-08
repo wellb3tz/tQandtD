@@ -268,6 +268,7 @@ export {
   type WorldSessionCacheClearedEvent,
   type WorldSessionCacheStats,
   type WorldSessionChunkEntry,
+  type WorldSessionChunkBounds,
   type WorldSessionConfigChangedEvent,
   type WorldSessionEvent,
   type WorldSessionEventCallback,

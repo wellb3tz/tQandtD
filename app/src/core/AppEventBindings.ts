@@ -16,7 +16,16 @@ export function bindWorldAppEvents(options: AppEventBindingsOptions): void {
   const { app } = options;
 
   app.subscribeToState((state) => {
-    options.getViewer()?.setStreamingViewDistance(state.appSettings.viewDistance, state.config.chunkSize);
+    const viewer = options.getViewer();
+    viewer?.setStreamingViewDistance(state.appSettings.viewDistance, state.config.chunkSize);
+    viewer?.setMovementBounds(state.journeyWorldSize
+      ? {
+          minX: state.journeyWorldSize.bounds.minWorldX,
+          maxX: state.journeyWorldSize.bounds.maxWorldX,
+          minZ: state.journeyWorldSize.bounds.minWorldZ,
+          maxZ: state.journeyWorldSize.bounds.maxWorldZ,
+        }
+      : null);
 
     const performanceMonitor = options.getPerformanceMonitor();
     if (!performanceMonitor) return;

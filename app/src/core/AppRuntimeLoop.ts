@@ -180,8 +180,15 @@ export class AppRuntimeLoop {
 
     const chunkSize = this.app.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
     const loadRadius = getBufferedStreamingRadius(this.app.getViewDistance());
-    const cameraChunkX = Math.floor(cameraPos.x / chunkSize);
-    const cameraChunkY = Math.floor(cameraPos.z / chunkSize);
+    const journeyBounds = this.app.getJourneyWorldBounds();
+    const cameraWorldX = journeyBounds
+      ? clamp(cameraPos.x, journeyBounds.minWorldX, journeyBounds.maxWorldX - 0.001)
+      : cameraPos.x;
+    const cameraWorldZ = journeyBounds
+      ? clamp(cameraPos.z, journeyBounds.minWorldZ, journeyBounds.maxWorldZ - 0.001)
+      : cameraPos.z;
+    const cameraChunkX = Math.floor(cameraWorldX / chunkSize);
+    const cameraChunkY = Math.floor(cameraWorldZ / chunkSize);
 
     void this.app.loadChunksAround(cameraChunkX, cameraChunkY, loadRadius);
     this.app.unloadDistantChunks(cameraChunkX, cameraChunkY, loadRadius + 2);
@@ -227,4 +234,8 @@ function updateText(id: string, value: string): void {
   if (element) {
     element.textContent = value;
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

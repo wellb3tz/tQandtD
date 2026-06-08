@@ -151,6 +151,20 @@ export function sampleDirectionalClimateField(
   };
 }
 
+export function sampleDirectionalClimateBlend(
+  x: number,
+  y: number,
+  config?: DirectionalClimateConfig,
+): number {
+  if (!config?.enabled) {
+    return 0;
+  }
+
+  const xAxis = sampleDirectionalAxis(x, config.scale);
+  const yAxis = sampleDirectionalAxis(-y, config.scale);
+  return Math.max(Math.abs(xAxis), Math.abs(yAxis));
+}
+
 /**
  * Half-height of the world used to normalise the latitude gradient.
  * Positions range from -WORLD_HALF_HEIGHT to +WORLD_HALF_HEIGHT in Y.
@@ -240,19 +254,20 @@ export class ClimateSystem {
     const cfg = this.config;
 
     const directional = sampleDirectionalClimateField(x, y, cfg.directionalClimateConfig);
-    const rawTemp = cfg.directionalClimateConfig?.enabled
-      ? directional.temperature
-      : (() => {
-          const climateNoise = this.tempClimate.fbm(x, y, {
-            octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.climateScale,
-          });
-          const detailNoise = this.tempDetail.fbm(x, y, {
-            octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.detailScale,
-          });
-          const blendedNoise = climateNoise * (1 - cfg.climateDetailBlend) + detailNoise * cfg.climateDetailBlend;
-          const latitudeBase = -y * cfg.latitudeGradientStrength / WORLD_HALF_HEIGHT;
-          return latitudeBase + blendedNoise * (1 - cfg.latitudeGradientStrength);
-        })();
+    const blend = sampleDirectionalClimateBlend(x, y, cfg.directionalClimateConfig);
+
+    const climateNoise = this.tempClimate.fbm(x, y, {
+      octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.climateScale,
+    });
+    const detailNoise = this.tempDetail.fbm(x, y, {
+      octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.detailScale,
+    });
+    const blendedNoise = climateNoise * (1 - cfg.climateDetailBlend) + detailNoise * cfg.climateDetailBlend;
+    const legacyTemp = -y * cfg.latitudeGradientStrength / WORLD_HALF_HEIGHT +
+      blendedNoise * (1 - cfg.latitudeGradientStrength);
+    const rawTemp = blend > 0
+      ? legacyTemp * (1 - blend) + directional.temperature * blend
+      : legacyTemp;
 
     // Altitude cooling
     const altitudeDelta = height > cfg.altitudeCoolingThreshold
@@ -284,9 +299,7 @@ export class ClimateSystem {
     const cfg = this.config;
 
     const directional = sampleDirectionalClimateField(x, y, cfg.directionalClimateConfig);
-    if (cfg.directionalClimateConfig?.enabled) {
-      return ClimateSystem.clamp(directional.moisture + cfg.worldMoistureOffset, -1, 1);
-    }
+    const blend = sampleDirectionalClimateBlend(x, y, cfg.directionalClimateConfig);
 
     // Multi-scale noise blend
     const climateNoise = this.moistClimate.fbm(x, y, {
@@ -303,7 +316,12 @@ export class ClimateSystem {
       ? (cfg.valleyGradientThreshold - gradient) / cfg.valleyGradientThreshold * cfg.valleyMoistureBonus
       : 0;
 
-    return ClimateSystem.clamp(blendedNoise + valleyBonus + cfg.worldMoistureOffset, -1, 1);
+    const legacyMoisture = blendedNoise + valleyBonus;
+    const rawMoisture = blend > 0
+      ? legacyMoisture * (1 - blend) + directional.moisture * blend
+      : legacyMoisture;
+
+    return ClimateSystem.clamp(rawMoisture + cfg.worldMoistureOffset, -1, 1);
   }
 
   /**

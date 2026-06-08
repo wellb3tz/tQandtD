@@ -24,7 +24,7 @@ import { AtmosphereController } from './AtmosphereController';
 import { RenderLayer } from './RenderLayerVisibility';
 import { type RenderStats } from './RenderStatsCalculator';
 import { FogOfWarManager } from './FogOfWarManager';
-import { CameraInputController } from './CameraInputController';
+import { CameraInputController, type CameraMovementBounds } from './CameraInputController';
 import type { ChunkMesh } from './ChunkMesh';
 import { setupWorldScene } from './WorldSceneSetup';
 import { CameraViewController } from './CameraViewController';
@@ -494,6 +494,10 @@ export class WorldViewer {
    */
   setCameraPosition(position: Vector3): void {
     this.cameraViewController.setCameraPosition(position);
+  }
+
+  setMovementBounds(bounds: CameraMovementBounds | null): void {
+    this.cameraInputController.setMovementBounds(bounds);
   }
 
   /**
