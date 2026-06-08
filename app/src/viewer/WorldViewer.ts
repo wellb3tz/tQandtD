@@ -582,6 +582,13 @@ export class WorldViewer {
   }
 
   /**
+   * Get the active terrain chunk meshes.
+   */
+  getChunkMeshes(): IterableIterator<ChunkMesh> {
+    return this.chunkMeshes.values();
+  }
+
+  /**
    * Get the canvas element
    */
   getCanvas(): HTMLCanvasElement {

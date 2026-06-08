@@ -18,6 +18,22 @@ export interface TerrainSurfaceWeightOptions {
   includeRiverbedSurface?: boolean;
 }
 
+export interface TerrainSurfaceSampleDebug {
+  x: number;
+  y: number;
+  biome: BiomeType;
+  elevation: number;
+  slope: number;
+  moisture: number;
+  temperature: number;
+  surfaceKey: TerrainSurfaceKey;
+}
+
+export interface TerrainSurfaceDebugInfo {
+  weights: TerrainSurfaceWeights;
+  samples: TerrainSurfaceSampleDebug[];
+}
+
 export interface TerrainDetailModulationOptions {
   geometry: THREE.BufferGeometry;
   vertices: Float32Array;
@@ -36,13 +52,21 @@ export function calculateVertexSurfaceWeights(
   vertexY: number,
   options: TerrainSurfaceWeightOptions = {},
 ): TerrainSurfaceWeights {
+  return getTerrainSurfaceDebugInfo(data, vertexX, vertexY, options).weights;
+}
+
+export function getTerrainSurfaceDebugInfo(
+  data: ChunkData,
+  vertexX: number,
+  vertexY: number,
+  options: TerrainSurfaceWeightOptions = {},
+): TerrainSurfaceDebugInfo {
   const chunkSize = data.size;
   const verticesPerSide = chunkSize + 1;
   const weights = createEmptySurfaceWeights();
   const lakeTiles = collectLakeTileIndices(data);
   const includeRiverbedSurface = options.includeRiverbedSurface ?? true;
-
-  const samples: Array<{ x: number; y: number }> = [
+  const samplePositions: Array<{ x: number; y: number }> = [
     { x: vertexX - 1, y: vertexY - 1 },
     { x: vertexX, y: vertexY - 1 },
     { x: vertexX - 1, y: vertexY },
@@ -50,7 +74,9 @@ export function calculateVertexSurfaceWeights(
   ];
 
   let sampleCount = 0;
-  for (const sample of samples) {
+  const samples: TerrainSurfaceSampleDebug[] = [];
+
+  for (const sample of samplePositions) {
     if (sample.x < 0 || sample.y < 0 || sample.x >= chunkSize || sample.y >= chunkSize) {
       continue;
     }
@@ -77,6 +103,16 @@ export function calculateVertexSurfaceWeights(
         ? 'mountainRock'
         : riverBankSurfaceKey ?? selectTerrainSurfaceKey(biome, elevation, Math.max(slope, cliffInfluence * 0.88), moisture, tileTemperature);
     weights[surfaceKey] += 1;
+    samples.push({
+      x: sample.x,
+      y: sample.y,
+      biome,
+      elevation,
+      slope,
+      moisture,
+      temperature: tileTemperature,
+      surfaceKey,
+    });
     sampleCount++;
   }
 
@@ -88,7 +124,7 @@ export function calculateVertexSurfaceWeights(
   for (const key of Object.keys(weights) as TerrainSurfaceKey[]) {
     weights[key] /= sampleCount;
   }
-  return weights;
+  return { weights, samples };
 }
 
 function calculateTerrainMoisture(

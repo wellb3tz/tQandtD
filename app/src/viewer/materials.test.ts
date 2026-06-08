@@ -205,6 +205,7 @@ describe('terrain texture materials', () => {
     expect(shader.fragmentShader).toContain('sampleTerrainAtlasTile');
     expect(shader.fragmentShader).toContain('sampleTerrainNormalAtlasTile');
     expect(shader.fragmentShader).toContain('mirrorTerrainAtlasUv');
+    expect(shader.fragmentShader).toContain('atlasGrid.y - 1.0 - floor(tileIndex / atlasGrid.x)');
     expect(shader.fragmentShader).not.toContain('fract(uv)');
     expect(shader.fragmentShader).toContain('considerTerrainAtlasTile');
     expect(shader.fragmentShader).toContain('atlasTilePixels = vec2(256.0, 256.0)');

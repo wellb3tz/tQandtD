@@ -468,7 +468,7 @@ vec2 mirrorTerrainAtlasUv(vec2 uv) {
 vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
   const vec2 atlasGrid = vec2(4.0, 3.0);
   const vec2 atlasTilePixels = vec2(256.0, 256.0);
-  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), floor(tileIndex / atlasGrid.x));
+  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), atlasGrid.y - 1.0 - floor(tileIndex / atlasGrid.x));
   vec2 paddedUv = (mirrorTerrainAtlasUv(uv) * (atlasTilePixels - vec2(2.0)) + vec2(1.0)) / atlasTilePixels;
   return texture2D(terrainAlbedoAtlas, (tile + paddedUv) / atlasGrid);
 }
@@ -476,7 +476,7 @@ vec4 sampleTerrainAtlasTile(float tileIndex, vec2 uv) {
 vec4 sampleTerrainNormalAtlasTile(float tileIndex, vec2 uv) {
   const vec2 atlasGrid = vec2(4.0, 3.0);
   const vec2 atlasTilePixels = vec2(256.0, 256.0);
-  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), floor(tileIndex / atlasGrid.x));
+  vec2 tile = vec2(mod(tileIndex, atlasGrid.x), atlasGrid.y - 1.0 - floor(tileIndex / atlasGrid.x));
   vec2 paddedUv = (mirrorTerrainAtlasUv(uv) * (atlasTilePixels - vec2(2.0)) + vec2(1.0)) / atlasTilePixels;
   return texture2D(terrainNormalAtlas, (tile + paddedUv) / atlasGrid);
 }

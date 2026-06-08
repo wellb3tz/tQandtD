@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatSurfaceSummary, TerrainTooltip } from './TerrainTooltip';
 
@@ -57,6 +58,114 @@ describe('TerrainTooltip', () => {
       ice: 0,
       riverbed: 0,
     })).toBe('Snow');
+  });
+
+  it('includes surface weights and sample tiles in the tooltip', () => {
+    document.body.innerHTML = '<div id="viewer"></div>';
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
+
+    const viewerEl = document.getElementById('viewer')!;
+    vi.spyOn(viewerEl, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const tooltip = new TerrainTooltip();
+    tooltip.initialize({ getState: () => ({ loadedChunks: new Map() }) } as never, {
+      raycastTerrain: vi.fn(() => ({
+        chunkX: 0,
+        chunkY: 0,
+        localX: 0,
+        localY: 0,
+        height: 0.5,
+        point: { x: 12, z: 34 },
+        chunkData: {
+          size: 1,
+          heightmap: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+          biomeMap: new Uint8Array([0]),
+          resources: [],
+          structures: [],
+        },
+      })),
+    });
+
+    const el = document.getElementById('terrain-tooltip')!;
+    (tooltip as unknown as { update: (clientX: number, clientY: number) => void }).update(10, 10);
+
+    expect(el.innerHTML).toContain('Surface weights');
+    expect(el.innerHTML).toContain('Samples');
+    expect(el.innerHTML).toContain('(0,0)');
+
+    tooltip.dispose();
+  });
+
+  it('shows raw terrain blend attributes when chunk meshes are available', () => {
+    document.body.innerHTML = '<div id="viewer"></div>';
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(42);
+
+    const viewerEl = document.getElementById('viewer')!;
+    vi.spyOn(viewerEl, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0]), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array([0.4, 0.4, 0.4]), 3));
+    geometry.setAttribute('surfaceBlendA', new THREE.BufferAttribute(new Float32Array([1, 0, 0, 0]), 4));
+    geometry.setAttribute('surfaceBlendB', new THREE.BufferAttribute(new Float32Array([0, 1, 0, 0]), 4));
+    geometry.setAttribute('surfaceBlendC', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0]), 4));
+    geometry.setAttribute('terrainDetailBlend', new THREE.BufferAttribute(new Float32Array([0.12, 0.34, 0.56, 0.78]), 4));
+
+    const terrain = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+    terrain.userData.chunkData = {
+      x: 0,
+      y: 0,
+      size: 1,
+      heightmap: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+      biomeMap: new Uint8Array([0]),
+      resources: [],
+      structures: [],
+    };
+
+    const tooltip = new TerrainTooltip();
+    tooltip.initialize({ getState: () => ({ loadedChunks: new Map() }) } as never, {
+      getChunkMeshes: () => [{ terrain }],
+      raycastTerrain: vi.fn(() => ({
+        chunkX: 0,
+        chunkY: 0,
+        localX: 0,
+        localY: 0,
+        height: 0.5,
+        point: { x: 12, z: 34 },
+        chunkData: terrain.userData.chunkData,
+      })),
+    });
+
+    const el = document.getElementById('terrain-tooltip')!;
+    (tooltip as unknown as { update: (clientX: number, clientY: number) => void }).update(10, 10);
+
+    expect(el.innerHTML).toContain('surfaceBlendA');
+    expect(el.innerHTML).toContain('surfaceBlendB');
+    expect(el.innerHTML).toContain('surfaceBlendC');
+    expect(el.innerHTML).toContain('terrainDetailBlend');
+    expect(el.innerHTML).toContain('1.00, 0.00, 0.00, 0.00');
+
+    tooltip.dispose();
   });
 
   it('toggles enabled state and hides the tooltip when disabled', () => {
