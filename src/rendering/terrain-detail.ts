@@ -46,11 +46,11 @@ export function calculateCliffInfluence(data: ChunkData, x: number, y: number): 
 }
 
 export function calculateRiverTrenchInfluence(data: ChunkData, x: number, y: number): number {
-  return calculateRiverInfluence(data, x, y, river => river.state !== 'dry');
+  return calculateRiverInfluence(data, x, y, river => isWetRiver(river));
 }
 
 export function calculateRiverbedInfluence(data: ChunkData, x: number, y: number): number {
-  return calculateRiverInfluence(data, x, y, () => true);
+  return calculateRiverInfluence(data, x, y, river => isWetRiver(river));
 }
 
 export function calculateRiverBankInfluence(data: ChunkData, x: number, y: number): number {
@@ -59,7 +59,7 @@ export function calculateRiverBankInfluence(data: ChunkData, x: number, y: numbe
 
   let strongest = 0;
   for (const river of rivers) {
-    if (river.state === 'dry') continue;
+    if (!isWetRiver(river)) continue;
     const points = river.points;
     if (points.length < 2) continue;
 
@@ -81,6 +81,10 @@ export function calculateRiverBankInfluence(data: ChunkData, x: number, y: numbe
   }
 
   return strongest;
+}
+
+function isWetRiver(river: NonNullable<ChunkData['rivers']>[number]): boolean {
+  return river.state !== 'dry' && river.state !== 'frozen';
 }
 
 function calculateRiverInfluence(

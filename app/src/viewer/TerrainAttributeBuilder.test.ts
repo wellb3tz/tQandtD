@@ -72,6 +72,32 @@ describe('TerrainAttributeBuilder', () => {
     expect(weights.riverbed).toBe(0);
   });
 
+  it('keeps frozen river terrain dry instead of muddy', () => {
+    const data = createRiverChunk({
+      size: 4,
+      heightmap: new Float32Array(25).fill(0.48),
+      biomeMap: new Uint8Array(16).fill(BiomeType.PLAINS),
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        state: 'frozen',
+        points: [
+          { x: 0, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+          { x: 4, y: 1, height: 0.48, surfaceLevel: 0.48, width: 1, depth: 0.04, channelWidth: 1, valleyWidth: 6, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 4, minY: 1, maxY: 1 },
+      }],
+    });
+
+    const weights = calculateVertexSurfaceWeights(data, 2, 3);
+
+    expect(calculateRiverBankInfluence(data, 2, 3)).toBe(0);
+    expect(getRiverTrenchDarkening(data, 2, 3)).toBe(1);
+    expect(getRiverbedDarkening(data, 2, 3)).toBe(1);
+    expect(weights.riverbed).toBe(0);
+  });
+
   it('uses muted seabed texture weights for underwater ocean tiles', () => {
     const data = {
       size: 1,
@@ -88,7 +114,7 @@ describe('TerrainAttributeBuilder', () => {
     expect(weights.plains).toBe(0);
   });
 
-  it('keeps dry riverbeds visible without treating them as wet water channels', () => {
+  it('skips dry riverbeds when painting terrain surfaces', () => {
     const data = createRiverChunk({
       rivers: [{
         riverId: 'river_1',
@@ -104,8 +130,8 @@ describe('TerrainAttributeBuilder', () => {
     });
 
     expect(getRiverTrenchDarkening(data, 0, 0)).toBe(1);
-    expect(getRiverbedDarkening(data, 0, 0)).toBeLessThan(1);
-    expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(1);
+    expect(getRiverbedDarkening(data, 0, 0)).toBe(1);
+    expect(calculateVertexSurfaceWeights(data, 0, 0).riverbed).toBe(0);
   });
 
   it('biases lowland tiles near lakes toward wetter surfaces', () => {

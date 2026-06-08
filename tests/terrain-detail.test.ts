@@ -3,6 +3,8 @@ import {
   BiomeType,
   RIVER_TRENCH_DARKEN_STRENGTH,
   calculateCliffInfluence,
+  calculateRiverBankInfluence,
+  calculateRiverbedInfluence,
   calculateRiverTrenchInfluence,
   getRiverTrenchDarkening,
   type ChunkData,
@@ -34,6 +36,41 @@ describe('terrain detail helpers', () => {
 
     expect(calculateRiverTrenchInfluence(data, 2, 0.9)).toBeGreaterThan(0);
     expect(calculateRiverTrenchInfluence(data, 0, 0.9)).toBe(0);
+  });
+
+  it('ignores inactive rivers for wet terrain influence', () => {
+    const frozenData = createRiverChunk({
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        state: 'frozen',
+        points: [
+          { x: 0, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+          { x: 1, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 1, minY: 0, maxY: 0 },
+      }],
+    });
+    const dryData = createRiverChunk({
+      rivers: [{
+        riverId: 'river_1',
+        pathId: 'river_1:main',
+        isTributary: false,
+        state: 'dry',
+        points: [
+          { x: 0, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+          { x: 1, y: 0, height: 0.31, surfaceLevel: 0.31, width: 1, depth: 0.04, channelWidth: 2, flowX: 1, flowY: 0 },
+        ],
+        bounds: { minX: 0, maxX: 1, minY: 0, maxY: 0 },
+      }],
+    });
+
+    for (const data of [frozenData, dryData]) {
+      expect(calculateRiverTrenchInfluence(data, 0, 0)).toBe(0);
+      expect(calculateRiverBankInfluence(data, 0, 0)).toBe(0);
+      expect(calculateRiverbedInfluence(data, 0, 0)).toBe(0);
+    }
   });
 
   it('detects cliff influence from sharp heightmap relief', () => {
