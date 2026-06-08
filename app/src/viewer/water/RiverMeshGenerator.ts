@@ -114,6 +114,7 @@ function buildTerrainDrapedRiverGeometryData(
           }
 
           polygon = clipPolygonToWater(polygon, chunkData, seaLevel);
+          polygon = sanitizePolygon2D(polygon);
 
           if (polygon.length < 3) {
             continue;
@@ -227,6 +228,53 @@ function clipPolygon(
   }
 
   return result;
+}
+
+function sanitizePolygon2D(polygon: RiverRibbonVertex[]): RiverRibbonVertex[] {
+  if (polygon.length < 3) return [];
+
+  const cleaned: RiverRibbonVertex[] = [];
+  for (const vertex of polygon) {
+    const previous = cleaned[cleaned.length - 1];
+    if (previous && nearlySameVertex(previous, vertex)) {
+      continue;
+    }
+    cleaned.push(vertex);
+  }
+
+  if (cleaned.length >= 2 && nearlySameVertex(cleaned[0], cleaned[cleaned.length - 1])) {
+    cleaned.pop();
+  }
+
+  if (cleaned.length < 3) return [];
+
+  const simplified: RiverRibbonVertex[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const prev = cleaned[(i + cleaned.length - 1) % cleaned.length];
+    const current = cleaned[i];
+    const next = cleaned[(i + 1) % cleaned.length];
+
+    if (isCollinear(prev, current, next)) {
+      continue;
+    }
+
+    simplified.push(current);
+  }
+
+  return simplified.length >= 3 ? simplified : cleaned;
+}
+
+function nearlySameVertex(a: RiverRibbonVertex, b: RiverRibbonVertex): boolean {
+  return Math.abs(a.x - b.x) <= 1e-6 && Math.abs(a.y - b.y) <= 1e-6;
+}
+
+function isCollinear(a: RiverRibbonVertex, b: RiverRibbonVertex, c: RiverRibbonVertex): boolean {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const bcx = c.x - b.x;
+  const bcy = c.y - b.y;
+  const cross = abx * bcy - aby * bcx;
+  return Math.abs(cross) <= 1e-8;
 }
 
 function interpolateRibbonVertexAtX(a: RiverRibbonVertex, b: RiverRibbonVertex, x: number): RiverRibbonVertex {
@@ -467,6 +515,21 @@ function triangulatePolygon2D(polygon: RiverRibbonVertex[]): number[] {
     }
   }
 
+  if (indices.length !== (n - 2) * 3) {
+    return triangulatePolygonFan(polygon);
+  }
+
+  return indices;
+}
+
+function triangulatePolygonFan(polygon: RiverRibbonVertex[]): number[] {
+  const n = polygon.length;
+  if (n < 3) return [];
+
+  const indices: number[] = [];
+  for (let i = 1; i < n - 1; i++) {
+    indices.push(0, i, i + 1);
+  }
   return indices;
 }
 

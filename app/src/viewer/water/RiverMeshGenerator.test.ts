@@ -131,6 +131,31 @@ describe('RiverMeshGenerator', () => {
     expect(hasBoundaryCenterVertex).toBe(true);
   });
 
+  it('triangulates clipped river ribbons without degenerate holes', () => {
+    const geometry = buildRiverGeometry([river([
+      { x: -2, y: 1.5, height: 0.55, surfaceLevel: 0.56, width: 1.2, depth: 0.03, channelWidth: 1.2, channelDepth: 0.04, flowX: 1, flowY: 0.2 },
+      { x: 2, y: 1.7, height: 0.5, surfaceLevel: 0.51, width: 1.6, depth: 0.03, channelWidth: 1.6, channelDepth: 0.05, flowX: 1, flowY: 0.1 },
+      { x: 5, y: 1.8, height: 0.44, surfaceLevel: 0.45, width: 1.9, depth: 0.03, channelWidth: 1.9, channelDepth: 0.05, flowX: 1, flowY: 0.05 },
+    ])], chunk())!;
+    const positions = geometry.getAttribute('position');
+    const indices = geometry.getIndex();
+
+    expect(indices).not.toBeNull();
+    for (let i = 0; i < indices!.count; i += 3) {
+      const a = indices!.getX(i);
+      const b = indices!.getX(i + 1);
+      const c = indices!.getX(i + 2);
+      const ax = positions.getX(a);
+      const az = positions.getZ(a);
+      const bx = positions.getX(b);
+      const bz = positions.getZ(b);
+      const cx = positions.getX(c);
+      const cz = positions.getZ(c);
+      const area = Math.abs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
+      expect(area).toBeGreaterThan(1e-8);
+    }
+  });
+
   it('uses the freshwater lake surface color for flowing river overlays', () => {
     const geometry = buildRiverGeometry([twoPointRiver], chunk())!;
     const colors = geometry.getAttribute('color').array;
