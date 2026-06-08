@@ -15,12 +15,23 @@ describe('FrustumCulling', () => {
     const hiddenChunk = createChunk(new THREE.Box3(new THREE.Vector3(100, 100, 100), new THREE.Vector3(101, 101, 101)));
     const frustum = createUnitFrustum();
 
-    updateFrustumCulledChunks([visibleChunk, hiddenChunk], frustum, layerVisibility);
+    updateFrustumCulledChunks([visibleChunk, hiddenChunk], frustum, layerVisibility, 0);
 
     expect(visibleChunk.visible).toBe(true);
     expect(visibleChunk.terrain.visible).toBe(true);
     expect(hiddenChunk.visible).toBe(false);
     expect(hiddenChunk.terrain.visible).toBe(false);
+  });
+
+  it('keeps nearby offscreen chunks visible so they can keep casting shadows', () => {
+    const layerVisibility = new Map([[RenderLayer.TERRAIN, true]]);
+    const shadowCaster = createChunk(new THREE.Box3(new THREE.Vector3(2, -1, -1), new THREE.Vector3(3, 1, 1)));
+    const frustum = createUnitFrustum();
+
+    updateFrustumCulledChunks([shadowCaster], frustum, layerVisibility, 2);
+
+    expect(shadowCaster.visible).toBe(true);
+    expect(shadowCaster.terrain.visible).toBe(true);
   });
 
   it('restores chunk visibility from layer settings when culling is disabled', () => {
