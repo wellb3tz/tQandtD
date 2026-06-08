@@ -15,6 +15,7 @@ export function syncVisibilityControls(viewerSettings: ViewerSettings): void {
   updateCheckboxValue('terrainTexturesEnabled', viewerSettings.terrainTexturesEnabled);
   updateCheckboxValue('fogOfWarEnabled', viewerSettings.fogOfWarEnabled);
   updateCheckboxValue('foliageLodEnabled', viewerSettings.foliageLodEnabled);
+  updateSliderValue('renderScale', viewerSettings.renderScale);
 }
 
 export function syncControlsWithConfig(config: WorldConfig): void {

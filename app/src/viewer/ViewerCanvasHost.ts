@@ -10,6 +10,7 @@ export class ViewerCanvasHost {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly getPixelRatio: () => number;
+  private currentPixelRatio: number | null = null;
 
   constructor(options: ViewerCanvasHostOptions) {
     this.camera = options.camera;
@@ -19,8 +20,16 @@ export class ViewerCanvasHost {
 
   attachToContainer(container: HTMLElement): void {
     this.resize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(this.getPixelRatio());
+    this.setPixelRatio(this.getPixelRatio());
     container.appendChild(this.renderer.domElement);
+  }
+
+  setPixelRatio(pixelRatio: number): void {
+    if (this.currentPixelRatio === pixelRatio) {
+      return;
+    }
+    this.currentPixelRatio = pixelRatio;
+    this.renderer.setPixelRatio(pixelRatio);
   }
 
   resize(width: number, height: number): void {

@@ -338,6 +338,7 @@ export class WorldViewer {
    * Apply a full viewer settings snapshot to the renderer stack.
    */
   applyViewerSettings(settings: ViewerSettings, loadedChunks?: Map<string, ChunkData>): void {
+    this.setRenderScale(settings.renderScale);
     this.setVisibility(RenderLayer.TERRAIN, settings.showTerrain);
     this.setVisibility(RenderLayer.FOLIAGE, settings.showFoliage);
     this.setVisibility(RenderLayer.BIOMES, settings.showBiomes);
@@ -500,6 +501,11 @@ export class WorldViewer {
    */
   setCameraTarget(target: Vector3): void {
     this.cameraViewController.setCameraTarget(target);
+  }
+
+  setRenderScale(scale: number): void {
+    const safeScale = clamp(scale, 0.5, 1);
+    this.canvasHost.setPixelRatio((window.devicePixelRatio || 1) * safeScale);
   }
 
   /**

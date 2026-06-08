@@ -13,6 +13,7 @@ import {
   CACHE_SIZE_SLIDER,
   RESOURCE_TYPE_TOGGLES,
   STRUCTURE_TYPE_TOGGLES,
+  RENDER_SCALE_SLIDER,
   SKY_VIEW_CONTROLS,
   TERRAIN_SLIDERS,
   VIEW_DISTANCE_SLIDER,
@@ -478,6 +479,13 @@ export class ControlPanel {
     });
     advancedContainer.appendChild(cacheSizeControl);
 
+    const renderScaleControl = createSliderControl(RENDER_SCALE_SLIDER, (value) => {
+      this.updateVisibility('renderScale', value);
+    }, {
+      formatValue: value => `${Math.round(value * 100)}%`,
+    });
+    advancedContainer.appendChild(renderScaleControl);
+
     const workerCheckbox = createCheckboxControl({
       id: 'enableWorkerPool',
       label: 'Enable Additional Worker (World Generation)',
@@ -676,7 +684,7 @@ export class ControlPanel {
   /**
    * Update visibility settings
    */
-  private updateVisibility(key: keyof ViewerSettings, value: boolean): void {
+  private updateVisibility(key: keyof ViewerSettings, value: boolean | number): void {
     if (!this.app) return;
 
     this.app.updateViewerSettings({ [key]: value });

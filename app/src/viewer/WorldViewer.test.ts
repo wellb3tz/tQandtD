@@ -215,6 +215,18 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
+  it('applies render scale to the renderer pixel ratio', () => {
+    const viewer = new WorldViewer();
+    const renderer = (viewer as unknown as { renderer: { setPixelRatio: ReturnType<typeof vi.fn> } }).renderer;
+
+    viewer.setRenderScale(0.75);
+
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(expect.any(Number));
+    expect(renderer.setPixelRatio.mock.calls.at(-1)?.[0]).toBeCloseTo((window.devicePixelRatio || 1) * 0.75);
+
+    viewer.dispose();
+  });
+
   it('rotates the free camera with mouse drag when pointer lock is unavailable', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });

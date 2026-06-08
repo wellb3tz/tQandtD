@@ -94,6 +94,16 @@ export const CACHE_SIZE_SLIDER: SliderConfig = {
   tooltip: 'Maximum number of chunks to keep in memory. Higher values improve performance when revisiting areas.',
 };
 
+export const RENDER_SCALE_SLIDER: SliderConfig = {
+  id: 'renderScale',
+  label: 'Render Scale',
+  min: 0.5,
+  max: 1.0,
+  step: 0.05,
+  defaultValue: 1.0,
+  tooltip: 'Lower values render the scene at reduced resolution for higher FPS. 100% is native, 85% is a light boost, 75% is more aggressive.',
+};
+
 export const WATER_VIEW_CONTROLS = {
   color: {
     id: 'waterColor',

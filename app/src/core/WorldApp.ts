@@ -133,6 +133,7 @@ export interface ViewerSettings {
   terrainTexturesEnabled: boolean;
   fogOfWarEnabled: boolean;
   foliageLodEnabled: boolean;
+  renderScale: number;
   waterView?: WaterViewSettings;
   sky?: SkyViewSettings;
 }
@@ -165,6 +166,7 @@ export const DEFAULT_VIEWER_SETTINGS: ViewerSettings = {
   terrainTexturesEnabled: true,
   fogOfWarEnabled: false,
   foliageLodEnabled: true,
+  renderScale: 1,
 };
 
 /**

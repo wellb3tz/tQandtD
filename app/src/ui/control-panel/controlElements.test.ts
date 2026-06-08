@@ -36,4 +36,26 @@ describe('controlElements', () => {
 
     expect(valueDisplay.textContent).toBe('3200 m');
   });
+
+  it('formats render scale as a percentage', () => {
+    const control = createSliderControl({
+      id: 'renderScale',
+      label: 'Render Scale',
+      min: 0.5,
+      max: 1,
+      step: 0.05,
+      defaultValue: 1,
+    }, vi.fn(), {
+      formatValue: value => `${Math.round(value * 100)}%`,
+    });
+
+    document.body.appendChild(control);
+
+    const valueDisplay = control.querySelector('.slider-value') as HTMLElement;
+    expect(valueDisplay.textContent).toBe('100%');
+
+    updateSliderValue('renderScale', 0.85);
+
+    expect(valueDisplay.textContent).toBe('85%');
+  });
 });

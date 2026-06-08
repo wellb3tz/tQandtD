@@ -26,6 +26,20 @@ describe('ViewerCanvasHost', () => {
     expect(renderer.domElement.parentElement).toBe(container);
   });
 
+  it('updates the renderer pixel ratio when changed', () => {
+    const camera = createCamera();
+    const renderer = createRenderer();
+    const host = new ViewerCanvasHost({
+      camera,
+      renderer,
+      getPixelRatio: () => 1,
+    });
+
+    host.setPixelRatio(0.85);
+
+    expect(renderer.setPixelRatio).toHaveBeenCalledWith(0.85);
+  });
+
   it('resizes without appending the canvas again', () => {
     const camera = createCamera();
     const renderer = createRenderer();
