@@ -36,6 +36,7 @@ export class WaterLayerManager {
   
   /** Frustum matrix */
   private frustumMatrix: THREE.Matrix4;
+  private readonly animatedNormalMaps = new Set<THREE.Texture>();
 
   constructor() {
     this.waterLayers = new Map();
@@ -463,8 +464,18 @@ export class WaterLayerManager {
    * Advance animated ocean materials for all loaded chunks.
    */
   updateOceanWaves(elapsedSeconds: number, config: OceanConfig): void {
+    this.animatedNormalMaps.clear();
     for (const waterLayer of this.waterLayers.values()) {
+      if (!waterLayer.group.visible) continue;
       for (const waterMesh of waterLayer.ocean) {
+        const normalMap = waterMesh.material.normalMap;
+        if (normalMap) {
+          if (this.animatedNormalMaps.has(normalMap)) {
+            updateOceanMaterialWaves(waterMesh.material, config, elapsedSeconds, false);
+            continue;
+          }
+          this.animatedNormalMaps.add(normalMap);
+        }
         updateOceanMaterialWaves(waterMesh.material, config, elapsedSeconds);
       }
     }
@@ -474,13 +485,16 @@ export class WaterLayerManager {
    * Advance calm lake surface animation for all loaded chunks.
    */
   updateLakeSurfaces(elapsedSeconds: number): void {
+    this.animatedNormalMaps.clear();
     for (const waterLayer of this.waterLayers.values()) {
+      if (!waterLayer.group.visible) continue;
       for (const waterMesh of waterLayer.lake) {
         if (waterMesh.material.userData.lakeState === 'frozen') {
           continue;
         }
         updateLakeMaterialSurface(waterMesh.material, elapsedSeconds);
-        if (waterMesh.material.normalMap) {
+        if (waterMesh.material.normalMap && !this.animatedNormalMaps.has(waterMesh.material.normalMap)) {
+          this.animatedNormalMaps.add(waterMesh.material.normalMap);
           const speed = 0.18;
           waterMesh.material.normalMap.offset.set(
             (elapsedSeconds * speed * 0.006) % 1,
@@ -495,14 +509,17 @@ export class WaterLayerManager {
    * Advance river flow animation for all loaded chunks.
    */
   updateRiverFlows(elapsedSeconds: number): void {
+    this.animatedNormalMaps.clear();
     for (const waterLayer of this.waterLayers.values()) {
+      if (!waterLayer.group.visible) continue;
       for (const waterMesh of waterLayer.river) {
         const mat = waterMesh.material;
         if (mat.userData.riverState === 'frozen') {
           continue;
         }
         updateRiverMaterialFlow(mat, elapsedSeconds);
-        if (mat.normalMap) {
+        if (mat.normalMap && !this.animatedNormalMaps.has(mat.normalMap)) {
+          this.animatedNormalMaps.add(mat.normalMap);
           const speed = 0.46;
           mat.normalMap.offset.set(
             (elapsedSeconds * speed * 0.006) % 1,

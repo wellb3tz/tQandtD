@@ -54,6 +54,8 @@ export class WorldRenderLoop {
   private lastFoliageLodCameraPosition: THREE.Vector3 | undefined;
   private lastFoliageLodChunkCount = -1;
   private foliageLodStats: FoliageLodStats = { near: 0, mid: 0, far: 0, hidden: 0 };
+  private terrainAnimationMaterials: THREE.Material[] = [];
+  private terrainAnimationMaterialsDirty = true;
 
   constructor(options: WorldRenderLoopOptions) {
     this.scene = options.scene;
@@ -79,9 +81,11 @@ export class WorldRenderLoop {
 
       if (!isOrbital && !isTransitioning) {
         this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
-        this.chunkController?.update().catch(() => {
-          // Silently ignore errors from chunk controller updates
-        });
+        if (this.chunkController?.hasPendingBuilds()) {
+          this.chunkController.update().catch(() => {
+            // Silently ignore errors from chunk controller updates
+          });
+        }
       }
 
       if (!isOrbital && !isTransitioning) {
@@ -142,6 +146,10 @@ export class WorldRenderLoop {
     }
   }
 
+  invalidateTerrainAnimationMaterials(): void {
+    this.terrainAnimationMaterialsDirty = true;
+  }
+
   getFrustumCullingStats() {
     return calculateFrustumCullingStats(this.chunkMeshes.values(), this.enableFrustumCulling);
   }
@@ -178,7 +186,19 @@ export class WorldRenderLoop {
   }
 
   private updateTerrainAnimations(elapsedSeconds: number): void {
+    if (this.terrainAnimationMaterialsDirty) {
+      this.rebuildTerrainAnimationMaterials();
+    }
+
+    for (const material of this.terrainAnimationMaterials) {
+      updateTerrainMaterialAnimation(material, elapsedSeconds);
+    }
+  }
+
+  private rebuildTerrainAnimationMaterials(): void {
     const seenMaterials = new Set<THREE.Material>();
+    this.terrainAnimationMaterials = [];
+
     for (const chunk of this.chunkMeshes.values()) {
       const materials = Array.isArray(chunk.terrain.material)
         ? chunk.terrain.material
@@ -186,8 +206,11 @@ export class WorldRenderLoop {
       for (const material of materials) {
         if (seenMaterials.has(material)) continue;
         seenMaterials.add(material);
-        updateTerrainMaterialAnimation(material, elapsedSeconds);
+        if (material.userData.terrainShader?.uniforms?.terrainAnimationTime) {
+          this.terrainAnimationMaterials.push(material);
+        }
       }
     }
+    this.terrainAnimationMaterialsDirty = false;
   }
 }

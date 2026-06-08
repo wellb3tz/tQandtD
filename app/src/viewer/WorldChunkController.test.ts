@@ -39,6 +39,18 @@ describe('WorldChunkController', () => {
     expect(onChunksChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('reports whether queued chunk builds are waiting', async () => {
+    const context = createContext({ addChunkToSceneFn: vi.fn(() => false) });
+
+    expect(context.controller.hasPendingBuilds()).toBe(false);
+
+    context.controller.addChunk(1, 2, createChunkData());
+    expect(context.controller.hasPendingBuilds()).toBe(true);
+
+    await context.controller.update();
+    expect(context.controller.hasPendingBuilds()).toBe(false);
+  });
+
   it('does not invalidate stats when add or remove reports no scene change', async () => {
     const onChunksChanged = vi.fn();
     const context = createContext({

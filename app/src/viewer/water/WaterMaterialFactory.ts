@@ -206,6 +206,7 @@ export function updateOceanMaterialWaves(
   material: THREE.Material,
   config: OceanConfig,
   elapsedSeconds: number,
+  updateNormalMapOffset = true,
 ): void {
   const waveUniforms = (material.userData as OceanWaveUserData).oceanWaveUniforms;
   if (waveUniforms) {
@@ -214,7 +215,7 @@ export function updateOceanMaterialWaves(
     waveUniforms.uOceanWaveSpeed.value = config.waveSpeed;
   }
 
-  if (!(material instanceof THREE.MeshPhongMaterial) || !material.normalMap) {
+  if (!updateNormalMapOffset || !(material instanceof THREE.MeshPhongMaterial) || !material.normalMap) {
     return;
   }
 

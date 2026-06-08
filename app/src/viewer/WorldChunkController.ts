@@ -118,6 +118,10 @@ export class WorldChunkController {
     this.cameraChunkY = Math.floor(worldZ / scaledChunkSize);
   }
 
+  hasPendingBuilds(): boolean {
+    return this.pendingBuilds.length > 0;
+  }
+
   /**
    * Process pending chunk builds with a per-frame time and count budget.
    * Call this once per frame, ideally before rendering.

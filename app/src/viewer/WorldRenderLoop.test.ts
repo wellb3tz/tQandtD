@@ -67,6 +67,84 @@ describe('WorldRenderLoop', () => {
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7);
   });
 
+  it('does not ask the chunk controller to update when there is no build backlog', () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(8));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const chunkController = {
+      setCameraPosition: vi.fn(),
+      hasPendingBuilds: vi.fn(() => false),
+      update: vi.fn(),
+    };
+
+    const loop = new WorldRenderLoop({
+      scene: new THREE.Scene(),
+      renderer: { render: vi.fn() } as unknown as THREE.WebGLRenderer,
+      cameraInputController: { updateMovement: vi.fn(), updateFirstPersonPhysics: vi.fn() } as unknown as CameraInputController,
+      cameraViewController: createCameraViewController(),
+      chunkMeshes: new Map(),
+      layerVisibility: createLayerVisibility(),
+      waterLayerManager: createWaterLayerManager(),
+      getWaterConfig: () => DEFAULT_WATER_CONFIG,
+      beforeRender: vi.fn(),
+      chunkController: chunkController as never,
+    });
+
+    loop.start();
+    loop.stop();
+
+    expect(chunkController.setCameraPosition).toHaveBeenCalledOnce();
+    expect(chunkController.hasPendingBuilds).toHaveBeenCalledOnce();
+    expect(chunkController.update).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds the terrain animation material cache only after invalidation', () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(9));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const terrainMaterial = new THREE.MeshStandardMaterial();
+    terrainMaterial.userData.terrainShader = {
+      uniforms: {
+        terrainAnimationTime: { value: 0 },
+      },
+    };
+    const firstTerrain = new THREE.Mesh(new THREE.BoxGeometry(), terrainMaterial);
+    const secondMaterial = new THREE.MeshStandardMaterial();
+    secondMaterial.userData.terrainShader = {
+      uniforms: {
+        terrainAnimationTime: { value: 0 },
+      },
+    };
+    const secondTerrain = new THREE.Mesh(new THREE.BoxGeometry(), secondMaterial);
+    const chunkMeshes = new Map<string, ChunkMesh>([
+      ['0,0', { terrain: firstTerrain }],
+    ]);
+    const loop = new WorldRenderLoop({
+      scene: new THREE.Scene(),
+      renderer: { render: vi.fn() } as unknown as THREE.WebGLRenderer,
+      cameraInputController: { updateMovement: vi.fn(), updateFirstPersonPhysics: vi.fn() } as unknown as CameraInputController,
+      cameraViewController: createCameraViewController(),
+      chunkMeshes,
+      layerVisibility: createLayerVisibility(),
+      waterLayerManager: createWaterLayerManager(),
+      getWaterConfig: () => DEFAULT_WATER_CONFIG,
+      beforeRender: vi.fn(),
+    });
+
+    loop.start();
+    loop.stop();
+    const firstUpdate = terrainMaterial.userData.terrainShader.uniforms.terrainAnimationTime.value;
+    expect(firstUpdate).toBeGreaterThan(0);
+
+    chunkMeshes.set('1,0', { terrain: secondTerrain });
+    loop.start();
+    loop.stop();
+    expect(secondMaterial.userData.terrainShader.uniforms.terrainAnimationTime.value).toBe(0);
+
+    loop.invalidateTerrainAnimationMaterials();
+    loop.start();
+    loop.stop();
+    expect(secondMaterial.userData.terrainShader.uniforms.terrainAnimationTime.value).toBeGreaterThan(0);
+  });
+
   it('restores chunk visibility when frustum culling is disabled', () => {
     const terrain = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
     const chunkMeshes = new Map<string, ChunkMesh>([

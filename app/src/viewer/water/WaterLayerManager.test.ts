@@ -255,6 +255,44 @@ describe('WaterLayerManager - Integration Tests', () => {
       expect(shader.uniforms.uOceanWaveSpeed.value).toBe(1.2);
     });
 
+    it('updates a shared ocean normal map only once per animation tick', () => {
+      const normalMap = new THREE.Texture();
+      const offsetSet = vi.spyOn(normalMap.offset, 'set');
+      const config = {
+        ...DEFAULT_WATER_CONFIG,
+        ocean: {
+          ...DEFAULT_WATER_CONFIG.ocean,
+          normalMap,
+        },
+      };
+
+      manager.addWaterToChunk('0,0', createMockChunkWithOcean(), scene, config);
+      manager.addWaterToChunk('1,0', createMockChunkWithOcean(), scene, config);
+
+      manager.updateOceanWaves(5, config.ocean);
+
+      expect(offsetSet).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips water animation work for culled water groups', () => {
+      const normalMap = new THREE.Texture();
+      const offsetSet = vi.spyOn(normalMap.offset, 'set');
+      const config = {
+        ...DEFAULT_WATER_CONFIG,
+        ocean: {
+          ...DEFAULT_WATER_CONFIG.ocean,
+          normalMap,
+        },
+      };
+
+      manager.addWaterToChunk('0,0', createMockChunkWithOcean(), scene, config);
+      manager.getWaterLayer('0,0')!.group.visible = false;
+
+      manager.updateOceanWaves(5, config.ocean);
+
+      expect(offsetSet).not.toHaveBeenCalled();
+    });
+
     it('renders frozen rivers separately and does not animate their flow normals', () => {
       const normalMap = new THREE.Texture();
       normalMap.offset.set(0, 0);

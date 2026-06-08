@@ -136,7 +136,10 @@ export class WorldViewer {
       viewSettings: this.viewSettings,
       waterLayerManager: this.waterLayerManager,
       fogOfWarManager: this.fogOfWarManager,
-      onChunksChanged: () => this.invalidateRenderStatsCache(),
+      onChunksChanged: () => {
+        this.invalidateRenderStatsCache();
+        this.renderLoop.invalidateTerrainAnimationMaterials();
+      },
     });
     this.renderLoop = new WorldRenderLoop({
       scene: this.scene,
