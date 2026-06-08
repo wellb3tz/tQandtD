@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cloneWorldConfig,
   createDefaultWorldConfig,
+  DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
   deriveNoise3DConfig,
   mergeWorldConfig,
   prepareWorldConfig,
@@ -117,6 +118,41 @@ describe('world config helpers', () => {
     expect(original.resourceConfig.types[0].biomes).not.toContain(99);
     expect(original.lakeConfig!.allowedBiomes).not.toContain(99);
     expect(original.riverConfig!.allowedSourceBiomes).not.toContain(99);
+  });
+
+  it('clones nested directional climate config values', () => {
+    const original = createDefaultWorldConfig({
+      terrainConfig: {
+        directionalClimateConfig: {
+          ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+          enabled: true,
+          scale: 8000,
+        },
+      },
+      biomeConfig: {
+        directionalClimateConfig: {
+          ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+          enabled: true,
+          scale: 12000,
+        },
+      },
+      enhancedBiomeConfig: {
+        directionalClimateConfig: {
+          ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+          enabled: true,
+          scale: 16000,
+        },
+      },
+    });
+    const clone = cloneWorldConfig(original);
+
+    clone.terrainConfig.directionalClimateConfig!.scale = 2000;
+    clone.biomeConfig.directionalClimateConfig!.scale = 3000;
+    clone.enhancedBiomeConfig!.directionalClimateConfig!.scale = 4000;
+
+    expect(original.terrainConfig.directionalClimateConfig!.scale).toBe(8000);
+    expect(original.biomeConfig.directionalClimateConfig!.scale).toBe(12000);
+    expect(original.enhancedBiomeConfig!.directionalClimateConfig!.scale).toBe(16000);
   });
 
   it('merges nested config sections', () => {

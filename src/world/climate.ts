@@ -1,5 +1,48 @@
 import { NoiseEngine } from '../core/noise';
 
+export interface DirectionalClimateConfig {
+  /** Enable compass-axis climate and terrain gradients. */
+  enabled: boolean;
+  /** World distance from the origin where a compass axis reaches full strength. */
+  scale: number;
+  /** Built-in compass region preset. */
+  preset: DirectionalClimatePreset;
+}
+
+export interface DirectionalClimateSample {
+  temperature: number;
+  moisture: number;
+  heightMultiplier: number;
+}
+
+export type DirectionalClimatePreset = 'fantasy-regions';
+
+export const DEFAULT_DIRECTIONAL_CLIMATE_CONFIG: DirectionalClimateConfig = {
+  enabled: false,
+  scale: 10000,
+  preset: 'fantasy-regions',
+};
+
+const DIRECTIONAL_CLIMATE_PRESETS: Record<DirectionalClimatePreset, {
+  north: DirectionalRegionSample;
+  south: DirectionalRegionSample;
+  east: DirectionalRegionSample;
+  west: DirectionalRegionSample;
+}> = {
+  'fantasy-regions': {
+    north: { temperature: -1.00, moisture: -1.00, height: 0.35 },
+    south: { temperature: 1.00, moisture: -1.00, height: -0.15 },
+    east: { temperature: 0.20, moisture: 0.55, height: -0.25 },
+    west: { temperature: -0.05, moisture: -0.20, height: 0.30 },
+  },
+};
+
+interface DirectionalRegionSample {
+  temperature: number;
+  moisture: number;
+  height: number;
+}
+
 /**
  * Configuration for the ClimateSystem.
  * All fields have safe defaults via DEFAULT_CLIMATE_CONFIG.
@@ -31,6 +74,9 @@ export interface ClimateConfig {
   /** Global moisture offset [-1-1], default 0.
    *  Shifts all moisture values up (positive) or down (negative). */
   worldMoistureOffset: number;
+
+  /** Optional world-axis climate field shared with terrain generation. */
+  directionalClimateConfig?: DirectionalClimateConfig;
 }
 
 /**
@@ -48,6 +94,57 @@ export const DEFAULT_CLIMATE_CONFIG: ClimateConfig = {
   worldTemperatureOffset: 0,
   worldMoistureOffset: 0,
 };
+
+export function sampleDirectionalClimateField(
+  x: number,
+  y: number,
+  config?: DirectionalClimateConfig,
+): DirectionalClimateSample {
+  if (!config?.enabled) {
+    return { temperature: 0, moisture: 0, heightMultiplier: 0 };
+  }
+
+  const xAxis = sampleDirectionalAxis(x, config.scale);
+  // Minimap north is drawn upward, matching negative world Y/Z movement.
+  const yAxis = sampleDirectionalAxis(-y, config.scale);
+  const preset = DIRECTIONAL_CLIMATE_PRESETS[config.preset];
+
+  if (!preset) {
+    return { temperature: 0, moisture: 0, heightMultiplier: 0 };
+  }
+
+  const northWeight = Math.max(0, yAxis);
+  const southWeight = Math.max(0, -yAxis);
+  const eastWeight = Math.max(0, xAxis);
+  const westWeight = Math.max(0, -xAxis);
+
+  return {
+    temperature: clamp(
+      preset.north.temperature * northWeight +
+        preset.south.temperature * southWeight +
+        preset.east.temperature * eastWeight +
+        preset.west.temperature * westWeight,
+      -1,
+      1,
+    ),
+    moisture: clamp(
+      preset.north.moisture * northWeight +
+        preset.south.moisture * southWeight +
+        preset.east.moisture * eastWeight +
+        preset.west.moisture * westWeight,
+      -1,
+      1,
+    ),
+    heightMultiplier: clamp(
+      preset.north.height * northWeight +
+        preset.south.height * southWeight +
+        preset.east.height * eastWeight +
+        preset.west.height * westWeight,
+      -1,
+      1,
+    ),
+  };
+}
 
 /**
  * Half-height of the world used to normalise the latitude gradient.
@@ -137,20 +234,20 @@ export class ClimateSystem {
   getTemperature(x: number, y: number, height: number): number {
     const cfg = this.config;
 
-    // Latitude base: higher Y -> more negative (colder)
-    const latitudeBase = -y * cfg.latitudeGradientStrength / WORLD_HALF_HEIGHT;
-
-    // Multi-scale noise blend
-    const climateNoise = this.tempClimate.fbm(x, y, {
-      octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.climateScale,
-    });
-    const detailNoise = this.tempDetail.fbm(x, y, {
-      octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.detailScale,
-    });
-    const blendedNoise = climateNoise * (1 - cfg.climateDetailBlend) + detailNoise * cfg.climateDetailBlend;
-
-    // Combine latitude base with noise contribution
-    const rawTemp = latitudeBase + blendedNoise * (1 - cfg.latitudeGradientStrength);
+    const directional = sampleDirectionalClimateField(x, y, cfg.directionalClimateConfig);
+    const rawTemp = cfg.directionalClimateConfig?.enabled
+      ? directional.temperature
+      : (() => {
+          const climateNoise = this.tempClimate.fbm(x, y, {
+            octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.climateScale,
+          });
+          const detailNoise = this.tempDetail.fbm(x, y, {
+            octaves: 4, persistence: 0.5, lacunarity: 2.0, scale: cfg.detailScale,
+          });
+          const blendedNoise = climateNoise * (1 - cfg.climateDetailBlend) + detailNoise * cfg.climateDetailBlend;
+          const latitudeBase = -y * cfg.latitudeGradientStrength / WORLD_HALF_HEIGHT;
+          return latitudeBase + blendedNoise * (1 - cfg.latitudeGradientStrength);
+        })();
 
     // Altitude cooling
     const altitudeDelta = height > cfg.altitudeCoolingThreshold
@@ -180,6 +277,11 @@ export class ClimateSystem {
     getHeight: (wx: number, wy: number) => number,
   ): number {
     const cfg = this.config;
+
+    const directional = sampleDirectionalClimateField(x, y, cfg.directionalClimateConfig);
+    if (cfg.directionalClimateConfig?.enabled) {
+      return ClimateSystem.clamp(directional.moisture + cfg.worldMoistureOffset, -1, 1);
+    }
 
     // Multi-scale noise blend
     const climateNoise = this.moistClimate.fbm(x, y, {
@@ -287,5 +389,36 @@ export class ClimateSystem {
         `ClimateConfig: detailScale must be > 0, got ${cfg.detailScale}`,
       );
     }
+    validateDirectionalClimateConfig(cfg.directionalClimateConfig, 'ClimateConfig.directionalClimateConfig');
   }
+}
+
+export function validateDirectionalClimateConfig(
+  cfg: DirectionalClimateConfig | undefined,
+  fieldName = 'directionalClimateConfig',
+): void {
+  if (!cfg) return;
+
+  if (typeof cfg.enabled !== 'boolean') {
+    throw new Error(`${fieldName}: enabled must be a boolean`);
+  }
+  if (cfg.scale <= 0 || !Number.isFinite(cfg.scale)) {
+    throw new Error(`${fieldName}: scale must be a finite number > 0, got ${cfg.scale}`);
+  }
+  if (!isDirectionalClimatePreset(cfg.preset)) {
+    throw new Error(`${fieldName}: preset must be one of fantasy-regions, got ${cfg.preset}`);
+  }
+}
+
+function sampleDirectionalAxis(coord: number, scale: number): number {
+  const t = clamp((coord + scale) / (scale * 2), 0, 1);
+  return (t * t * (3 - 2 * t)) * 2 - 1;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return value < min ? min : value > max ? max : value;
+}
+
+function isDirectionalClimatePreset(value: string): value is DirectionalClimatePreset {
+  return value === 'fantasy-regions';
 }

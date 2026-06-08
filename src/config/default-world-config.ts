@@ -27,8 +27,8 @@ export function createDefaultWorldConfig(overrides: WorldConfigOverrides = {}): 
 export function cloneWorldConfig(config: WorldConfig): WorldConfig {
   return {
     ...config,
-    terrainConfig: { ...config.terrainConfig },
-    biomeConfig: { ...config.biomeConfig },
+    terrainConfig: clonePlainValue(config.terrainConfig),
+    biomeConfig: clonePlainValue(config.biomeConfig),
     resourceConfig: {
       ...config.resourceConfig,
       types: config.resourceConfig.types.map(type => ({
@@ -47,7 +47,7 @@ export function cloneWorldConfig(config: WorldConfig): WorldConfig {
       })),
     },
     noise3DConfig: config.noise3DConfig ? { ...config.noise3DConfig } : undefined,
-    enhancedBiomeConfig: config.enhancedBiomeConfig ? { ...config.enhancedBiomeConfig } : undefined,
+    enhancedBiomeConfig: config.enhancedBiomeConfig ? clonePlainValue(config.enhancedBiomeConfig) : undefined,
     lakeConfig: config.lakeConfig
       ? {
           ...config.lakeConfig,
@@ -78,20 +78,26 @@ export function mergeWorldConfig(base: WorldConfig, overrides: WorldConfigOverri
   assignIfDefined(merged, overrides, 'errorRecovery');
 
   if (overrides.terrainConfig) {
-    merged.terrainConfig = { ...base.terrainConfig, ...overrides.terrainConfig };
+    merged.terrainConfig = {
+      ...clonePlainValue(base.terrainConfig),
+      ...overrides.terrainConfig,
+    };
   }
 
   if (overrides.biomeConfig) {
-    merged.biomeConfig = { ...base.biomeConfig, ...overrides.biomeConfig };
+    merged.biomeConfig = {
+      ...clonePlainValue(base.biomeConfig),
+      ...overrides.biomeConfig,
+    };
   }
 
   if (overrides.enhancedBiomeConfig) {
     merged.enhancedBiomeConfig = base.enhancedBiomeConfig
       ? {
-          ...base.enhancedBiomeConfig,
+          ...clonePlainValue(base.enhancedBiomeConfig),
           ...overrides.enhancedBiomeConfig,
         }
-      : (overrides.enhancedBiomeConfig as NonNullable<WorldConfig['enhancedBiomeConfig']>);
+      : clonePlainValue(overrides.enhancedBiomeConfig) as NonNullable<WorldConfig['enhancedBiomeConfig']>;
   }
 
   if (overrides.resourceConfig) {

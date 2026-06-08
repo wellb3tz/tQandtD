@@ -160,6 +160,10 @@ export function updateCheckboxValue(id: string, checked: boolean): void {
       setControlDisplay('continentalStrength-group', checked);
       break;
     }
+    case 'enableDirectionalClimate': {
+      setControlDisplay('directionalClimate-controls-group', checked);
+      break;
+    }
   }
 }
 

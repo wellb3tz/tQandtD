@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { validateWorldConfig, ValidationError } from '../src/utils/validation';
+import { DEFAULT_DIRECTIONAL_CLIMATE_CONFIG } from '../src';
 import { makeMinimalConfig } from './helpers';
 import { BiomeType } from '../src/world/chunk';
 
@@ -111,6 +112,17 @@ describe('Configuration Validation', () => {
       config.terrainConfig.continentalStrength = 1.5;
       expect(() => validateWorldConfig(config)).toThrow(ValidationError);
     });
+
+    it('rejects invalid directional climate scale', () => {
+      const config = makeMinimalConfig(12345);
+      config.terrainConfig.directionalClimateConfig = {
+        ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+        enabled: true,
+        scale: 0,
+      };
+      expect(() => validateWorldConfig(config)).toThrow(ValidationError);
+      expect(() => validateWorldConfig(config)).toThrow('directionalClimateConfig.scale');
+    });
   });
 
   describe('Biome configuration', () => {
@@ -131,6 +143,17 @@ describe('Configuration Validation', () => {
       const config = makeMinimalConfig(12345);
       config.biomeConfig.blendRadius = -5;
       expect(() => validateWorldConfig(config)).toThrow(ValidationError);
+    });
+
+    it('rejects invalid directional climate preset names', () => {
+      const config = makeMinimalConfig(12345);
+      config.biomeConfig.directionalClimateConfig = {
+        ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+        enabled: true,
+        preset: 'unknown-preset' as any,
+      };
+      expect(() => validateWorldConfig(config)).toThrow(ValidationError);
+      expect(() => validateWorldConfig(config)).toThrow('directionalClimateConfig.preset');
     });
   });
 

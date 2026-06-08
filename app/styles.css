@@ -2012,6 +2012,46 @@ body {
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.38);
 }
 
+.minimap-direction {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(234, 239, 243, 0.9);
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.minimap-direction-n {
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #e6edf3;
+}
+
+.minimap-direction-e {
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.minimap-direction-s {
+  bottom: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.minimap-direction-w {
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 .status-bar {
   justify-content: flex-start;
   gap: 22px;

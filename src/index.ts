@@ -94,8 +94,13 @@ export {
 } from './world/enhanced-biome';
 export {
   ClimateSystem,
+  type DirectionalClimateConfig,
+  type DirectionalClimatePreset,
+  type DirectionalClimateSample,
   type ClimateConfig,
   DEFAULT_CLIMATE_CONFIG,
+  DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+  sampleDirectionalClimateField,
 } from './world/climate';
 export {
   BiomeCompatibilityMatrix,

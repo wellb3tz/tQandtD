@@ -116,6 +116,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
     const climateCfg: ClimateConfig = {
       ...DEFAULT_CLIMATE_CONFIG,
       ...config.climateConfig,
+      directionalClimateConfig: config.directionalClimateConfig ?? config.climateConfig?.directionalClimateConfig,
       worldTemperatureOffset: config.worldTemperatureOffset ?? config.climateConfig?.worldTemperatureOffset ?? DEFAULT_CLIMATE_CONFIG.worldTemperatureOffset,
       worldMoistureOffset: config.worldMoistureOffset ?? config.climateConfig?.worldMoistureOffset ?? DEFAULT_CLIMATE_CONFIG.worldMoistureOffset,
     };

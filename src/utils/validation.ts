@@ -113,6 +113,8 @@ export function validateTerrainConfig(config: TerrainConfig): void {
       validatePositive('terrainConfig.canyonScale', config.canyonScale);
     }
   }
+
+  validateDirectionalClimateConfig(config.directionalClimateConfig, 'terrainConfig.directionalClimateConfig');
 }
 
 /**
@@ -122,6 +124,7 @@ export function validateBiomeConfig(config: BiomeConfig): void {
   validatePositive('biomeConfig.temperatureScale', config.temperatureScale);
   validatePositive('biomeConfig.moistureScale', config.moistureScale);
   validateNonNegative('biomeConfig.blendRadius', config.blendRadius);
+  validateDirectionalClimateConfig(config.directionalClimateConfig, 'biomeConfig.directionalClimateConfig');
 }
 
 /**
@@ -327,5 +330,45 @@ export function validateWorldConfig(config: WorldConfig): void {
         'Must be a non-empty string'
       );
     }
+  }
+
+  if (config.enhancedBiomeConfig?.directionalClimateConfig) {
+    validateDirectionalClimateConfig(
+      config.enhancedBiomeConfig.directionalClimateConfig,
+      'enhancedBiomeConfig.directionalClimateConfig',
+    );
+  }
+
+  if (config.enhancedBiomeConfig?.climateConfig?.directionalClimateConfig) {
+    validateDirectionalClimateConfig(
+      config.enhancedBiomeConfig.climateConfig.directionalClimateConfig,
+      'enhancedBiomeConfig.climateConfig.directionalClimateConfig',
+    );
+  }
+}
+
+function validateDirectionalClimateConfig(
+  config: {
+    enabled: boolean;
+    scale: number;
+    preset: string;
+  } | undefined,
+  fieldName: string,
+): void {
+  if (!config) {
+    return;
+  }
+
+  if (typeof config.enabled !== 'boolean') {
+    throw new ValidationError(`${fieldName}.enabled`, config.enabled, 'Must be a boolean');
+  }
+
+  validatePositive(`${fieldName}.scale`, config.scale);
+  if (config.preset !== 'fantasy-regions') {
+    throw new ValidationError(
+      `${fieldName}.preset`,
+      config.preset,
+      'Must be one of: fantasy-regions',
+    );
   }
 }

@@ -38,6 +38,17 @@ export const BIOME_SLIDERS: SliderConfig[] = [
   { id: 'blendRadius', label: 'Biome Blend Radius', min: 0.5, max: 20, step: 0.5, defaultValue: 0.5, tooltip: 'Radius in meters used to sample neighbouring biomes for blending' },
 ];
 
+export const DIRECTIONAL_CLIMATE_TOGGLE: CheckboxConfig = {
+  id: 'enableDirectionalClimate',
+  label: 'Enable Directional Regions',
+  defaultValue: false,
+  tooltip: 'Add smooth fantasy terrain regions by compass direction',
+};
+
+export const DIRECTIONAL_CLIMATE_SLIDERS: SliderConfig[] = [
+  { id: 'directionalScale', label: 'Region Reach (tiles)', min: 1000, max: 40000, step: 500, defaultValue: 10000, tooltip: 'Terrain tiles from the world center to the full regional effect' },
+];
+
 export const RESOURCE_TYPE_TOGGLES: CheckboxConfig[] = [
   { id: 'enableIron', label: 'Iron', defaultValue: true },
   { id: 'enableGold', label: 'Gold', defaultValue: true },

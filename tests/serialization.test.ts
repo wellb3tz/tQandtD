@@ -12,6 +12,7 @@ import { WorldSerializer, SerializationFormat, type SerializedRiverPoint } from 
 import { StructureType } from '../src/world/chunk';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
+import { createDefaultWorldConfig, DEFAULT_DIRECTIONAL_CLIMATE_CONFIG } from '../src';
 import { makeMinimalConfig } from './helpers';
 
 // helpers
@@ -164,6 +165,33 @@ describe('Serialization round-trip', () => {
         expect(fresh.climateTreeLine).toBe(orig.climateTreeLine);
         expect(fresh.worldTemperatureOffset).toBe(orig.worldTemperatureOffset);
         expect(Array.from(fresh.temperatureMap ?? [])).toEqual(Array.from(orig.temperatureMap ?? []));
+      });
+
+      it('serializes directional climate config fields', async () => {
+        const config = createDefaultWorldConfig({ seed: 42 });
+        const directionalClimate = {
+          ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+          enabled: true,
+          scale: 12000,
+          preset: 'fantasy-regions' as const,
+        };
+
+        config.terrainConfig.directionalClimateConfig = directionalClimate;
+        config.biomeConfig.directionalClimateConfig = directionalClimate;
+        if (config.enhancedBiomeConfig) {
+          config.enhancedBiomeConfig.directionalClimateConfig = directionalClimate;
+        }
+        config.lakeConfig = DEFAULT_LAKE_CONFIG;
+        config.riverConfig = DEFAULT_RIVER_CONFIG;
+
+        const manager = new ChunkManager(config);
+        await manager.getChunk(0, 0);
+
+        const ser = new WorldSerializer();
+        const saved = ser.serialize(manager, { format, compress, modifiedOnly: false });
+        expect(saved.config.terrainConfig.directionalClimateConfig).toEqual(directionalClimate);
+        expect(saved.config.biomeConfig.directionalClimateConfig).toEqual(directionalClimate);
+        expect(saved.config.enhancedBiomeConfig?.directionalClimateConfig).toEqual(directionalClimate);
       });
 
       it('restores river corridor fields on path points', async () => {

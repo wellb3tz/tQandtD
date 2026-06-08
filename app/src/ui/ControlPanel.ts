@@ -11,6 +11,8 @@ import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
   BIOME_SLIDERS,
   CACHE_SIZE_SLIDER,
+  DIRECTIONAL_CLIMATE_SLIDERS,
+  DIRECTIONAL_CLIMATE_TOGGLE,
   RESOURCE_TYPE_TOGGLES,
   STRUCTURE_TYPE_TOGGLES,
   RENDER_SCALE_SLIDER,
@@ -30,6 +32,7 @@ import {
 import {
   buildBiomeConfigPatch,
   buildBiomeUpdateConfig,
+  buildDirectionalClimatePatch,
   buildLakeConfigPatch,
   buildResourceConfigPatch,
   buildResourceTypePatch,
@@ -87,6 +90,7 @@ export class ControlPanel {
   private parameterChangeCallbacks: Set<ParameterChangeCallback> = new Set();
   private presetSelectCallbacks: Set<PresetSelectCallback> = new Set();
   private currentConfig: WorldConfig | null = null;
+  private lastSyncedConfig: WorldConfig | null = null;
   private customPresets: PresetConfig[] = [];
 
   /**
@@ -96,6 +100,7 @@ export class ControlPanel {
     this.container = container;
     this.app = app;
     this.currentConfig = app.getState().config;
+    this.lastSyncedConfig = this.currentConfig;
 
     // Subscribe to state changes
     app.subscribeToState((state: AppState) => {
@@ -220,6 +225,36 @@ export class ControlPanel {
     });
     continentalStrengthControl.id = 'continentalStrength-group';
     terrainContainer.appendChild(continentalStrengthControl);
+
+    const directionalSection = document.createElement('div');
+    directionalSection.style.marginTop = '16px';
+    directionalSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Directional Regions</h4>';
+    terrainContainer.appendChild(directionalSection);
+
+    const directionalToggle = createCheckboxControl(DIRECTIONAL_CLIMATE_TOGGLE, (checked) => {
+      this.updateDirectionalClimateConfig('enabled', checked);
+      const directionalControls = document.getElementById('directionalClimate-controls-group');
+      if (directionalControls) {
+        directionalControls.style.display = checked ? 'block' : 'none';
+      }
+    });
+    directionalSection.appendChild(directionalToggle);
+
+    const directionalControls = document.createElement('div');
+    directionalControls.id = 'directionalClimate-controls-group';
+    directionalControls.style.display = 'none';
+    directionalControls.style.marginTop = '8px';
+
+    DIRECTIONAL_CLIMATE_SLIDERS.forEach(config => {
+      const control = createSliderControl(config, (value) => {
+        this.updateDirectionalClimateConfig(config.id, value);
+      }, {
+        formatValue: value => `${Math.round(value).toLocaleString('en-US')} tiles`,
+      });
+      directionalControls.appendChild(control);
+    });
+
+    directionalSection.appendChild(directionalControls);
   }
 
   /**
@@ -595,6 +630,15 @@ export class ControlPanel {
   }
 
   /**
+   * Update directional climate configuration shared between terrain and biomes.
+   */
+  private updateDirectionalClimateConfig(key: string, value: number | boolean): void {
+    if (!this.app || !this.currentConfig) return;
+
+    this.applyEngineConfigChange(buildDirectionalClimatePatch(this.currentConfig, { [key]: value }));
+  }
+
+  /**
    * Update resource configuration
    */
   private updateResourceConfig(key: string, value: number): void {
@@ -695,6 +739,10 @@ export class ControlPanel {
    */
   private updateFromState(state: AppState): void {
     this.currentConfig = state.config;
+    if (state.config !== this.lastSyncedConfig) {
+      syncControlsWithConfig(state.config);
+      this.lastSyncedConfig = state.config;
+    }
     updateSliderValue('viewDistance', state.appSettings.viewDistance);
     syncVisibilityControls(state.viewerSettings);
   }

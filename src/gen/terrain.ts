@@ -1,4 +1,7 @@
 import { NoiseEngine, NoiseConfig } from '../core/noise';
+import { sampleDirectionalClimateField, type DirectionalClimateConfig } from '../world/climate';
+
+const DIRECTIONAL_HEIGHT_MULTIPLIER_SCALE = 0.12;
 
 /**
  * Configuration for terrain generation
@@ -16,6 +19,8 @@ export interface TerrainConfig {
   warpStrength: number;
   /** Multiplier for final height values */
   heightMultiplier: number;
+  /** Optional world-axis terrain/climate field shared with biome generation. */
+  directionalClimateConfig?: DirectionalClimateConfig;
   /** Enable 3D noise for terrain generation (optional) */
   enable3D?: boolean;
   /** Z-axis scale for 3D noise (optional) */
@@ -330,8 +335,11 @@ export class TerrainGenerator {
       noiseValue = noise.fbm(warpedX, warpedY, this.noiseConfig);
     }
 
-    // Normalize from [-1, 1] to [0, 1] and apply height multiplier
-    let height = (noiseValue + 1) * 0.5 * this.config.heightMultiplier;
+    // Normalize from [-1, 1] to [0, 1] and apply height multiplier.
+    const directional = sampleDirectionalClimateField(x, y, this.config.directionalClimateConfig);
+    const effectiveHeightMultiplier = this.config.heightMultiplier *
+      (1 + directional.heightMultiplier * DIRECTIONAL_HEIGHT_MULTIPLIER_SCALE);
+    let height = (noiseValue + 1) * 0.5 * effectiveHeightMultiplier;
 
     // Apply continental noise as a BASE LAYER
     if (this.continentalNoise !== null && this.coastlineNoise !== null) {

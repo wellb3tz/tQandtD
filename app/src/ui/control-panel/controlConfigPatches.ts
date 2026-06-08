@@ -1,5 +1,6 @@
 import {
   DEFAULT_CLIMATE_CONFIG,
+  DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
   DEFAULT_RIVER_CONFIG,
   type WorldConfig,
   type WorldConfigOverrides,
@@ -22,7 +23,7 @@ const ENHANCED_BIOME_FEATURES = new Set([
 
 export function buildTerrainConfigPatch(
   config: WorldConfig,
-  patch: Record<string, number | boolean>,
+  patch: Record<string, unknown>,
 ): WorldConfigOverrides {
   return {
     terrainConfig: {
@@ -78,7 +79,7 @@ export function buildBiomeUpdateConfig(
 
 export function buildBiomeConfigPatch(
   config: WorldConfig,
-  patch: Record<string, number | boolean>,
+  patch: Record<string, unknown>,
 ): WorldConfigOverrides {
   const newConfig: WorldConfigOverrides = {
     biomeConfig: {
@@ -95,6 +96,34 @@ export function buildBiomeConfigPatch(
   }
 
   return newConfig;
+}
+
+export function buildDirectionalClimatePatch(
+  config: WorldConfig,
+  patch: Record<string, number | boolean>,
+): WorldConfigOverrides {
+  const directionalScale = patch.directionalScale;
+  const normalizedPatch: Record<string, number | boolean> = {
+    ...patch,
+    ...(directionalScale !== undefined ? { scale: directionalScale } : {}),
+  };
+  delete normalizedPatch.directionalScale;
+
+  const nextDirectionalClimate = {
+    ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+    ...(config.terrainConfig.directionalClimateConfig ?? config.biomeConfig.directionalClimateConfig ?? {}),
+    preset: 'fantasy-regions' as const,
+    ...normalizedPatch,
+  };
+
+  return {
+    ...buildTerrainConfigPatch(config, {
+      directionalClimateConfig: nextDirectionalClimate,
+    }),
+    ...buildBiomeConfigPatch(config, {
+      directionalClimateConfig: nextDirectionalClimate,
+    }),
+  };
 }
 
 export function buildResourceConfigPatch(config: WorldConfig, patch: Record<string, unknown>): WorldConfigOverrides {

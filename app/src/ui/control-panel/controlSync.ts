@@ -19,6 +19,10 @@ export function syncVisibilityControls(viewerSettings: ViewerSettings): void {
 }
 
 export function syncControlsWithConfig(config: WorldConfig): void {
+  const directional = config.terrainConfig?.directionalClimateConfig
+    ?? config.biomeConfig?.directionalClimateConfig
+    ?? config.enhancedBiomeConfig?.directionalClimateConfig;
+
   if (config.terrainConfig) {
     updateSliderValue('baseScale', config.terrainConfig.baseScale);
     updateSliderValue('octaves', config.terrainConfig.octaves);
@@ -50,6 +54,13 @@ export function syncControlsWithConfig(config: WorldConfig): void {
     if (config.terrainConfig.continentalStrength !== undefined) {
       updateSliderValue('continentalStrength', config.terrainConfig.continentalStrength);
     }
+  }
+
+  if (directional) {
+    updateCheckboxValue('enableDirectionalClimate', directional.enabled);
+    updateSliderValue('directionalScale', directional.scale);
+  } else {
+    updateCheckboxValue('enableDirectionalClimate', false);
   }
 
   if (config.biomeConfig) {
