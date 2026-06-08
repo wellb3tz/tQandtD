@@ -52,6 +52,14 @@ export function selectTerrainSurfaceKey(
   }
 
   if (biome === BiomeType.BEACH) {
+    if (temperature < -0.55) {
+      return wetness > 0.35 ? 'ice' : 'snow';
+    }
+
+    if (temperature < -0.25) {
+      return wetness > 0.55 ? 'ice' : 'snow';
+    }
+
     return wetness > 0.55 ? 'swampMud' : 'beach';
   }
 

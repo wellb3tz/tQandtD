@@ -176,6 +176,22 @@ describe('TerrainAttributeBuilder', () => {
     expect(detailBlend[0 * 4 + 3]).toBeGreaterThan(0);
   });
 
+  it('turns extreme-cold beach vertices into snow or ice surfaces', () => {
+    const data = {
+      size: 1,
+      heightmap: new Float32Array([0.28, 0.28, 0.28, 0.28]),
+      biomeMap: new Uint8Array([BiomeType.BEACH]),
+      temperatureMap: new Float32Array([-0.7]),
+      resources: [],
+      structures: [],
+    } as unknown as ChunkData;
+
+    const weights = calculateVertexSurfaceWeights(data, 0, 0);
+
+    expect(weights.ice + weights.snow).toBe(1);
+    expect(weights.beach).toBe(0);
+  });
+
   it('extends wet detail masks onto riverbanks without marking them as riverbed', () => {
     const data = createRiverChunk({
       size: 4,
