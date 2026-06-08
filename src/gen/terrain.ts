@@ -344,7 +344,10 @@ export class TerrainGenerator {
     // Apply continental noise as a BASE LAYER
     if (this.continentalNoise !== null && this.coastlineNoise !== null) {
       const seaLevel  = 0.3;
-      const cStrength = this.config.continentalStrength ?? 0.6;
+      const baseContinentalStrength = this.config.continentalStrength ?? 0.6;
+      const cStrength = directional.oceanCoverageWeight > 0
+        ? lerp(baseContinentalStrength, directional.oceanCoverage, directional.oceanCoverageWeight)
+        : baseContinentalStrength;
 
       // --- Layer 1: large-scale continental shape ---
       const rawContinental = this.continentalNoise.fbm(x, y, this.continentalConfig);
@@ -554,4 +557,8 @@ export class TerrainGenerator {
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }

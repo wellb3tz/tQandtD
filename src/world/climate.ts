@@ -13,6 +13,8 @@ export interface DirectionalClimateSample {
   temperature: number;
   moisture: number;
   heightMultiplier: number;
+  oceanCoverage: number;
+  oceanCoverageWeight: number;
 }
 
 export type DirectionalClimatePreset = 'fantasy-regions';
@@ -31,7 +33,7 @@ const DIRECTIONAL_CLIMATE_PRESETS: Record<DirectionalClimatePreset, {
 }> = {
   'fantasy-regions': {
     north: { temperature: -1.00, moisture: -1.00, height: 0.35 },
-    south: { temperature: 1.00, moisture: -1.00, height: -0.15 },
+    south: { temperature: 1.00, moisture: -1.00, height: -0.15, oceanCoverage: 0.10 },
     east: { temperature: 0.20, moisture: 0.55, height: -0.25 },
     west: { temperature: -0.05, moisture: -0.20, height: 0.30 },
   },
@@ -41,6 +43,7 @@ interface DirectionalRegionSample {
   temperature: number;
   moisture: number;
   height: number;
+  oceanCoverage?: number;
 }
 
 /**
@@ -101,7 +104,7 @@ export function sampleDirectionalClimateField(
   config?: DirectionalClimateConfig,
 ): DirectionalClimateSample {
   if (!config?.enabled) {
-    return { temperature: 0, moisture: 0, heightMultiplier: 0 };
+    return { temperature: 0, moisture: 0, heightMultiplier: 0, oceanCoverage: 0, oceanCoverageWeight: 0 };
   }
 
   const xAxis = sampleDirectionalAxis(x, config.scale);
@@ -110,7 +113,7 @@ export function sampleDirectionalClimateField(
   const preset = DIRECTIONAL_CLIMATE_PRESETS[config.preset];
 
   if (!preset) {
-    return { temperature: 0, moisture: 0, heightMultiplier: 0 };
+    return { temperature: 0, moisture: 0, heightMultiplier: 0, oceanCoverage: 0, oceanCoverageWeight: 0 };
   }
 
   const northWeight = Math.max(0, yAxis);
@@ -143,6 +146,8 @@ export function sampleDirectionalClimateField(
       -1,
       1,
     ),
+    oceanCoverage: preset.south.oceanCoverage ?? 0,
+    oceanCoverageWeight: southWeight,
   };
 }
 

@@ -19,6 +19,8 @@ describe('Directional climate field', () => {
       temperature: 0,
       moisture: 0,
       heightMultiplier: 0,
+      oceanCoverage: 0.10,
+      oceanCoverageWeight: 0,
     });
 
     expect(sampleDirectionalClimateField(1000, 0, directional)).toMatchObject({
@@ -43,6 +45,8 @@ describe('Directional climate field', () => {
       temperature: 1.00,
       moisture: -1.00,
       heightMultiplier: -0.15,
+      oceanCoverage: 0.10,
+      oceanCoverageWeight: 1,
     });
   });
 
@@ -52,6 +56,19 @@ describe('Directional climate field', () => {
     expect(sample.temperature).toBeCloseTo(-0.80, 6);
     expect(sample.moisture).toBeCloseTo(-0.45, 6);
     expect(sample.heightMultiplier).toBeCloseTo(0.10, 6);
+  });
+
+  it('ramps ocean coverage toward the dry southern extreme', () => {
+    const center = sampleDirectionalClimateField(0, 0, directional);
+    const halfwaySouth = sampleDirectionalClimateField(0, 500, directional);
+    const farSouth = sampleDirectionalClimateField(0, 10000, directional);
+
+    expect(center.oceanCoverageWeight).toBe(0);
+    expect(halfwaySouth.oceanCoverage).toBeCloseTo(0.10, 6);
+    expect(halfwaySouth.oceanCoverageWeight).toBeGreaterThan(0);
+    expect(halfwaySouth.oceanCoverageWeight).toBeLessThan(1);
+    expect(farSouth.oceanCoverage).toBeCloseTo(0.10, 6);
+    expect(farSouth.oceanCoverageWeight).toBe(1);
   });
 
   it('uses the directional preset directly when enabled', () => {

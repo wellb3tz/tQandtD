@@ -1,4 +1,5 @@
 import { DEFAULT_RIVER_CONFIG } from '../gen/rivers';
+import { DEFAULT_DIRECTIONAL_CLIMATE_CONFIG } from '../world/climate';
 import type { WorldConfig } from '../world/world-config';
 
 export type WorldConfigOverrides = Omit<
@@ -196,11 +197,19 @@ function createBaseWorldConfig(): WorldConfig {
       enableCanyons: true,
       canyonStrength: 0.9,
       canyonDepth: 0.28,
+      directionalClimateConfig: {
+        ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+        enabled: true,
+      },
     },
     biomeConfig: {
       temperatureScale: 0.001,
       moistureScale: 0.001,
       blendRadius: 0.5,
+      directionalClimateConfig: {
+        ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+        enabled: true,
+      },
     },
     enhancedBiomeConfig: {
       temperatureScale: 0.005,
@@ -213,6 +222,10 @@ function createBaseWorldConfig(): WorldConfig {
       treeLineElevation: 0.75,
       worldTemperatureOffset: 0,
       worldMoistureOffset: 0,
+      directionalClimateConfig: {
+        ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+        enabled: true,
+      },
     },
     resourceConfig: {
       types: [

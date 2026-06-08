@@ -41,7 +41,7 @@ export const BIOME_SLIDERS: SliderConfig[] = [
 export const DIRECTIONAL_CLIMATE_TOGGLE: CheckboxConfig = {
   id: 'enableDirectionalClimate',
   label: 'Enable Directional Regions',
-  defaultValue: false,
+  defaultValue: true,
   tooltip: 'Add smooth fantasy terrain regions by compass direction',
 };
 

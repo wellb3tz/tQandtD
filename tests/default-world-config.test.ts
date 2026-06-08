@@ -15,6 +15,18 @@ describe('createDefaultWorldConfig', () => {
 
     expect(config.seed).toBe(12345);
     expect(config.chunkSize).toBe(32);
+    expect(config.terrainConfig.directionalClimateConfig).toEqual({
+      ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+      enabled: true,
+    });
+    expect(config.biomeConfig.directionalClimateConfig).toEqual({
+      ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+      enabled: true,
+    });
+    expect(config.enhancedBiomeConfig!.directionalClimateConfig).toEqual({
+      ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
+      enabled: true,
+    });
     expect(() => validateWorldConfig(config)).not.toThrow();
   });
 
