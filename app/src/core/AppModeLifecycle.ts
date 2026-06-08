@@ -20,6 +20,10 @@ export interface AppModeLifecycleOptions {
   setWorldGenerationLoading: (visible: boolean) => void;
 }
 
+export interface ReturnToMenuOptions {
+  preserveFullscreen?: boolean;
+}
+
 export class AppModeLifecycle {
   private readonly getApp: () => WorldApp | null;
   private readonly getViewer: () => WorldViewer | null;
@@ -65,7 +69,7 @@ export class AppModeLifecycle {
       console.error('Failed to enter app mode:', error);
       this.cleanupEngine();
       document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active', FULLSCREEN_TRANSITION_CLASS, 'economy-console-open');
+      document.body.classList.remove(JOURNEY_MODE_CLASS, EDITOR_MODE_CLASS, 'first-person-active', FULLSCREEN_TRANSITION_CLASS, 'economy-console-open', 'journey-minimap-expanded');
       modeSelect?.classList.remove('hidden');
       document.title = 'Project tQandtD';
       errorHandler.handleError(new AppError(
@@ -83,20 +87,22 @@ export class AppModeLifecycle {
     }
   }
 
-  returnToMenu(): void {
+  returnToMenu(options: ReturnToMenuOptions = {}): void {
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
     this.cleanupEngine();
 
     document.body.classList.add(MODE_SELECT_ACTIVE_CLASS);
-    document.body.classList.remove(EDITOR_MODE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open');
+    document.body.classList.remove(EDITOR_MODE_CLASS, JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open', 'journey-minimap-expanded');
     document.getElementById('mode-select')?.classList.remove('hidden');
 
-    if (document.fullscreenElement) {
+    if (!options.preserveFullscreen && document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
-    document.body.classList.remove('fullscreen-mode');
+    if (!options.preserveFullscreen) {
+      document.body.classList.remove('fullscreen-mode');
+    }
 
     document.title = 'Project tQandtD';
 
@@ -113,14 +119,14 @@ export class AppModeLifecycle {
     await warmUpInitialTerrain(this.requireApp(), this.requireViewer());
     this.setViewerReady(true);
     this.setWorldGenerationLoading(false);
-    document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open');
+    document.body.classList.remove(JOURNEY_MODE_CLASS, 'first-person-active', 'economy-console-open', 'journey-minimap-expanded');
     document.body.classList.add(EDITOR_MODE_CLASS);
     document.title = 'World Editor - tQandtD';
   }
 
   private async enterJourneyMode(): Promise<void> {
     document.body.classList.add(FULLSCREEN_TRANSITION_CLASS);
-    document.body.classList.remove('economy-console-open');
+    document.body.classList.remove('economy-console-open', 'journey-minimap-expanded');
     this.setViewerReady(false);
     await requestBrowserFullscreen();
     await waitForFullscreenLayout();

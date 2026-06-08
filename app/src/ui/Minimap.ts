@@ -6,14 +6,34 @@
 import { WorldApp } from '../core/WorldApp';
 import { getBiomeRgb255 } from './biomeDisplay';
 import { TERRAIN_TILE_SIZE_METERS } from '@engine/index';
+import type { LakeData } from '@engine/gen/lakes';
+import type { RiverData } from '@engine/gen/rivers';
 
-interface MinimapChunk {
+export interface MinimapChunk {
   x: number;
   y: number;
   size: number;
   heightmap: Float32Array;
   biomeMap: Uint8Array;
+  lakes?: LakeData[];
+  rivers?: RiverData[];
 }
+
+interface MinimapWaterPixel {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+const LAKE_WATER: MinimapWaterPixel = { r: 26, g: 96, b: 120, a: 224 };
+const FROZEN_WATER: MinimapWaterPixel = { r: 126, g: 176, b: 188, a: 210 };
+const DRY_WATER: MinimapWaterPixel = { r: 92, g: 80, b: 62, a: 142 };
+const RIVER_WATER = '#1d7890';
+const RIVER_FROZEN = '#9fcfd9';
+const RIVER_DRY = 'rgba(116, 96, 70, 0.62)';
+const UNLOADED_TILE_DARK: MinimapWaterPixel = { r: 8, g: 20, b: 23, a: 255 };
+const UNLOADED_TILE_LIGHT: MinimapWaterPixel = { r: 12, g: 29, b: 33, a: 255 };
 
 export class Minimap {
   private canvas: HTMLCanvasElement | null = null;
@@ -53,8 +73,13 @@ export class Minimap {
   draw(): void {
     if (!this.ctx || !this.canvas || !this.app) return;
     const ctx = this.ctx;
-    const width = this.WIDTH_PX;
-    const height = this.HEIGHT_PX;
+    const width = this.getCanvasDisplayWidth();
+    const height = this.getCanvasDisplayHeight();
+
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
 
     ctx.fillStyle = '#061119';
     ctx.fillRect(0, 0, width, height);
@@ -85,11 +110,18 @@ export class Minimap {
     const mapCtx = mapCanvas.getContext('2d');
     if (!mapCtx) return;
     const pixels = mapCtx.createImageData(spanTilesX, spanTilesY);
+    paintMinimapUnloadedTerrain(pixels, spanTilesX);
 
     for (const chunk of chunks.values() as IterableIterator<MinimapChunk>) {
       this.paintChunk(pixels, spanTilesX, chunk, minX, minY);
     }
+    for (const chunk of chunks.values() as IterableIterator<MinimapChunk>) {
+      paintMinimapLakes(pixels, spanTilesX, chunk, minX, minY, this.CHUNK_SIZE);
+    }
     mapCtx.putImageData(pixels, 0, 0);
+    for (const chunk of chunks.values() as IterableIterator<MinimapChunk>) {
+      paintMinimapRivers(mapCtx, chunk, minX, minY, this.CHUNK_SIZE);
+    }
 
     const scale = Math.max(width / spanTilesX, height / spanTilesY);
     const renderedWidth = spanTilesX * scale;
@@ -172,9 +204,105 @@ export class Minimap {
     return Math.max(min, Math.min(max, value));
   }
 
+  private getCanvasDisplayWidth(): number {
+    const measured = Math.round(this.canvas?.getBoundingClientRect().width ?? 0);
+    return measured > 0 ? measured : this.WIDTH_PX;
+  }
+
+  private getCanvasDisplayHeight(): number {
+    const measured = Math.round(this.canvas?.getBoundingClientRect().height ?? 0);
+    return measured > 0 ? measured : this.HEIGHT_PX;
+  }
+
   /** Returns biome name at canvas pixel (for tooltip on minimap hover) */
   getBiomeAtPixel(px: number, py: number): string | null {
     if (!this.app) return null;
     return null;
   }
+}
+
+export function paintMinimapLakes(
+  pixels: ImageData,
+  mapWidth: number,
+  chunk: MinimapChunk,
+  minChunkX: number,
+  minChunkY: number,
+  chunkSize = 32
+): void {
+  const size = chunk.size || chunkSize;
+  const originX = (chunk.x - minChunkX) * chunkSize;
+  const originY = (chunk.y - minChunkY) * chunkSize;
+
+  for (const lake of chunk.lakes ?? []) {
+    const tiles = lake.surfaceTiles ?? lake.tiles;
+    const color = lake.state === 'frozen' ? FROZEN_WATER : lake.state === 'dry' ? DRY_WATER : LAKE_WATER;
+
+    for (const tileIndex of tiles) {
+      const x = tileIndex % size;
+      const y = Math.floor(tileIndex / size);
+      if (x < 0 || y < 0 || x >= size || y >= size) continue;
+
+      blendPixel(pixels, ((originY + y) * mapWidth + originX + x) * 4, color);
+    }
+  }
+}
+
+export function paintMinimapUnloadedTerrain(pixels: ImageData, mapWidth: number): void {
+  for (let y = 0; y < pixels.height; y++) {
+    for (let x = 0; x < pixels.width; x++) {
+      const color = (x + y) % 9 < 2 ? UNLOADED_TILE_LIGHT : UNLOADED_TILE_DARK;
+      const pixelIndex = (y * mapWidth + x) * 4;
+      pixels.data[pixelIndex] = color.r;
+      pixels.data[pixelIndex + 1] = color.g;
+      pixels.data[pixelIndex + 2] = color.b;
+      pixels.data[pixelIndex + 3] = color.a;
+    }
+  }
+}
+
+function paintMinimapRivers(
+  ctx: CanvasRenderingContext2D,
+  chunk: MinimapChunk,
+  minChunkX: number,
+  minChunkY: number,
+  chunkSize = 32
+): void {
+  const originX = (chunk.x - minChunkX) * chunkSize;
+  const originY = (chunk.y - minChunkY) * chunkSize;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const river of chunk.rivers ?? []) {
+    if (river.points.length < 2) continue;
+
+    ctx.strokeStyle = river.state === 'frozen' ? RIVER_FROZEN : river.state === 'dry' ? RIVER_DRY : RIVER_WATER;
+    ctx.globalAlpha = river.state === 'dry' ? 0.68 : 0.92;
+    ctx.lineWidth = Math.max(1.15, averageRiverWidth(river) * 0.72);
+    ctx.beginPath();
+    ctx.moveTo(originX + river.points[0].x + 0.5, originY + river.points[0].y + 0.5);
+    for (let i = 1; i < river.points.length; i++) {
+      ctx.lineTo(originX + river.points[i].x + 0.5, originY + river.points[i].y + 0.5);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function averageRiverWidth(river: RiverData): number {
+  let total = 0;
+  for (const point of river.points) {
+    total += Number.isFinite(point.width) ? point.width : 1;
+  }
+  return total / river.points.length;
+}
+
+function blendPixel(pixels: ImageData, pixelIndex: number, color: MinimapWaterPixel): void {
+  const alpha = color.a / 255;
+  pixels.data[pixelIndex] = Math.round(pixels.data[pixelIndex] * (1 - alpha) + color.r * alpha);
+  pixels.data[pixelIndex + 1] = Math.round(pixels.data[pixelIndex + 1] * (1 - alpha) + color.g * alpha);
+  pixels.data[pixelIndex + 2] = Math.round(pixels.data[pixelIndex + 2] * (1 - alpha) + color.b * alpha);
+  pixels.data[pixelIndex + 3] = 255;
 }

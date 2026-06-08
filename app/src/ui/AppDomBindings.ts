@@ -28,6 +28,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const controlPanel = document.getElementById('control-panel');
   const rightPanel = document.getElementById('right-panel');
+  const minimapExpandBtn = document.getElementById('minimap-expand-btn') as HTMLButtonElement | null;
   const worldEditorModeBtn = document.getElementById('world-editor-mode-btn') as HTMLButtonElement | null;
   const journeyModeBtn = document.getElementById('journey-mode-btn') as HTMLButtonElement | null;
 
@@ -50,22 +51,28 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
   worldEditorModeBtn?.addEventListener('click', async () => {
     economyConsoleOpen = false;
-    document.body.classList.remove('economy-console-open');
+    clearJourneyOverlays(minimapExpandBtn);
     await options.getModeLifecycle()?.enterAppMode('world-editor');
   });
 
   journeyModeBtn?.addEventListener('click', async () => {
     economyConsoleOpen = false;
-    document.body.classList.remove('economy-console-open');
+    clearJourneyOverlays(minimapExpandBtn);
     await options.getModeLifecycle()?.enterAppMode('journey');
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+    if (e.code === 'KeyR' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       if (!document.body.classList.contains(MODE_SELECT_ACTIVE_CLASS)) {
         economyConsoleOpen = false;
         document.body.classList.remove('economy-console-open');
-        options.getModeLifecycle()?.returnToMenu();
+        options.getModeLifecycle()?.returnToMenu({ preserveFullscreen: true });
+      }
+    }
+    if (e.code === 'KeyM' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+      if (document.body.classList.contains(JOURNEY_MODE_CLASS) && !isInteractiveTarget(e.target)) {
+        e.preventDefault();
+        setJourneyMinimapExpanded(!document.body.classList.contains('journey-minimap-expanded'), minimapExpandBtn);
       }
     }
     if (e.code === 'Digit1' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
@@ -91,6 +98,11 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
         e.preventDefault();
         return;
       }
+      if (document.body.classList.contains('journey-minimap-expanded')) {
+        setJourneyMinimapExpanded(false, minimapExpandBtn);
+        e.preventDefault();
+        return;
+      }
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
         document.body.classList.remove('fullscreen-mode');
@@ -111,6 +123,11 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
   toggleMonitorBtn?.addEventListener('click', () => {
     rightPanel?.classList.toggle('collapsed');
+  });
+
+  minimapExpandBtn?.addEventListener('click', () => {
+    if (!document.body.classList.contains(JOURNEY_MODE_CLASS)) return;
+    setJourneyMinimapExpanded(!document.body.classList.contains('journey-minimap-expanded'), minimapExpandBtn);
   });
 
   helpBtn?.addEventListener('click', () => {
@@ -247,6 +264,19 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   window.addEventListener('beforeunload', () => {
     options.cleanupEngine();
   });
+}
+
+function clearJourneyOverlays(minimapExpandBtn: HTMLButtonElement | null): void {
+  document.body.classList.remove('economy-console-open');
+  setJourneyMinimapExpanded(false, minimapExpandBtn);
+}
+
+function setJourneyMinimapExpanded(expanded: boolean, minimapExpandBtn: HTMLButtonElement | null): void {
+  document.body.classList.toggle('journey-minimap-expanded', expanded);
+  minimapExpandBtn?.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+  if (minimapExpandBtn) {
+    minimapExpandBtn.title = expanded ? 'Collapse minimap (M)' : 'Expand minimap (M)';
+  }
 }
 
 function clearCameraModeButtons(...buttons: Array<HTMLElement | null>): void {
