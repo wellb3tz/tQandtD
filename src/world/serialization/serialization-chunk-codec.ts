@@ -176,6 +176,7 @@ function serializeLakes(chunk: ChunkData): SerializedLake[] {
   return (chunk.lakes ?? []).map(lake => ({
     waterLevel: lake.waterLevel,
     tiles: Array.from(lake.tiles),
+    surfaceTiles: lake.surfaceTiles ? Array.from(lake.surfaceTiles) : undefined,
     maxDepth: lake.maxDepth,
     minTerrainHeight: lake.minTerrainHeight,
     state: lake.state,
@@ -197,6 +198,7 @@ function deserializeLakes(serializedChunk: SerializedChunk): LakeData[] {
   return (serializedChunk.lakes ?? []).map(lake => ({
     waterLevel: lake.waterLevel,
     tiles: new Set(lake.tiles),
+    surfaceTiles: lake.surfaceTiles ? new Set(lake.surfaceTiles) : undefined,
     maxDepth: lake.maxDepth,
     minTerrainHeight: lake.minTerrainHeight,
     state: lake.state,

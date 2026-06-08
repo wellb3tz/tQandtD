@@ -22,6 +22,7 @@ export interface SerializedChunkData {
   lakes: Array<{
     waterLevel: number;
     tiles: number[];
+    surfaceTiles?: number[];
     maxDepth: number;
     minTerrainHeight?: number;
     state?: 'filled' | 'frozen' | 'dry';
@@ -96,6 +97,7 @@ export function serializeChunkData(chunk: ChunkData): SerializedChunkData {
     lakes: (chunk.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: Array.from(lake.tiles),
+      surfaceTiles: lake.surfaceTiles ? Array.from(lake.surfaceTiles) : undefined,
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
       state: lake.state,
@@ -166,6 +168,7 @@ export function deserializeChunkData(serialized: SerializedChunkData): ChunkData
     lakes: (serialized.lakes ?? []).map(lake => ({
       waterLevel: lake.waterLevel,
       tiles: new Set(lake.tiles),
+      surfaceTiles: lake.surfaceTiles ? new Set(lake.surfaceTiles) : undefined,
       maxDepth: lake.maxDepth,
       minTerrainHeight: lake.minTerrainHeight,
       state: lake.state,

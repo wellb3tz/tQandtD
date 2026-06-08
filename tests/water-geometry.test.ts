@@ -91,6 +91,91 @@ describe('water geometry data helpers', () => {
     expect(data!.colors[0]).toBeLessThanOrEqual(0.08);
   });
 
+  it('keeps lake interiors filled when an enclosed terrain vertex rises above water', () => {
+    const chunk = createChunk(3, 0.35);
+    setHeight(chunk, 1, 1, 0.85);
+    const lake = createLake(Array.from({ length: 9 }, (_, index) => index));
+
+    const lakeTiles = identifyLakeSurfaceTiles(chunk, [lake]);
+    const data = buildLakeGeometryData(lakeTiles, [lake], chunk, { heightScale: HEIGHT_SCALE });
+
+    expect(data).not.toBeNull();
+    const hasInteriorVertex = Array.from({ length: getIndexedGeometryVertexCount(data!) }, (_, index) => index)
+      .some(index => (
+        Math.abs(data!.positions[index * 3] - 1) < 1e-6 &&
+        Math.abs(data!.positions[index * 3 + 2] - 1) < 1e-6
+      ));
+
+    expect(hasInteriorVertex).toBe(true);
+    for (let i = 0; i < data!.indices.length; i += 3) {
+      const a = data!.indices[i] * 3;
+      const b = data!.indices[i + 1] * 3;
+      const c = data!.indices[i + 2] * 3;
+      const ax = data!.positions[a];
+      const az = data!.positions[a + 2];
+      const bx = data!.positions[b];
+      const bz = data!.positions[b + 2];
+      const cx = data!.positions[c];
+      const cz = data!.positions[c + 2];
+      const area = Math.abs((bx - ax) * (cz - az) - (bz - az) * (cx - ax));
+      expect(area).toBeGreaterThan(1e-8);
+    }
+  });
+
+  it('fills lake tile corners even when the shoreline terrain forms a sharp high point', () => {
+    const chunk = createChunk(2, 0.35);
+    setHeight(chunk, 1, 1, 0.9);
+    const lake = createLake([0]);
+
+    const lakeTiles = identifyLakeSurfaceTiles(chunk, [lake]);
+    const data = buildLakeGeometryData(lakeTiles, [lake], chunk, { heightScale: HEIGHT_SCALE });
+
+    expect(data).not.toBeNull();
+    const coversSharpCorner = Array.from({ length: getIndexedGeometryVertexCount(data!) }, (_, index) => index)
+      .some(index => (
+        Math.abs(data!.positions[index * 3] - 1) < 1e-6 &&
+        Math.abs(data!.positions[index * 3 + 2] - 1) < 1e-6
+      ));
+
+    expect(coversSharpCorner).toBe(true);
+  });
+
+  it('adds shoreline corner fill around lake tiles to avoid V-shaped visual gaps', () => {
+    const chunk = createChunk(2, 0.9);
+    lowerTileCorners(chunk, 0, 0, 0.35);
+    const lake = createLake([0]);
+
+    const lakeTiles = identifyLakeSurfaceTiles(chunk, [lake]);
+    const data = buildLakeGeometryData(lakeTiles, [lake], chunk, { heightScale: HEIGHT_SCALE });
+
+    expect(data).not.toBeNull();
+    const hasDiagonalCornerFill = Array.from({ length: data!.indices.length / 3 }, (_, index) => index * 3)
+      .some(index => {
+        const a = data!.indices[index] * 3;
+        const b = data!.indices[index + 1] * 3;
+        const c = data!.indices[index + 2] * 3;
+        const centroidX = (data!.positions[a] + data!.positions[b] + data!.positions[c]) / 3;
+        const centroidZ = (data!.positions[a + 2] + data!.positions[b + 2] + data!.positions[c + 2]) / 3;
+
+        return centroidX > 1 && centroidX < 2 && centroidZ > 1 && centroidZ < 2;
+      });
+
+    expect(hasDiagonalCornerFill).toBe(true);
+  });
+
+  it('builds lake surface from render footprint tiles even when no basin tile is local', () => {
+    const chunk = createChunk(2, 0.35);
+    const lake = {
+      ...createLake([]),
+      surfaceTiles: new Set([0]),
+    };
+
+    const data = buildLakeGeometryData([], [lake], chunk, { heightScale: HEIGHT_SCALE });
+
+    expect(data).not.toBeNull();
+    expect(getIndexedGeometryVertexCount(data!)).toBeGreaterThanOrEqual(4);
+  });
+
   it('builds and clips subdivided river surface data at ocean level', () => {
     const points: RiverData['points'] = [
       { x: 0, y: 1, height: 0.5, surfaceLevel: 0.51, width: 1, depth: 0.03, channelDepth: 0.04, flowX: 1, flowY: 0 },

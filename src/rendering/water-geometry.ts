@@ -17,6 +17,7 @@ import {
 
 const CONTOUR_EPSILON = 1e-6;
 const OUTSIDE_LAKE_EPSILON = 1e-6;
+const LAKE_SHORELINE_FILL_FIELD = 0.35;
 const DEFAULT_WATER_SURFACE_OFFSET = 0.15;
 const DEFAULT_RIVER_SURFACE_OFFSET = -1.0;
 const RIVER_CROSS_SECTION_OFFSETS = [-1, -0.5, 0, 0.5, 1] as const;
@@ -178,7 +179,7 @@ export function buildLakeGeometryData(
   chunkData: ChunkData,
   options: WaterGeometryOptions,
 ): IndexedGeometryData | null {
-  if (lakeTiles.length === 0) {
+  if (lakeTiles.length === 0 && lakes.every(lake => !lake.surfaceTiles || lake.surfaceTiles.size === 0)) {
     return null;
   }
 
@@ -189,23 +190,25 @@ export function buildLakeGeometryData(
   let vertexCount = 0;
 
   for (const lake of lakes) {
-    if (lake.tiles.size === 0) continue;
+    if (lake.tiles.size === 0 && (!lake.surfaceTiles || lake.surfaceTiles.size === 0)) continue;
 
     const waterY = lake.waterLevel;
     const maxDepth = lake.maxDepth;
-    const candidateCells = collectLakeContourCells(lake.tiles, size);
+    const lakeSurfaceTiles = lake.surfaceTiles ?? lake.tiles;
+    const candidateCells = lake.surfaceTiles ?? collectLakeContourCells(lake.tiles, size);
 
     for (const cellIdx of candidateCells) {
       const tx = cellIdx % size;
       const ty = Math.floor(cellIdx / size);
-      const polygon = buildLakePolygon(tx, ty, lake.tiles, chunkData, waterY);
+      const polygon = buildLakePolygon(tx, ty, lakeSurfaceTiles, chunkData, waterY);
+      const sanitizedPolygon = sanitizeContourPolygon(polygon);
 
-      if (polygon.length < 3) {
+      if (sanitizedPolygon.length < 3) {
         continue;
       }
 
       const baseIndex = vertexCount;
-      for (const point of polygon) {
+      for (const point of sanitizedPolygon) {
         const worldX = (chunkData.x * size + point.x) * horizontalScale;
         const worldZ = (chunkData.y * size + point.z) * horizontalScale;
         const depth = Math.max(0, waterY - point.terrainHeight);
@@ -220,13 +223,181 @@ export function buildLakeGeometryData(
         vertexCount++;
       }
 
-      for (let i = 1; i < polygon.length - 1; i++) {
-        data.indices.push(baseIndex, baseIndex + i, baseIndex + i + 1);
+      const triIndices = triangulatePolygon2D(sanitizedPolygon);
+      for (let i = 0; i < triIndices.length; i += 3) {
+        data.indices.push(
+          baseIndex + triIndices[i],
+          baseIndex + triIndices[i + 1],
+          baseIndex + triIndices[i + 2],
+        );
       }
     }
   }
 
   return getIndexedGeometryVertexCount(data) > 0 ? data : null;
+}
+
+function sanitizeContourPolygon(polygon: ContourPoint[]): ContourPoint[] {
+  if (polygon.length < 3) return [];
+
+  const cleaned: ContourPoint[] = [];
+  for (const point of polygon) {
+    const previous = cleaned[cleaned.length - 1];
+    if (previous && nearlySameContourPoint(previous, point)) {
+      continue;
+    }
+    cleaned.push(point);
+  }
+
+  if (cleaned.length >= 2 && nearlySameContourPoint(cleaned[0], cleaned[cleaned.length - 1])) {
+    cleaned.pop();
+  }
+
+  if (cleaned.length < 3) return [];
+
+  const simplified: ContourPoint[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const prev = cleaned[(i + cleaned.length - 1) % cleaned.length];
+    const current = cleaned[i];
+    const next = cleaned[(i + 1) % cleaned.length];
+
+    if (isContourCollinear(prev, current, next)) {
+      continue;
+    }
+
+    simplified.push(current);
+  }
+
+  return simplified.length >= 3 ? simplified : cleaned;
+}
+
+function nearlySameContourPoint(a: ContourPoint, b: ContourPoint): boolean {
+  return Math.abs(a.x - b.x) <= 1e-6 && Math.abs(a.z - b.z) <= 1e-6;
+}
+
+function isContourCollinear(a: ContourPoint, b: ContourPoint, c: ContourPoint): boolean {
+  const abx = b.x - a.x;
+  const abz = b.z - a.z;
+  const bcx = c.x - b.x;
+  const bcz = c.z - b.z;
+  return Math.abs(abx * bcz - abz * bcx) <= 1e-8;
+}
+
+function triangulatePolygon2D(polygon: ContourPoint[]): number[] {
+  const n = polygon.length;
+  if (n < 3) return [];
+  if (n === 3) return [0, 1, 2];
+
+  const area = polygonSignedArea2D(polygon);
+  if (Math.abs(area) < 1e-10) return [];
+
+  const indices: number[] = [];
+  const V: number[] = [];
+  const clockwise = area < 0;
+
+  for (let i = 0; i < n; i++) {
+    V.push(clockwise ? n - 1 - i : i);
+  }
+
+  let nv = n;
+  let count = 2 * nv;
+
+  for (let v = nv - 1; nv > 2; ) {
+    if (count-- <= 0) break;
+
+    let u = v;
+    if (nv <= u) u = 0;
+    v = u + 1;
+    if (nv <= v) v = 0;
+    let w = v + 1;
+    if (nv <= w) w = 0;
+
+    if (isContourEar(polygon, V, u, v, w, nv)) {
+      indices.push(V[u], V[v], V[w]);
+      for (let s = v, t = v + 1; t < nv; t++, s++) {
+        V[s] = V[t];
+      }
+      nv--;
+      count = 2 * nv;
+    }
+  }
+
+  if (indices.length !== (n - 2) * 3) {
+    return triangulatePolygonFan(polygon);
+  }
+
+  return indices;
+}
+
+function triangulatePolygonFan(polygon: ContourPoint[]): number[] {
+  const n = polygon.length;
+  if (n < 3) return [];
+
+  const indices: number[] = [];
+  for (let i = 1; i < n - 1; i++) {
+    indices.push(0, i, i + 1);
+  }
+  return indices;
+}
+
+function polygonSignedArea2D(polygon: ContourPoint[]): number {
+  let area = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const j = (i + 1) % polygon.length;
+    area += polygon[i].x * polygon[j].z - polygon[j].x * polygon[i].z;
+  }
+  return area;
+}
+
+function isContourEar(
+  polygon: ContourPoint[],
+  V: number[],
+  u: number,
+  v: number,
+  w: number,
+  n: number,
+): boolean {
+  const a = polygon[V[u]];
+  const b = polygon[V[v]];
+  const c = polygon[V[w]];
+
+  const cross = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+  if (cross <= 1e-10) {
+    return false;
+  }
+
+  for (let p = 0; p < n; p++) {
+    if (p === u || p === v || p === w) continue;
+    const pt = polygon[V[p]];
+    if (pointInTriangle2D(pt, a, b, c)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function pointInTriangle2D(
+  p: ContourPoint,
+  a: ContourPoint,
+  b: ContourPoint,
+  c: ContourPoint,
+): boolean {
+  const ax = c.x - a.x;
+  const az = c.z - a.z;
+  const bx = b.x - a.x;
+  const bz = b.z - a.z;
+  const cx = p.x - a.x;
+  const cz = p.z - a.z;
+
+  const d = ax * bz - az * bx;
+  if (Math.abs(d) < 1e-10) return false;
+
+  const wA = (cx * bz - cz * bx) / d;
+  const wB = (ax * cz - az * cx) / d;
+  const wC = 1 - wA - wB;
+
+  return wA >= -1e-6 && wB >= -1e-6 && wC >= -1e-6;
 }
 
 export function buildRiverGeometryData(
@@ -532,7 +703,7 @@ function sampleLakeContourPoint(
   const terrainHeight = heightmap[vy * vertexSize + vx];
   const touchesLake = lakeVertexTouchesTile(vx, vy, lakeTiles, size);
   const field = touchesLake
-    ? waterY - terrainHeight
+    ? Math.max(waterY - terrainHeight, LAKE_SHORELINE_FILL_FIELD)
     : Math.min(waterY - terrainHeight, -OUTSIDE_LAKE_EPSILON);
 
   return { x: vx, z: vy, field, terrainHeight };

@@ -48,6 +48,7 @@ export interface SerializedWorld {
 export interface SerializedLake {
   waterLevel: number;
   tiles: number[];
+  surfaceTiles?: number[];
   maxDepth: number;
   minTerrainHeight?: number;
   state?: 'filled' | 'frozen' | 'dry';

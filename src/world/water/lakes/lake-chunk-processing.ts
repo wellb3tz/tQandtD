@@ -20,6 +20,7 @@ export function convertWorldLakesToChunkLakes(
 
   for (const worldLake of worldLakes) {
     const chunkTiles = new Set<number>();
+    const surfaceTiles = new Set<number>();
 
     for (const tileKey of worldLake.tiles) {
       const [worldX, worldY] = tileKey.split(',').map(Number);
@@ -34,12 +35,25 @@ export function convertWorldLakesToChunkLakes(
         const localY = worldY - chunkWorldY;
         chunkTiles.add(localY * chunkSize + localX);
       }
+
+      for (let surfaceWorldY = worldY - 1; surfaceWorldY <= worldY + 1; surfaceWorldY++) {
+        if (surfaceWorldY < chunkWorldY || surfaceWorldY >= chunkWorldY + chunkSize) continue;
+
+        for (let surfaceWorldX = worldX - 1; surfaceWorldX <= worldX + 1; surfaceWorldX++) {
+          if (surfaceWorldX < chunkWorldX || surfaceWorldX >= chunkWorldX + chunkSize) continue;
+
+          const localX = surfaceWorldX - chunkWorldX;
+          const localY = surfaceWorldY - chunkWorldY;
+          surfaceTiles.add(localY * chunkSize + localX);
+        }
+      }
     }
 
-    if (chunkTiles.size > 0) {
+    if (chunkTiles.size > 0 || surfaceTiles.size > 0) {
       result.push({
         waterLevel: worldLake.waterLevel,
         tiles: chunkTiles,
+        surfaceTiles,
         maxDepth: worldLake.maxDepth,
         minTerrainHeight: worldLake.minTerrainHeight,
         state: determineState(worldLake),

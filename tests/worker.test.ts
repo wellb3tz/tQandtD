@@ -25,7 +25,13 @@ function makeChunk(): ChunkData {
     climateTreeLine: 0.62,
     worldTemperatureOffset: -0.2,
     temperatureMap: new Float32Array([-0.4, -0.3, -0.2, -0.1]),
-    lakes: [{ waterLevel: 0.42, tiles: new Set([0, 3]), maxDepth: 0.12, minTerrainHeight: 0.3 }],
+    lakes: [{
+      waterLevel: 0.42,
+      tiles: new Set([0, 3]),
+      surfaceTiles: new Set([0, 1, 2, 3]),
+      maxDepth: 0.12,
+      minTerrainHeight: 0.3,
+    }],
     rivers: [{
       riverId: 'river_1',
       pathId: 'river_1:main',
@@ -69,6 +75,7 @@ describe('worker serialization', () => {
     expect(restored.worldTemperatureOffset).toBe(chunk.worldTemperatureOffset);
     expect(Array.from(restored.temperatureMap ?? [])).toEqual(Array.from(chunk.temperatureMap ?? []));
     expect(restored.lakes?.[0].tiles).toEqual(new Set([0, 3]));
+    expect(restored.lakes?.[0].surfaceTiles).toEqual(new Set([0, 1, 2, 3]));
     expect(restored.rivers?.[0].riverId).toBe('river_1');
     expect(restored.rivers?.[0].state).toBe('frozen');
     expect(restored.rivers?.[0].points[0].surfaceLevel).toBe(0.61);

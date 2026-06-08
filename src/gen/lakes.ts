@@ -30,6 +30,12 @@ export interface LakeData {
    * A tile is covered when its average corner height is below waterLevel.
    */
   tiles: Set<number>;
+  /**
+   * Optional render footprint for the lake surface inside this chunk.
+   * Multi-chunk lakes use this to include shoreline and boundary cells whose
+   * vertices touch the lake even when the cell itself is outside the basin.
+   */
+  surfaceTiles?: Set<number>;
   /** Maximum depth of the lake (waterLevel - min terrain height inside lake) */
   maxDepth: number;
   /** Minimum terrain height inside the lake (for consistent water positioning across chunks) */
