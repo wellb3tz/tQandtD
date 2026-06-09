@@ -24,4 +24,28 @@ describe('PerformanceMonitor', () => {
     expect(cancelFrame).toHaveBeenCalledWith(7);
     expect(clearIntervalSpy).toHaveBeenCalledWith(11);
   });
+
+  it('renders worker pool and geometry worker status text', () => {
+    document.body.innerHTML = `
+      <canvas id="fps-graph"></canvas>
+      <span id="worker-pool-status-value"></span>
+      <span id="worker-manager-status-value"></span>
+      <span id="worker-manager-pending-value"></span>
+    `;
+    vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(7);
+    vi.spyOn(window, 'setInterval').mockReturnValue(11);
+
+    const monitor = new PerformanceMonitor();
+    monitor.initialize(document.body);
+    monitor.updateWorkerSystemStatus({
+      workerPool: { state: 'running', totalWorkers: 4 },
+      geometryWorker: { mode: 'worker', workerCount: 1, pendingTasks: 2 },
+    });
+
+    expect(document.getElementById('worker-pool-status-value')?.textContent).toBe('running (4)');
+    expect(document.getElementById('worker-manager-status-value')?.textContent).toBe('running (1)');
+    expect(document.getElementById('worker-manager-pending-value')?.textContent).toBe('2');
+
+    monitor.dispose();
+  });
 });

@@ -3,6 +3,7 @@ import type { WorldApp } from './WorldApp';
 import type { PerformanceMonitor } from '../ui/PerformanceMonitor';
 import type { Minimap } from '../ui/Minimap';
 import type { WorldViewer } from '../viewer/WorldViewer';
+import { buildWorkerSystemStatus } from './workerStatus';
 
 const HORIZON_STREAMING_BUFFER_CHUNKS = 2;
 
@@ -34,6 +35,7 @@ export class AppRuntimeLoop {
   private lastUIUpdate = 0;
   private lastEconomyWorldUpdate = 0;
   private lastChunkLoadCameraPos: { x: number; z: number } | null = null;
+  private chunkStreamingPaused = false;
 
   constructor(options: AppRuntimeLoopOptions) {
     this.app = options.app;
@@ -133,6 +135,10 @@ export class AppRuntimeLoop {
     }, 100);
   }
 
+  setChunkStreamingPaused(paused: boolean): void {
+    this.chunkStreamingPaused = paused;
+  }
+
   private startEconomyLoop(): void {
     this.economyTimer = setInterval(() => {
       if (!this.running) return;
@@ -146,6 +152,11 @@ export class AppRuntimeLoop {
       if (!this.running) return;
 
       let nextInterval = 100;
+
+      if (this.chunkStreamingPaused) {
+        this.scheduleChunkLoad(nextInterval);
+        return;
+      }
 
       if (this.viewer.isOrbitalOrTransitioning()) {
         this.scheduleChunkLoad(200);
@@ -177,6 +188,7 @@ export class AppRuntimeLoop {
 
   private loadChunksForCamera(cameraPos: { x: number; z: number }): void {
     if (!this.running) return;
+    if (this.chunkStreamingPaused) return;
 
     const chunkSize = this.app.getConfigSnapshot().chunkSize * TERRAIN_TILE_SIZE_METERS;
     const loadRadius = getBufferedStreamingRadius(this.app.getViewDistance());
@@ -219,9 +231,8 @@ export class AppRuntimeLoop {
 
         this.getMinimap()?.draw();
 
-        if (this.app.isWorkerPoolEnabled()) {
-          this.app.updateWorkerPoolStats();
-        }
+        this.app.updateWorkerPoolStats();
+        performanceMonitor?.updateWorkerSystemStatus(buildWorkerSystemStatus(this.app));
       }, 0);
 
       this.lastPerformanceUpdate = now;

@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppEvent, WorldApp } from './WorldApp';
 
 describe('WorldApp app/viewer settings', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('updates viewer settings through the dedicated settings API', () => {
     const app = new WorldApp();
     const visibilityEvents: unknown[] = [];
@@ -54,5 +58,26 @@ describe('WorldApp app/viewer settings', () => {
       enableWaves: false,
       waveHeight: 0.2,
     });
+  });
+
+  it('enables the worker pool by default when workers are available', () => {
+    class FakeWorker {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      addEventListener(): void {}
+      postMessage(): void {}
+      terminate(): void {}
+    }
+
+    vi.stubGlobal('Worker', FakeWorker as unknown as typeof Worker);
+
+    const app = new WorldApp();
+    const workerPoolConfig = app.getState().config.workerPoolConfig;
+
+    expect(workerPoolConfig).toMatchObject({
+      maxWorkers: 4,
+      taskTimeout: 5000,
+    });
+    expect(app.getState().workerPoolEnabled).toBe(true);
   });
 });

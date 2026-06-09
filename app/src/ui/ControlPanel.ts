@@ -7,7 +7,6 @@
 
 import { WorldApp, AppState, type ViewerSettings, type WaterSurfaceViewSettings, type SkyViewSettings } from '../core/WorldApp';
 import { TERRAIN_TILE_SIZE_METERS, type WorldConfig, type WorldConfigOverrides } from '@engine/index';
-import { createWorker, getWorkerUrl } from '../../worker-loader';
 import {
   BIOME_SLIDERS,
   CACHE_SIZE_SLIDER,
@@ -521,16 +520,6 @@ export class ControlPanel {
     });
     advancedContainer.appendChild(renderScaleControl);
 
-    const workerCheckbox = createCheckboxControl({
-      id: 'enableWorkerPool',
-      label: 'Enable Additional Worker (World Generation)',
-      defaultValue: false,
-      tooltip: 'Offloads world generation (noise, biomes, rivers) to a background worker. The geometry worker is always active for smooth rendering.'
-    }, (checked) => {
-      this.updateWorkerPoolConfig('enabled', checked);
-    });
-    advancedContainer.appendChild(workerCheckbox);
-
     // Atmosphere section
     const atmosphereSection = document.createElement('div');
     atmosphereSection.style.marginTop = '20px';
@@ -556,44 +545,6 @@ export class ControlPanel {
       this.updateSkyConfig('azimuth', value);
     });
     atmosphereSection.appendChild(azimuthControl);
-  }
-
-  /**
-   * Update Worker Pool configuration
-   */
-  private updateWorkerPoolConfig(key: string, value: number | boolean): void {
-    if (!this.app || !this.currentConfig) return;
-
-    if (key === 'enabled') {
-      if (value === true) {
-        const workerUrl = getWorkerUrl();
-        const newConfig: Partial<WorldConfig> = {
-          workerPoolConfig: {
-            maxWorkers: 4,
-            workerScriptUrl: workerUrl,
-            createWorker: () => createWorker(),
-            taskTimeout: 5000,
-          }
-        };
-        this.applyEngineConfigChange(newConfig);
-      } else {
-        const newConfig: Partial<WorldConfig> = {
-          workerPoolConfig: undefined
-        };
-        this.applyEngineConfigChange(newConfig);
-      }
-    } else if (key === 'maxWorkers') {
-      const currentWorkerPoolConfig = this.currentConfig.workerPoolConfig;
-      if (currentWorkerPoolConfig) {
-        const newConfig: Partial<WorldConfig> = {
-          workerPoolConfig: {
-            ...currentWorkerPoolConfig,
-            maxWorkers: value as number
-          }
-        };
-        this.applyEngineConfigChange(newConfig);
-      }
-    }
   }
 
   /**

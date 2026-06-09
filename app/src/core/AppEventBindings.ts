@@ -1,5 +1,6 @@
 import type { ThreeWorldRendererAdapter } from '@engine/adapters/three';
 import { AppEvent, type WorldApp } from './WorldApp';
+import { buildWorkerSystemStatus } from './workerStatus';
 import { JOURNEY_MODE_CLASS } from './AppModeLifecycle';
 import type { PerformanceMonitor } from '../ui/PerformanceMonitor';
 import type { WorldViewer } from '../viewer/WorldViewer';
@@ -48,6 +49,7 @@ export function bindWorldAppEvents(options: AppEventBindingsOptions): void {
       completedTasks: state.completedTasks,
       avgWorkerTime: state.avgWorkerTime
     });
+    performanceMonitor.updateWorkerSystemStatus(buildWorkerSystemStatus(app));
   });
 
   app.on(AppEvent.WORLD_GENERATED, (data) => {

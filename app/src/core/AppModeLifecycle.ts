@@ -156,15 +156,16 @@ export class AppModeLifecycle {
     if (statusSeed) statusSeed.textContent = randomSeed.toString();
 
     await app.generateWorld(randomSeed);
-    await warmUpInitialTerrain(app, viewer);
 
+    const spawnPosition = findSpawnPosition(app);
     viewer.setMovementBounds({
       minX: journeySize.bounds.minWorldX,
       maxX: journeySize.bounds.maxWorldX,
       minZ: journeySize.bounds.minWorldZ,
       maxZ: journeySize.bounds.maxWorldZ,
     });
-    viewer.setCameraPosition(findSpawnPosition(app));
+    viewer.setCameraPosition(spawnPosition);
+    await warmUpInitialTerrain(app, viewer);
     viewer.setFirstPersonMode(true);
     await waitForFullscreenLayout();
     this.resizeViewerToContainer();

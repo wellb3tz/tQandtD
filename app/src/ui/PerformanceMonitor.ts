@@ -18,6 +18,22 @@ export interface WorkerStats {
   avgWorkerTime: number;
 }
 
+export interface WorkerPoolStatus {
+  state: 'off' | 'starting' | 'running' | 'error';
+  totalWorkers: number;
+}
+
+export interface GeometryWorkerStatus {
+  mode: 'waiting' | 'sync' | 'worker' | 'error';
+  workerCount: number;
+  pendingTasks: number;
+}
+
+export interface WorkerSystemStatus {
+  workerPool: WorkerPoolStatus;
+  geometryWorker: GeometryWorkerStatus;
+}
+
 export class PerformanceMonitor {
   private container: HTMLElement | null = null;
 
@@ -29,6 +45,9 @@ export class PerformanceMonitor {
   private cacheSizeElement:      HTMLElement | null = null;
   private loadedChunksElement:   HTMLElement | null = null;
   private vertexCountElement:    HTMLElement | null = null;
+  private workerPoolStatusElement: HTMLElement | null = null;
+  private workerManagerStatusElement: HTMLElement | null = null;
+  private workerManagerPendingElement: HTMLElement | null = null;
   private activeWorkersElement:  HTMLElement | null = null;
   private queuedTasksElement:    HTMLElement | null = null;
   private completedTasksElement: HTMLElement | null = null;
@@ -59,6 +78,9 @@ export class PerformanceMonitor {
     this.cacheSizeElement      = document.getElementById('cache-size-value');
     this.loadedChunksElement   = document.getElementById('loaded-chunks-value');
     this.vertexCountElement    = document.getElementById('vertices-value');
+    this.workerPoolStatusElement = document.getElementById('worker-pool-status-value');
+    this.workerManagerStatusElement = document.getElementById('worker-manager-status-value');
+    this.workerManagerPendingElement = document.getElementById('worker-manager-pending-value');
     this.activeWorkersElement  = document.getElementById('active-workers-value');
     this.queuedTasksElement    = document.getElementById('queued-tasks-value');
     this.completedTasksElement = document.getElementById('completed-tasks-value');
@@ -247,6 +269,32 @@ export class PerformanceMonitor {
     if (this.queuedTasksElement)    this.queuedTasksElement.textContent    = stats.queuedTasks.toString();
     if (this.completedTasksElement) this.completedTasksElement.textContent = stats.completedTasks.toString();
     if (this.avgWorkerTimeElement)  this.avgWorkerTimeElement.textContent  = `${stats.avgWorkerTime.toFixed(2)} ms`;
+  }
+
+  updateWorkerSystemStatus(status: WorkerSystemStatus): void {
+    if (this.workerPoolStatusElement) {
+      this.workerPoolStatusElement.textContent = this.formatWorkerPoolStatus(status.workerPool);
+    }
+    if (this.workerManagerStatusElement) {
+      this.workerManagerStatusElement.textContent = this.formatGeometryWorkerStatus(status.geometryWorker);
+    }
+    if (this.workerManagerPendingElement) {
+      this.workerManagerPendingElement.textContent = status.geometryWorker.pendingTasks.toString();
+    }
+  }
+
+  private formatWorkerPoolStatus(status: WorkerPoolStatus): string {
+    if (status.state === 'error') return `error (${status.totalWorkers})`;
+    if (status.state === 'running') return `running (${status.totalWorkers})`;
+    if (status.state === 'starting') return `starting (${status.totalWorkers})`;
+    return 'off';
+  }
+
+  private formatGeometryWorkerStatus(status: GeometryWorkerStatus): string {
+    if (status.mode === 'error') return `error (${status.workerCount})`;
+    if (status.mode === 'worker') return `running (${status.workerCount})`;
+    if (status.mode === 'waiting') return 'waiting';
+    return 'sync';
   }
 
   private formatNumber(n: number): string {

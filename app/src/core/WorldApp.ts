@@ -30,6 +30,7 @@ import {
   WorldConfigOverrides,
 } from '@engine/index';
 import { DEFAULT_CLIMATE_CONFIG } from '@engine/world/climate';
+import { createWorker, getWorkerUrl } from '../../worker-loader';
 import { requiresWorldRebuild } from './configChange';
 import { EconomySimulation, type EconomySnapshot, type WorldEconomyContext } from '../economy';
 import {
@@ -109,6 +110,7 @@ export interface AppWorldExportResult {
 }
 
 export interface AppWorkerPoolStats {
+  totalWorkers: number;
   activeWorkers: number;
   queuedTasks: number;
   completedTasks: number;
@@ -230,10 +232,11 @@ export class WorldApp {
     this.worldSessionUnsubscribers = [];
     this.loadChunksAbortController = null;
     this.economySimulation = new EconomySimulation();
+    const defaultConfig = createAppDefaultWorldConfig();
     
     this.state = {
       loadedChunks: new Map(),
-      config: createDefaultWorldConfig(),
+      config: defaultConfig,
       
       cameraPosition: { ...DEFAULT_CAMERA_POSITION_METERS },
       cameraTarget: { x: 0, y: 0, z: 0 },
@@ -251,7 +254,7 @@ export class WorldApp {
       loadedChunkCount: 0,
       renderedVertexCount: 0,
       
-      workerPoolEnabled: false,
+      workerPoolEnabled: !!defaultConfig.workerPoolConfig,
       activeWorkers: 0,
       queuedTasks: 0,
       completedTasks: 0,
@@ -286,18 +289,53 @@ export class WorldApp {
       const initConfig = prepareWorldConfig(this.state.config, {
         onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
       });
-      const session = new WorldSession({
-        worldConfig: initConfig,
-        disposeWorldOnReplace: true,
-        scene: {
-          input: false,
-          movement: false,
-          streaming: false,
-          renderer: false,
-          player: false,
-        },
-      });
-      this.state.config = initConfig;
+      let session: WorldSession;
+      let resolvedConfig = initConfig;
+
+      try {
+        session = new WorldSession({
+          worldConfig: initConfig,
+          disposeWorldOnReplace: true,
+          scene: {
+            input: false,
+            movement: false,
+            streaming: false,
+            renderer: false,
+            player: false,
+          },
+        });
+      } catch (error) {
+        if (!initConfig.workerPoolConfig) {
+          throw error;
+        }
+
+        resolvedConfig = prepareWorldConfig({
+          ...initConfig,
+          workerPoolConfig: undefined,
+        });
+        session = new WorldSession({
+          worldConfig: resolvedConfig,
+          disposeWorldOnReplace: true,
+          scene: {
+            input: false,
+            movement: false,
+            streaming: false,
+            renderer: false,
+            player: false,
+          },
+        });
+
+        console.error('Failed to initialize Worker Pool during app startup, falling back to single-threaded:', error);
+        this.emit(AppEvent.ERROR, {
+          message: 'Worker Pool initialization failed. Using single-threaded generation.',
+          error,
+          category: 'worker_pool',
+          fallback: true,
+        });
+      }
+
+      this.state.config = resolvedConfig;
+      this.state.workerPoolEnabled = !!resolvedConfig.workerPoolConfig;
       this.attachWorldSession(session);
       
       this.initialized = true;
@@ -940,11 +978,9 @@ export class WorldApp {
         return;
       }
       
-      let workerPoolEnabled = !!newConfig.workerPoolConfig;
       const result = this.requireWorldSession().updateConfig(newConfig, {
-        fallbackOnWorkerPoolError: 'workerPoolConfig' in config && !!config.workerPoolConfig,
+        fallbackOnWorkerPoolError: !!newConfig.workerPoolConfig,
       });
-      workerPoolEnabled = result.workerPoolEnabled;
 
       if (result.usedWorkerPoolFallback && result.workerPoolInitializationError) {
         newConfig.workerPoolConfig = undefined;
@@ -964,7 +1000,7 @@ export class WorldApp {
       
       this.updateState({ 
         config: newConfig,
-        workerPoolEnabled,
+        workerPoolEnabled: result.workerPoolEnabled,
       });
       this.emit(AppEvent.CONFIG_CHANGED, newConfig);
     } finally {
@@ -980,9 +1016,10 @@ export class WorldApp {
    * Get worker pool statistics from the active world session.
    */
   getWorkerPoolStats(): AppWorkerPoolStats {
-    const stats = this.requireWorldSession().getWorkerPoolStats();
+    const stats = this.getWorldSession()?.getWorkerPoolStats() ?? null;
     if (!stats) {
       return {
+        totalWorkers: 0,
         activeWorkers: 0,
         queuedTasks: 0,
         completedTasks: 0,
@@ -995,6 +1032,7 @@ export class WorldApp {
       : 0;
     
     return {
+      totalWorkers: stats.totalWorkers,
       activeWorkers: stats.activeWorkers,
       queuedTasks: stats.queuedTasks,
       completedTasks: stats.completedTasks,
@@ -1006,17 +1044,26 @@ export class WorldApp {
    * Update worker pool statistics in state
    */
   updateWorkerPoolStats(): void {
-    if (!this.state.workerPoolEnabled) {
+    const stats = this.getWorkerPoolStats();
+    const nextActiveWorkers = stats.activeWorkers;
+    const nextQueuedTasks = stats.queuedTasks;
+    const nextCompletedTasks = stats.completedTasks;
+    const nextAvgWorkerTime = stats.avgWorkerTime;
+
+    if (
+      this.state.activeWorkers === nextActiveWorkers &&
+      this.state.queuedTasks === nextQueuedTasks &&
+      this.state.completedTasks === nextCompletedTasks &&
+      this.state.avgWorkerTime === nextAvgWorkerTime
+    ) {
       return;
     }
     
-    const stats = this.getWorkerPoolStats();
-    
     this.updateState({
-      activeWorkers: stats.activeWorkers,
-      queuedTasks: stats.queuedTasks,
-      completedTasks: stats.completedTasks,
-      avgWorkerTime: stats.avgWorkerTime
+      activeWorkers: nextActiveWorkers,
+      queuedTasks: nextQueuedTasks,
+      completedTasks: nextCompletedTasks,
+      avgWorkerTime: nextAvgWorkerTime
     });
   }
 
@@ -1195,6 +1242,21 @@ export class WorldApp {
       maxY: bounds.maxChunkY,
     };
   }
+}
+
+function createAppDefaultWorldConfig(): WorldConfig {
+  const config = createDefaultWorldConfig();
+
+  if (typeof Worker !== 'undefined') {
+    config.workerPoolConfig = {
+      maxWorkers: 4,
+      workerScriptUrl: getWorkerUrl(),
+      taskTimeout: 5000,
+      createWorker: () => createWorker(),
+    };
+  }
+
+  return config;
 }
 
 function clampInt(min: number, max: number, value: number): number {

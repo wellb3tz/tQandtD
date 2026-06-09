@@ -20,6 +20,7 @@ let app: WorldApp | null = null;
 let engineRuntime: AppEngineRuntime | null = null;
 let helpModal: HelpModal | null = null;
 let modeLifecycle: AppModeLifecycle | null = null;
+let worldGenerationLoading = false;
 
 const VIEWER_READY_CLASS = 'viewer-ready';
 
@@ -87,6 +88,7 @@ async function initEngine(): Promise<void> {
     app = new WorldApp();
     await app.initialize();
     engineRuntime = createAppEngineRuntime({ app, setViewerReady });
+    engineRuntime?.runtimeLoop.setChunkStreamingPaused(worldGenerationLoading);
   } catch (error) {
     console.error('Failed to initialize application core:', error);
     setWorldGenerationLoading(false);
@@ -137,5 +139,7 @@ function setViewerReady(ready: boolean): void {
 }
 
 function setWorldGenerationLoading(visible: boolean): void {
+  worldGenerationLoading = visible;
+  engineRuntime?.runtimeLoop.setChunkStreamingPaused(visible);
   document.getElementById('loading-indicator')?.classList.toggle('hidden', !visible);
 }

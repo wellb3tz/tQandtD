@@ -6,9 +6,16 @@ import {
 } from './terrain-geometry-builder';
 import GeometryWorkerUrl from './geometry-worker?worker&url';
 
+export interface GeometryWorkerManagerStatus {
+  mode: 'waiting' | 'worker' | 'sync' | 'error';
+  workerCount: number;
+  pendingTasks: number;
+}
+
 export class GeometryWorkerManager {
   private worker: Worker | null = null;
   private initialized = false;
+  private lastError: string | null = null;
   private messageId = 0;
   private pending = new Map<number, {
     resolve: (value: TerrainGeometryBuffers) => void;
@@ -51,6 +58,7 @@ export class GeometryWorkerManager {
       this.worker.terminate();
       this.worker = null;
     }
+    this.lastError = null;
     for (const { reject } of this.pending.values()) {
       reject(new Error('GeometryWorkerManager disposed'));
     }
@@ -99,12 +107,37 @@ export class GeometryWorkerManager {
 
   private handleError = (event: ErrorEvent) => {
     // Reject all pending promises on catastrophic worker error
+    this.lastError = event.message ?? 'Geometry worker failed';
     for (const { reject } of this.pending.values()) {
-      reject(new Error(event.message ?? 'Geometry worker failed'));
+      reject(new Error(this.lastError));
     }
     this.pending.clear();
     this.worker = null;
   };
+
+  getStatus(): GeometryWorkerManagerStatus {
+    if (this.lastError) {
+      return {
+        mode: 'error',
+        workerCount: 0,
+        pendingTasks: this.pending.size,
+      };
+    }
+
+    if (!this.worker) {
+      return {
+        mode: 'sync',
+        workerCount: 0,
+        pendingTasks: this.pending.size,
+      };
+    }
+
+    return {
+      mode: 'worker',
+      workerCount: 1,
+      pendingTasks: this.pending.size,
+    };
+  }
 }
 
 let sharedManager: GeometryWorkerManager | null = null;
@@ -119,4 +152,12 @@ export function getGeometryWorkerManager(): GeometryWorkerManager {
 export function disposeGeometryWorkerManager(): void {
   sharedManager?.dispose();
   sharedManager = null;
+}
+
+export function getGeometryWorkerManagerStatus(): GeometryWorkerManagerStatus {
+  return sharedManager?.getStatus() ?? {
+    mode: 'waiting',
+    workerCount: 0,
+    pendingTasks: 0,
+  };
 }
