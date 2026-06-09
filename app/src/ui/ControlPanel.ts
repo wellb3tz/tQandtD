@@ -24,7 +24,6 @@ import {
 } from './control-panel/controlSchemas';
 import {
   createCheckboxControl,
-  createColorControl,
   createSliderControl,
   updateSliderValue,
 } from './control-panel/controlElements';
@@ -460,21 +459,6 @@ export class ControlPanel {
     viewSection.style.marginBottom = '16px';
     viewSection.innerHTML = '<h4 style="font-size: 0.875rem; margin-bottom: 8px; color: var(--text-secondary);">Water Surface View</h4>';
     waterContainer.appendChild(viewSection);
-
-    const colorControl = createColorControl(WATER_VIEW_CONTROLS.color, (color) => {
-      this.updateWaterViewConfig('ocean', 'color', parseInt(color.replace('#', '0x')));
-    });
-    viewSection.appendChild(colorControl);
-
-    const opacityControl = createSliderControl(WATER_VIEW_CONTROLS.opacity, (value) => {
-      this.updateWaterViewConfig('ocean', 'opacity', value);
-    });
-    viewSection.appendChild(opacityControl);
-
-    const shininessControl = createSliderControl(WATER_VIEW_CONTROLS.shininess, (value) => {
-      this.updateWaterViewConfig('ocean', 'shininess', value);
-    });
-    viewSection.appendChild(shininessControl);
 
     const wavesControl = createCheckboxControl(WATER_VIEW_CONTROLS.enableWaves, (checked) => {
       this.updateWaterViewConfig('ocean', 'enableWaves', checked);

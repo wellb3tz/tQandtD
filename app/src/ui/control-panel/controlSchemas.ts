@@ -33,8 +33,6 @@ export const TERRAIN_SLIDERS: SliderConfig[] = [
 export const BIOME_SLIDERS: SliderConfig[] = [
   { id: 'worldTemperatureOffset', label: 'World Temperature', min: -1, max: 1, step: 0.05, defaultValue: 0, tooltip: 'Global temperature offset (cold <-> hot)' },
   { id: 'worldMoistureOffset', label: 'World Moisture', min: -1, max: 1, step: 0.05, defaultValue: 0, tooltip: 'Global moisture offset (dry <-> wet)' },
-  { id: 'temperatureScale', label: 'Climate Zone Scale', min: 0.0001, max: 0.2, step: 0.001, defaultValue: 0.005, tooltip: 'Size of climate zones (lower = larger biomes)' },
-  { id: 'moistureScale', label: 'Moisture Detail Scale', min: 0.0001, max: 0.2, step: 0.001, defaultValue: 0.005, tooltip: 'Scale of moisture variation detail (lower = smoother)' },
   { id: 'blendRadius', label: 'Biome Blend Radius', min: 0.5, max: 20, step: 0.5, defaultValue: 0.5, tooltip: 'Radius in meters used to sample neighbouring biomes for blending' },
 ];
 
@@ -116,30 +114,6 @@ export const RENDER_SCALE_SLIDER: SliderConfig = {
 };
 
 export const WATER_VIEW_CONTROLS = {
-  color: {
-    id: 'waterColor',
-    label: 'Water Color',
-    defaultValue: '#1e90ff',
-    tooltip: 'Color of water surface',
-  },
-  opacity: {
-    id: 'waterOpacity',
-    label: 'Water Opacity',
-    min: 0,
-    max: 1,
-    step: 0.05,
-    defaultValue: 0.7,
-    tooltip: 'Transparency of water (0 = transparent, 1 = opaque)',
-  },
-  shininess: {
-    id: 'waterShininess',
-    label: 'Water Shininess',
-    min: 0,
-    max: 100,
-    step: 5,
-    defaultValue: 30,
-    tooltip: 'Shininess of water surface',
-  },
   enableWaves: {
     id: 'waterEnableWaves',
     label: 'Ocean Waves',

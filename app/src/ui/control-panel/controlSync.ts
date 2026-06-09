@@ -62,10 +62,7 @@ export function syncControlsWithConfig(config: WorldConfig): void {
   } else {
     updateCheckboxValue('enableDirectionalClimate', false);
   }
-
   if (config.biomeConfig) {
-    updateSliderValue('temperatureScale', config.biomeConfig.temperatureScale);
-    updateSliderValue('moistureScale', config.biomeConfig.moistureScale);
     updateSliderValue('blendRadius', config.biomeConfig.blendRadius);
   }
 
