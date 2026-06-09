@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   BiomeSystem,
+  BiomeType,
   ClimateSystem,
   DEFAULT_CLIMATE_CONFIG,
   DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
   TerrainGenerator,
+  classifyLandBiomeFromClimate,
   sampleDirectionalClimateField,
 } from '../src';
 
@@ -25,26 +27,26 @@ describe('Directional climate field', () => {
     });
 
     expect(sampleDirectionalClimateField(1000, 0, directional)).toMatchObject({
-      temperature: 0.20,
-      moisture: 0.55,
+      temperature: 0.65,
+      moisture: 0.85,
       heightMultiplier: -0.25,
     });
 
     expect(sampleDirectionalClimateField(-1000, 0, directional)).toMatchObject({
-      temperature: -0.05,
-      moisture: -0.20,
-      heightMultiplier: 0.30,
+      temperature: -0.35,
+      moisture: 0.05,
+      heightMultiplier: 0.35,
     });
 
     expect(sampleDirectionalClimateField(0, -1000, directional)).toMatchObject({
-      temperature: -1.00,
-      moisture: -1.00,
+      temperature: -0.95,
+      moisture: -0.20,
       heightMultiplier: 0.35,
     });
 
     expect(sampleDirectionalClimateField(0, 1000, directional)).toMatchObject({
-      temperature: 1.00,
-      moisture: -1.00,
+      temperature: 0.90,
+      moisture: -0.75,
       heightMultiplier: -0.15,
       oceanCoverage: 0.10,
       oceanCoverageWeight: 1,
@@ -54,9 +56,24 @@ describe('Directional climate field', () => {
   it('blends adjacent fantasy regions at diagonal positions', () => {
     const sample = sampleDirectionalClimateField(1000, -1000, directional);
 
-    expect(sample.temperature).toBeCloseTo(-0.80, 6);
-    expect(sample.moisture).toBeCloseTo(-0.45, 6);
+    expect(sample.temperature).toBeCloseTo(-0.30, 6);
+    expect(sample.moisture).toBeCloseTo(0.65, 6);
     expect(sample.heightMultiplier).toBeCloseTo(0.10, 6);
+  });
+
+  it('maps compass climate extremes to the intended biome families', () => {
+    const north = sampleDirectionalClimateField(0, -1000, directional);
+    const south = sampleDirectionalClimateField(0, 1000, directional);
+    const east = sampleDirectionalClimateField(1000, 0, directional);
+    const west = sampleDirectionalClimateField(-1000, 0, directional);
+
+    expect(classifyLandBiomeFromClimate(north.temperature, north.moisture)).toBe(BiomeType.POLAR);
+    expect(classifyLandBiomeFromClimate(-0.60, north.moisture)).toBe(BiomeType.TUNDRA);
+    expect(classifyLandBiomeFromClimate(south.temperature, south.moisture)).toBe(BiomeType.DESERT);
+    expect(classifyLandBiomeFromClimate(0.35, -0.35)).toBe(BiomeType.STEPPE);
+    expect(classifyLandBiomeFromClimate(0.65, -0.35)).toBe(BiomeType.SAVANNA);
+    expect(classifyLandBiomeFromClimate(east.temperature, east.moisture)).toBe(BiomeType.RAINFOREST);
+    expect(classifyLandBiomeFromClimate(west.temperature, west.moisture)).toBe(BiomeType.TAIGA);
   });
 
   it('ramps ocean coverage toward the dry southern extreme', () => {

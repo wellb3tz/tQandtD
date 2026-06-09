@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData } from '@engine/index';
+import { BiomeType, NUM_BIOMES, TERRAIN_TILE_SIZE_METERS, type ChunkData, type LakeData } from '@engine/index';
 import type { LakeTile } from './types';
 import {
   LAKE_SURFACE_SHADER_KEY,
@@ -15,7 +15,7 @@ function createChunk(size = 4): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize).fill(0.7);
   const biomeMap = new Uint8Array(size * size).fill(BiomeType.PLAINS);
-  const biomeWeights = new Float32Array(size * size * 13);
+  const biomeWeights = new Float32Array(size * size * NUM_BIOMES);
 
   return {
     x: 0,

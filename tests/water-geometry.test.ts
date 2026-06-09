@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
+  NUM_BIOMES,
   buildLakeGeometryData,
   buildOceanGeometryData,
   buildRiverGeometryData,
@@ -25,7 +26,7 @@ function createChunk(size = 2, fillHeight = 0.5): ChunkData {
     size,
     heightmap: new Float32Array(vertexSize * vertexSize).fill(fillHeight),
     biomeMap: new Uint8Array(size * size).fill(BiomeType.PLAINS),
-    biomeWeights: new Float32Array(size * size * 13),
+    biomeWeights: new Float32Array(size * size * NUM_BIOMES),
     resources: [],
     structures: [],
   };

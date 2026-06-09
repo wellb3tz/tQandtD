@@ -1230,9 +1230,9 @@ export class EconomySimulation {
     if ((resources.STONE ?? 0) > 0 && ['stone', 'bricks'].includes(itemId)) factor *= 1.16;
     if ((resources.GOLD ?? 0) > 0 && ['jewelry', 'contracts'].includes(itemId)) factor *= 1.12;
     if (this.matchesBiome(biome, ['FOREST', 'TAIGA', 'RAINFOREST']) && ['timber', 'hides'].includes(itemId)) factor *= 1.1;
-    if (this.matchesBiome(biome, ['MOUNTAIN', 'GLACIER']) && ['iron_ore', 'coal', 'stone'].includes(itemId)) factor *= 1.1;
+    if (this.matchesBiome(biome, ['MOUNTAIN', 'POLAR']) && ['iron_ore', 'coal', 'stone'].includes(itemId)) factor *= 1.1;
     if (this.matchesBiome(biome, ['OCEAN', 'BEACH', 'SWAMP']) && ['fish', 'salt'].includes(itemId)) factor *= 1.1;
-    if (this.matchesBiome(biome, ['PLAINS', 'SAVANNA']) && ['grain', 'hides'].includes(itemId)) factor *= 1.08;
+    if (this.matchesBiome(biome, ['PLAINS', 'STEPPE', 'SAVANNA']) && ['grain', 'hides'].includes(itemId)) factor *= 1.08;
     return factor;
   }
 

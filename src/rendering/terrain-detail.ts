@@ -36,7 +36,7 @@ export function calculateCliffInfluence(data: ChunkData, x: number, y: number): 
   const biome = data.biomeMap?.[tileY * size + tileX];
   const biomeFactor = biome === undefined
     ? 0.68
-    : biome === BiomeType.MOUNTAIN || biome === BiomeType.VOLCANIC || biome === BiomeType.GLACIER
+    : biome === BiomeType.MOUNTAIN || biome === BiomeType.VOLCANIC || biome === BiomeType.POLAR
       ? 1
       : biome === BiomeType.BEACH
         ? 0.76

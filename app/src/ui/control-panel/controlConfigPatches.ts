@@ -2,6 +2,7 @@ import {
   DEFAULT_CLIMATE_CONFIG,
   DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
   DEFAULT_RIVER_CONFIG,
+  BiomeType,
   type WorldConfig,
   type WorldConfigOverrides,
 } from '@engine/index';
@@ -209,7 +210,17 @@ export function buildLakeConfigPatch(
     noiseThreshold: 0.62,
     minElevation: 0.32,
     maxElevation: 0.72,
-    allowedBiomes: [3, 4, 5, 6, 7, 8, 9],
+    allowedBiomes: [
+      BiomeType.PLAINS,
+      BiomeType.FOREST,
+      BiomeType.DRY_FOREST,
+      BiomeType.STEPPE,
+      BiomeType.TAIGA,
+      BiomeType.TUNDRA,
+      BiomeType.MOUNTAIN,
+      BiomeType.SWAMP,
+      BiomeType.SAVANNA,
+    ],
     maxLakeTiles: 80,
     maxFillDepth: 0.06,
   };

@@ -239,7 +239,7 @@ describe('Climate-driven water state', () => {
       getDynamicSnowLine: () => 0.76,
       getDynamicTreeLine: () => 0.75,
       getTemperature: (x: number) => x < 0 ? -0.6 : 0.6,
-      getMoisture: () => -0.5,
+      getMoisture: () => -0.6,
     };
 
     const data = system.getEnhancedBiome(1, 0, () => 0.5);

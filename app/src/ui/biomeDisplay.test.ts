@@ -7,7 +7,9 @@ describe('biomeDisplay', () => {
   it('derives biome names from the current enum', () => {
     expect(getBiomeDisplayName(BiomeType.OCEAN)).toBe('Ocean');
     expect(getBiomeDisplayName(BiomeType.RAINFOREST)).toBe('Rainforest');
-    expect(getBiomeDisplayName(BiomeType.GLACIER)).toBe('Glacier');
+    expect(getBiomeDisplayName(BiomeType.POLAR)).toBe('Polar');
+    expect(getBiomeDisplayName(BiomeType.GLACIER)).toBe('Polar');
+    expect(getBiomeDisplayName(BiomeType.DRY_FOREST)).toBe('Dry Forest');
     expect(getBiomeDisplayName(999)).toBe('Unknown');
   });
 

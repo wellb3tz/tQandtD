@@ -32,10 +32,10 @@ const DIRECTIONAL_CLIMATE_PRESETS: Record<DirectionalClimatePreset, {
   west: DirectionalRegionSample;
 }> = {
   'fantasy-regions': {
-    north: { temperature: -1.00, moisture: -1.00, height: 0.35 },
-    south: { temperature: 1.00, moisture: -1.00, height: -0.15, oceanCoverage: 0.10 },
-    east: { temperature: 0.20, moisture: 0.55, height: -0.25 },
-    west: { temperature: -0.05, moisture: -0.20, height: 0.30 },
+    north: { temperature: -0.95, moisture: -0.20, height: 0.35 },
+    south: { temperature: 0.90, moisture: -0.75, height: -0.15, oceanCoverage: 0.10 },
+    east: { temperature: 0.65, moisture: 0.85, height: -0.25 },
+    west: { temperature: -0.35, moisture: 0.05, height: 0.35 },
   },
 };
 

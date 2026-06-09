@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ResourceType,
   StructureType,
+  NUM_BIOMES,
   buildChunkBoundaryLineData,
   buildResourceMarkerPlacements,
   buildStructureMarkerPlacements,
@@ -72,7 +73,7 @@ function createChunkData(): ChunkData {
       0.6, 0.8, 0.9,
     ]),
     biomeMap: new Uint8Array(4),
-    biomeWeights: new Float32Array(4 * 13),
+    biomeWeights: new Float32Array(4 * NUM_BIOMES),
     resources: [],
     structures: [],
   } as ChunkData;

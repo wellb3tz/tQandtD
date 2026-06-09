@@ -116,9 +116,11 @@ describe('terrain texture materials', () => {
     expect(selectTerrainSurfaceKey(BiomeType.FOREST, 0.42, 0.2, 0.84)).toBe('swampMud');
     expect(selectTerrainSurfaceKey(BiomeType.SAVANNA, 0.35, 0.1)).toBe('dryGrass');
     expect(selectTerrainSurfaceKey(BiomeType.SAVANNA, 0.38, 0.1, 0.78)).toBe('swampMud');
+    expect(selectTerrainSurfaceKey(BiomeType.STEPPE, 0.43, 0.1, 0.18)).toBe('dryGrass');
+    expect(selectTerrainSurfaceKey(BiomeType.DRY_FOREST, 0.43, 0.1, 0.34)).toBe('forestFloor');
     expect(selectTerrainSurfaceKey(BiomeType.SWAMP, 0.34, 0.1)).toBe('swampMud');
     expect(selectTerrainSurfaceKey(BiomeType.VOLCANIC, 0.58, 0.1)).toBe('volcanicRock');
-    expect(selectTerrainSurfaceKey(BiomeType.GLACIER, 0.5, 0.1)).toBe('ice');
+    expect(selectTerrainSurfaceKey(BiomeType.POLAR, 0.5, 0.1)).toBe('ice');
     expect(selectTerrainSurfaceKey(BiomeType.PLAINS, 0.4, 0.1)).toBe('plains');
   });
 

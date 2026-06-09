@@ -1,5 +1,6 @@
 import { DEFAULT_RIVER_CONFIG } from '../gen/rivers';
 import { DEFAULT_DIRECTIONAL_CLIMATE_CONFIG } from '../world/climate';
+import { BiomeType, ResourceType } from '../world/chunk';
 import type { WorldConfig } from '../world/world-config';
 
 export type WorldConfigOverrides = Omit<
@@ -229,11 +230,11 @@ function createBaseWorldConfig(): WorldConfig {
     },
     resourceConfig: {
       types: [
-        { type: 0, rarity: 0.5, biomes: [6, 7, 8], minAmount: 1, maxAmount: 5 },
-        { type: 1, rarity: 0.5, biomes: [6, 7], minAmount: 1, maxAmount: 3 },
-        { type: 2, rarity: 0.5, biomes: [3, 4, 5, 6], minAmount: 2, maxAmount: 6 },
-        { type: 3, rarity: 0.5, biomes: [6, 7, 8], minAmount: 3, maxAmount: 8 },
-        { type: 4, rarity: 0.5, biomes: [4, 5, 9], minAmount: 1, maxAmount: 4 },
+        { type: ResourceType.IRON, rarity: 0.5, biomes: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.SAVANNA, BiomeType.STEPPE], minAmount: 1, maxAmount: 5 },
+        { type: ResourceType.GOLD, rarity: 0.5, biomes: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.POLAR], minAmount: 1, maxAmount: 3 },
+        { type: ResourceType.COAL, rarity: 0.5, biomes: [BiomeType.PLAINS, BiomeType.FOREST, BiomeType.TAIGA, BiomeType.TUNDRA, BiomeType.DRY_FOREST], minAmount: 2, maxAmount: 6 },
+        { type: ResourceType.STONE, rarity: 0.5, biomes: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.SAVANNA, BiomeType.STEPPE, BiomeType.POLAR], minAmount: 3, maxAmount: 8 },
+        { type: ResourceType.WOOD, rarity: 0.5, biomes: [BiomeType.FOREST, BiomeType.TAIGA, BiomeType.SWAMP, BiomeType.RAINFOREST, BiomeType.DRY_FOREST], minAmount: 1, maxAmount: 4 },
       ],
       clusterScale: 20,
       densityThreshold: 0.6,
@@ -254,7 +255,17 @@ function createBaseWorldConfig(): WorldConfig {
       noiseThreshold: 0.62,
       minElevation: 0.32,
       maxElevation: 0.72,
-      allowedBiomes: [3, 4, 5, 6, 7, 8, 9],
+      allowedBiomes: [
+        BiomeType.PLAINS,
+        BiomeType.FOREST,
+        BiomeType.DRY_FOREST,
+        BiomeType.STEPPE,
+        BiomeType.TAIGA,
+        BiomeType.TUNDRA,
+        BiomeType.MOUNTAIN,
+        BiomeType.SWAMP,
+        BiomeType.SAVANNA,
+      ],
       maxLakeTiles: 80,
       maxFillDepth: 0.06,
     },

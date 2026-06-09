@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 import { WaterLayerManager } from './WaterLayerManager';
 import { DEFAULT_WATER_CONFIG } from './config';
-import { BiomeType, type ChunkData, type LakeData, type RiverData } from '@engine/index';
+import { BiomeType, NUM_BIOMES, type ChunkData, type LakeData, type RiverData } from '@engine/index';
 
 /**
  * Create a mock ChunkData with ocean tiles for testing
@@ -19,7 +19,7 @@ function createMockChunkWithOcean(): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize);
   const biomeMap = new Uint8Array(size * size);
-  const biomeWeights = new Float32Array(size * size * 13); // 13 biomes
+  const biomeWeights = new Float32Array(size * size * NUM_BIOMES);
 
   // Create heightmap with all tiles below sea level (0.3)
   // This ensures ocean tiles are identified
@@ -34,7 +34,7 @@ function createMockChunkWithOcean(): ChunkData {
 
   // Set biome weights (100% ocean)
   for (let i = 0; i < size * size; i++) {
-    biomeWeights[i * 13 + BiomeType.OCEAN] = 1.0;
+    biomeWeights[i * NUM_BIOMES + BiomeType.OCEAN] = 1.0;
   }
 
   return {
@@ -57,7 +57,7 @@ function createMockChunkWithoutWater(): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize);
   const biomeMap = new Uint8Array(size * size);
-  const biomeWeights = new Float32Array(size * size * 13);
+  const biomeWeights = new Float32Array(size * size * NUM_BIOMES);
 
   // Create heightmap with all tiles above sea level
   for (let i = 0; i < heightmap.length; i++) {

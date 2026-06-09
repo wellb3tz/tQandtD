@@ -355,7 +355,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
 
     const isVolcanic = vertexBiome === BiomeType.VOLCANIC;
     const isMountain = vertexBiome === BiomeType.MOUNTAIN;
-    const isGlacier = vertexBiome === BiomeType.GLACIER;
+    const isPolar = vertexBiome === BiomeType.POLAR;
     const isBeach = vertexBiome === BiomeType.BEACH;
     const isOcean = vertexBiome === BiomeType.OCEAN;
     const belowWaterBand = 0.05;
@@ -388,7 +388,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
     const aspectShelter = clamp01(0.52 - normals[i * 3] * 0.35 - normals[i * 3 + 2] * 0.22);
     const snowPocket = clamp01(1.0 - rockBreakup * 0.82 + aspectShelter * 0.26);
     const visualSnowLine = snowLine + 0.055;
-    const snowDetail = (isMountain || isGlacier)
+    const snowDetail = (isMountain || isPolar)
       ? Math.min(1, Math.max(0, (rawHeight - visualSnowLine + (snowBreakup - 0.5) * 0.12) / 0.095) * (0.48 - steepness * 0.30 + snowPocket * 0.28)) * temperatureFactor
       : 0;
     const riverbedDetail = riverbedInfluence;
@@ -423,7 +423,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       g = blend(g, rock.g, steepness);
       b = blend(b, rock.b, steepness);
 
-      if ((isMountain || isGlacier) && rawHeight > visualSnowLine) {
+      if ((isMountain || isPolar) && rawHeight > visualSnowLine) {
         const snowFactor = Math.min(1.0, (rawHeight - visualSnowLine + (snowBreakup - 0.5) * 0.12) / 0.08) * (0.44 - steepness * 0.34 + snowPocket * 0.24) * temperatureFactor;
         if (snowFactor > 0) {
           r = blend(r, snow.r, snowFactor);
@@ -441,7 +441,7 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
     }
 
-    const mountainSurface = (isMountain || isGlacier)
+    const mountainSurface = (isMountain || isPolar)
       ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
       : cliffDetail;
     if (mountainSurface > 0.08) {
@@ -456,21 +456,21 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       b = blend(b, coolRock.b, rockFactor);
     }
 
-    if (isGlacier) {
-      const glacierIce = { r: 0.76, g: 0.90, b: 0.98 };
-      const glacierIceFactor = Math.min(0.74, 0.46 + (1 - steepness) * 0.28);
-      r = blend(r, glacierIce.r, glacierIceFactor);
-      g = blend(g, glacierIce.g, glacierIceFactor);
-      b = blend(b, glacierIce.b, glacierIceFactor);
+    if (isPolar) {
+      const polarIce = { r: 0.76, g: 0.90, b: 0.98 };
+      const polarIceFactor = Math.min(0.74, 0.46 + (1 - steepness) * 0.28);
+      r = blend(r, polarIce.r, polarIceFactor);
+      g = blend(g, polarIce.g, polarIceFactor);
+      b = blend(b, polarIce.b, polarIceFactor);
     }
 
     if (riverBankWetness > 0) {
-      const silt = isGlacier
+      const silt = isPolar
         ? { r: 0.70, g: 0.84, b: 0.90 }
-        : isBeach || vertexBiome === BiomeType.DESERT || vertexBiome === BiomeType.SAVANNA
+        : isBeach || vertexBiome === BiomeType.DESERT || vertexBiome === BiomeType.SAVANNA || vertexBiome === BiomeType.STEPPE
         ? { r: 0.76, g: 0.66, b: 0.42 }
         : { r: 0.30, g: 0.39, b: 0.25 };
-      const bankTint = riverBankWetness * (isGlacier ? 0.22 : 0.34);
+      const bankTint = riverBankWetness * (isPolar ? 0.22 : 0.34);
       r = blend(r, silt.r, bankTint);
       g = blend(g, silt.g, bankTint);
       b = blend(b, silt.b, bankTint);

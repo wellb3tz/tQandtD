@@ -3,11 +3,11 @@ import { BiomeType, type ChunkData } from '@engine/index';
 import { buildTerrainGeometryBuffers } from './terrain-geometry-builder';
 
 describe('terrain geometry builder', () => {
-  it('keeps glacier ice vertex colors cold instead of yellow-green', () => {
+  it('keeps polar ice vertex colors cold instead of yellow-green', () => {
     const data = {
       size: 1,
       heightmap: new Float32Array([0.5, 0.5, 0.5, 0.5]),
-      biomeMap: new Uint8Array([BiomeType.GLACIER]),
+      biomeMap: new Uint8Array([BiomeType.POLAR]),
       resources: [],
       structures: [],
     } as unknown as ChunkData;

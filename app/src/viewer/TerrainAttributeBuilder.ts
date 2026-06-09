@@ -165,13 +165,13 @@ function selectRiverBankSurfaceKey(
   }
 
   if (riverBankInfluence > 0.74) {
-    if (biome === BiomeType.DESERT || biome === BiomeType.BEACH || biome === BiomeType.SAVANNA) {
+    if (biome === BiomeType.DESERT || biome === BiomeType.BEACH || biome === BiomeType.SAVANNA || biome === BiomeType.STEPPE) {
       return 'beach';
     }
     return 'swampMud';
   }
 
-  if (biome === BiomeType.FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST || biome === BiomeType.SWAMP) {
+  if (biome === BiomeType.FOREST || biome === BiomeType.DRY_FOREST || biome === BiomeType.TAIGA || biome === BiomeType.RAINFOREST || biome === BiomeType.SWAMP) {
     return 'forestFloor';
   }
 
@@ -250,13 +250,17 @@ function getBiomeMoistureBias(biome: BiomeType): number {
       return 0.62;
     case BiomeType.PLAINS:
       return 0.46;
+    case BiomeType.DRY_FOREST:
+      return 0.40;
     case BiomeType.SAVANNA:
       return 0.30;
+    case BiomeType.STEPPE:
+      return 0.24;
     case BiomeType.TUNDRA:
       return 0.22;
     case BiomeType.MOUNTAIN:
       return 0.20;
-    case BiomeType.GLACIER:
+    case BiomeType.POLAR:
       return 0.16;
     case BiomeType.DESERT:
       return 0.06;
@@ -337,7 +341,7 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
     const aspectShelter = clamp01(0.52 - nx * 0.35 - nz * 0.22);
     const snowPocket = clamp01(1.0 - rockBreakup * 0.82 + aspectShelter * 0.26);
     const visualSnowLine = snowLine + 0.055;
-    const snowDetail = (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER))
+    const snowDetail = (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.POLAR))
       ? Math.min(1, Math.max(0, (rawHeight - visualSnowLine + snowEdgeLift * 1.26) / 0.095) * (0.48 - steepness * 0.30 + snowPocket * 0.28)) * temperatureFactor
       : 0;
     const riverbedDetail = riverbedInfluence;
@@ -350,7 +354,7 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
     }
 
-    const mountainSurface = data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.GLACIER)
+    const mountainSurface = data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.POLAR)
       ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
       : cliffDetail;
     if (mountainSurface > 0.08) {

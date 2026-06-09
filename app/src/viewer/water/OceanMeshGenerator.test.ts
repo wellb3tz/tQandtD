@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BiomeType, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
+import { BiomeType, NUM_BIOMES, TERRAIN_TILE_SIZE_METERS, type ChunkData } from '@engine/index';
 import { DEFAULT_WATER_CONFIG } from './config';
 import { OCEAN_SURFACE_UV_SCALE, buildOceanGeometry, identifyOceanTiles } from './OceanMeshGenerator';
 
@@ -7,7 +7,7 @@ function createChunk(size = 2, fillHeight = 0.5): ChunkData {
   const vertexSize = size + 1;
   const heightmap = new Float32Array(vertexSize * vertexSize).fill(fillHeight);
   const biomeMap = new Uint8Array(size * size).fill(BiomeType.PLAINS);
-  const biomeWeights = new Float32Array(size * size * 13);
+  const biomeWeights = new Float32Array(size * size * NUM_BIOMES);
 
   return {
     x: 0,

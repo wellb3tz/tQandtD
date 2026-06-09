@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
+  NUM_BIOMES,
   RIVER_TRENCH_DARKEN_STRENGTH,
   calculateCliffInfluence,
   calculateRiverBankInfluence,
@@ -101,7 +102,7 @@ function createRiverChunk(overrides: Partial<ChunkData> = {}): ChunkData {
     size: 1,
     heightmap: new Float32Array([0.31, 0.31, 0.84, 0.84]),
     biomeMap: new Uint8Array([BiomeType.MOUNTAIN]),
-    biomeWeights: new Float32Array(13),
+    biomeWeights: new Float32Array(NUM_BIOMES),
     rivers: [{
       riverId: 'river_1',
       pathId: 'river_1:main',

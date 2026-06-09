@@ -397,6 +397,8 @@ function getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
   switch (biome) {
     case BiomeType.FOREST:
       return { density: 0.86, height: 1.42, radius: 0.50, color: 0x285f24, maxSlope: 0.18 };
+    case BiomeType.DRY_FOREST:
+      return { density: 0.42, height: 1.20, radius: 0.44, color: 0x586f2d, maxSlope: 0.16 };
     case BiomeType.RAINFOREST:
       return { density: 0.96, height: 1.62, radius: 0.58, color: 0x185623, maxSlope: 0.20 };
     case BiomeType.TAIGA:
@@ -412,6 +414,7 @@ function getFoliageProfileForTile(data: ChunkData, tileIndex: number): FoliagePr
   if (data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0 && data.sparseBiomeOffsets) {
     const weightedProfiles: Array<{ biome: BiomeType; weight: number }> = [
       { biome: BiomeType.FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.FOREST) },
+      { biome: BiomeType.DRY_FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.DRY_FOREST) },
       { biome: BiomeType.RAINFOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.RAINFOREST) },
       { biome: BiomeType.TAIGA, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.TAIGA) },
       { biome: BiomeType.SWAMP, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.SWAMP) },

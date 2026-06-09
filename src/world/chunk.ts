@@ -20,8 +20,15 @@ export enum BiomeType {
   SWAMP = 9,        // Warm/temperate + very wet + low elevation
   RAINFOREST = 10,  // Hot + very wet
   VOLCANIC = 11,    // Extreme elevation with volcanic features
-  GLACIER = 12,     // Very cold + high elevation, distinct from tundra
+  /** @deprecated Use POLAR. Kept as an alias for saved-world compatibility. */
+  GLACIER = 12,
+  POLAR = 12,       // Extreme cold and ice, replacing the old glacier biome meaning
+  STEPPE = 13,      // Dry temperate grassland between plains, savanna, and desert
+  DRY_FOREST = 14,  // Sparse/dry woodland between forest, steppe, and savanna
 }
+
+/** Number of numeric biome ids, excluding deprecated aliases. */
+export const NUM_BIOMES = 15;
 
 /**
  * Resource types that can be found in the world
@@ -76,7 +83,7 @@ export interface Structure {
  * - Both vertices sample the same world coordinate, ensuring identical heights
  * 
  * **Biome Weights Storage**: Uses sparse representation to save memory.
- * Instead of storing all 13 biome weights for each tile (most are zero),
+ * Instead of storing all biome weights for each tile (most are zero),
  * only non-zero weights are stored using three parallel arrays:
  * - sparseBiomeTypes: biome type IDs
  * - sparseBiomeWeights: corresponding weights

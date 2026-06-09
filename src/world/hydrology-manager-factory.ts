@@ -63,11 +63,13 @@ function adjustLakeConfigForClimate(lakeConfig: LakeConfig, enhancedBiomeConfig?
   if (temperatureOffset > 0.4) {
     allowedBiomes.delete(BiomeType.TUNDRA);
     allowedBiomes.delete(BiomeType.TAIGA);
+    allowedBiomes.delete(BiomeType.POLAR);
   }
 
   if (temperatureOffset < -0.4) {
     allowedBiomes.delete(BiomeType.DESERT);
     allowedBiomes.delete(BiomeType.SAVANNA);
+    allowedBiomes.delete(BiomeType.DRY_FOREST);
   }
 
   return {
@@ -75,4 +77,3 @@ function adjustLakeConfigForClimate(lakeConfig: LakeConfig, enhancedBiomeConfig?
     allowedBiomes: Array.from(allowedBiomes),
   };
 }
-

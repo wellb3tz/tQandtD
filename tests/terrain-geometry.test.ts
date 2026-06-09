@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BiomeType,
+  NUM_BIOMES,
   buildTerrainGridGeometryData,
   type ChunkData,
 } from '../src';
@@ -21,7 +22,7 @@ function createChunkData(overrides: Partial<ChunkData> = {}): ChunkData {
       BiomeType.DESERT,
       BiomeType.MOUNTAIN,
     ]),
-    biomeWeights: new Float32Array(2 * 2 * 13),
+    biomeWeights: new Float32Array(2 * 2 * NUM_BIOMES),
     resources: [],
     structures: [],
     ...overrides,

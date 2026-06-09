@@ -1,4 +1,4 @@
-import { BiomeConfig, BiomeSystem } from './biome';
+import { BiomeConfig, BiomeSystem, classifyLandBiomeFromClimate } from './biome';
 import { BiomeType } from './chunk';
 import { ClimateSystem, ClimateConfig, DEFAULT_CLIMATE_CONFIG } from './climate';
 import { BiomeCompatibilityMatrix } from './biome-compatibility';
@@ -320,7 +320,7 @@ export class EnhancedBiomeSystem extends BiomeSystem {
   /**
    * Classifies a biome from pre-computed climate values.
    * Mirrors the logic in BiomeSystem.getBiome but accepts explicit temperature/moisture
-   * and supports all 13 biome types including the extended set.
+   * and supports all current biome types including the extended set.
    *
    * @param height      - Terrain height [0,1]
    * @param temperature - Climate temperature [-1,1]
@@ -347,6 +347,9 @@ export class EnhancedBiomeSystem extends BiomeSystem {
           return BiomeType.VOLCANIC;
         }
       }
+      if (height > 0.82 && temperature < -0.55) {
+        return BiomeType.POLAR;
+      }
       return BiomeType.MOUNTAIN;
     }
 
@@ -367,24 +370,11 @@ export class EnhancedBiomeSystem extends BiomeSystem {
       // Not near water - fall through to climate-based classification
     }
 
-    if (temperature < -0.5) {
-      if (height > 0.6) return BiomeType.GLACIER;
-      return moisture > 0.1 ? BiomeType.TAIGA : BiomeType.TUNDRA;
-    } else if (temperature < -0.3) {
-      return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
-    } else if (temperature > 0.5) {
-      if (moisture > 0.4)  return BiomeType.RAINFOREST;
-      if (moisture < -0.2) return BiomeType.DESERT;
-      return BiomeType.SAVANNA;
-    } else if (temperature > 0.3) {
-      if (moisture < -0.2) return BiomeType.DESERT;
-      if (moisture > 0.5)  return BiomeType.RAINFOREST;
-      return BiomeType.PLAINS;
-    } else {
-      if (moisture > 0.5)  return BiomeType.SWAMP;
-      if (moisture > 0.2)  return BiomeType.FOREST;
-      return BiomeType.PLAINS;
+    if (height < 0.48 && moisture >= 0.60 && temperature > -0.10) {
+      return BiomeType.SWAMP;
     }
+
+    return classifyLandBiomeFromClimate(temperature, moisture);
   }
 
   /**

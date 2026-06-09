@@ -90,7 +90,7 @@ export interface LakeConfig {
 
   /**
    * Biomes in which lakes are allowed to form.
-   * Default: PLAINS, FOREST, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA.
+   * Default: PLAINS, FOREST, DRY_FOREST, STEPPE, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA.
    */
   allowedBiomes: BiomeType[];
 
@@ -119,6 +119,8 @@ export const DEFAULT_LAKE_CONFIG: LakeConfig = {
   allowedBiomes: [
     BiomeType.PLAINS,
     BiomeType.FOREST,
+    BiomeType.DRY_FOREST,
+    BiomeType.STEPPE,
     BiomeType.TAIGA,
     BiomeType.TUNDRA,
     BiomeType.MOUNTAIN,

@@ -5,7 +5,7 @@
  * smooth color blending between biomes based on blend weights.
  */
 
-import { BiomeType } from '@engine/index';
+import { BiomeType, NUM_BIOMES } from '@engine/index';
 import * as THREE from 'three';
 import {
   clamp01,
@@ -130,7 +130,9 @@ export const BIOME_COLORS: Record<BiomeType, BiomeColor> = {
   [BiomeType.SWAMP]:      { r: 0.235, g: 0.353, b: 0.196 },  // Dark murky green (#3C5A32)
   [BiomeType.RAINFOREST]: { r: 0.047, g: 0.314, b: 0.094 },  // Lush deep green (#0A5018)
   [BiomeType.VOLCANIC]:   { r: 0.314, g: 0.118, b: 0.039 },  // Dark volcanic rock (#500A0A) with red tint
-  [BiomeType.GLACIER]:    { r: 0.839, g: 0.918, b: 0.957 },  // Icy pale blue-white (#D6EAF4)
+  [BiomeType.POLAR]:      { r: 0.839, g: 0.918, b: 0.957 },  // Icy pale blue-white (#D6EAF4)
+  [BiomeType.STEPPE]:     { r: 0.686, g: 0.631, b: 0.318 },  // Muted dry temperate grass (#AFA151)
+  [BiomeType.DRY_FOREST]: { r: 0.392, g: 0.482, b: 0.204 },  // Olive woodland (#647B34)
 };
 
 /**
@@ -179,7 +181,7 @@ export function blendBiomeColors(biomeWeights: Map<BiomeType, number>): BiomeCol
 export function extractBiomeWeights(
   biomeWeights: Float32Array,
   index: number,
-  numBiomes: number = 13
+  numBiomes: number = NUM_BIOMES
 ): Map<BiomeType, number> {
   const weights = new Map<BiomeType, number>();
   
@@ -204,7 +206,7 @@ export function extractBiomeWeights(
 export function calculateBlendedColor(
   biomeWeights: Float32Array,
   index: number,
-  numBiomes: number = 13
+  numBiomes: number = NUM_BIOMES
 ): BiomeColor {
   const weights = extractBiomeWeights(biomeWeights, index, numBiomes);
   

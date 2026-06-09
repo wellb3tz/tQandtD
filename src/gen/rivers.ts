@@ -83,6 +83,8 @@ export const DEFAULT_RIVER_CONFIG: RiverConfig = {
     BiomeType.TAIGA,
     BiomeType.TUNDRA,
     BiomeType.FOREST,
+    BiomeType.DRY_FOREST,
+    BiomeType.STEPPE,
     BiomeType.PLAINS,
   ],
   maxLength: 512,

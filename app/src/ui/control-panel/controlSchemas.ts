@@ -72,11 +72,11 @@ export const RESOURCE_TYPE_BY_CONTROL_ID: Record<string, number> = {
 };
 
 export const DEFAULT_RESOURCE_BIOMES: Record<number, number[]> = {
-  0: [6, 7, 8],
-  1: [6, 7],
-  2: [3, 4, 5, 6],
-  3: [6, 7, 8],
-  4: [4, 5, 9],
+  [ResourceType.IRON]: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.SAVANNA, BiomeType.STEPPE],
+  [ResourceType.GOLD]: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.POLAR],
+  [ResourceType.COAL]: [BiomeType.PLAINS, BiomeType.FOREST, BiomeType.TAIGA, BiomeType.TUNDRA, BiomeType.DRY_FOREST],
+  [ResourceType.STONE]: [BiomeType.TUNDRA, BiomeType.MOUNTAIN, BiomeType.SAVANNA, BiomeType.STEPPE, BiomeType.POLAR],
+  [ResourceType.WOOD]: [BiomeType.FOREST, BiomeType.TAIGA, BiomeType.SWAMP, BiomeType.RAINFOREST, BiomeType.DRY_FOREST],
 };
 
 export const STRUCTURE_TYPE_BY_CONTROL_ID: Record<string, number> = {
@@ -229,3 +229,4 @@ export const VISIBILITY_TOGGLES: CheckboxConfig[] = [
   { id: 'fogOfWarEnabled', label: 'Exploration Mask', defaultValue: false },
   { id: 'foliageLodEnabled', label: 'Foliage LOD', defaultValue: true, tooltip: 'Enable distance-based level of detail for foliage (improves performance)' },
 ];
+import { BiomeType, ResourceType } from '@engine/index';

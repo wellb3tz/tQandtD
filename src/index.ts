@@ -85,7 +85,7 @@ export {
   TERRAIN_TILE_SIZE_METERS,
   WORLD_METERS_PER_UNIT,
 } from './config/world-units';
-export { BiomeSystem, type BiomeConfig } from './world/biome';
+export { BiomeSystem, classifyLandBiomeFromClimate, type BiomeConfig } from './world/biome';
 export {
   EnhancedBiomeSystem,
   type EnhancedBiomeConfig,
@@ -111,6 +111,7 @@ export {
   type Resource,
   type Structure,
   BiomeType,
+  NUM_BIOMES,
   ResourceType,
   StructureType,
   worldToChunk,

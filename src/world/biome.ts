@@ -1,5 +1,5 @@
 import { NoiseEngine, NoiseConfig } from '../core/noise';
-import { BiomeType } from './chunk';
+import { BiomeType, NUM_BIOMES } from './chunk';
 import {
   sampleDirectionalClimateBlend,
   sampleDirectionalClimateField,
@@ -18,6 +18,51 @@ export interface BiomeConfig {
   blendRadius: number;
   /** Optional world-axis climate field shared with terrain generation. */
   directionalClimateConfig?: DirectionalClimateConfig;
+}
+
+/**
+ * Classifies land biomes from normalized climate values after water/elevation
+ * overrides have been handled by the caller.
+ */
+export function classifyLandBiomeFromClimate(
+  temperature: number,
+  moisture: number,
+): BiomeType {
+  if (temperature >= 0.55) {
+    if (moisture < -0.55) return BiomeType.DESERT;
+    if (moisture < 0.25) return BiomeType.SAVANNA;
+    return BiomeType.RAINFOREST;
+  }
+
+  if (temperature >= 0.25) {
+    if (moisture < -0.55) return BiomeType.DESERT;
+    if (moisture < -0.15) return BiomeType.STEPPE;
+    if (moisture < 0.25) return BiomeType.DRY_FOREST;
+    if (moisture < 0.60) return BiomeType.FOREST;
+    return BiomeType.SWAMP;
+  }
+
+  if (temperature >= -0.10) {
+    if (moisture < -0.55) return BiomeType.STEPPE;
+    if (moisture < -0.15) return BiomeType.PLAINS;
+    if (moisture < 0.60) return BiomeType.FOREST;
+    return BiomeType.SWAMP;
+  }
+
+  if (temperature >= -0.45) {
+    if (moisture < -0.55) return BiomeType.TUNDRA;
+    if (moisture < -0.15) return BiomeType.STEPPE;
+    return BiomeType.TAIGA;
+  }
+
+  if (temperature >= -0.75) {
+    if (moisture < -0.55) return BiomeType.POLAR;
+    if (moisture < 0.25) return BiomeType.TUNDRA;
+    return BiomeType.TAIGA;
+  }
+
+  if (moisture < 0.25) return BiomeType.POLAR;
+  return BiomeType.TUNDRA;
 }
 
 /**
@@ -132,6 +177,9 @@ export class BiomeSystem {
         // Extreme peaks in warm regions = volcanic
         return BiomeType.VOLCANIC;
       }
+      if (height > 0.82 && temperature < -0.55) {
+        return BiomeType.POLAR;
+      }
       return BiomeType.MOUNTAIN;
     }
 
@@ -148,47 +196,11 @@ export class BiomeSystem {
       moistureCache?.set(cacheKey, moisture);
     }
 
-    // Classify based on temperature and moisture
-    // Temperature: -1 (cold) to 1 (hot)
-    // Moisture: -1 (dry) to 1 (wet)
-
-    if (temperature < -0.5) {
-      // Very cold regions
-      if (height > 0.6) {
-        return BiomeType.GLACIER; // Cold + elevated = glacier
-      }
-      return moisture > 0.1 ? BiomeType.TAIGA : BiomeType.TUNDRA;
-    } else if (temperature < -0.3) {
-      // Cold regions
-      return moisture > 0.2 ? BiomeType.TAIGA : BiomeType.TUNDRA;
-    } else if (temperature > 0.5) {
-      // Very hot regions
-      if (moisture > 0.4) {
-        return BiomeType.RAINFOREST; // Hot + very wet
-      } else if (moisture < -0.2) {
-        return BiomeType.DESERT; // Hot + dry
-      } else {
-        return BiomeType.SAVANNA; // Hot + moderate moisture
-      }
-    } else if (temperature > 0.3) {
-      // Hot regions
-      if (moisture < -0.2) {
-        return BiomeType.DESERT; // Hot and dry
-      } else if (moisture > 0.5) {
-        return BiomeType.RAINFOREST; // Hot and very wet
-      } else {
-        return BiomeType.PLAINS; // Hot and moderate moisture
-      }
-    } else {
-      // Temperate regions
-      if (moisture > 0.5) {
-        return BiomeType.SWAMP; // Temperate + very wet + low elevation
-      } else if (moisture > 0.2) {
-        return BiomeType.FOREST; // Temperate and wet
-      } else {
-        return BiomeType.PLAINS; // Temperate and moderate/dry
-      }
+    if (height < 0.48 && moisture >= 0.60 && temperature > -0.10) {
+      return BiomeType.SWAMP;
     }
+
+    return classifyLandBiomeFromClimate(temperature, moisture);
   }
 
   /**
@@ -226,11 +238,10 @@ export class BiomeSystem {
     biomeCache?: Map<string, BiomeType>,
     biomeLookup?: (x: number, y: number, height: number) => BiomeType,
   ): Map<BiomeType, number> {
-    // Use a fixed-size Float64Array indexed by BiomeType (13 values, 0-12) to
+    // Use a fixed-size Float64Array indexed by BiomeType to
     // accumulate weights without allocating a Map per sample point.
     // The final Map is built once at the end - one allocation per tile instead of
     // one per sample (was 9 Map.get/set calls x 1024 tiles = 9 216 ops per chunk).
-    const NUM_BIOMES = 13;
     const accumulator = new Float64Array(NUM_BIOMES);
 
     const step = radius / Math.sqrt(9); // 3x3 grid
