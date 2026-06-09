@@ -3,6 +3,9 @@
 - Do not use Playwright in this project. Do not add Playwright tests, scripts, dependencies, screenshots, or automation.
 - Do not use browser-based verification tools in this project. The user performs visual testing manually and provides feedback.
 - Preserve deterministic world generation. Changes to terrain, biome, river, lake, resource, or structure generation must keep identical inputs producing identical outputs unless the change intentionally updates generation behavior.
+- Keep biome naming/API stable: `POLAR` is the canonical and only biome name for id `12`; do not reintroduce old ice-biome aliases.
+- When changing biome ids or biome classification, update the public docs, UI labels/colors, compatibility matrix, resource/lake/river biome lists, `NUM_BIOMES` consumers, and focused Vitest coverage in the same change.
+- Journey and the infinite world editor must share the same temperature/moisture climate grid. Journey may change scale or directional climate bias, but must not fork separate biome rules.
 - Keep engine code renderer-neutral. Code under `src/` must not depend on DOM, browser globals, Vite app code, or Three.js except inside explicit adapter entrypoints.
 - Keep browser app code inside `app/`. UI, input handling, visual controls, and demo-only behavior should not leak into the published engine package.
 - Use the `imagegen` skill whenever an AI-generated raster image could materially improve the visual result, such as textures, sprites, concept art, UI mockups, visual variants, or project-bound bitmap assets. Prefer repo-native SVG, HTML/CSS, canvas, or existing editable assets when those are a better fit.

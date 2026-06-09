@@ -306,6 +306,9 @@ downloadWorld(manager, 'my-world.json');
 
 Create custom biome classification systems.
 
+If you only need the built-in climate grid, use `classifyLandBiomeFromClimate()`.
+Custom classifiers are for projects that intentionally replace those rules.
+
 ### Custom Biome Classifier
 
 ```typescript
@@ -328,15 +331,18 @@ class CustomBiomeClassifier {
     }
 
     if (temperature > 0.5) {
-      if (moisture < 0.4) return BiomeType.PLAINS;
+      if (moisture < 0.2) return BiomeType.STEPPE;
+      if (moisture < 0.5) return BiomeType.DRY_FOREST;
       return BiomeType.FOREST;
     }
 
     if (temperature > 0.2) {
+      if (moisture < 0.3) return BiomeType.STEPPE;
       return BiomeType.TAIGA;
     }
 
     if (height > 0.7) return BiomeType.MOUNTAIN;
+    if (temperature < -0.75) return BiomeType.POLAR;
     return BiomeType.TUNDRA;
   }
 }
@@ -360,7 +366,9 @@ const BIOME_COLORS = {
   [BiomeType.SWAMP]: { r: 0.3, g: 0.4, b: 0.3 },
   [BiomeType.RAINFOREST]: { r: 0.1, g: 0.4, b: 0.1 },
   [BiomeType.VOLCANIC]: { r: 0.3, g: 0.1, b: 0.1 },
-  [BiomeType.GLACIER]: { r: 0.9, g: 0.9, b: 1.0 },
+  [BiomeType.POLAR]: { r: 0.9, g: 0.9, b: 1.0 },
+  [BiomeType.STEPPE]: { r: 0.65, g: 0.6, b: 0.3 },
+  [BiomeType.DRY_FOREST]: { r: 0.35, g: 0.45, b: 0.2 },
 };
 
 function getBiomeColor(biome: BiomeType) {

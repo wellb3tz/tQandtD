@@ -231,7 +231,7 @@ interface LakeConfig {
   noiseThreshold: number;        // Threshold for lake placement (default: 0.62)
   minElevation: number;          // Min elevation for lakes (default: 0.32)
   maxElevation: number;          // Max elevation for lakes (default: 0.72)
-  allowedBiomes: BiomeType[];    // Biomes that can have lakes
+  allowedBiomes: BiomeType[];    // Biomes that can have lakes (default: PLAINS, FOREST, DRY_FOREST, STEPPE, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA)
   maxLakeTiles: number;          // Max tiles per lake (default: 80)
   maxFillDepth: number;          // Max water depth (default: 0.06)
 }
@@ -250,7 +250,7 @@ interface RiverConfig {
   sourceThreshold: number;          // Threshold for source placement (default: 0.7)
   minSourceElevation: number;       // Minimum source elevation (default: 0.5)
   maxSourceElevation: number;       // Maximum source elevation (default: 0.95)
-  allowedSourceBiomes: BiomeType[]; // Biomes that can spawn rivers
+  allowedSourceBiomes: BiomeType[]; // Biomes that can spawn rivers (default: MOUNTAIN, TAIGA, TUNDRA, FOREST, DRY_FOREST, STEPPE, PLAINS)
   maxLength: number;                // Max river length in tiles (default: 200)
   maxUphillBudget: number;          // Max elevation the river can climb (default: 0.15)
   minRiverLength: number;           // Minimum river length (default: 20)
@@ -448,8 +448,22 @@ enum BiomeType {
   SWAMP = 9,
   RAINFOREST = 10,
   VOLCANIC = 11,
-  GLACIER = 12,
+  POLAR = 12,
+  STEPPE = 13,
+  DRY_FOREST = 14,
 }
+```
+
+---
+
+### Biome Constants
+
+#### `NUM_BIOMES`
+
+Total number of numeric biome ids.
+
+```typescript
+const NUM_BIOMES = 15;
 ```
 
 ---
@@ -556,6 +570,20 @@ Gets weight for a specific biome at a tile.
 ```typescript
 const forestWeight = getBiomeWeightForTile(chunk, 325, BiomeType.FOREST);
 console.log(`Forest: ${forestWeight}`);
+```
+
+---
+
+### Biome Classification
+
+#### `classifyLandBiomeFromClimate(temperature: number, moisture: number): BiomeType`
+
+Classifies a land biome from normalized climate values in `[-1, 1]`.
+Used by the shared Journey and infinite-editor climate grid.
+
+**Example:**
+```typescript
+const biome = classifyLandBiomeFromClimate(0.35, -0.2);
 ```
 
 ---

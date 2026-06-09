@@ -387,6 +387,8 @@ continentalStrength: 0.45
 
 Basic biome classification configuration.
 
+This same climate model is used by both Journey-sized worlds and the infinite world editor. Journey only changes the scale and directional bias of the climate noise; it does not use a separate biome rule set.
+
 ```typescript
 interface BiomeConfig {
   temperatureScale: number;
@@ -445,6 +447,8 @@ blendRadius: 0.5
 ## EnhancedBiomeConfig
 
 Advanced biome system with transitions and elevation bands.
+
+Directional climate, the climate grid, and the compatibility matrix all share the same normalized `temperature` and `moisture` space in `[-1, 1]`.
 
 ```typescript
 interface EnhancedBiomeConfig extends BiomeConfig {
@@ -676,15 +680,20 @@ maxElevation: 0.72
 
 Biomes that can have lakes.
 
-**Default:** `[PLAINS, FOREST, TAIGA, SWAMP]`
+**Default:** `[PLAINS, FOREST, DRY_FOREST, STEPPE, TAIGA, TUNDRA, MOUNTAIN, SWAMP, SAVANNA]`
 
 **Example:**
 ```typescript
 allowedBiomes: [
   BiomeType.PLAINS,
   BiomeType.FOREST,
+  BiomeType.DRY_FOREST,
+  BiomeType.STEPPE,
   BiomeType.TAIGA,
+  BiomeType.TUNDRA,
+  BiomeType.MOUNTAIN,
   BiomeType.SWAMP,
+  BiomeType.SAVANNA,
 ]
 ```
 
@@ -822,14 +831,18 @@ maxSourceElevation: 0.95
 
 Biomes that can spawn river sources.
 
-**Default:** `[MOUNTAIN, TAIGA, FOREST]`
+**Default:** `[MOUNTAIN, TAIGA, TUNDRA, FOREST, DRY_FOREST, STEPPE, PLAINS]`
 
 **Example:**
 ```typescript
 allowedSourceBiomes: [
   BiomeType.MOUNTAIN,
   BiomeType.TAIGA,
+  BiomeType.TUNDRA,
   BiomeType.FOREST,
+  BiomeType.DRY_FOREST,
+  BiomeType.STEPPE,
+  BiomeType.PLAINS,
 ]
 ```
 

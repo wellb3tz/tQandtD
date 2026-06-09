@@ -222,7 +222,7 @@ Common ranges:
 
 ### How many biome types are there?
 
-13 biome types:
+15 biome types:
 - OCEAN
 - BEACH
 - DESERT
@@ -235,7 +235,9 @@ Common ranges:
 - SWAMP
 - RAINFOREST
 - VOLCANIC
-- GLACIER
+- POLAR
+- STEPPE
+- DRY_FOREST
 
 ---
 

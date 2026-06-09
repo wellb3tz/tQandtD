@@ -20,14 +20,12 @@ export enum BiomeType {
   SWAMP = 9,        // Warm/temperate + very wet + low elevation
   RAINFOREST = 10,  // Hot + very wet
   VOLCANIC = 11,    // Extreme elevation with volcanic features
-  /** @deprecated Use POLAR. Kept as an alias for saved-world compatibility. */
-  GLACIER = 12,
-  POLAR = 12,       // Extreme cold and ice, replacing the old glacier biome meaning
+  POLAR = 12,       // Extreme cold and ice
   STEPPE = 13,      // Dry temperate grassland between plains, savanna, and desert
   DRY_FOREST = 14,  // Sparse/dry woodland between forest, steppe, and savanna
 }
 
-/** Number of numeric biome ids, excluding deprecated aliases. */
+/** Number of numeric biome ids. */
 export const NUM_BIOMES = 15;
 
 /**

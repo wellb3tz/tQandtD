@@ -8,7 +8,6 @@ describe('biomeDisplay', () => {
     expect(getBiomeDisplayName(BiomeType.OCEAN)).toBe('Ocean');
     expect(getBiomeDisplayName(BiomeType.RAINFOREST)).toBe('Rainforest');
     expect(getBiomeDisplayName(BiomeType.POLAR)).toBe('Polar');
-    expect(getBiomeDisplayName(BiomeType.GLACIER)).toBe('Polar');
     expect(getBiomeDisplayName(BiomeType.DRY_FOREST)).toBe('Dry Forest');
     expect(getBiomeDisplayName(999)).toBe('Unknown');
   });

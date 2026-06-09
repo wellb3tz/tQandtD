@@ -7,9 +7,8 @@ import {
 } from '../src';
 
 describe('Biome climate grid', () => {
-  it('keeps POLAR on the old GLACIER id for compatibility', () => {
+  it('uses POLAR as the only biome name for id 12', () => {
     expect(BiomeType.POLAR).toBe(12);
-    expect(BiomeType.GLACIER).toBe(BiomeType.POLAR);
     expect(NUM_BIOMES).toBe(15);
   });
 
