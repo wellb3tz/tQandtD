@@ -15,6 +15,10 @@ import {
 
 export { clamp01, selectTerrainSurfaceKey, type TerrainSurfaceKey } from './terrain-geometry-types';
 
+type TerrainShaderUserData = {
+  uniforms?: Record<string, { value: unknown }>;
+};
+
 export const TERRAIN_ALBEDO_TEXTURE_URL = '/textures/terrain-albedo-v1.png';
 export const TERRAIN_NORMAL_TEXTURE_URL = '/textures/terrain-normal-v1.png';
 export const TERRAIN_ROUGHNESS_TEXTURE_URL = '/textures/terrain-roughness-v1.png';
@@ -733,8 +737,8 @@ roughnessFactor = mix(roughnessFactor, 0.42, max(vTerrainDetailBlend.w, roughnes
 }
 
 export function updateTerrainMaterialAnimation(material: THREE.Material, elapsedSeconds: number): void {
-  const shader = material.userData.terrainShader as THREE.Shader | undefined;
-  const uniform = shader?.uniforms.terrainAnimationTime;
+  const shader = material.userData.terrainShader as TerrainShaderUserData | undefined;
+  const uniform = shader?.uniforms?.terrainAnimationTime;
   if (uniform) {
     uniform.value = elapsedSeconds;
   }

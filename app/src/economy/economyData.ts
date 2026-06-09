@@ -14,7 +14,7 @@ import type {
 } from './types';
 
 export const ECONOMY_ITEMS = items as ItemDefinition[];
-export const ECONOMY_FACTIONS = factions as FactionDefinition[];
+export const ECONOMY_FACTIONS = factions as unknown as FactionDefinition[];
 export const ECONOMY_EVENTS = events as EconomyEventDefinition[];
 export const ECONOMY_CONTRACT_TEMPLATES = contractTemplates as ContractDefinition[];
 export const ECONOMY_BUILDINGS = buildings as BuildingDefinition[];

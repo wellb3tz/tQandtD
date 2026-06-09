@@ -118,7 +118,7 @@ export function getTerrainSurfaceDebugInfo(
 
   if (sampleCount === 0) {
     weights.plains = 1;
-    return weights;
+    return { weights, samples };
   }
 
   for (const key of Object.keys(weights) as TerrainSurfaceKey[]) {
