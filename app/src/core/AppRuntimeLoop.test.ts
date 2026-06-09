@@ -63,7 +63,6 @@ function createViewerStub(): WorldViewer {
   return {
     getCameraPosition: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
     getCameraHeading: vi.fn(() => 0),
-    isOrbitalOrTransitioning: vi.fn(() => false),
     getRenderStats: vi.fn(() => ({ vertexCount: 0, drawCalls: 0 })),
   } as unknown as WorldViewer;
 }

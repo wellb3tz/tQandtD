@@ -37,7 +37,7 @@ export function createAppEngineRuntime(options: AppEngineRuntimeOptions): AppEng
   setViewerReady(false);
 
   const viewer = new WorldViewer();
-  viewer.initialize(viewerContainer, app.getSeed());
+  viewer.initialize(viewerContainer);
 
   const renderer = new ThreeWorldRendererAdapter({ target: viewer });
   app.setRenderer(renderer);

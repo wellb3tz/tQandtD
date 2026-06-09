@@ -18,7 +18,6 @@ export interface AppDomBindingsOptions {
   setViewerReady: (ready: boolean) => void;
   setWorldGenerationLoading: (visible: boolean) => void;
 }
-
 export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   const generateBtn = document.getElementById('generate-btn');
   const seedInput = document.getElementById('seed-input') as HTMLInputElement | null;
@@ -36,7 +35,6 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
   const topDownBtn = document.getElementById('top-down-btn');
   const followTerrainBtn = document.getElementById('follow-terrain-btn');
   const firstPersonBtn = document.getElementById('first-person-btn');
-  const planetModeBtn = document.getElementById('planet-mode-btn');
 
   let isFullscreen = false;
   let economyConsoleOpen = false;
@@ -168,7 +166,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
     if (!viewer) return;
 
     viewer.resetCamera();
-    clearCameraModeButtons(topDownBtn, followTerrainBtn, firstPersonBtn, planetModeBtn);
+    clearCameraModeButtons(topDownBtn, followTerrainBtn, firstPersonBtn);
     document.body.classList.remove('first-person-active');
     errorHandler.showSuccessToast('Camera reset to default position');
   });
@@ -182,7 +180,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
     if (!isActive) {
       topDownBtn.classList.add('active');
-      clearCameraModeButtons(followTerrainBtn, firstPersonBtn, planetModeBtn);
+      clearCameraModeButtons(followTerrainBtn, firstPersonBtn);
       document.body.classList.remove('first-person-active');
       errorHandler.showSuccessToast('Top-down orthographic view enabled');
     } else {
@@ -200,7 +198,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
     if (!isActive) {
       followTerrainBtn.classList.add('active');
-      clearCameraModeButtons(topDownBtn, firstPersonBtn, planetModeBtn);
+      clearCameraModeButtons(topDownBtn, firstPersonBtn);
       document.body.classList.remove('first-person-active');
       errorHandler.showSuccessToast('Follow terrain mode enabled');
     } else {
@@ -218,7 +216,7 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
 
     if (!isActive) {
       firstPersonBtn.classList.add('active');
-      clearCameraModeButtons(topDownBtn, followTerrainBtn, planetModeBtn);
+      clearCameraModeButtons(topDownBtn, followTerrainBtn);
       document.body.classList.add('first-person-active');
       errorHandler.showSuccessToast('First-person mode enabled. Click to look around, WASD to walk, Space to jump.');
     } else {
@@ -226,17 +224,6 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
       document.body.classList.remove('first-person-active');
       errorHandler.showSuccessToast('First-person mode disabled');
     }
-  });
-
-  planetModeBtn?.addEventListener('click', () => {
-    const viewer = options.getViewer();
-    if (!viewer) return;
-
-    viewer.enterPlanetMode();
-    planetModeBtn.classList.add('active');
-    clearCameraModeButtons(topDownBtn, followTerrainBtn, firstPersonBtn);
-    document.body.classList.remove('first-person-active');
-    errorHandler.showSuccessToast('Planet mode enabled');
   });
 
   generateBtn?.addEventListener('click', async () => {
@@ -256,11 +243,6 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
     }
   });
 
-  window.addEventListener('planet-clicked', async (e: Event) => {
-    const detail = (e as CustomEvent).detail as { lat: number; lon: number };
-    await landOnPlanet(detail, planetModeBtn, options);
-  });
-
   window.addEventListener('beforeunload', () => {
     options.cleanupEngine();
   });
@@ -278,7 +260,6 @@ function setJourneyMinimapExpanded(expanded: boolean, minimapExpandBtn: HTMLButt
     minimapExpandBtn.title = expanded ? 'Collapse minimap (M)' : 'Expand minimap (M)';
   }
 }
-
 function clearCameraModeButtons(...buttons: Array<HTMLElement | null>): void {
   buttons.forEach(button => button?.classList.remove('active'));
 }
@@ -368,35 +349,5 @@ async function generateWorldFromSeed(
     options.setWorldGenerationLoading(false);
     generateBtn.removeAttribute('disabled');
     generateBtn.textContent = 'Generate';
-  }
-}
-
-async function landOnPlanet(
-  detail: { lat: number; lon: number },
-  planetModeBtn: HTMLElement | null,
-  options: AppDomBindingsOptions
-): Promise<void> {
-  const app = options.getApp();
-  const viewer = options.getViewer();
-  if (!app || !viewer) return;
-
-  await viewer.startLandingTransition(detail.lat, detail.lon);
-  planetModeBtn?.classList.remove('active');
-
-  errorHandler.showSuccessToast('Landing on new world...');
-  options.setWorldGenerationLoading(true);
-  options.setViewerReady(false);
-
-  try {
-    await app.landOnPlanet(detail.lat, detail.lon);
-    await warmUpInitialTerrain(app, viewer);
-    options.setViewerReady(true);
-    errorHandler.showSuccessToast(`Landed on new world! Seed: ${app.getSeed()}`);
-  } catch (error) {
-    console.error('Planet landing failed:', error);
-    errorHandler.showErrorToast('Failed to land on planet. Please try again.');
-  } finally {
-    options.setWorldGenerationLoading(false);
-    options.setViewerReady(true);
   }
 }

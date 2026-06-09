@@ -111,7 +111,7 @@ describe('AtmosphereController', () => {
     atmosphere.dispose();
   });
 
-  it('applies terrain fog and suppresses it in space mode', () => {
+  it('applies and clears terrain fog', () => {
     const scene = new THREE.Scene();
     const ambientLight = new THREE.AmbientLight(0x9fb6c8, 0.365);
     const directionalLight = new THREE.DirectionalLight(0xffe2b8, 1.12);
@@ -124,13 +124,6 @@ describe('AtmosphereController', () => {
 
     expect(scene.fog).toBeInstanceOf(THREE.Fog);
     expect((scene.fog as THREE.Fog).near).toBe(1200);
-    expect((scene.fog as THREE.Fog).far).toBe(3000);
-
-    atmosphere.setSpaceMode(true);
-    expect(scene.fog).toBeNull();
-
-    atmosphere.setSpaceMode(false);
-    expect(scene.fog).toBeInstanceOf(THREE.Fog);
     expect((scene.fog as THREE.Fog).far).toBe(3000);
 
     atmosphere.setTerrainFog(null);

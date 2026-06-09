@@ -66,18 +66,6 @@ export function bindWorldAppEvents(options: AppEventBindingsOptions): void {
     }
   });
 
-  app.on(AppEvent.PLANET_LANDED, (data) => {
-    const viewer = options.getViewer();
-    if (viewer) {
-      viewer.clearChunks();
-      viewer.clearFogOfWar();
-    }
-
-    const statusSeed = document.getElementById('status-seed');
-    if (statusSeed) statusSeed.textContent = data.seed.toString();
-    errorHandler.showSuccessToast(`New world from lat ${data.lat.toFixed(2)}, lon ${data.lon.toFixed(2)}`);
-  });
-
   app.on(AppEvent.CHUNK_LOADED, (data) => {
     const renderSystem = app.getWorldSession()?.scene.renderSystem;
     const renderer = options.getRenderer();

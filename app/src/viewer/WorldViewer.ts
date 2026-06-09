@@ -34,16 +34,9 @@ import { ViewerRenderStatsCache } from './ViewerRenderStatsCache';
 import { ViewerTerrainRaycaster } from './ViewerTerrainRaycaster';
 import { ViewerCanvasHost } from './ViewerCanvasHost';
 import { WorldChunkController } from './WorldChunkController';
-import { PlanetRenderer } from './planet/PlanetRenderer';
-import { SpaceViewManager } from './planet/SpaceViewManager';
-import {
-  OrbitalTransitionController,
-  OrbitalState,
-} from './planet/OrbitalTransitionController';
 
 export { RenderLayer } from './RenderLayerVisibility';
 export type { ChunkCoord, RaycastHit, Vector3 } from '../utils/coordinates';
-export { OrbitalState } from './planet/OrbitalTransitionController';
 
 export const VIEWER_CAMERA_NEAR_METERS = 0.5;
 export const VIEWER_CAMERA_FAR_METERS = 10000;
@@ -70,10 +63,6 @@ export class WorldViewer {
   
   private atmosphereController: AtmosphereController | null = null;
   private horizonFillPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
-  private planetRenderer: PlanetRenderer | null = null;
-  private spaceViewManager: SpaceViewManager | null = null;
-  private orbitalTransitionController: OrbitalTransitionController | null = null;
-  private readonly transitionCompleteResolvers: Array<(state: OrbitalState) => void> = [];
 
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
@@ -184,103 +173,16 @@ export class WorldViewer {
     this.createHorizonFillPlane();
     this.setStreamingViewDistance(DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS, DEFAULT_STREAMING_CHUNK_SIZE_TILES);
     this.updateSunAndShadowFocus();
-
-    // Initialize space view elements
-    this.spaceViewManager = new SpaceViewManager({ scene: this.scene });
-    this.spaceViewManager.initialize();
   }
   
   /**
    * Initialize the viewer with a container element
    */
-  initialize(container: HTMLElement, seed: number = 12345): void {
+  initialize(container: HTMLElement): void {
     this.container = container;
     this.canvasHost.attachToContainer(container);
     this.cameraInputController.attach();
-
-    // Planet renderer (lazy-initialized, hidden by default)
-    this.planetRenderer = new PlanetRenderer({
-      scene: this.scene,
-      seed,
-      position: new THREE.Vector3(0, 0, 0),
-    });
-
-    // Orbital transition controller
-    this.orbitalTransitionController = new OrbitalTransitionController({
-      cameraViewController: this.cameraViewController,
-      cameraInputController: this.cameraInputController,
-      planetRenderer: this.planetRenderer,
-      spaceViewManager: this.spaceViewManager!,
-      chunkController: this.chunkController,
-      atmosphereController: this.atmosphereController,
-      waterLayerManager: this.waterLayerManager,
-      getChunkMeshes: () => this.chunkMeshes.values(),
-      onTransitionComplete: state => this.handleOrbitalTransitionComplete(state),
-      onPlanetClicked: (lat, lon) => {
-        this.handlePlanetClicked(lat, lon);
-      },
-      canvas: this.renderer.domElement,
-    });
-
-    // Wire orbit input callback
-    this.cameraInputController.setOrbitInputCallback((dx, dy, scroll) => {
-      this.orbitalTransitionController?.processOrbitInput(dx, dy, scroll);
-    });
-
-    this.renderLoop.setOrbitalTransitionController(this.orbitalTransitionController);
-
-    // Click handler for orbit mode planet raycasting
-    container.addEventListener('click', (e) => {
-      if (this.orbitalTransitionController?.getState() === OrbitalState.ORBIT) {
-        this.orbitalTransitionController.handleClick(e.clientX, e.clientY);
-      }
-    });
-
     this.renderLoop.start();
-  }
-
-  /**
-   * Begin the dive transition from orbit to a specific point on the planet.
-   */
-  startLandingTransition(lat: number, lon: number): Promise<void> {
-    if (!this.orbitalTransitionController || this.orbitalTransitionController.getState() !== OrbitalState.ORBIT) {
-      return Promise.resolve();
-    }
-
-    const transition = new Promise<void>(resolve => {
-      this.transitionCompleteResolvers.push(state => {
-        if (state === OrbitalState.TERRAIN) {
-          resolve();
-        }
-      });
-    });
-    this.orbitalTransitionController.startTransitionToSurface(lat, lon);
-    return transition;
-  }
-
-  /**
-   * Begin the transition from terrain view into the orbital planet view.
-   */
-  enterPlanetMode(): void {
-    this.setFirstPersonMode(false);
-    this.cameraViewController.setFollowTerrainMode(false);
-    this.cameraViewController.setOrthographicView(false);
-    this.orbitalTransitionController?.startTransitionToOrbit();
-  }
-
-  private handlePlanetClicked(lat: number, lon: number): void {
-    // Emit event for main.ts to pick up
-    const event = new CustomEvent('planet-clicked', {
-      detail: { lat, lon },
-    });
-    window.dispatchEvent(event);
-  }
-
-  private handleOrbitalTransitionComplete(state: OrbitalState): void {
-    const resolvers = this.transitionCompleteResolvers.splice(0);
-    for (const resolve of resolvers) {
-      resolve(state);
-    }
   }
   
   private updateSunAndShadowFocus(): void {
@@ -482,14 +384,6 @@ export class WorldViewer {
   }
 
   /**
-   * Whether the viewer is currently in orbit mode or transitioning.
-   */
-  isOrbitalOrTransitioning(): boolean {
-    if (!this.orbitalTransitionController) return false;
-    return this.orbitalTransitionController.isOrbital() || this.orbitalTransitionController.isTransitioning();
-  }
-
-  /**
    * Set camera position
    */
   setCameraPosition(position: Vector3): void {
@@ -668,12 +562,6 @@ export class WorldViewer {
     this.atmosphereController?.dispose();
     this.atmosphereController = null;
 
-    this.planetRenderer?.dispose();
-    this.planetRenderer = null;
-
-    this.spaceViewManager?.dispose();
-    this.spaceViewManager = null;
-
     // Dispose renderer
     this.renderer.dispose();
     
@@ -705,10 +593,7 @@ export class WorldViewer {
 
   private updateHorizonFill(activeCamera: THREE.Camera): void {
     if (!this.horizonFillPlane) return;
-    const isOrbital = this.orbitalTransitionController?.isOrbital() ?? false;
-    const isTransitioning = this.orbitalTransitionController?.isTransitioning() ?? false;
-    this.horizonFillPlane.visible = !isOrbital && !isTransitioning;
-    if (!this.horizonFillPlane.visible) return;
+    this.horizonFillPlane.visible = true;
 
     const waterConfig = this.viewSettings.getWaterConfigReference();
     const seaLevelMeters = waterConfig.seaLevel * TERRAIN_HEIGHT_SCALE_METERS;

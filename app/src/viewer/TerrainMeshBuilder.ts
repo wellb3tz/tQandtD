@@ -75,7 +75,7 @@ export async function createTerrainMesh(options: TerrainMeshBuilderOptions): Pro
     wireframeMode,
     riverbedMaskTexture,
   });
-  // Reset shared material opacity - it may have been left transparent by orbit transition
+  // Reset shared material opacity before reusing it on rebuilt terrain.
   material.transparent = false;
   material.opacity = 1.0;
   material.visible = true;

@@ -29,7 +29,6 @@ import {
   prepareWorldConfig,
   WorldConfigOverrides,
 } from '@engine/index';
-import { DEFAULT_CLIMATE_CONFIG } from '@engine/world/climate';
 import { createWorker, getWorkerUrl } from '../../worker-loader';
 import { requiresWorldRebuild } from './configChange';
 import { EconomySimulation, type EconomySnapshot, type WorldEconomyContext } from '../economy';
@@ -190,7 +189,6 @@ export enum AppEvent {
   CHUNK_UNLOADED = 'chunk_unloaded',
   WORLD_GENERATED = 'world_generated',
   WORLD_LOADED = 'world_loaded',
-  PLANET_LANDED = 'planet_landed',
   CONFIG_CHANGED = 'config_changed',
   STATE_CHANGED = 'state_changed',
   VISIBILITY_CHANGED = 'visibility_changed',
@@ -753,58 +751,6 @@ export class WorldApp {
     } catch (error) {
       console.error('Failed to generate world:', error);
       this.emit(AppEvent.ERROR, { message: 'World generation failed', error });
-      throw error;
-    }
-  }
-
-  /**
-   * Land on a new world at the given planet surface coordinates.
-   * Derives a deterministic seed from lat/lon and generates the world.
-   */
-  async landOnPlanet(lat: number, lon: number): Promise<void> {
-    const latDeg = Math.round((lat * 180) / Math.PI);
-    const lonDeg = Math.round((lon * 180) / Math.PI);
-    const baseSeed = Math.abs(latDeg * 1000 + lonDeg);
-    const randomSalt = Math.floor(Math.random() * 10000);
-    const newSeed = baseSeed + randomSalt;
-
-    const normalizedLat = Math.abs(lat) / (Math.PI / 2); // 0 at equator, 1 at pole
-    const temperatureOffset = (normalizedLat * 2) - 1; // -1 at equator, +1 at poles
-
-    try {
-      const newConfig = prepareWorldConfig(this.state.config, {
-        seed: newSeed,
-        onChunkInvalidated: (chunkX: number, chunkY: number) => this.handleChunkInvalidated(chunkX, chunkY),
-      });
-
-      if (newConfig.enhancedBiomeConfig) {
-        newConfig.enhancedBiomeConfig.climateConfig = {
-          ...DEFAULT_CLIMATE_CONFIG,
-          ...newConfig.enhancedBiomeConfig.climateConfig,
-          worldTemperatureOffset: temperatureOffset,
-        };
-      }
-
-      const newManager = this.requireWorldSession().regenerate({ config: newConfig, seed: newSeed });
-
-      this.state.loadedChunks.clear();
-      this.state.exploredChunks.clear();
-      this.economySimulation.reset(newSeed);
-
-      this.updateState({
-        config: newManager.config,
-        loadedChunks: new Map(),
-        exploredChunks: new Set(),
-        economy: this.economySimulation.getSnapshot(),
-      });
-
-      this.emit(AppEvent.PLANET_LANDED, { seed: newSeed, lat, lon, temperatureOffset });
-
-      await this.loadChunksAround(0, 0, 1);
-      this.updateStatistics();
-    } catch (error) {
-      console.error('Failed to land on planet:', error);
-      this.emit(AppEvent.ERROR, { message: 'Planet landing failed', error });
       throw error;
     }
   }

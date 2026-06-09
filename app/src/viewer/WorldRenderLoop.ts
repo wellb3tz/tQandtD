@@ -16,7 +16,6 @@ import type { RenderLayer } from './RenderLayerVisibility';
 import type { WaterLayerManager } from './water/WaterLayerManager';
 import type { WaterConfig } from './water/types';
 import type { WorldChunkController } from './WorldChunkController';
-import type { OrbitalTransitionController } from './planet/OrbitalTransitionController';
 import { updateTerrainMaterialAnimation } from './materials';
 
 export interface WorldRenderLoopOptions {
@@ -30,7 +29,6 @@ export interface WorldRenderLoopOptions {
   getWaterConfig: () => WaterConfig;
   beforeRender: (activeCamera: THREE.Camera) => void;
   chunkController?: WorldChunkController;
-  orbitalTransitionController?: OrbitalTransitionController;
 }
 
 export class WorldRenderLoop {
@@ -44,7 +42,6 @@ export class WorldRenderLoop {
   private readonly getWaterConfig: () => WaterConfig;
   private readonly beforeRender: (activeCamera: THREE.Camera) => void;
   private readonly chunkController: WorldChunkController | undefined;
-  private orbitalTransitionController: OrbitalTransitionController | undefined;
   private readonly frustum = new THREE.Frustum();
   private readonly frustumMatrix = new THREE.Matrix4();
   private animationFrameId: number | null = null;
@@ -68,57 +65,41 @@ export class WorldRenderLoop {
     this.getWaterConfig = options.getWaterConfig;
     this.beforeRender = options.beforeRender;
     this.chunkController = options.chunkController;
-    this.orbitalTransitionController = options.orbitalTransitionController;
   }
 
   start(): void {
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
       const activeCamera = this.cameraViewController.getActiveCamera();
-
-      const isOrbital = this.orbitalTransitionController?.isOrbital() ?? false;
-      const isTransitioning = this.orbitalTransitionController?.isTransitioning() ?? false;
-
-      if (!isOrbital && !isTransitioning) {
-        this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
-        if (this.chunkController?.hasPendingBuilds()) {
-          this.chunkController.update().catch(() => {
-            // Silently ignore errors from chunk controller updates
-          });
-        }
+      this.chunkController?.setCameraPosition(activeCamera.position.x, activeCamera.position.z);
+      if (this.chunkController?.hasPendingBuilds()) {
+        this.chunkController.update().catch(() => {
+          // Silently ignore errors from chunk controller updates
+        });
       }
 
-      if (!isOrbital && !isTransitioning) {
-        this.cameraInputController.updateMovement();
-        this.cameraInputController.updateFirstPersonPhysics();
-        this.cameraViewController.updateFollowTerrainMode();
-      }
+      this.cameraInputController.updateMovement();
+      this.cameraInputController.updateFirstPersonPhysics();
+      this.cameraViewController.updateFollowTerrainMode();
 
       const now = performance.now();
       const elapsedSeconds = now / 1000;
       const waterConfig = this.getWaterConfig();
 
-      if (!isOrbital && !isTransitioning) {
-        this.updateTerrainAnimations(elapsedSeconds);
-        this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
-        this.waterLayerManager.updateLakeSurfaces(elapsedSeconds);
-        this.waterLayerManager.updateRiverFlows(elapsedSeconds);
-      }
+      this.updateTerrainAnimations(elapsedSeconds);
+      this.waterLayerManager.updateOceanWaves(elapsedSeconds, waterConfig.ocean);
+      this.waterLayerManager.updateLakeSurfaces(elapsedSeconds);
+      this.waterLayerManager.updateRiverFlows(elapsedSeconds);
 
-      if (this.enableFrustumCulling && !isOrbital && !isTransitioning && now - this.lastCullingCheck > this.cullingCheckInterval) {
+      if (this.enableFrustumCulling && now - this.lastCullingCheck > this.cullingCheckInterval) {
         this.updateFrustumCulling();
         this.updateFoliageLod(activeCamera);
         this.lastCullingCheck = now;
         if (waterConfig.performance.enableFrustumCulling) {
           this.waterLayerManager.applyFrustumCulling(this.cameraViewController.getActiveCamera(), waterConfig);
         }
-      } else if (!isOrbital && !isTransitioning) {
+      } else {
         this.updateFoliageLod(activeCamera);
-      }
-
-      // Orbital transition controller update (must run after camera positioning)
-      if (this.orbitalTransitionController) {
-        this.orbitalTransitionController.update(1 / 60);
       }
 
       this.beforeRender(activeCamera);
@@ -133,10 +114,6 @@ export class WorldRenderLoop {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-  }
-
-  setOrbitalTransitionController(controller: OrbitalTransitionController | undefined): void {
-    this.orbitalTransitionController = controller;
   }
 
   setFrustumCulling(enabled: boolean): void {

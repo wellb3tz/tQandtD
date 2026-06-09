@@ -11,7 +11,6 @@ import {
   VIEWER_CAMERA_NEAR_METERS,
   WorldViewer,
 } from './WorldViewer';
-import { PlanetRenderer } from './planet/PlanetRenderer';
 
 function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {
   const data = texture.image.data as Uint8Array;
@@ -277,43 +276,6 @@ describe('WorldViewer lifecycle', () => {
     expect(() => {
       container.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     }).not.toThrow();
-
-    viewer.dispose();
-  });
-
-  it('enters orbital transition through the explicit planet mode command', () => {
-    vi.spyOn(PlanetRenderer.prototype, 'initialize').mockImplementation(() => undefined);
-
-    const container = document.createElement('div');
-    Object.defineProperty(container, 'clientWidth', { value: 800 });
-    Object.defineProperty(container, 'clientHeight', { value: 600 });
-    document.body.appendChild(container);
-
-    const viewer = new WorldViewer();
-    viewer.initialize(container);
-
-    viewer.setFirstPersonMode(true);
-    viewer.enterPlanetMode();
-
-    expect(viewer.isFirstPersonMode()).toBe(false);
-    expect(viewer.isOrbitalOrTransitioning()).toBe(true);
-
-    viewer.dispose();
-  });
-
-  it('does not enter orbital transition automatically from high camera altitude', () => {
-    vi.spyOn(PlanetRenderer.prototype, 'initialize').mockImplementation(() => undefined);
-
-    const container = document.createElement('div');
-    Object.defineProperty(container, 'clientWidth', { value: 800 });
-    Object.defineProperty(container, 'clientHeight', { value: 600 });
-    document.body.appendChild(container);
-
-    const viewer = new WorldViewer();
-    viewer.getCamera().position.y = 1000;
-    viewer.initialize(container);
-
-    expect(viewer.isOrbitalOrTransitioning()).toBe(false);
 
     viewer.dispose();
   });

@@ -57,7 +57,6 @@ export class CameraInputController {
   private touchMoveVector = { x: 0, y: 0 };
   private cameraRotation = { pitch: 0, yaw: 0 };
   private firstPersonMode = false;
-  private orbitMode = false;
   private movementBounds: CameraMovementBounds | null = null;
   private eyeHeight = FIRST_PERSON_EYE_HEIGHT;
   private velocityY = 0;
@@ -79,9 +78,6 @@ export class CameraInputController {
     new THREE.Vector2(-FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS, -FIRST_PERSON_TERRAIN_CLEARANCE_DIAGONAL_METERS),
   ];
 
-  /** Callback for orbit drag + scroll, set by OrbitalTransitionController. */
-  private onOrbitInput: ((deltaX: number, deltaY: number, scrollDelta: number) => void) | null = null;
-
   constructor(options: CameraInputControllerOptions) {
     this.camera = options.camera;
     this.getContainer = options.getContainer;
@@ -98,7 +94,6 @@ export class CameraInputController {
     container.addEventListener('click', this.handleContainerClick);
     container.addEventListener('mousedown', this.handleCameraDragStart);
     container.addEventListener('mouseleave', this.handleCameraDragEnd);
-    container.addEventListener('wheel', this.handleWheel, { passive: false });
     container.addEventListener('touchstart', this.handleTouchStart, { passive: false });
     container.addEventListener('touchmove', this.handleTouchMove, { passive: false });
     container.addEventListener('touchend', this.handleTouchEnd, { passive: false });
@@ -118,7 +113,6 @@ export class CameraInputController {
       container.removeEventListener('click', this.handleContainerClick);
       container.removeEventListener('mousedown', this.handleCameraDragStart);
       container.removeEventListener('mouseleave', this.handleCameraDragEnd);
-      container.removeEventListener('wheel', this.handleWheel);
       container.removeEventListener('touchstart', this.handleTouchStart);
       container.removeEventListener('touchmove', this.handleTouchMove);
       container.removeEventListener('touchend', this.handleTouchEnd);
@@ -219,24 +213,6 @@ export class CameraInputController {
 
   isFirstPersonMode(): boolean {
     return this.firstPersonMode;
-  }
-
-  setOrbitMode(enabled: boolean): void {
-    this.orbitMode = enabled;
-    if (enabled) {
-      this.firstPersonMode = false;
-      this.unlockPointer();
-    }
-  }
-
-  isOrbitMode(): boolean {
-    return this.orbitMode;
-  }
-
-  setOrbitInputCallback(
-    callback: (deltaX: number, deltaY: number, scrollDelta: number) => void
-  ): void {
-    this.onOrbitInput = callback;
   }
 
   setEyeHeight(height: number): void {
@@ -412,10 +388,6 @@ export class CameraInputController {
   }
 
   private readonly handleContainerClick = (): void => {
-    if (this.orbitMode) {
-      // In orbit mode, click is handled by OrbitalTransitionController for planet raycasting
-      return;
-    }
     if (!this.isPointerLocked && (this.useFreeCamera || this.firstPersonMode)) {
       try {
         const pointerLockRequest = this.getContainer()?.requestPointerLock?.();
@@ -433,7 +405,6 @@ export class CameraInputController {
   };
 
   private readonly handlePointerLockedMouseMove = (e: MouseEvent): void => {
-    if (this.orbitMode) return;
     if (this.isPointerLocked && this.useFreeCamera) {
       this.cameraRotation.yaw -= e.movementX * this.mouseSensitivity;
       this.cameraRotation.pitch -= e.movementY * this.mouseSensitivity;
@@ -450,15 +421,6 @@ export class CameraInputController {
   };
 
   private readonly handleCameraDragMove = (e: MouseEvent): void => {
-    if (this.orbitMode && this.onOrbitInput && this.isMouseDragRotating) {
-      const deltaX = e.clientX - (this.lastMouseDragPosition?.x ?? e.clientX);
-      const deltaY = e.clientY - (this.lastMouseDragPosition?.y ?? e.clientY);
-      this.onOrbitInput(deltaX, deltaY, 0);
-      this.lastMouseDragPosition = { x: e.clientX, y: e.clientY };
-      e.preventDefault();
-      return;
-    }
-
     if (!this.isMouseDragRotating || this.isPointerLocked || !this.lastMouseDragPosition) return;
 
     const deltaX = e.clientX - this.lastMouseDragPosition.x;
@@ -475,18 +437,11 @@ export class CameraInputController {
     this.lastMouseDragPosition = null;
   };
 
-  private readonly handleWheel = (e: WheelEvent): void => {
-    if (this.orbitMode && this.onOrbitInput) {
-      e.preventDefault();
-      this.onOrbitInput(0, 0, e.deltaY > 0 ? 1 : -1);
-    }
-  };
-
   private readonly handleTouchStart = (e: TouchEvent): void => {
-    if (!this.useFreeCamera && !this.orbitMode) return;
+    if (!this.useFreeCamera) return;
 
     for (const touch of Array.from(e.changedTouches)) {
-      if (this.moveTouchId === null && this.isLeftSideTouch(touch) && !this.orbitMode) {
+      if (this.moveTouchId === null && this.isLeftSideTouch(touch)) {
         this.moveTouchId = touch.identifier;
         this.moveTouchStart = { x: touch.clientX, y: touch.clientY };
         this.touchMoveVector = { x: 0, y: 0 };
@@ -505,7 +460,7 @@ export class CameraInputController {
   };
 
   private readonly handleTouchMove = (e: TouchEvent): void => {
-    if (!this.useFreeCamera && !this.orbitMode) return;
+    if (!this.useFreeCamera) return;
 
     for (const touch of Array.from(e.changedTouches)) {
       if (touch.identifier === this.moveTouchId) {
@@ -518,9 +473,7 @@ export class CameraInputController {
         const deltaX = touch.clientX - this.lastLookTouchPosition.x;
         const deltaY = touch.clientY - this.lastLookTouchPosition.y;
 
-        if (this.orbitMode && this.onOrbitInput) {
-          this.onOrbitInput(deltaX, deltaY, 0);
-        } else if (!this.isPointerLocked) {
+        if (!this.isPointerLocked) {
           this.cameraRotation.yaw -= deltaX * this.mouseSensitivity;
           this.cameraRotation.pitch -= deltaY * this.mouseSensitivity;
           this.updateCameraRotation();

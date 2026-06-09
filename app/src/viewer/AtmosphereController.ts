@@ -35,9 +35,7 @@ export class AtmosphereController {
   private sky: Sky | null = null;
   private skyParams: SkyParams = { ...DEFAULT_SKY_PARAMS };
 
-  private originalBackground: THREE.Color | null = null;
   private terrainFogParams: TerrainFogParams | null = null;
-  private spaceMode = false;
   private readonly shadowFocus = new THREE.Vector3();
   private readonly stableShadowFocus = new THREE.Vector3();
   private readonly shadowFocusSnapDelta = new THREE.Vector3();
@@ -187,32 +185,7 @@ export class AtmosphereController {
     return target.setFromSphericalCoords(1, phi, theta).normalize();
   }
 
-  /**
-   * Toggle space mode: hide sky dome and darken background.
-   */
-  setSpaceMode(enabled: boolean): void {
-    this.spaceMode = enabled;
-    if (enabled) {
-      if (this.sky) this.sky.visible = false;
-      this.originalBackground = this.scene.background instanceof THREE.Color
-        ? this.scene.background.clone()
-        : null;
-      this.scene.fog = null;
-    } else {
-      if (this.sky) this.sky.visible = true;
-      if (this.originalBackground) {
-        this.scene.background = this.originalBackground;
-      }
-      this.applyTerrainFog();
-    }
-  }
-
   private applyTerrainFog(): void {
-    if (this.spaceMode) {
-      this.scene.fog = null;
-      return;
-    }
-
     if (!this.terrainFogParams) {
       this.scene.fog = null;
       return;

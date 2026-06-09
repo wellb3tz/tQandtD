@@ -158,11 +158,6 @@ export class AppRuntimeLoop {
         return;
       }
 
-      if (this.viewer.isOrbitalOrTransitioning()) {
-        this.scheduleChunkLoad(200);
-        return;
-      }
-
       const cameraPos = this.viewer.getCameraPosition();
       let distance = 0;
       if (this.lastChunkLoadCameraPos) {
