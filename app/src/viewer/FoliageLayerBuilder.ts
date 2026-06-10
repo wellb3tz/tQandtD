@@ -147,6 +147,7 @@ function addTreeLayers(
     { variant: 'spire', geometry: createFoliagePrototypeGeometry('spire', detail) },
     { variant: 'compact', geometry: createFoliagePrototypeGeometry('compact', detail) },
     { variant: 'broad', geometry: createFoliagePrototypeGeometry('broad', detail) },
+    { variant: 'palm', geometry: createFoliagePrototypeGeometry('palm', detail) },
   ];
 
   let treeVariantCount = 0;

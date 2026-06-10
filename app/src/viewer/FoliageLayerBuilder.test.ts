@@ -30,6 +30,15 @@ describe('FoliageLayerBuilder', () => {
     expect(treeMeshes.every(mesh => mesh.receiveShadow === true)).toBe(true);
   });
 
+  it('builds a dedicated palm tree mesh for desert foliage', () => {
+    const layer = createFoliageLayer(0, 0, createDesertChunk(), 0.3);
+    const treeMeshes = layer?.children.flatMap(lod => lod.children.filter(child => child.name.startsWith('foliage-trees-'))) ?? [];
+
+    expect(layer).toBeDefined();
+    expect(layer?.userData.treeCount).toBeGreaterThan(0);
+    expect(treeMeshes.map(mesh => mesh.name)).toEqual(['foliage-trees-palm']);
+  });
+
   it('builds sparse simple LOD groups on demand for distant foliage', () => {
     const layer = createFoliageLayer(0, 0, createForestChunk(), 0.3);
     const near = layer?.children[0] as THREE.Group;
@@ -73,6 +82,17 @@ function createForestChunk(): ChunkData {
     size,
     heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
     biomeMap: new Uint8Array(size * size).fill(BiomeType.FOREST),
+    resources: [],
+    structures: [],
+  } as unknown as ChunkData;
+}
+
+function createDesertChunk(): ChunkData {
+  const size = 64;
+  return {
+    size,
+    heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+    biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
     resources: [],
     structures: [],
   } as unknown as ChunkData;

@@ -9,7 +9,7 @@ afterEach(() => {
 
 describe('FoliageGeometryBuilder', () => {
   it('creates colored prototype geometry for every foliage kind', () => {
-    for (const kind of ['spire', 'compact', 'broad', 'shrub', 'stump'] as const) {
+    for (const kind of ['spire', 'compact', 'broad', 'palm', 'shrub', 'stump'] as const) {
       const geometry = createFoliagePrototypeGeometry(kind);
       const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
       const colors = geometry.getAttribute('color') as THREE.BufferAttribute;
@@ -38,6 +38,25 @@ describe('FoliageGeometryBuilder', () => {
     }
 
     expect(minY).toBeCloseTo(-0.3);
+  });
+
+  it('gives palm geometry a narrow trunk and broad frond crown', () => {
+    const geometry = createFoliagePrototypeGeometry('palm');
+    const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+    let maxRadius = 0;
+    let trunkRadius = 0;
+
+    for (let i = 0; i < positions.count; i++) {
+      const radius = Math.hypot(positions.getX(i), positions.getZ(i));
+      maxRadius = Math.max(maxRadius, radius);
+      if (positions.getY(i) < 0) {
+        trunkRadius = Math.max(trunkRadius, radius);
+      }
+    }
+
+    expect(maxRadius).toBeGreaterThan(0.95);
+    expect(trunkRadius).toBeLessThan(0.12);
+    expect(maxRadius / trunkRadius).toBeGreaterThan(8);
   });
 
   it('creates instanced foliage meshes from placement transforms', () => {

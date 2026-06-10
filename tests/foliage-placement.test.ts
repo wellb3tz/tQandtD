@@ -189,6 +189,23 @@ describe('foliage placement planner', () => {
     expect(Math.min(...plan!.treePlacements.map(tree => tree.height))).toBeGreaterThan(9);
     expect(Math.max(...plan!.treePlacements.map(tree => tree.height))).toBeLessThan(30);
   });
+
+  it('places rare palm trees in desert biomes and keeps other foliage out', () => {
+    const size = 64;
+    const plan = planFoliagePlacements(0, 0, {
+      size,
+      heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+      biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeDefined();
+    expect(plan!.treePlacements.length).toBeGreaterThan(0);
+    expect(plan!.treePlacements.every(tree => tree.variant === 'palm')).toBe(true);
+    expect(plan!.shrubPlacements).toHaveLength(0);
+    expect(plan!.terrainPropPlacements).toHaveLength(0);
+  });
 });
 
 function sampleTerrainSurface(heightmap: Float32Array, size: number, worldX: number, worldZ: number): number {

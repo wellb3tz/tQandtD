@@ -19,6 +19,9 @@ export type FoliageProfile = {
   radius: number;
   color: number;
   maxSlope: number;
+  treeVariant?: TreeVariant;
+  allowShrubs?: boolean;
+  allowTerrainProps?: boolean;
 };
 
 export type FoliagePlacement = {
@@ -32,7 +35,7 @@ export type FoliagePlacement = {
   rank: number;
 };
 
-export type TreeVariant = 'spire' | 'compact' | 'broad';
+export type TreeVariant = 'spire' | 'compact' | 'broad' | 'palm';
 
 export type TreePlacement = FoliagePlacement & {
   variant: TreeVariant;
@@ -134,54 +137,58 @@ export function planFoliagePlacements(
       const clusterDensity = getForestClusterDensity(worldTileX, worldTileZ);
       const slopeStress = Math.min(1, slope / Math.max(profile.maxSlope, 0.001));
       const slopeDensityScale = 1 - Math.max(0, slopeStress - 0.45) * 0.45;
-      const shrubChance = deterministic01(worldTileX, worldTileZ, 139);
-      const shrubDensity = Math.min(
-        0.72,
-        profile.density * clusterDensity * 0.36 * slopeDensityScale * Math.max(0, 1 - waterInfluence.bank * 1.15) * (1 - clearingInfluence.strength * 0.55),
-      );
-      if (shrubChance <= shrubDensity && shouldPlaceShrubs(slope, waterInfluence.bank)) {
-        const shrubJitterX = 0.10 + deterministic01(worldTileX, worldTileZ, 149) * 0.80;
-        const shrubJitterZ = 0.10 + deterministic01(worldTileX, worldTileZ, 151) * 0.80;
-        const shrubElevation = sampleTerrainElevationAtTilePoint(
-          data.heightmap,
-          verticesPerSide,
-          tileX,
-          tileY,
-          shrubJitterX,
-          shrubJitterZ
+      if (profile.allowShrubs !== false) {
+        const shrubChance = deterministic01(worldTileX, worldTileZ, 139);
+        const shrubDensity = Math.min(
+          0.72,
+          profile.density * clusterDensity * 0.36 * slopeDensityScale * Math.max(0, 1 - waterInfluence.bank * 1.15) * (1 - clearingInfluence.strength * 0.55),
         );
-        const shrubScale = 0.62 + deterministic01(worldTileX, worldTileZ, 157) * 0.72;
-        const shrubHeight = profile.height * 0.30 * shrubScale * TREE_HEIGHT_METERS_SCALE;
-        const shrubRadius = profile.radius * 0.62 * shrubScale * TREE_HEIGHT_METERS_SCALE;
-        shrubPlacements.push({
-          x: (worldTileX + shrubJitterX) * horizontalScale,
-          y: shrubElevation * heightScale - SHRUB_PROTOTYPE_MIN_Y * shrubHeight,
-          z: (worldTileZ + shrubJitterZ) * horizontalScale,
-          radius: shrubRadius,
-          height: shrubHeight,
-          rotation: deterministic01(worldTileX, worldTileZ, 163) * Math.PI * 2,
-          color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
-          rank: deterministic01(worldTileX, worldTileZ, 173),
-        });
+        if (shrubChance <= shrubDensity && shouldPlaceShrubs(slope, waterInfluence.bank)) {
+          const shrubJitterX = 0.10 + deterministic01(worldTileX, worldTileZ, 149) * 0.80;
+          const shrubJitterZ = 0.10 + deterministic01(worldTileX, worldTileZ, 151) * 0.80;
+          const shrubElevation = sampleTerrainElevationAtTilePoint(
+            data.heightmap,
+            verticesPerSide,
+            tileX,
+            tileY,
+            shrubJitterX,
+            shrubJitterZ
+          );
+          const shrubScale = 0.62 + deterministic01(worldTileX, worldTileZ, 157) * 0.72;
+          const shrubHeight = profile.height * 0.30 * shrubScale * TREE_HEIGHT_METERS_SCALE;
+          const shrubRadius = profile.radius * 0.62 * shrubScale * TREE_HEIGHT_METERS_SCALE;
+          shrubPlacements.push({
+            x: (worldTileX + shrubJitterX) * horizontalScale,
+            y: shrubElevation * heightScale - SHRUB_PROTOTYPE_MIN_Y * shrubHeight,
+            z: (worldTileZ + shrubJitterZ) * horizontalScale,
+            radius: shrubRadius,
+            height: shrubHeight,
+            rotation: deterministic01(worldTileX, worldTileZ, 163) * Math.PI * 2,
+            color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
+            rank: deterministic01(worldTileX, worldTileZ, 173),
+          });
+        }
       }
 
-      const propChance = deterministic01(worldTileX, worldTileZ, 181);
-      const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
-      if (propChance <= propDensity) {
-        const propScale = 0.72 + deterministic01(worldTileX, worldTileZ, 193) * 0.56;
-        const stumpHeight = 0.30 * propScale * PROP_HEIGHT_METERS_SCALE;
-        const stumpRadius = 0.25 * propScale * PROP_HEIGHT_METERS_SCALE;
-        terrainPropPlacements.push({
-          x: placementX * horizontalScale,
-          y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * stumpHeight,
-          z: placementZ * horizontalScale,
-          radius: stumpRadius,
-          height: stumpHeight,
-          rotation: deterministic01(worldTileX, worldTileZ, 197) * Math.PI * 2,
-          color: 0x6a4325,
-          rank: deterministic01(worldTileX, worldTileZ, 199),
-          kind: 'stumps',
-        });
+      if (profile.allowTerrainProps !== false) {
+        const propChance = deterministic01(worldTileX, worldTileZ, 181);
+        const propDensity = Math.min(0.18, 0.035 + clearingInfluence.strength * 0.055 + waterInfluence.bank * 0.024 + slopeStress * 0.045);
+        if (propChance <= propDensity) {
+          const propScale = 0.72 + deterministic01(worldTileX, worldTileZ, 193) * 0.56;
+          const stumpHeight = 0.30 * propScale * PROP_HEIGHT_METERS_SCALE;
+          const stumpRadius = 0.25 * propScale * PROP_HEIGHT_METERS_SCALE;
+          terrainPropPlacements.push({
+            x: placementX * horizontalScale,
+            y: placementElevation * heightScale - TREE_AND_PROP_PROTOTYPE_MIN_Y * stumpHeight,
+            z: placementZ * horizontalScale,
+            radius: stumpRadius,
+            height: stumpHeight,
+            rotation: deterministic01(worldTileX, worldTileZ, 197) * Math.PI * 2,
+            color: 0x6a4325,
+            rank: deterministic01(worldTileX, worldTileZ, 199),
+            kind: 'stumps',
+          });
+        }
       }
 
       for (let candidate = 0; candidate < TREE_CANDIDATES_PER_TILE; candidate++) {
@@ -222,7 +229,7 @@ export function planFoliagePlacements(
           rotation: deterministic01(worldTileX, worldTileZ, 59 + candidate * 11) * Math.PI * 2,
           color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
           rank: deterministic01(worldTileX, worldTileZ, 101 + candidate * 11),
-          variant: selectTreeVariant(profile, worldTileX * TREE_CANDIDATES_PER_TILE + candidate, worldTileZ),
+          variant: profile.treeVariant ?? selectTreeVariant(profile, worldTileX * TREE_CANDIDATES_PER_TILE + candidate, worldTileZ),
         });
       }
     }
@@ -397,6 +404,17 @@ function getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
   switch (biome) {
     case BiomeType.FOREST:
       return { density: 0.86, height: 1.42, radius: 0.50, color: 0x285f24, maxSlope: 0.18 };
+    case BiomeType.DESERT:
+      return {
+        density: 0.004,
+        height: 1.26,
+        radius: 0.34,
+        color: 0x8f9a56,
+        maxSlope: 0.08,
+        treeVariant: 'palm',
+        allowShrubs: false,
+        allowTerrainProps: false,
+      };
     case BiomeType.DRY_FOREST:
       return { density: 0.42, height: 1.20, radius: 0.44, color: 0x586f2d, maxSlope: 0.16 };
     case BiomeType.RAINFOREST:
@@ -414,6 +432,7 @@ function getFoliageProfileForTile(data: ChunkData, tileIndex: number): FoliagePr
   if (data.sparseBiomeWeights && data.sparseBiomeWeights.length > 0 && data.sparseBiomeOffsets) {
     const weightedProfiles: Array<{ biome: BiomeType; weight: number }> = [
       { biome: BiomeType.FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.FOREST) },
+      { biome: BiomeType.DESERT, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.DESERT) },
       { biome: BiomeType.DRY_FOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.DRY_FOREST) },
       { biome: BiomeType.RAINFOREST, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.RAINFOREST) },
       { biome: BiomeType.TAIGA, weight: getBiomeWeightForTile(data, tileIndex, BiomeType.TAIGA) },

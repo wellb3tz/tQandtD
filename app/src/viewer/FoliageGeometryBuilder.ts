@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { FoliagePlacement } from './FoliagePlacementPlanner';
 
-export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'shrub' | 'stump';
+export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'palm' | 'shrub' | 'stump';
 export type FoliagePrototypeDetail = 'full' | 'simple';
 
 const prototypeGeometryCache = new Map<string, THREE.BufferGeometry>();
@@ -92,6 +92,9 @@ export function createFoliagePrototypeGeometry(
         ['cone', 0.42, 0.28, 0.78, 9, new THREE.Color(0.28, 0.66, 0.34)],
       ]);
       break;
+    case 'palm':
+      geometry = createPalmPrototypeGeometry('full');
+      break;
     case 'shrub':
       geometry = buildGeometry([
         ['cone', 0.54, -0.30, 0.18, 7, new THREE.Color(0.28, 0.56, 0.24)],
@@ -140,6 +143,8 @@ function createSimpleFoliagePrototypeGeometry(kind: FoliagePrototypeKind): THREE
         ['prism', 0.13, -0.50, 0.08, 5, new THREE.Color(0.43, 0.25, 0.12)],
         ['cone', 0.68, -0.02, 0.76, 5, new THREE.Color(0.20, 0.52, 0.24)],
       ]);
+    case 'palm':
+      return createPalmPrototypeGeometry('simple');
     case 'shrub':
       return buildGeometry([
         ['cone', 0.46, -0.30, 0.42, 5, new THREE.Color(0.32, 0.56, 0.26)],
@@ -162,6 +167,53 @@ function buildGeometry(layers: LayerSpec[]): THREE.BufferGeometry {
     } else {
       addConeLayer(vertices, colors, indices, radius, yBase, yTop, sides, color);
     }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createPalmPrototypeGeometry(detail: FoliagePrototypeDetail): THREE.BufferGeometry {
+  const vertices: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  const trunkColor = new THREE.Color(0.34, 0.22, 0.11);
+  const trunkTopColor = new THREE.Color(0.44, 0.30, 0.14);
+  const frondBaseColor = new THREE.Color(0.16, 0.48, 0.22);
+  const frondTipColor = new THREE.Color(0.30, 0.72, 0.32);
+  const frondCount = detail === 'simple' ? 6 : 8;
+  const frondSegments = detail === 'simple' ? 3 : 5;
+  const frondLength = detail === 'simple' ? 0.92 : 1.22;
+  const frondWidth = detail === 'simple' ? 0.20 : 0.26;
+
+  addPrism(vertices, colors, indices, detail === 'simple' ? 0.08 : 0.09, -0.50, 0.30, 6, trunkColor);
+  addPrism(vertices, colors, indices, detail === 'simple' ? 0.06 : 0.07, 0.28, 0.56, 6, trunkTopColor);
+
+  for (let frond = 0; frond < frondCount; frond++) {
+    const turn = (frond / frondCount) * Math.PI * 2;
+    const lean = ((frond % 2 === 0) ? 0.08 : -0.04) + (detail === 'simple' ? 0.0 : (deterministic01(frond, 17) - 0.5) * 0.08);
+    const length = frondLength * (0.90 + deterministic01(frond, 29) * 0.18);
+    const width = frondWidth * (0.82 + deterministic01(frond, 31) * 0.24);
+    addPalmFrond(
+      vertices,
+      colors,
+      indices,
+      turn + lean,
+      detail === 'simple' ? 0.54 : 0.58,
+      length,
+      width,
+      frondSegments,
+      frondBaseColor,
+      frondTipColor,
+      detail === 'simple' ? 0.10 : 0.14,
+      detail === 'simple' ? 0.26 : 0.34,
+      frond
+    );
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -222,6 +274,72 @@ function addConeLayer(
       colors.push(color.r, color.g, color.b);
     }
     indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+  }
+}
+
+function addPalmFrond(
+  vertices: number[],
+  colors: number[],
+  indices: number[],
+  angle: number,
+  baseY: number,
+  length: number,
+  baseWidth: number,
+  segments: number,
+  baseColor: THREE.Color,
+  tipColor: THREE.Color,
+  lift: number,
+  droop: number,
+  seed: number,
+): void {
+  const dirX = Math.cos(angle);
+  const dirZ = Math.sin(angle);
+  const sideX = -dirZ;
+  const sideZ = dirX;
+  let prevLeft: [number, number, number] | undefined;
+  let prevRight: [number, number, number] | undefined;
+
+  for (let segment = 0; segment <= segments; segment++) {
+    const t = segment / segments;
+    const reach = length * (0.18 + t * 0.82);
+    const arch = Math.sin(t * Math.PI) * lift - t * t * droop;
+    const centerY = baseY + arch;
+    const centerX = dirX * reach;
+    const centerZ = dirZ * reach;
+    const halfWidth = Math.max(0.02, baseWidth * Math.pow(1 - t, 1.25));
+    const curl = (deterministic01(seed, segment) - 0.5) * halfWidth * 0.18;
+    const left: [number, number, number] = [
+      centerX + sideX * (halfWidth + curl),
+      centerY,
+      centerZ + sideZ * (halfWidth + curl),
+    ];
+    const right: [number, number, number] = [
+      centerX - sideX * (halfWidth - curl),
+      centerY,
+      centerZ - sideZ * (halfWidth - curl),
+    ];
+
+    if (prevLeft && prevRight) {
+      const baseIndex = vertices.length / 3;
+      const segmentColor = baseColor.clone().lerp(tipColor, t);
+      const nextColor = baseColor.clone().lerp(tipColor, Math.min(1, t + 1 / segments * 0.5));
+      vertices.push(
+        prevLeft[0], prevLeft[1], prevLeft[2],
+        prevRight[0], prevRight[1], prevRight[2],
+        right[0], right[1], right[2],
+        left[0], left[1], left[2],
+      );
+      for (let i = 0; i < 2; i++) {
+        colors.push(segmentColor.r, segmentColor.g, segmentColor.b);
+      }
+      for (let i = 0; i < 2; i++) {
+        colors.push(nextColor.r, nextColor.g, nextColor.b);
+      }
+      indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
+    }
+
+    prevLeft = left;
+    prevRight = right;
   }
 }
 
