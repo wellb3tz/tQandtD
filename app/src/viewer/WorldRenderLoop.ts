@@ -68,6 +68,10 @@ export class WorldRenderLoop {
   }
 
   start(): void {
+    if (this.animationFrameId !== null) {
+      return;
+    }
+
     const animate = () => {
       this.animationFrameId = requestAnimationFrame(animate);
       const activeCamera = this.cameraViewController.getActiveCamera();

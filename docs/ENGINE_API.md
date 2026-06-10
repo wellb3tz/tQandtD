@@ -40,8 +40,14 @@ world.dispose();
 import { WorldSession, createDefaultWorldConfig } from 'tqandtd-project';
 
 const session = new WorldSession({
-  config: createDefaultWorldConfig({ seed: 123 }),
-  scene: { syncLoadedChunks: true },
+  worldConfig: createDefaultWorldConfig({ seed: 123 }),
+  scene: {
+    player: false,
+    input: false,
+    movement: false,
+    streaming: false,
+    renderer: false,
+  },
 });
 
 await session.loadChunksAround(0, 0, 2);

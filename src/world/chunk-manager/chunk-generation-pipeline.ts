@@ -127,7 +127,19 @@ export function generateChunkThroughPipeline(
     config.onProgress?.('rivers', 0.55);
     const riverStart = config.enablePerformanceMetrics ? performance.now() : 0;
     if (dependencies.riverManager) {
-      const worldRivers = dependencies.riverManager.getRiversForChunk(chunkX, chunkY, config.chunkSize);
+      const worldRivers = dependencies.riverManager.getRiversForChunk(
+        chunkX,
+        chunkY,
+        config.chunkSize,
+        (invalidatedX, invalidatedY) => {
+          const wasInCache = dependencies.invalidateCachedChunk(invalidatedX, invalidatedY);
+          logger.debug(
+            LogCategory.CACHE,
+            `River cache invalidation for chunk (${invalidatedX}, ${invalidatedY}): wasInCache=${wasInCache}`
+          );
+          config.onChunkInvalidated?.(invalidatedX, invalidatedY);
+        }
+      );
       const riverStateMap = new Map<string, 'flowing' | 'frozen' | 'dry'>();
       for (const river of worldRivers) {
         riverStateMap.set(

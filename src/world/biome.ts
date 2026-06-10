@@ -244,13 +244,16 @@ export class BiomeSystem {
     // one per sample (was 9 Map.get/set calls x 1024 tiles = 9 216 ops per chunk).
     const accumulator = new Float64Array(NUM_BIOMES);
 
-    const step = radius / Math.sqrt(9); // 3x3 grid
+    const step = radius; // 3x3 grid
     let totalWeight = 0;
 
-    // Optional caches for temperature/moisture to avoid redundant fBM calls
-    const tempCache = new Map<string, number>();
-    const moistureCache = new Map<string, number>();
-    const getBiomeFn = biomeLookup ?? ((sx: number, sy: number, sh: number) => this.getBiome(sx, sy, sh, tempCache, moistureCache));
+    let tempCache: Map<string, number> | undefined;
+    let moistureCache: Map<string, number> | undefined;
+    const getBiomeFn = biomeLookup ?? ((sx: number, sy: number, sh: number) => {
+      tempCache ??= new Map<string, number>();
+      moistureCache ??= new Map<string, number>();
+      return this.getBiome(sx, sy, sh, tempCache, moistureCache);
+    });
 
     for (let dy = -radius; dy <= radius; dy += step) {
       for (let dx = -radius; dx <= radius; dx += step) {

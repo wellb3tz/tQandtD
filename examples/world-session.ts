@@ -5,9 +5,13 @@ import {
 
 async function main(): Promise<void> {
   const session = new WorldSession({
-    config: createDefaultWorldConfig({ seed: 123 }),
+    worldConfig: createDefaultWorldConfig({ seed: 123 }),
     scene: {
-      syncLoadedChunks: true,
+      player: false,
+      input: false,
+      movement: false,
+      streaming: false,
+      renderer: false,
     },
   });
 

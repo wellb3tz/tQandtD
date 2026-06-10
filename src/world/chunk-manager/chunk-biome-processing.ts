@@ -45,7 +45,7 @@ export function generateChunkBiomeData(
       const localX = sampleX - worldX;
       const localY = sampleY - worldY;
       if (localX >= 0 && localX <= size && localY >= 0 && localY <= size) {
-        return heightmap[localY * vertexCount + localX];
+        return sampleHeightmap(heightmap, vertexCount, size, localX, localY);
       }
     }
 
@@ -53,7 +53,7 @@ export function generateChunkBiomeData(
   };
 
   const blendRadius = options.biomeConfig.blendRadius;
-  const stepInv = 3 / blendRadius;
+  const stepInv = 1 / blendRadius;
   const padding = Math.ceil(blendRadius) + 1;
   const gridMinX = worldX - padding;
   const gridMinY = worldY - padding;
@@ -63,7 +63,8 @@ export function generateChunkBiomeData(
   const gridHeight = Math.ceil((gridMaxY - gridMinY) * stepInv) + 1;
   const sampledHeights = new Float32Array(gridWidth * gridHeight);
   const sampledBiomes = new Uint8Array(gridWidth * gridHeight);
-  const sampled = new Uint8Array(gridWidth * gridHeight);
+  const sampledHeight = new Uint8Array(gridWidth * gridHeight);
+  const sampledBiome = new Uint8Array(gridWidth * gridHeight);
 
   const gridIndex = (sampleX: number, sampleY: number): number => {
     const indexX = Math.round((sampleX - gridMinX) * stepInv);
@@ -73,10 +74,10 @@ export function generateChunkBiomeData(
 
   const getHeightFast = (sampleX: number, sampleY: number): number => {
     const index = gridIndex(sampleX, sampleY);
-    if (sampled[index]) return sampledHeights[index];
+    if (sampledHeight[index]) return sampledHeights[index];
     const height = getHeight(sampleX, sampleY);
     sampledHeights[index] = height;
-    sampled[index] = 1;
+    sampledHeight[index] = 1;
     return height;
   };
 
@@ -85,10 +86,10 @@ export function generateChunkBiomeData(
 
   const getBiomeFast = (sampleX: number, sampleY: number, height: number): number => {
     const index = gridIndex(sampleX, sampleY);
-    if (sampled[index]) return sampledBiomes[index];
+    if (sampledBiome[index]) return sampledBiomes[index];
     const biome = options.biomeSystem.getBiome(sampleX, sampleY, height, temperatureCache, moistureCache);
     sampledBiomes[index] = biome;
-    sampled[index] = 1;
+    sampledBiome[index] = 1;
     return biome;
   };
 
@@ -121,11 +122,19 @@ export function generateChunkBiomeData(
         biomeCache.set(`${tileWorldX},${tileWorldY}`, biome);
 
         const blendingStartedAt = options.enablePerformanceMetrics ? performance.now() : 0;
-        const weights = options.biomeSystem.getBiomeWeights(tileWorldX, tileWorldY, getHeightFast, biomeCache);
+        const weights = options.biomeSystem.getBiomeWeightsWithRadius(
+          tileWorldX,
+          tileWorldY,
+          getHeightFast,
+          blendRadius,
+          biomeCache,
+          getBiomeFast,
+        );
         if (options.enablePerformanceMetrics) blendingTime += performance.now() - blendingStartedAt;
 
         tileWeights.push(weights);
-        temperatureMap[index] = options.biomeSystem.getTemperature(tileWorldX, tileWorldY);
+        temperatureMap[index] = temperatureCache.get(`${tileWorldX},${tileWorldY}`)
+          ?? options.biomeSystem.getTemperature(tileWorldX, tileWorldY);
       }
     }
   }
@@ -151,6 +160,29 @@ export function generateChunkBiomeData(
     temperatureMap,
     metrics: { classificationTime, blendingTime },
   };
+}
+
+function sampleHeightmap(
+  heightmap: Float32Array,
+  vertexCount: number,
+  size: number,
+  localX: number,
+  localY: number,
+): number {
+  const x0 = Math.max(0, Math.min(size, Math.floor(localX)));
+  const y0 = Math.max(0, Math.min(size, Math.floor(localY)));
+  const x1 = Math.min(size, x0 + 1);
+  const y1 = Math.min(size, y0 + 1);
+  const tx = localX - x0;
+  const ty = localY - y0;
+
+  const h00 = heightmap[y0 * vertexCount + x0];
+  const h10 = heightmap[y0 * vertexCount + x1];
+  const h01 = heightmap[y1 * vertexCount + x0];
+  const h11 = heightmap[y1 * vertexCount + x1];
+  const top = h00 * (1 - tx) + h10 * tx;
+  const bottom = h01 * (1 - tx) + h11 * tx;
+  return top * (1 - ty) + bottom * ty;
 }
 
 export function fixBiomesAfterHeightChange(chunk: ChunkData): void {

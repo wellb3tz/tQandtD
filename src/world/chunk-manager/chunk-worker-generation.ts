@@ -39,6 +39,10 @@ export function generateChunkWithWorkerPool({
           reject(new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`));
           return;
         }
+        if (isCancellationError(error)) {
+          reject(error);
+          return;
+        }
         logger.warn(LogCategory.WORKER, `Worker generation failed for chunk (${chunkX}, ${chunkY}), falling back to sync`, error);
         try {
           resolve(fallback());
@@ -50,4 +54,8 @@ export function generateChunkWithWorkerPool({
 
     workerPool.submitTask(task);
   });
+}
+
+function isCancellationError(error: Error): boolean {
+  return /abort|cancel|shut down/i.test(error.message);
 }

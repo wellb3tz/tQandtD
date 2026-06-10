@@ -26,8 +26,14 @@ const adapter = new ThreeWorldRendererAdapter({
 });
 
 const session = new WorldSession({
-  config: createDefaultWorldConfig({ seed: 9001 }),
-  renderer: adapter,
+  worldConfig: createDefaultWorldConfig({ seed: 9001 }),
+  scene: {
+    renderer: adapter,
+    player: false,
+    input: false,
+    movement: false,
+    streaming: false,
+  },
 });
 
 async function main(): Promise<void> {

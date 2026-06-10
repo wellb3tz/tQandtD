@@ -248,6 +248,43 @@ export class WorkerPool {
   }
 
   /**
+   * Cancels every queued or active task and rejects their callbacks.
+   * Active worker computations cannot be interrupted, but their eventual
+   * responses are ignored because currentTask/activeTasks are cleared here.
+   */
+  cancelAll(reason: Error = new Error('Worker tasks cancelled')): void {
+    const tasks = Array.from(this.activeTasks.values());
+
+    for (const workerState of this.workers) {
+      if (workerState.currentTask?.timeoutId !== undefined) {
+        clearTimeout(workerState.currentTask.timeoutId);
+      }
+      if (workerState.currentTask) {
+        this.cleanupTaskAbort(workerState.currentTask);
+      }
+      workerState.currentTask = null;
+    }
+
+    for (const task of this.taskQueue) {
+      if (task.timeoutId !== undefined) {
+        clearTimeout(task.timeoutId);
+      }
+      this.cleanupTaskAbort(task);
+    }
+
+    this.taskQueue = [];
+    this.activeTasks.clear();
+
+    for (const task of tasks) {
+      try {
+        task.onError(reason);
+      } catch (callbackError) {
+        logger.error(LogCategory.WORKER, `Error in task cancellation callback: ${callbackError}`);
+      }
+    }
+  }
+
+  /**
    * Gets pool statistics
    * @returns Object with pool statistics
    */
@@ -273,32 +310,12 @@ export class WorkerPool {
    * Clears any outstanding timeouts to prevent post-shutdown callbacks.
    */
   shutdown(): void {
-    // Cancel timeouts for all active tasks before terminating workers.
-    for (const workerState of this.workers) {
-      if (workerState.currentTask) {
-        const timeoutId = workerState.currentTask.timeoutId;
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
-        this.cleanupTaskAbort(workerState.currentTask);
-      }
-    }
-    // Cancel timeouts for queued tasks (they may have been assigned timeouts
-    // by a previous assignNextTask call that hasn't fired yet).
-    for (const task of this.taskQueue) {
-      const timeoutId = task.timeoutId;
-      if (timeoutId !== undefined) {
-        clearTimeout(timeoutId);
-      }
-      this.cleanupTaskAbort(task);
-    }
+    this.cancelAll(new Error('Worker pool shut down'));
 
     for (const workerState of this.workers) {
       workerState.worker.terminate();
     }
     this.workers = [];
-    this.taskQueue = [];
-    this.activeTasks.clear();
   }
 
   /**

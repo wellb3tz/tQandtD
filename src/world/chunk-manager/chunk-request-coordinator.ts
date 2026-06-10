@@ -101,6 +101,10 @@ async function generateAndCacheChunk({
       })
     : generateChunk(chunkX, chunkY);
 
+  if (signal?.aborted) {
+    throw new Error(`Chunk generation aborted for (${chunkX}, ${chunkY})`);
+  }
+
   logger.debug(LogCategory.CHUNK, `Finished generation for chunk (${chunkX}, ${chunkY})`);
   addToCache(chunk);
   clearInFlight();

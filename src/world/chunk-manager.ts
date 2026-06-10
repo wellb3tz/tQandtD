@@ -206,8 +206,10 @@ export class ChunkManager implements ChunkManagerSnapshot {
    * Clears all cached chunks.
    */
   clearCache(): void {
+    this.workerPool?.cancelAll(new Error('Chunk generation cancelled: cache cleared'));
     this.cache.clear();
     this.inFlightRequests.clear();
+    this.lakeManager?.clear();
     this.riverManager?.clear();
   }
 

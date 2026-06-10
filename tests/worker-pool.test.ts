@@ -240,6 +240,84 @@ describe('WorkerPool', () => {
     pool.shutdown();
   });
 
+  it('rejects active and queued tasks on shutdown', async () => {
+    const workers: ManualWorker[] = [];
+    const pool = new WorkerPool({
+      maxWorkers: 1,
+      workerScriptUrl: 'ignored-by-factory.js',
+      taskTimeout: 1000,
+      worldConfig: makeMinimalConfig(42),
+      createWorker: () => {
+        const worker = new ManualWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+    });
+
+    const active = new Promise((resolve, reject) => {
+      pool.submitTask({
+        id: '',
+        chunkX: 0,
+        chunkY: 0,
+        lodLevel: 0,
+        priority: 1,
+        onComplete: resolve,
+        onError: reject,
+      });
+    });
+    const queued = new Promise((resolve, reject) => {
+      pool.submitTask({
+        id: '',
+        chunkX: 1,
+        chunkY: 0,
+        lodLevel: 0,
+        priority: 1,
+        onComplete: resolve,
+        onError: reject,
+      });
+    });
+
+    pool.shutdown();
+
+    await expect(active).rejects.toThrow('Worker pool shut down');
+    await expect(queued).rejects.toThrow('Worker pool shut down');
+    expect(workers[0].terminated).toBe(true);
+  });
+
+  it('rejects all tasks when cancelAll is requested', async () => {
+    const workers: ManualWorker[] = [];
+    const pool = new WorkerPool({
+      maxWorkers: 1,
+      workerScriptUrl: 'ignored-by-factory.js',
+      taskTimeout: 1000,
+      worldConfig: makeMinimalConfig(42),
+      createWorker: () => {
+        const worker = new ManualWorker();
+        workers.push(worker);
+        return worker as unknown as Worker;
+      },
+    });
+
+    const result = new Promise((resolve, reject) => {
+      pool.submitTask({
+        id: '',
+        chunkX: 0,
+        chunkY: 0,
+        lodLevel: 0,
+        priority: 1,
+        onComplete: resolve,
+        onError: reject,
+      });
+    });
+
+    pool.cancelAll(new Error('cache reset'));
+    workers[0].sendChunkReady(0, 0);
+
+    await expect(result).rejects.toThrow('cache reset');
+    expect(pool.getStats().activeWorkers).toBe(0);
+    pool.shutdown();
+  });
+
   it('removes abort listeners after a task completes', async () => {
     const workers: ManualWorker[] = [];
     const controller = new AbortController();

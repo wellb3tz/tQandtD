@@ -97,6 +97,37 @@ describe('WorldRenderLoop', () => {
     expect(chunkController.update).not.toHaveBeenCalled();
   });
 
+  it('does not start a second animation loop while already running', () => {
+    const requestAnimationFrame = vi.fn().mockReturnValue(8);
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame);
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    const render = vi.fn();
+    const cameraInputController = {
+      updateMovement: vi.fn(),
+      updateFirstPersonPhysics: vi.fn(),
+    } as unknown as CameraInputController;
+
+    const loop = new WorldRenderLoop({
+      scene: new THREE.Scene(),
+      renderer: { render } as unknown as THREE.WebGLRenderer,
+      cameraInputController,
+      cameraViewController: createCameraViewController(),
+      chunkMeshes: new Map(),
+      layerVisibility: createLayerVisibility(),
+      waterLayerManager: createWaterLayerManager(),
+      getWaterConfig: () => DEFAULT_WATER_CONFIG,
+      beforeRender: vi.fn(),
+    });
+
+    loop.start();
+    loop.start();
+    loop.stop();
+
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+    expect(cameraInputController.updateMovement).toHaveBeenCalledOnce();
+    expect(render).toHaveBeenCalledOnce();
+  });
+
   it('rebuilds the terrain animation material cache only after invalidation', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn().mockReturnValue(9));
     vi.stubGlobal('cancelAnimationFrame', vi.fn());

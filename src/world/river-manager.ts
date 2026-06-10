@@ -63,17 +63,28 @@ export class RiverManager {
     this.occupancyIndex = new RiverOccupancyIndex(config.carveBankWidth);
   }
 
-  getRiversForChunk(chunkX: number, chunkY: number, chunkSize: number): WorldRiverData[] {
+  getRiversForChunk(
+    chunkX: number,
+    chunkY: number,
+    chunkSize: number,
+    onInvalidateChunk?: (chunkX: number, chunkY: number) => void,
+  ): WorldRiverData[] {
     if (!this.config.enabled) return [];
+
+    const newRivers: WorldRiverData[] = [];
 
     for (let regionY = chunkY - 1; regionY <= chunkY + 1; regionY++) {
       for (let regionX = chunkX - 1; regionX <= chunkX + 1; regionX++) {
         const regionKey = this.getChunkKey(regionX, regionY);
         if (this.generatedRegions.has(regionKey)) continue;
 
-        this.generateRiversForRegion(regionX, regionY, chunkSize);
+        newRivers.push(...this.generateRiversForRegion(regionX, regionY, chunkSize));
         this.generatedRegions.add(regionKey);
       }
+    }
+
+    if (newRivers.length > 0 && onInvalidateChunk) {
+      this.invalidateChunksTouchedByRivers(newRivers, chunkX, chunkY, chunkSize, onInvalidateChunk);
     }
 
     const chunkWorldX = chunkX * chunkSize;
@@ -81,7 +92,7 @@ export class RiverManager {
     const chunkMaxX = chunkWorldX + chunkSize;
     const chunkMaxY = chunkWorldY + chunkSize;
 
-    return Array.from(this.rivers.values()).filter(river => {
+    const intersecting = Array.from(this.rivers.values()).filter(river => {
       const padding = getRiverInfluenceRadius(river, this.config.carveBankWidth);
       return (
         river.bounds.maxX >= chunkWorldX - padding &&
@@ -89,7 +100,9 @@ export class RiverManager {
         river.bounds.maxY >= chunkWorldY - padding &&
         river.bounds.minY <= chunkMaxY + padding
       );
-    });
+    }).sort((a, b) => a.id.localeCompare(b.id));
+
+    return this.deduplicateParallelRivers(intersecting);
   }
 
   clear(): void {
@@ -124,19 +137,80 @@ export class RiverManager {
     return this.occupancyIndex.findOccupiedPoint(worldX, worldY);
   }
 
-  private generateRiversForRegion(chunkX: number, chunkY: number, chunkSize: number): void {
+  private generateRiversForRegion(chunkX: number, chunkY: number, chunkSize: number): WorldRiverData[] {
+    const generated: WorldRiverData[] = [];
+    if (!this.config.enabled) return generated;
+
     const candidates = this.collectSourceCandidates(chunkX, chunkY, chunkSize);
     const limited = candidates
       .slice(0, this.config.maxRiversPerRegion)
       .sort((a, b) => a.x - b.x || a.y - b.y);
 
     for (const source of limited) {
-      if (this.findOccupiedPoint(source.x, source.y)) continue;
-
-      const river = this.traceMainRiver(source.x, source.y);
+      const river = this.traceMainRiver(source.x, source.y, {
+        ignoreExistingHydrology: true,
+      });
       if (river) {
         this.acceptRiver(river);
+        generated.push(river);
       }
+    }
+
+    return generated;
+  }
+
+  private deduplicateParallelRivers(rivers: WorldRiverData[]): WorldRiverData[] {
+    const result: WorldRiverData[] = [];
+    const localIndex = new RiverOccupancyIndex(this.config.carveBankWidth);
+
+    for (const river of rivers) {
+      if (this.overlapsIndexedRiver(river, localIndex)) continue;
+
+      result.push(river);
+      localIndex.indexRiverPath(river.id, river.mainPath, this.config);
+      for (const tributary of river.tributaries) {
+        localIndex.indexRiverPath(river.id, tributary.points, this.config);
+      }
+    }
+
+    return result;
+  }
+
+  private overlapsIndexedRiver(river: WorldRiverData, index: RiverOccupancyIndex): boolean {
+    for (const point of river.mainPath) {
+      if (index.findOccupiedPoint(point.x, point.y)) return true;
+    }
+
+    return false;
+  }
+
+  private invalidateChunksTouchedByRivers(
+    rivers: WorldRiverData[],
+    currentChunkX: number,
+    currentChunkY: number,
+    chunkSize: number,
+    onInvalidateChunk: (chunkX: number, chunkY: number) => void,
+  ): void {
+    const chunks = new Set<string>();
+
+    for (const river of rivers) {
+      const padding = getRiverInfluenceRadius(river, this.config.carveBankWidth);
+      const minChunkX = Math.floor((river.bounds.minX - padding) / chunkSize);
+      const maxChunkX = Math.floor((river.bounds.maxX + padding) / chunkSize);
+      const minChunkY = Math.floor((river.bounds.minY - padding) / chunkSize);
+      const maxChunkY = Math.floor((river.bounds.maxY + padding) / chunkSize);
+
+      for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+        for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+          if (cx === currentChunkX && cy === currentChunkY) continue;
+          chunks.add(this.getChunkKey(cx, cy));
+        }
+      }
+    }
+
+    for (const key of chunks) {
+      const [cx, cy] = key.split(',').map(Number);
+      onInvalidateChunk(cx, cy);
     }
   }
 
@@ -170,19 +244,24 @@ export class RiverManager {
     return result;
   }
 
-  private traceMainRiver(sourceX: number, sourceY: number): WorldRiverData | null {
+  private traceMainRiver(
+    sourceX: number,
+    sourceY: number,
+    options: { ignoreExistingHydrology?: boolean } = {}
+  ): WorldRiverData | null {
     const points: RiverPoint[] = [];
     const visited = new Set<string>();
     let currentX = sourceX;
     let currentY = sourceY;
     let uphillSpent = 0;
+    const ignoreExistingHydrology = options.ignoreExistingHydrology === true;
 
     for (let step = 0; step < this.config.maxLength; step++) {
       const height = this.getHeightAt(currentX, currentY);
       const biome = this.getBiomeAt(currentX, currentY);
       points.push(this.createPoint(currentX, currentY, height, points[points.length - 1]));
 
-      if (points.length >= 2) {
+      if (!ignoreExistingHydrology && points.length >= 2) {
         const previous = points[points.length - 2];
         const current = points[points.length - 1];
         const hit = this.occupancyIndex.findConfluenceHit(previous, current);
@@ -197,7 +276,7 @@ export class RiverManager {
         return this.createRiver(points);
       }
 
-      if (this.isLakeTile?.(currentX, currentY)) {
+      if (!ignoreExistingHydrology && this.isLakeTile?.(currentX, currentY)) {
         if (points.filter(point => !this.isOceanPoint(point)).length < this.config.minRiverLength) return null;
         return this.createRiver(points);
       }
@@ -206,7 +285,7 @@ export class RiverManager {
       if (visited.has(key)) return null;
       visited.add(key);
 
-      const next = this.chooseNextStep(currentX, currentY, height, step);
+      const next = this.chooseNextStep(currentX, currentY, height, step, options);
       if (!next) return null;
 
       if (next.height > height) {
@@ -225,7 +304,8 @@ export class RiverManager {
     x: number,
     y: number,
     currentHeight: number,
-    step: number
+    step: number,
+    options: { ignoreExistingHydrology?: boolean } = {}
   ): { x: number; y: number; height: number } | null {
     const directions = [
       [1, 0],
@@ -249,7 +329,9 @@ export class RiverManager {
       const oceanBonus = height <= SEA_LEVEL || biome === BiomeType.OCEAN ? 10 : 0;
       const eastwardBias = dx * 0.05;
       const meander = this.noise.noise2D(nx * 0.17 + step, ny * 0.17) * 0.02;
-      const occupancyScore = this.getOccupiedCorridorStepScore(x, y, currentHeight, nx, ny, height, step);
+      const occupancyScore = options.ignoreExistingHydrology
+        ? 0
+        : this.getOccupiedCorridorStepScore(x, y, currentHeight, nx, ny, height, step);
       const score = downhill * 4 + oceanBonus + eastwardBias + meander + occupancyScore;
 
       if (!best || score > best.score) {

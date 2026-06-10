@@ -11,6 +11,7 @@
 - Use the `imagegen` skill whenever an AI-generated raster image could materially improve the visual result, such as textures, sprites, concept art, UI mockups, visual variants, or project-bound bitmap assets. Prefer repo-native SVG, HTML/CSS, canvas, or existing editable assets when those are a better fit.
 - Prefer focused Vitest coverage for logic changes. Add or update nearby tests for generation, geometry, water, economy, serialization, config, and public API behavior.
 - Run the narrowest relevant verification first, then broader checks when touching shared behavior. Use `npm test -- <test-file>` for focused changes, `npm run typecheck` / `npm run typecheck:app` for TypeScript contracts, and `npm run build` when package output may be affected.
+- After finishing any implementation, end the response with a short, explicit note on how to verify the change visually in the app or demo.
 - Avoid large cross-cutting refactors while implementing visual or gameplay tweaks. Keep changes scoped to the affected subsystem unless an extraction clearly reduces existing complexity.
 - Be careful with performance-sensitive paths. Avoid per-frame allocations, unnecessary geometry rebuilds, unbounded caches, and expensive work inside render loops, chunk streaming, terrain mesh generation, and worker communication.
 - When proposing implementation options or visual changes, always consider and state the expected FPS impact, including likely render-loop, geometry, material, texture, shader, allocation, and chunk-streaming costs when relevant.

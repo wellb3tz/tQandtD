@@ -224,7 +224,7 @@ export class LakeManager {
       }
     }
 
-    return result;
+    return result.sort((a, b) => a.id.localeCompare(b.id));
   }
 
   /**
@@ -250,11 +250,9 @@ export class LakeManager {
       for (let tx = 0; tx < chunkSize; tx += step) {
         const worldX = worldXStart + tx;
         const worldY = worldYStart + ty;
-        const tileKey = this.encodeTile(worldX, worldY);
-
-        // Skip if already part of a lake or a river corridor
-        if (this.isTileInAnyLake(tileKey)) continue;
-        if (this.isRiverTile?.(worldX, worldY)) continue;
+        // Candidate discovery must not depend on previously requested
+        // neighbouring regions. Overlaps are resolved deterministically in
+        // addLake(), where adjacent or shared basins are merged.
 
         const biome = this.getBiomeAt(worldX, worldY);
         if (!this.allowedBiomes.has(biome)) continue;
@@ -281,9 +279,6 @@ export class LakeManager {
 
     // Flood-fill from each candidate
     for (const [seedX, seedY] of candidatesToProcess) {
-      const tileKey = this.encodeTile(seedX, seedY);
-      if (this.isTileInAnyLake(tileKey)) continue;
-
       const seedH = this.getTileHeightCached(seedX, seedY, heightCache);
 
       // Determine lake size category using a second noise layer
@@ -464,14 +459,9 @@ export class LakeManager {
         const nKey = this.encodeTile(nx, ny);
 
         if (visited.has(nKey)) continue;
-        if (this.tileToLakeId.has(nKey)) continue; // O(1) - replaces isTileInAnyLake
 
         const nh = getHeight(nx, ny);
         if (nh < waterLevel) {
-          if (this.isRiverTile?.(nx, ny)) {
-            return null; // River drains the basin - treat as open
-          }
-
           visited.add(nKey);
 
           if (visited.size > maxLakeTiles) {

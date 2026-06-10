@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { DEFAULT_LAKE_CONFIG } from '../src/gen/lakes';
 import { DEFAULT_RIVER_CONFIG } from '../src/gen/rivers';
+import type { ChunkData } from '../src/world/chunk';
 import { makeMinimalConfig } from './helpers';
 
 describe('Determinism', () => {
@@ -112,4 +113,89 @@ describe('Determinism', () => {
 
     expect(Array.from(chunkA.heightmap)).toEqual(Array.from(chunkB.heightmap));
   });
+
+  it('hydrology does not depend on chunk request order', async () => {
+    const config = makeMinimalConfig(123);
+    config.maxCacheSize = 200;
+    config.lakeConfig = {
+      ...DEFAULT_LAKE_CONFIG,
+      noiseThreshold: 0.54,
+      maxLakeTiles: 120,
+    };
+    config.riverConfig = {
+      ...DEFAULT_RIVER_CONFIG,
+      sourceThreshold: 0.35,
+      maxRiversPerRegion: 2,
+      minRiverLength: 4,
+      maxLength: 96,
+    };
+    const coordinates = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 0, y: 2 },
+      { x: 2, y: 2 },
+    ];
+
+    const forward = await generateHydrologySnapshot(config, coordinates, coordinates);
+    const reverse = await generateHydrologySnapshot(config, [...coordinates].reverse(), coordinates);
+
+    expect(reverse).toEqual(forward);
+  });
 });
+
+async function generateHydrologySnapshot(
+  config: ReturnType<typeof makeMinimalConfig>,
+  requestOrder: Array<{ x: number; y: number }>,
+  snapshotOrder: Array<{ x: number; y: number }>,
+): Promise<Record<string, unknown>> {
+  const manager = new ChunkManager(config);
+  for (const coordinate of requestOrder) {
+    await manager.getChunk(coordinate.x, coordinate.y);
+  }
+
+  const snapshot: Record<string, unknown> = {};
+  for (const coordinate of snapshotOrder) {
+    const chunk = await manager.getChunk(coordinate.x, coordinate.y);
+    snapshot[`${coordinate.x},${coordinate.y}`] = normalizeHydrologyChunk(chunk);
+  }
+  manager.dispose();
+  return snapshot;
+}
+
+function normalizeHydrologyChunk(chunk: ChunkData): unknown {
+  return {
+    heightmap: Array.from(chunk.heightmap, value => Number(value.toFixed(6))),
+    lakes: (chunk.lakes ?? [])
+      .map(lake => {
+        const tiles = Array.from(lake.tiles).sort((a, b) => a - b);
+        return {
+          waterLevel: Number(lake.waterLevel.toFixed(6)),
+          state: lake.state,
+          tiles,
+          maxDepth: Number(lake.maxDepth.toFixed(6)),
+        };
+      })
+      .sort((a, b) =>
+        a.waterLevel - b.waterLevel ||
+        a.maxDepth - b.maxDepth ||
+        a.state.localeCompare(b.state) ||
+        a.tiles.join(',').localeCompare(b.tiles.join(','))
+      ),
+    rivers: (chunk.rivers ?? [])
+      .map(river => ({
+        riverId: river.riverId,
+        pathId: river.pathId,
+        state: river.state,
+        points: river.points.map(point => [
+          Number(point.x.toFixed(4)),
+          Number(point.y.toFixed(4)),
+          Number(point.surfaceLevel.toFixed(6)),
+        ]),
+      }))
+      .sort((a, b) =>
+        a.riverId.localeCompare(b.riverId) ||
+        a.pathId.localeCompare(b.pathId) ||
+        a.state.localeCompare(b.state)
+      ),
+  };
+}
