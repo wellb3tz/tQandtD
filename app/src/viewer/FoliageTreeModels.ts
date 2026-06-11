@@ -1,35 +1,47 @@
 import * as THREE from 'three';
 
-export interface SpruceTreePrototype {
+export type FoliageTreeModelKind = 'spruce' | 'palm';
+
+export interface FoliageTreeModelPrototype {
   geometry: THREE.BufferGeometry;
   material: THREE.MeshStandardMaterial;
 }
 
-let spruceTreePrototype: SpruceTreePrototype | undefined;
-let spruceTreePrototypePromise: Promise<SpruceTreePrototype> | undefined;
+const treeModelCache = new Map<FoliageTreeModelKind, FoliageTreeModelPrototype>();
+const treeModelPromiseCache = new Map<FoliageTreeModelKind, Promise<FoliageTreeModelPrototype>>();
 
-const SPRUCE_TREE_MODEL_PATH = `${import.meta.env.BASE_URL}models/spruce.glb`;
-const SPRUCE_TREE_MODEL_URL = new URL(SPRUCE_TREE_MODEL_PATH, getAssetBaseUrl()).href;
+const FOLIAGE_TREE_MODEL_FILES: Record<FoliageTreeModelKind, string> = {
+  spruce: 'spruce.glb',
+  palm: 'palm.glb',
+};
 
-export async function getSpruceTreePrototype(): Promise<SpruceTreePrototype> {
-  if (spruceTreePrototype) return spruceTreePrototype;
-  spruceTreePrototypePromise ??= loadSpruceTreePrototype();
-  spruceTreePrototype = await spruceTreePrototypePromise;
-  return spruceTreePrototype;
-}
+export async function getFoliageTreeModelPrototype(kind: FoliageTreeModelKind): Promise<FoliageTreeModelPrototype> {
+  const cached = treeModelCache.get(kind);
+  if (cached) return cached;
 
-export function clearSpruceTreeModelCache(): void {
-  if (spruceTreePrototype) {
-    spruceTreePrototype.geometry.dispose();
-    disposeMaterialTextures(spruceTreePrototype.material);
-    spruceTreePrototype.material.dispose();
+  let promise = treeModelPromiseCache.get(kind);
+  if (!promise) {
+    promise = loadFoliageTreeModelPrototype(kind);
+    treeModelPromiseCache.set(kind, promise);
   }
 
-  spruceTreePrototype = undefined;
-  spruceTreePrototypePromise = undefined;
+  const prototype = await promise;
+  treeModelCache.set(kind, prototype);
+  return prototype;
 }
 
-async function loadSpruceTreePrototype(): Promise<SpruceTreePrototype> {
+export function clearFoliageTreeModelCache(): void {
+  for (const prototype of treeModelCache.values()) {
+    prototype.geometry.dispose();
+    disposeMaterialTextures(prototype.material);
+    prototype.material.dispose();
+  }
+
+  treeModelCache.clear();
+  treeModelPromiseCache.clear();
+}
+
+async function loadFoliageTreeModelPrototype(kind: FoliageTreeModelKind): Promise<FoliageTreeModelPrototype> {
   ensureSelfGlobal();
   const [gltfModule, meshoptModule] = await Promise.all([
     import('three/examples/jsm/loaders/GLTFLoader.js'),
@@ -43,10 +55,10 @@ async function loadSpruceTreePrototype(): Promise<SpruceTreePrototype> {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
 
-  const gltf = await loader.loadAsync(SPRUCE_TREE_MODEL_URL);
+  const gltf = await loader.loadAsync(getFoliageTreeModelUrl(kind));
   const mesh = findFirstMesh(gltf.scene);
   if (!mesh) {
-    throw new Error('spruce.glb did not contain a mesh for foliage rendering');
+    throw new Error(`${FOLIAGE_TREE_MODEL_FILES[kind]} did not contain a mesh for foliage rendering`);
   }
 
   mesh.updateWorldMatrix(true, false);
@@ -65,6 +77,11 @@ async function loadSpruceTreePrototype(): Promise<SpruceTreePrototype> {
   material.needsUpdate = true;
 
   return { geometry, material };
+}
+
+function getFoliageTreeModelUrl(kind: FoliageTreeModelKind): string {
+  const modelPath = `${import.meta.env.BASE_URL}models/${FOLIAGE_TREE_MODEL_FILES[kind]}`;
+  return new URL(modelPath, getAssetBaseUrl()).href;
 }
 
 function findFirstMesh(root: THREE.Object3D): THREE.Mesh<THREE.BufferGeometry, THREE.Material | THREE.Material[]> | undefined {

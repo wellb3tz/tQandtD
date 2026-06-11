@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { FoliagePlacement } from './FoliagePlacementPlanner';
-import { clearSpruceTreeModelCache } from './SpruceTreeModel';
+import { clearFoliageTreeModelCache } from './FoliageTreeModels';
 
 export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'palm' | 'shrub' | 'stump';
 export type FoliagePrototypeDetail = 'full' | 'simple';
@@ -122,7 +122,7 @@ export function clearFoliageGeometryCache(): void {
     geometry.dispose();
   }
   prototypeGeometryCache.clear();
-  clearSpruceTreeModelCache();
+  clearFoliageTreeModelCache();
 }
 
 type LayerSpec =

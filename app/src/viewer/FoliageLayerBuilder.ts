@@ -6,7 +6,11 @@ import {
   type FoliagePrototypeDetail,
   type FoliagePrototypeKind,
 } from './FoliageGeometryBuilder';
-import { getSpruceTreePrototype, type SpruceTreePrototype } from './SpruceTreeModel';
+import {
+  getFoliageTreeModelPrototype,
+  type FoliageTreeModelKind,
+  type FoliageTreeModelPrototype,
+} from './FoliageTreeModels';
 import {
   planFoliagePlacements,
   type FoliagePlacement,
@@ -62,9 +66,7 @@ export async function createFoliageLayer(
   if (!plan) return undefined;
 
   const { treePlacements, shrubPlacements, terrainPropPlacements, clearingCount, clearingSample } = plan;
-  const treePrototype = treePlacements.length > 0
-    ? await getSpruceTreePrototype()
-    : undefined;
+  const treePrototypes = await getTreeModelPrototypes(treePlacements);
   const initialLod = options.initialLod ?? 'near';
   const group = new THREE.Group();
   group.name = `foliage-${chunkX},${chunkY}`;
@@ -76,7 +78,7 @@ export async function createFoliageLayer(
   group.userData.lodEnabled = true;
   group.userData.activeLod = initialLod;
   group.userData.foliagePlan = plan;
-  group.userData.treePrototype = treePrototype;
+  group.userData.treePrototypes = treePrototypes;
   group.userData.chunkCenterX = (chunkX * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
   group.userData.chunkCenterZ = (chunkY * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
   if (clearingSample) group.userData.clearingSample = clearingSample;
@@ -94,14 +96,20 @@ export function ensureFoliageLodBuilt(group: THREE.Group, lod: FoliageLodLevel):
   const plan = group.userData.foliagePlan as FoliagePlacementPlan | undefined;
   if (!plan) return undefined;
 
-  const treePrototype = group.userData.treePrototype as SpruceTreePrototype | undefined;
-  const lodGroup = buildFoliageLodGroup(group, plan, lod, treePrototype);
+  const treePrototypes = group.userData.treePrototypes as Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>> | undefined;
+  const lodGroup = buildFoliageLodGroup(group, plan, lod, treePrototypes ?? {});
   group.add(lodGroup);
   if (lodGroup.userData.treeVariantCount !== undefined) {
     group.userData.treeVariantCount = lodGroup.userData.treeVariantCount;
   }
   if (lodGroup.userData.treeModelCount !== undefined) {
     group.userData.treeModelCount = lodGroup.userData.treeModelCount;
+  }
+  if (lodGroup.userData.spruceTreeModelCount !== undefined) {
+    group.userData.spruceTreeModelCount = lodGroup.userData.spruceTreeModelCount;
+  }
+  if (lodGroup.userData.palmTreeModelCount !== undefined) {
+    group.userData.palmTreeModelCount = lodGroup.userData.palmTreeModelCount;
   }
   return lodGroup;
 }
@@ -132,7 +140,7 @@ function buildFoliageLodGroup(
   owner: THREE.Group,
   plan: FoliagePlacementPlan,
   lod: FoliageLodLevel,
-  treePrototype: SpruceTreePrototype | undefined,
+  treePrototypes: Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>>,
 ): THREE.Group {
   const lodGroup = new THREE.Group();
   lodGroup.name = `foliage-lod-${lod}`;
@@ -144,7 +152,7 @@ function buildFoliageLodGroup(
   addTreeLayers(
     lodGroup,
     selectStableSubset(plan.treePlacements, fractions.trees),
-    treePrototype,
+    treePrototypes,
     detail,
     FOLIAGE_LOD_MODEL_TREE_FRACTION[lod],
   );
@@ -161,30 +169,40 @@ function buildFoliageLodGroup(
 function addTreeLayers(
   group: THREE.Group,
   treePlacements: TreePlacement[],
-  treePrototype: SpruceTreePrototype | undefined,
+  treePrototypes: Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>>,
   detail: FoliagePrototypeDetail,
   modelTreeFraction: number,
 ): void {
   if (treePlacements.length === 0) return;
 
-  const modelPlacements = treePrototype && modelTreeFraction > 0
-    ? selectStableSubset(treePlacements, modelTreeFraction)
-    : [];
-  const modelPlacementSet = new Set(modelPlacements);
+  const modelPlacementSet = new Set<TreePlacement>();
   let treeVariantCount = 0;
 
-  if (treePrototype && modelPlacements.length > 0) {
+  for (const kind of ['spruce', 'palm'] as const) {
+    const prototype = treePrototypes[kind];
+    if (!prototype) continue;
+
+    const kindPlacements = treePlacements.filter(placement => getTreeModelKindForPlacement(placement) === kind);
+    const placements = modelTreeFraction > 0
+      ? selectStableSubset(kindPlacements, modelTreeFraction)
+      : [];
+    if (placements.length === 0) continue;
+    for (const placement of placements) {
+      modelPlacementSet.add(placement);
+    }
+
     const treeMesh = createFoliageInstancedMesh(
-      treePrototype.geometry,
-      modelPlacements,
-      treePrototype.material,
+      prototype.geometry,
+      placements,
+      prototype.material,
       0.30,
     );
-    treeMesh.name = 'foliage-trees-spruce';
+    treeMesh.name = `foliage-trees-${kind}-model`;
     treeMesh.castShadow = false;
     treeMesh.receiveShadow = true;
     group.add(treeMesh);
-    group.userData.treeModelCount = modelPlacements.length;
+    group.userData[`${kind}TreeModelCount`] = placements.length;
+    group.userData.treeModelCount = (group.userData.treeModelCount ?? 0) + placements.length;
     treeVariantCount++;
   }
 
@@ -224,6 +242,27 @@ function addProceduralTreeLayers(
   }
 
   return treeVariantCount;
+}
+
+async function getTreeModelPrototypes(
+  treePlacements: TreePlacement[],
+): Promise<Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>>> {
+  const kinds = new Set<FoliageTreeModelKind>();
+  for (const placement of treePlacements) {
+    kinds.add(getTreeModelKindForPlacement(placement));
+  }
+
+  const prototypes: Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>> = {};
+  await Promise.all(
+    Array.from(kinds, async (kind) => {
+      prototypes[kind] = await getFoliageTreeModelPrototype(kind);
+    }),
+  );
+  return prototypes;
+}
+
+function getTreeModelKindForPlacement(placement: TreePlacement): FoliageTreeModelKind {
+  return placement.variant === 'palm' ? 'palm' : 'spruce';
 }
 
 function addPlacementLayer(

@@ -696,7 +696,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('uses a textured spruce model for instanced tree foliage', async () => {
+  it('uses textured tree models for close instanced tree foliage', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -718,8 +718,8 @@ describe('WorldViewer lifecycle', () => {
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
-    const spruceTree = treeMeshes.find(mesh => mesh.name === 'foliage-trees-spruce')!;
-    const proceduralTrees = treeMeshes.filter(mesh => mesh.name !== 'foliage-trees-spruce');
+    const spruceTree = treeMeshes.find(mesh => mesh.name === 'foliage-trees-spruce-model')!;
+    const proceduralTrees = treeMeshes.filter(mesh => !mesh.name.endsWith('-model'));
     const material = spruceTree.material as THREE.MeshStandardMaterial;
     const geometry = spruceTree.geometry as THREE.BufferGeometry;
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute;

@@ -21,25 +21,28 @@ describe('FoliageLayerBuilder', () => {
     expect(layer?.children.some(lod => lod.children.some(child => child.name.startsWith('foliage-trees-')))).toBe(true);
   });
 
-  it('keeps procedural tree shadows but disables expensive spruce shadow casting', async () => {
+  it('keeps procedural tree shadows but disables expensive tree model shadow casting', async () => {
     const layer = await createFoliageLayer(0, 0, createForestChunk(), 0.3);
     const treeMeshes = layer?.children.flatMap(lod => lod.children.filter(child => child.name.startsWith('foliage-trees-'))) ?? [];
-    const spruceMesh = treeMeshes.find(mesh => mesh.name === 'foliage-trees-spruce');
-    const proceduralMeshes = treeMeshes.filter(mesh => mesh.name !== 'foliage-trees-spruce');
+    const modelMeshes = treeMeshes.filter(mesh => mesh.name.endsWith('-model'));
+    const proceduralMeshes = treeMeshes.filter(mesh => !mesh.name.endsWith('-model'));
 
     expect(treeMeshes.length).toBeGreaterThan(0);
-    expect(spruceMesh?.castShadow).toBe(false);
+    expect(modelMeshes.length).toBeGreaterThan(0);
+    expect(modelMeshes.every(mesh => mesh.castShadow === false)).toBe(true);
     expect(proceduralMeshes.every(mesh => mesh.castShadow === true)).toBe(true);
     expect(treeMeshes.every(mesh => mesh.receiveShadow === true)).toBe(true);
   });
 
-  it('adds a limited spruce tree mesh for close foliage', async () => {
+  it('adds a limited palm tree model mesh for close desert foliage', async () => {
     const layer = await createFoliageLayer(0, 0, createDesertChunk(), 0.3);
     const treeMeshes = layer?.children.flatMap(lod => lod.children.filter(child => child.name.startsWith('foliage-trees-'))) ?? [];
 
     expect(layer).toBeDefined();
     expect(layer?.userData.treeCount).toBeGreaterThan(0);
-    expect(treeMeshes.map(mesh => mesh.name)).toContain('foliage-trees-spruce');
+    expect(treeMeshes.map(mesh => mesh.name)).toContain('foliage-trees-palm-model');
+    expect(treeMeshes.map(mesh => mesh.name)).not.toContain('foliage-trees-spruce-model');
+    expect(layer?.userData.palmTreeModelCount).toBeGreaterThan(0);
     expect(layer?.userData.treeModelCount).toBeGreaterThan(0);
   });
 
@@ -60,8 +63,8 @@ describe('FoliageLayerBuilder', () => {
     expect(far.visible).toBe(true);
     expect(midInstances).toBeLessThan(nearInstances);
     expect(farInstances).toBeLessThan(midInstances);
-    expect(mid.children.some(child => child.name === 'foliage-trees-spruce')).toBe(false);
-    expect(far.children.some(child => child.name === 'foliage-trees-spruce')).toBe(false);
+    expect(mid.children.some(child => child.name.endsWith('-model'))).toBe(false);
+    expect(far.children.some(child => child.name.endsWith('-model'))).toBe(false);
   });
 
   it('can create a far-only initial foliage layer for streaming warmup', async () => {
@@ -70,7 +73,7 @@ describe('FoliageLayerBuilder', () => {
     expect(layer?.userData.activeLod).toBe('far');
     expect(layer?.children.map(child => child.name)).toEqual(['foliage-lod-far']);
     expect(layer?.children[0].visible).toBe(true);
-    expect(layer?.children[0].children.some(child => child.name === 'foliage-trees-spruce')).toBe(false);
+    expect(layer?.children[0].children.some(child => child.name.endsWith('-model'))).toBe(false);
   });
 });
 

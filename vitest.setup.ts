@@ -28,7 +28,7 @@ const blobUrlStore = new Map<string, Blob>();
 let blobUrlId = 0;
 
 URL.createObjectURL = (blob: Blob) => {
-  const url = `blob:vitest-spruce-${++blobUrlId}`;
+  const url = `blob:vitest-tree-model-${++blobUrlId}`;
   blobUrlStore.set(url, blob);
   return url;
 };
@@ -44,10 +44,11 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
     return new Response(storedBlob, { status: 200 });
   }
 
-  if (url.includes('spruce.glb')) {
+  if (url.includes('spruce.glb') || url.includes('palm.glb')) {
+    const modelFile = url.includes('palm.glb') ? 'palm.glb' : 'spruce.glb';
     const path = url.startsWith('file:')
       ? fileURLToPath(url)
-      : resolve('app/public/models/spruce.glb');
+      : resolve('app/public/models', modelFile);
     const bytes = await readFile(path);
     return new Response(bytes, {
       status: 200,
