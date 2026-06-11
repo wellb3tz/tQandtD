@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { ChunkManager } from '../src/world/chunk-manager';
 import { TerrainGenerator } from '../src/gen/terrain';
 import { createDefaultWorldConfig } from '../src/config/default-world-config';
+import { BiomeType, classifyLandBiomeFromClimate, sampleDirectionalClimateField } from '../src';
 import { makeMinimalConfig } from './helpers';
 
 describe('Terrain', () => {
@@ -253,6 +254,31 @@ describe('Terrain', () => {
       expect(carvedVertices).toBeGreaterThan(40);
       expect(maxCut).toBeGreaterThan(0.12);
       expect(strongestMaxDelta).toBeLessThanOrEqual(0.42);
+    });
+
+    it('keeps the southern directional desert below the mountain threshold and dune-shaped', () => {
+      const config = createDefaultWorldConfig({
+        seed: 98765,
+        chunkSize: 32,
+      });
+      const gen = new TerrainGenerator(config.terrainConfig);
+      const chunkSize = config.chunkSize;
+      const chunkX = 0;
+      const chunkY = 300;
+      const worldX = chunkX * chunkSize;
+      const worldY = chunkY * chunkSize;
+      const directional = sampleDirectionalClimateField(worldX, worldY, config.terrainConfig.directionalClimateConfig);
+
+      expect(classifyLandBiomeFromClimate(directional.temperature, directional.moisture)).toBe(BiomeType.DESERT);
+
+      const heightmap = gen.generateHeightmap(config.seed, chunkSize, chunkX, chunkY);
+      const landHeights = Array.from(heightmap).filter(height => height >= 0.3);
+      const maxLandHeight = Math.max(...landHeights);
+      const minLandHeight = Math.min(...landHeights);
+
+      expect(landHeights.length).toBeGreaterThan(20);
+      expect(maxLandHeight).toBeLessThan(0.7);
+      expect(maxLandHeight - minLandHeight).toBeGreaterThan(0.05);
     });
   });
 });

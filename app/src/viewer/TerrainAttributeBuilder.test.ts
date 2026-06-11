@@ -33,6 +33,56 @@ describe('TerrainAttributeBuilder', () => {
     expect(weights.forestFloor).toBeCloseTo(0.25);
   });
 
+  it('keeps steep desert terrain in the desert surface family and suppresses rock detail', () => {
+    const data = {
+      size: 1,
+      heightmap: new Float32Array([0.5, 0.9, 0.5, 0.9]),
+      biomeMap: new Uint8Array([BiomeType.DESERT]),
+      resources: [],
+      structures: [],
+    } as unknown as ChunkData;
+
+    const weights = calculateVertexSurfaceWeights(data, 0, 0);
+
+    expect(weights.desert).toBe(1);
+    expect(weights.mountainRock).toBe(0);
+
+    const geometry = new THREE.BufferGeometry();
+    const vertices = new Float32Array([
+      0, 25, 0,
+      1, 45, 0,
+      0, 25, 1,
+      1, 45, 1,
+    ]);
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array([
+      0.84, 0.72, 0.44,
+      0.84, 0.72, 0.44,
+      0.84, 0.72, 0.44,
+      0.84, 0.72, 0.44,
+    ]), 3));
+    geometry.setIndex([0, 2, 1, 1, 2, 3]);
+    geometry.computeVertexNormals();
+
+    const detailBlend = applyTerrainDetailAndColorModulation({
+      geometry,
+      vertices,
+      data,
+      chunkSize: 1,
+      worldXBase: 0,
+      worldZBase: 0,
+      seaLevel: 0.3,
+      heightScale: 50,
+    });
+
+    for (let i = 0; i < geometry.getAttribute('color').count; i++) {
+      expect(detailBlend[i * 4]).toBe(0);
+      const color = geometry.getAttribute('color') as THREE.BufferAttribute;
+      expect(color.getX(i)).toBeGreaterThan(color.getY(i));
+      expect(color.getY(i)).toBeGreaterThan(color.getZ(i));
+    }
+  });
+
   it('marks river channels as riverbed surface for tooltip summaries', () => {
     const data = createRiverChunk();
 

@@ -63,6 +63,38 @@ describe('terrain geometry builder', () => {
     }
   });
 
+  it('keeps steep desert terrain sandy instead of rocky', () => {
+    const data = {
+      size: 1,
+      heightmap: new Float32Array([0.5, 0.9, 0.5, 0.9]),
+      biomeMap: new Uint8Array([BiomeType.DESERT]),
+      resources: [],
+      structures: [],
+    } as unknown as ChunkData;
+
+    const buffers = buildTerrainGeometryBuffers(data, {
+      chunkX: 0,
+      chunkY: 0,
+      heightScale: 50,
+      seaLevel: 0.3,
+      underwaterDarkenFactor: 0.55,
+      underwaterDesaturationFactor: 0.3,
+      enableDepthGradient: true,
+    });
+
+    for (let i = 0; i < buffers.vertexCount; i++) {
+      const r = buffers.colors[i * 3];
+      const g = buffers.colors[i * 3 + 1];
+      const b = buffers.colors[i * 3 + 2];
+
+      expect(buffers.surfaceBlendA[i * 4 + 1]).toBeGreaterThan(0);
+      expect(buffers.surfaceBlendA[i * 4 + 3]).toBe(0);
+      expect(buffers.terrainDetailBlend[i * 4]).toBe(0);
+      expect(r).toBeGreaterThan(g);
+      expect(g).toBeGreaterThan(b);
+    }
+  });
+
   it('keeps beach vertex colors sandy instead of muddy green', () => {
     const data = {
       size: 1,

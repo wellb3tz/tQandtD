@@ -265,6 +265,7 @@ function createBaseWorldConfig(): WorldConfig {
         BiomeType.MOUNTAIN,
         BiomeType.SWAMP,
         BiomeType.SAVANNA,
+        BiomeType.DESERT,
       ],
       maxLakeTiles: 80,
       maxFillDepth: 0.06,

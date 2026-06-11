@@ -190,11 +190,25 @@ describe('foliage placement planner', () => {
     expect(Math.max(...plan!.treePlacements.map(tree => tree.height))).toBeLessThan(30);
   });
 
-  it('places rare palm trees in desert biomes and keeps other foliage out', () => {
+  it('keeps dry desert dunes free of palms', () => {
     const size = 64;
     const plan = planFoliagePlacements(0, 0, {
       size,
-      heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+      heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.68),
+      biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeUndefined();
+  });
+
+  it('clusters desert palms in lowland pockets even without lakes', () => {
+    const size = 32;
+    const heightmap = createDesertLowlandHeightmap(size);
+    const plan = planFoliagePlacements(0, 0, {
+      size,
+      heightmap,
       biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
       resources: [],
       structures: [],
@@ -203,10 +217,67 @@ describe('foliage placement planner', () => {
     expect(plan).toBeDefined();
     expect(plan!.treePlacements.length).toBeGreaterThan(0);
     expect(plan!.treePlacements.every(tree => tree.variant === 'palm')).toBe(true);
+    expect(plan!.treePlacements.every(placement =>
+      sampleTerrainSurface(heightmap, size, placement.x / TERRAIN_TILE_SIZE_METERS, placement.z / TERRAIN_TILE_SIZE_METERS) < 0.58
+    )).toBe(true);
+    expect(plan!.shrubPlacements).toHaveLength(0);
+    expect(plan!.terrainPropPlacements).toHaveLength(0);
+  });
+
+  it('clusters desert palms around water to form oases', () => {
+    const size = 8;
+    const lakeTiles = new Set([27, 28, 35, 36]);
+    const plan = planFoliagePlacements(0, 0, {
+      size,
+      heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+      biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
+      lakes: [{
+        waterLevel: 0.55,
+        tiles: lakeTiles,
+        maxDepth: 0.08,
+        minTerrainHeight: 0.5,
+      }],
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeDefined();
+    expect(plan!.treePlacements.length).toBeGreaterThan(0);
+    expect(plan!.treePlacements.every(tree => tree.variant === 'palm')).toBe(true);
+
+    const nearestLakeTileDistance = (placement: { x: number; z: number }) => {
+      const tileX = placement.x / TERRAIN_TILE_SIZE_METERS;
+      const tileZ = placement.z / TERRAIN_TILE_SIZE_METERS;
+      let best = Number.POSITIVE_INFINITY;
+      for (const lakeTile of lakeTiles) {
+        const lakeX = lakeTile % size + 0.5;
+        const lakeZ = Math.floor(lakeTile / size) + 0.5;
+        best = Math.min(best, Math.hypot(tileX - lakeX, tileZ - lakeZ));
+      }
+      return best;
+    };
+
+    expect(plan!.treePlacements.every(placement => nearestLakeTileDistance(placement) <= 4.5)).toBe(true);
+    expect(plan!.treePlacements.some(placement => nearestLakeTileDistance(placement) <= 3.0)).toBe(true);
     expect(plan!.shrubPlacements).toHaveLength(0);
     expect(plan!.terrainPropPlacements).toHaveLength(0);
   });
 });
+
+function createDesertLowlandHeightmap(size: number): Float32Array {
+  const verticesPerSide = size + 1;
+  const heightmap = new Float32Array(verticesPerSide * verticesPerSide);
+  const center = size * 0.5;
+
+  for (let y = 0; y < verticesPerSide; y++) {
+    for (let x = 0; x < verticesPerSide; x++) {
+      const distance = Math.hypot(x - center, y - center);
+      heightmap[y * verticesPerSide + x] = distance <= 7 ? 0.48 : 0.68;
+    }
+  }
+
+  return heightmap;
+}
 
 function sampleTerrainSurface(heightmap: Float32Array, size: number, worldX: number, worldZ: number): number {
   const verticesPerSide = size + 1;

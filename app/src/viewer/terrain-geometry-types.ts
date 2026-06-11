@@ -22,6 +22,13 @@ export function selectTerrainSurfaceKey(
 ): TerrainSurfaceKey {
   const wetness = clamp01(moisture);
 
+  if (biome === BiomeType.DESERT) {
+    if (wetness > 0.7 && elevation < 0.5) {
+      return 'beach';
+    }
+    return 'desert';
+  }
+
   if ((biome === BiomeType.MOUNTAIN || biome === BiomeType.POLAR) && elevation >= 0.78 && slope < 0.55 && temperature < 0.3) {
     return 'snow';
   }
@@ -32,13 +39,6 @@ export function selectTerrainSurfaceKey(
 
   if (slope >= 0.6 || biome === BiomeType.MOUNTAIN) {
     return biome === BiomeType.POLAR && wetness > 0.45 ? 'ice' : 'mountainRock';
-  }
-
-  if (biome === BiomeType.DESERT) {
-    if (wetness > 0.7 && elevation < 0.5) {
-      return 'beach';
-    }
-    return 'desert';
   }
 
   if (biome === BiomeType.SAVANNA || biome === BiomeType.STEPPE || biome === BiomeType.DRY_FOREST) {

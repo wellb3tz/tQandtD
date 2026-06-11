@@ -374,7 +374,8 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH,
     );
     const cliffInfluence = calculateCliffInfluence(data, bvX, bvY);
-    const cliffDetail = Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
+    const isDesert = vertexBiome === BiomeType.DESERT;
+    const cliffDetail = isDesert ? 0 : Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
     const frozenBand = clamp01(calculateFrozenRiverInfluence(data, bvX, bvY));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
 
@@ -406,6 +407,19 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
         r = blend(r, wetSand.r, wetFactor * 0.64);
         g = blend(g, wetSand.g, wetFactor * 0.64);
         b = blend(b, wetSand.b, wetFactor * 0.64);
+      }
+    } else if (isDesert) {
+      const duneTint = { r: 0.82, g: 0.71, b: 0.46 };
+      const duneShade = { r: 0.76, g: 0.64, b: 0.39 };
+      const duneFactor = Math.min(0.54, steepness * 0.44);
+      r = blend(r, duneTint.r, duneFactor);
+      g = blend(g, duneTint.g, duneFactor);
+      b = blend(b, duneTint.b, duneFactor);
+      if (steepness > 0.48) {
+        const shadowFactor = Math.min(1.0, (steepness - 0.48) / 0.52);
+        r = blend(r, duneShade.r, shadowFactor * 0.24);
+        g = blend(g, duneShade.g, shadowFactor * 0.24);
+        b = blend(b, duneShade.b, shadowFactor * 0.24);
       }
     } else if (isVolcanic) {
       r = blend(r, rock.r, steepness * 0.6);
@@ -441,7 +455,9 @@ function applyTerrainDetailAndColorModulationRaw(options: DetailModulationOption
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
     }
 
-    const mountainSurface = (isMountain || isPolar)
+    const mountainSurface = isDesert
+      ? 0
+      : (isMountain || isPolar)
       ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
       : cliffDetail;
     if (mountainSurface > 0.08) {

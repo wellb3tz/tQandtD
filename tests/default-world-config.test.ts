@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BiomeType,
   cloneWorldConfig,
   createDefaultWorldConfig,
   DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
@@ -23,6 +24,7 @@ describe('createDefaultWorldConfig', () => {
       ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
       enabled: true,
     });
+    expect(config.lakeConfig!.allowedBiomes).toContain(BiomeType.DESERT);
     expect(config.enhancedBiomeConfig!.directionalClimateConfig).toEqual({
       ...DEFAULT_DIRECTIONAL_CLIMATE_CONFIG,
       enabled: true,

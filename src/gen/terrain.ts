@@ -1,5 +1,5 @@
 import { NoiseEngine, NoiseConfig } from '../core/noise';
-import { sampleDirectionalClimateField, type DirectionalClimateConfig } from '../world/climate';
+import { sampleDirectionalClimateField, type DirectionalClimateConfig, type DirectionalClimateSample } from '../world/climate';
 
 const DIRECTIONAL_HEIGHT_MULTIPLIER_SCALE = 0.12;
 
@@ -117,6 +117,7 @@ export class TerrainGenerator {
   private readonly mountainMaskConfig: NoiseConfig;
   private readonly ridgeConfig: NoiseConfig;
   private readonly mountainDetailConfig: NoiseConfig;
+  private readonly desertDuneConfig: NoiseConfig;
   private readonly cliffConfig: NoiseConfig;
   private readonly cliffFractureConfig: NoiseConfig;
   private readonly canyonRegionConfig: NoiseConfig;
@@ -166,6 +167,13 @@ export class TerrainGenerator {
       persistence: 0.46,
       lacunarity: 2.35,
       scale: config.baseScale * 3.1,
+    };
+
+    this.desertDuneConfig = {
+      octaves: 4,
+      persistence: 0.56,
+      lacunarity: 2.08,
+      scale: config.baseScale * 0.42,
     };
 
     this.cliffConfig = {
@@ -318,6 +326,7 @@ export class TerrainGenerator {
     // Use pre-allocated noise config (no object creation in hot path)
     // Config values are already set in constructor
     let noiseValue: number;
+    const seaLevel = 0.3;
 
     if (use3D) {
       // Use 3D noise with zScale controlling the Z-axis slice of the noise volume.
@@ -337,13 +346,13 @@ export class TerrainGenerator {
 
     // Normalize from [-1, 1] to [0, 1] and apply height multiplier.
     const directional = sampleDirectionalClimateField(x, y, this.config.directionalClimateConfig);
+    const desertDuneBlend = this.getDesertDuneBlend(directional);
     const effectiveHeightMultiplier = this.config.heightMultiplier *
       (1 + directional.heightMultiplier * DIRECTIONAL_HEIGHT_MULTIPLIER_SCALE);
     let height = (noiseValue + 1) * 0.5 * effectiveHeightMultiplier;
 
     // Apply continental noise as a BASE LAYER
     if (this.continentalNoise !== null && this.coastlineNoise !== null) {
-      const seaLevel  = 0.3;
       const baseContinentalStrength = this.config.continentalStrength ?? 0.6;
       const cStrength = directional.oceanCoverageWeight > 0
         ? lerp(baseContinentalStrength, directional.oceanCoverage, directional.oceanCoverageWeight)
@@ -415,6 +424,10 @@ export class TerrainGenerator {
         height = this.applyCliffLandforms(x, y, height, mountainMask, shoreFactor, seaLevel);
         height = this.applyCanyonLandforms(x, y, height, mountainMask, shoreFactor, seaLevel);
       }
+    }
+
+    if (desertDuneBlend > 0 && height >= seaLevel) {
+      height = this.applyDesertDunes(x, y, height, noise, desertDuneBlend, seaLevel);
     }
 
     // Clamp to [0, 1] range
@@ -551,6 +564,31 @@ export class TerrainGenerator {
     const antiMountainTarget = floorHeight + (height - floorHeight) * (1 - Math.min(0.92, canyonFloor * strength));
     const carved = height + (antiMountainTarget - height) * Math.min(1, canyonProfile * regionMask * strength * 1.18);
     return Math.max(floorHeight, Math.min(height - downwardPull * 0.18, carved));
+  }
+
+  private getDesertDuneBlend(directional: DirectionalClimateSample): number {
+    const heat = Math.max(0, Math.min(1, (directional.temperature - 0.48) / 0.34));
+    const dryness = Math.max(0, Math.min(1, (-directional.moisture - 0.24) / 0.48));
+    return Math.max(0, Math.min(1, heat * 0.66 + dryness * 0.72 - 0.08));
+  }
+
+  private applyDesertDunes(
+    x: number,
+    y: number,
+    height: number,
+    noise: NoiseEngine,
+    desertBlend: number,
+    seaLevel: number,
+  ): number {
+    const ridge = noise.ridgeFbm(x + 27.0, y - 19.0, this.desertDuneConfig);
+    const ripples = (noise.fbm(x - 113.0, y + 71.0, this.desertDuneConfig) + 1) * 0.5;
+    const duneProfile = Math.max(0, Math.min(1, ridge * 0.84 + ripples * 0.16));
+    const duneTarget = seaLevel + 0.035 + duneProfile * 0.19;
+    const blend = Math.min(1, desertBlend * (0.58 + Math.max(0, height - seaLevel) * 1.15));
+    const sculpted = height + (duneTarget - height) * blend;
+    const ceiling = 0.685 - desertBlend * 0.02;
+    const capped = Math.min(ceiling, sculpted);
+    return Math.max(seaLevel + 0.01, capped);
   }
 }
 

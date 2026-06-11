@@ -324,7 +324,8 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       (1 - getRiverbedDarkening(data, bvX, bvY)) / RIVER_TRENCH_DARKEN_STRENGTH
     );
     const cliffInfluence = calculateCliffInfluence(data, bvX, bvY);
-    const cliffDetail = Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
+    const isDesert = data.biomeMap && data.biomeMap[bmIdx] === BiomeType.DESERT;
+    const cliffDetail = isDesert ? 0 : Math.max(cliffInfluence, Math.max(0, Math.min(1, (steepness - 0.08) / 0.46)));
     const wetBand = clamp01(Math.max(shorelineWetness, lakeWetness * 0.92, riverWetness * 0.75, riverBankWetness * 0.86));
     const tileTemperature = data.temperatureMap && bmIdx < data.temperatureMap.length
       ? data.temperatureMap[bmIdx]
@@ -354,9 +355,12 @@ export function applyTerrainDetailAndColorModulation(options: TerrainDetailModul
       b = Math.min(1.0, b * wetShade * (1.0 + wetBand * 0.01));
     }
 
-    const mountainSurface = data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.POLAR)
-      ? Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)))
-      : cliffDetail;
+    let mountainSurface = cliffDetail;
+    if (isDesert) {
+      mountainSurface = 0;
+    } else if (data.biomeMap && (data.biomeMap[bmIdx] === BiomeType.MOUNTAIN || data.biomeMap[bmIdx] === BiomeType.POLAR)) {
+      mountainSurface = Math.max(cliffDetail, Math.min(1, Math.max(0, (rawHeight - 0.58) / 0.22)));
+    }
     if (mountainSurface > 0.08) {
       const coolRock = {
         r: 0.34 + rockBreakup * 0.18,

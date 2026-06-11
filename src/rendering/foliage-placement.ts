@@ -210,14 +210,41 @@ export function planFoliagePlacements(
 
         const treeWaterInfluence = getFoliageWaterInfluence(data, tileIndex, treeX, treeZ, worldXBase, worldZBase);
         if (treeWaterInfluence.inWater) continue;
+
         const treeClearingInfluence = getClearingInfluence(treeX, treeZ);
-        const bankTreeScale = Math.max(0, 1 - treeWaterInfluence.bank);
+        const isDesertPalm = profile.treeVariant === 'palm';
         const clearingTreeScale = 1 - treeClearingInfluence.strength;
-        const treeDensity = Math.min(1, profile.density * clusterDensity * 1.22 * slopeDensityScale * bankTreeScale * clearingTreeScale);
+        const bankTreeScale = isDesertPalm
+          ? Math.max(0.36, treeWaterInfluence.bank * 1.15)
+          : Math.max(0, 1 - treeWaterInfluence.bank);
+        const desertLowlandSignal = isDesertPalm
+          ? getDesertLowlandSignal(
+              data.heightmap,
+              verticesPerSide,
+              chunkSize,
+              tileX,
+              tileY,
+              treeElevation,
+              seaLevel,
+            )
+          : 0;
+        const oasisClusterDensity = isDesertPalm ? getDesertOasisClusterDensity(worldTileX, worldTileZ) : 0;
+        const oasisSignal = isDesertPalm
+          ? Math.max(
+              treeWaterInfluence.bank,
+              desertLowlandSignal * (0.14 + oasisClusterDensity * 0.58),
+            )
+          : 1;
+        if (isDesertPalm && oasisSignal <= 0.12) continue;
+
+        const treeDensityBase = profile.density * clusterDensity * 1.22 * slopeDensityScale * bankTreeScale * clearingTreeScale;
+        const treeDensity = isDesertPalm
+          ? Math.min(0.24, treeDensityBase * (2.2 + oasisSignal * 5.0) * oasisSignal)
+          : Math.min(1, treeDensityBase);
         if (deterministic01(worldTileX, worldTileZ, 17 + candidate * 11) > treeDensity) continue;
 
         const treeScaleJitter = 0.82 + deterministic01(worldTileX, worldTileZ, 43 + candidate * 11) * 0.46;
-        const treeHeightScale = (1 - treeWaterInfluence.bank * 0.28 - slopeStress * 0.12) * (1 - treeClearingInfluence.strength * 0.18);
+        const treeHeightScale = (1 - (isDesertPalm ? oasisSignal * 0.08 : treeWaterInfluence.bank * 0.28) - slopeStress * 0.12) * (1 - treeClearingInfluence.strength * 0.18);
         const treeHeight = profile.height * treeScaleJitter * Math.max(0.68, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
         const treeRadius = profile.radius * treeScaleJitter * Math.max(0.72, treeHeightScale) * TREE_HEIGHT_METERS_SCALE;
         treePlacements.push({
@@ -406,11 +433,11 @@ function getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
       return { density: 0.86, height: 1.42, radius: 0.50, color: 0x285f24, maxSlope: 0.18 };
     case BiomeType.DESERT:
       return {
-        density: 0.004,
+        density: 0.011,
         height: 1.26,
         radius: 0.34,
         color: 0x8f9a56,
-        maxSlope: 0.08,
+        maxSlope: 0.12,
         treeVariant: 'palm',
         allowShrubs: false,
         allowTerrainProps: false,
@@ -463,6 +490,56 @@ function getForestClusterDensity(worldX: number, worldZ: number): number {
   const broad = deterministic01(broadX, broadZ, 211);
   const mid = deterministic01(midX, midZ, 223);
   return Math.max(0.28, Math.min(1.18, 0.30 + broad * 0.66 + mid * 0.22));
+}
+
+function getDesertOasisClusterDensity(worldX: number, worldZ: number): number {
+  const broadX = Math.floor(worldX / 13);
+  const broadZ = Math.floor(worldZ / 13);
+  const midX = Math.floor(worldX / 5);
+  const midZ = Math.floor(worldZ / 5);
+  const broad = deterministic01(broadX, broadZ, 229);
+  const mid = deterministic01(midX, midZ, 233);
+  return Math.max(0, Math.min(1, broad * 0.72 + mid * 0.34 - 0.36));
+}
+
+function getDesertLowlandSignal(
+  heightmap: Float32Array,
+  verticesPerSide: number,
+  chunkSize: number,
+  tileX: number,
+  tileY: number,
+  placementElevation: number,
+  seaLevel: number,
+): number {
+  let neighborTotal = 0;
+  let neighborCount = 0;
+  let highestNeighbor = -Infinity;
+  let lowestNeighbor = Infinity;
+
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = tileX + dx;
+      const ny = tileY + dy;
+      if (nx < 0 || ny < 0 || nx >= chunkSize || ny >= chunkSize) continue;
+      const neighborElevation = sampleTerrainElevationAtTilePoint(heightmap, verticesPerSide, nx, ny, 0.5, 0.5);
+      neighborTotal += neighborElevation;
+      neighborCount++;
+      highestNeighbor = Math.max(highestNeighbor, neighborElevation);
+      lowestNeighbor = Math.min(lowestNeighbor, neighborElevation);
+    }
+  }
+
+  if (neighborCount === 0) {
+    return 0;
+  }
+
+  const averageNeighbor = neighborTotal / neighborCount;
+  const depression = averageNeighbor - placementElevation;
+  const basinContrast = highestNeighbor - lowestNeighbor;
+  const localBasin = smoothstep(0.012, 0.06, depression) * smoothstep(0.02, 0.11, basinContrast);
+  const broadLowland = 1 - smoothstep(seaLevel + 0.18, seaLevel + 0.34, placementElevation);
+  return Math.max(0, Math.min(1, Math.max(localBasin, broadLowland * 0.62)));
 }
 
 function selectTreeVariant(profile: FoliageProfile, worldX: number, worldZ: number): TreeVariant {
@@ -546,4 +623,9 @@ function deterministic01(x: number, y: number, salt: number): number {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h = (h ^ (h >>> 16)) >>> 0;
   return h / 4294967296;
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
