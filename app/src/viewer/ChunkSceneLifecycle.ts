@@ -146,7 +146,7 @@ async function createChunkMesh(
     }
   }
 
-  const foliage = createFoliageLayer(chunkX, chunkY, data, waterConfig.seaLevel, {
+  const foliage = await createFoliageLayer(chunkX, chunkY, data, waterConfig.seaLevel, {
     initialLod: selectInitialFoliageLod(chunkX, chunkY, data.size, options.foliageCameraPosition),
   });
   if (foliage) {

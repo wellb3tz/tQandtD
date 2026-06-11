@@ -696,7 +696,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.dispose();
   });
 
-  it('uses multiple instanced low-poly tree silhouettes with trunk and crown colors', async () => {
+  it('uses a textured spruce model for instanced tree foliage', async () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', { value: 800 });
     Object.defineProperty(container, 'clientHeight', { value: 600 });
@@ -705,6 +705,7 @@ describe('WorldViewer lifecycle', () => {
     const viewer = new WorldViewer();
     viewer.initialize(container);
     disableWater(viewer);
+    viewer.setCameraPosition({ x: 40, y: 300, z: 40 });
 
     viewer.addChunk(0, 0, createViewerChunkData({
       size: 4,
@@ -717,43 +718,23 @@ describe('WorldViewer lifecycle', () => {
 
     const foliage = getFoliageGroup(viewer) as THREE.Group;
     const treeMeshes = getFoliageMeshes(foliage, 'foliage-trees');
-    const tree = treeMeshes
-      .slice()
-      .sort((a, b) => {
-        const aPositions = a.geometry.getAttribute('position') as THREE.BufferAttribute;
-        const bPositions = b.geometry.getAttribute('position') as THREE.BufferAttribute;
-        return bPositions.count - aPositions.count;
-      })[0];
-    const material = tree.material as THREE.MeshStandardMaterial;
-    const geometry = tree.geometry as THREE.BufferGeometry;
-    const colors = geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+    const spruceTree = treeMeshes.find(mesh => mesh.name === 'foliage-trees-spruce')!;
+    const proceduralTrees = treeMeshes.filter(mesh => mesh.name !== 'foliage-trees-spruce');
+    const material = spruceTree.material as THREE.MeshStandardMaterial;
+    const geometry = spruceTree.geometry as THREE.BufferGeometry;
     const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
 
-    let hasTrunkColor = false;
-    let hasCrownColor = false;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    for (let i = 0; i < positions.count; i++) {
-      minY = Math.min(minY, positions.getY(i));
-      maxY = Math.max(maxY, positions.getY(i));
-      if (!colors) continue;
-      const r = colors.getX(i);
-      const g = colors.getY(i);
-      const b = colors.getZ(i);
-      hasTrunkColor ||= r > 0.30 && r > g * 1.35 && g > b;
-      hasCrownColor ||= g > r * 1.25 && g > b * 1.25;
-    }
-
-    expect(treeMeshes.length).toBeGreaterThanOrEqual(2);
-    expect(foliage.userData.treeVariantCount).toBeGreaterThanOrEqual(2);
+    expect(spruceTree).toBeInstanceOf(THREE.InstancedMesh);
+    expect(spruceTree.castShadow).toBe(false);
+    expect(spruceTree.count).toBeLessThan(foliage.userData.treeCount);
+    expect(proceduralTrees.length).toBeGreaterThan(0);
+    expect(foliage.userData.treeVariantCount).toBeGreaterThan(1);
     expect(material.vertexColors).toBe(true);
-    expect(colors).toBeDefined();
-    expect(positions.count).toBeGreaterThan(30);
-    expect(minY).toBeLessThan(-0.45);
-    expect(maxY).toBeGreaterThan(0.75);
-    expect(hasTrunkColor).toBe(true);
-    expect(hasCrownColor).toBe(true);
+    expect(material.map).toBeInstanceOf(THREE.Texture);
+    expect((material.map?.image as { width?: number } | undefined)?.width).toBeGreaterThan(0);
+    expect(positions.count).toBeGreaterThan(1000);
+    expect(geometry.boundingBox?.min.y).toBeLessThan(-0.45);
+    expect(geometry.boundingBox?.max.y).toBeGreaterThan(0.45);
 
     viewer.dispose();
   });
@@ -972,7 +953,7 @@ describe('WorldViewer lifecycle', () => {
     viewer.addChunk(0, 0, createViewerChunkData({
       size: 2,
       heightmap: new Float32Array(9).fill(0.5),
-      biomeMap: new Uint8Array(4).fill(BiomeType.DESERT),
+      biomeMap: new Uint8Array(4).fill(BiomeType.PLAINS),
       resources: [],
       structures: [],
     }));

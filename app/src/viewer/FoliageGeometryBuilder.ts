@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { FoliagePlacement } from './FoliagePlacementPlanner';
+import { clearSpruceTreeModelCache } from './SpruceTreeModel';
 
 export type FoliagePrototypeKind = 'spire' | 'compact' | 'broad' | 'palm' | 'shrub' | 'stump';
 export type FoliagePrototypeDetail = 'full' | 'simple';
@@ -13,6 +14,7 @@ export function createFoliageInstancedMesh(
   geometry: THREE.BufferGeometry,
   placements: FoliagePlacement[],
   material: THREE.Material = defaultFoliageMaterial,
+  colorJitterStrength = 1,
 ): THREE.InstancedMesh {
   const mesh = new THREE.InstancedMesh(geometry, material, placements.length);
   const matrix = new THREE.Matrix4();
@@ -35,9 +37,9 @@ export function createFoliageInstancedMesh(
 
     color.setHex(placement.color ?? 0xffffff);
     color.offsetHSL(
-      (deterministic01(index, 53) - 0.5) * 0.035,
-      (deterministic01(index, 59) - 0.5) * 0.18,
-      (deterministic01(index, 61) - 0.5) * 0.16,
+      (deterministic01(index, 53) - 0.5) * 0.035 * colorJitterStrength,
+      (deterministic01(index, 59) - 0.5) * 0.18 * colorJitterStrength,
+      (deterministic01(index, 61) - 0.5) * 0.16 * colorJitterStrength,
     );
     mesh.setColorAt(index, color);
   });
@@ -120,6 +122,7 @@ export function clearFoliageGeometryCache(): void {
     geometry.dispose();
   }
   prototypeGeometryCache.clear();
+  clearSpruceTreeModelCache();
 }
 
 type LayerSpec =
