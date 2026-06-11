@@ -39,10 +39,10 @@ const FOLIAGE_LOD_INSTANCE_FRACTION: Record<FoliageLodLevel, {
   far: { trees: 0.34, shrubs: 0.10, terrainProps: 0 },
 };
 
-const FOLIAGE_LOD_MODEL_TREE_FRACTION: Record<FoliageLodLevel, number> = {
-  near: 0.18,
-  mid: 0,
-  far: 0,
+const FOLIAGE_LOD_MODEL_TREE_FRACTION: Record<FoliageLodLevel, Record<FoliageTreeModelKind, number>> = {
+  near: { spruce: 0.5, palm: 1 },
+  mid: { spruce: 0, palm: 1 },
+  far: { spruce: 0, palm: 1 },
 };
 
 const FOLIAGE_LOD_DETAIL: Record<FoliageLodLevel, FoliagePrototypeDetail> = {
@@ -171,7 +171,7 @@ function addTreeLayers(
   treePlacements: TreePlacement[],
   treePrototypes: Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>>,
   detail: FoliagePrototypeDetail,
-  modelTreeFraction: number,
+  modelTreeFractions: Record<FoliageTreeModelKind, number>,
 ): void {
   if (treePlacements.length === 0) return;
 
@@ -183,6 +183,7 @@ function addTreeLayers(
     if (!prototype) continue;
 
     const kindPlacements = treePlacements.filter(placement => getTreeModelKindForPlacement(placement) === kind);
+    const modelTreeFraction = modelTreeFractions[kind];
     const placements = modelTreeFraction > 0
       ? selectStableSubset(kindPlacements, modelTreeFraction)
       : [];

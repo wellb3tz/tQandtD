@@ -34,7 +34,7 @@ describe('FoliageLayerBuilder', () => {
     expect(treeMeshes.every(mesh => mesh.receiveShadow === true)).toBe(true);
   });
 
-  it('adds a limited palm tree model mesh for close desert foliage', async () => {
+  it('adds palm tree model meshes for desert foliage', async () => {
     const layer = await createFoliageLayer(0, 0, createDesertChunk(), 0.3);
     const treeMeshes = layer?.children.flatMap(lod => lod.children.filter(child => child.name.startsWith('foliage-trees-'))) ?? [];
 
@@ -46,7 +46,7 @@ describe('FoliageLayerBuilder', () => {
     expect(layer?.userData.treeModelCount).toBeGreaterThan(0);
   });
 
-  it('builds sparse simple LOD groups on demand for distant foliage', async () => {
+  it('builds sparse simple LOD groups on demand for distant forest foliage', async () => {
     const layer = await createFoliageLayer(0, 0, createForestChunk(), 0.3);
     const near = layer?.children[0] as THREE.Group;
     const mid = ensureFoliageLodBuilt(layer!, 'mid')!;
@@ -65,6 +65,15 @@ describe('FoliageLayerBuilder', () => {
     expect(farInstances).toBeLessThan(midInstances);
     expect(mid.children.some(child => child.name.endsWith('-model'))).toBe(false);
     expect(far.children.some(child => child.name.endsWith('-model'))).toBe(false);
+  });
+
+  it('keeps palm tree model meshes across distant desert LODs', async () => {
+    const layer = await createFoliageLayer(0, 0, createDesertChunk(), 0.3);
+    const mid = ensureFoliageLodBuilt(layer!, 'mid')!;
+    const far = ensureFoliageLodBuilt(layer!, 'far')!;
+
+    expect(mid.children.some(child => child.name === 'foliage-trees-palm-model')).toBe(true);
+    expect(far.children.some(child => child.name === 'foliage-trees-palm-model')).toBe(true);
   });
 
   it('can create a far-only initial foliage layer for streaming warmup', async () => {

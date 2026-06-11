@@ -556,8 +556,7 @@ describe('WorldViewer lifecycle', () => {
     expect(foliage).toBeInstanceOf(THREE.Group);
     expect(canopy).toBeInstanceOf(THREE.InstancedMesh);
     expect(canopy.count).toBeGreaterThan(0);
-    expect(canopy.count).toBeGreaterThan(0);
-    expect(canopy.castShadow).toBe(true);
+    expect(canopy.castShadow).toBe(canopy.name.endsWith('-model') ? false : true);
     expect(canopy.receiveShadow).toBe(true);
     expect(foliage.visible).toBe(true);
 
@@ -726,7 +725,7 @@ describe('WorldViewer lifecycle', () => {
 
     expect(spruceTree).toBeInstanceOf(THREE.InstancedMesh);
     expect(spruceTree.castShadow).toBe(false);
-    expect(spruceTree.count).toBeLessThan(foliage.userData.treeCount);
+    expect(spruceTree.count).toBe(Math.floor(foliage.userData.treeCount * 0.5));
     expect(proceduralTrees.length).toBeGreaterThan(0);
     expect(foliage.userData.treeVariantCount).toBeGreaterThan(1);
     expect(material.vertexColors).toBe(true);
