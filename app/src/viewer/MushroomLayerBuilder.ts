@@ -21,7 +21,8 @@ export const MUSHROOM_INTERACTION_DISTANCE_METERS = 4.5;
 export const MUSHROOM_SPEED_BOOST_MULTIPLIER = 1.6;
 export const MUSHROOM_SPEED_BOOST_DURATION_MS = 12000;
 
-const MUSHROOM_FRACTION_PER_FOREST_TILE = 0.012;
+const MUSHROOM_FRACTION_PER_FOREST_TILE = 0.06;
+const MUSHROOM_GROUND_SINK_HEIGHT_RATIO = 0.12;
 const MUSHROOM_MAX_SLOPE = 0.16;
 const FOREST_BIOMES = new Set<BiomeType>([
   BiomeType.FOREST,
@@ -106,7 +107,7 @@ function createMushroomInstancedMesh(
     const placement = placements[index];
     transform.position.set(
       placement.x,
-      placement.y - prototype.baseMinY * placement.scale,
+      placement.y - (prototype.baseMinY + prototype.baseHeight * MUSHROOM_GROUND_SINK_HEIGHT_RATIO) * placement.scale,
       placement.z,
     );
     transform.rotation.set(0, placement.rotation, 0);

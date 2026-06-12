@@ -8,12 +8,14 @@ const repoRoot = path.resolve(__dirname, '..');
 const modelDir = path.join(repoRoot, 'app', 'public', 'models');
 const sourceDir = path.join(modelDir, 'high-poly-source');
 
-const modelTargets = {
-  'spruce.glb': 1800,
-  'palm.glb': 1800,
-  'shrub.glb': 2500,
-  'mushroom.glb': 1200,
+const modelConfigs = {
+  'spruce.glb': { targetTriangles: 3000, normalWeight: 0.03, uvWeight: 12.0, targetError: 0.12 },
+  'palm.glb': { targetTriangles: 3000, normalWeight: 0.03, uvWeight: 12.0, targetError: 0.12 },
+  'shrub.glb': { targetTriangles: 3000, normalWeight: 0.03, uvWeight: 12.0, targetError: 0.12 },
+  'mushroom.glb': { targetTriangles: 3000, normalWeight: 0.03, uvWeight: 12.0, targetError: 0.12 },
 };
+
+const requestedFiles = new Set(process.argv.slice(2));
 
 const componentSizes = new Map([
   [5120, 1],
@@ -37,7 +39,9 @@ const componentCounts = new Map([
 await MeshoptSimplifier.ready;
 await mkdir(sourceDir, { recursive: true });
 
-for (const [fileName, targetTriangles] of Object.entries(modelTargets)) {
+for (const [fileName, config] of Object.entries(modelConfigs)) {
+  if (requestedFiles.size > 0 && !requestedFiles.has(fileName)) continue;
+
   const activePath = path.join(modelDir, fileName);
   const sourcePath = path.join(sourceDir, fileName);
 
@@ -45,7 +49,7 @@ for (const [fileName, targetTriangles] of Object.entries(modelTargets)) {
   const sourceBuffer = await readFile(sourcePath);
   const before = readGlb(sourceBuffer);
   const beforeStats = getMeshStats(before.json);
-  const result = simplifyGlb(before, targetTriangles);
+  const result = simplifyGlb(before, config);
   await writeFile(activePath, result.buffer);
 
   console.log(JSON.stringify({
@@ -57,7 +61,7 @@ for (const [fileName, targetTriangles] of Object.entries(modelTargets)) {
     trianglesAfter: result.stats.triangles,
     verticesBefore: beforeStats.vertices,
     verticesAfter: result.stats.vertices,
-    targetTriangles,
+    targetTriangles: config.targetTriangles,
   }));
 }
 
@@ -101,7 +105,7 @@ function readGlb(buffer) {
   return { json, bin };
 }
 
-function simplifyGlb(glb, targetTriangles) {
+function simplifyGlb(glb, config) {
   const json = structuredClone(glb.json);
   const oldAccessors = glb.json.accessors ?? [];
   const oldBufferViews = glb.json.bufferViews ?? [];
@@ -134,10 +138,10 @@ function simplifyGlb(glb, targetTriangles) {
       const vertexCount = oldAccessors[oldPositionAccessorIndex].count;
       const attributes = packSimplifierAttributes(vertexCount, normals, uvs);
       const attributeWeights = [
-        ...(normals ? [0.08, 0.08, 0.08] : []),
-        ...(uvs ? [0.02, 0.02] : []),
+        ...(normals ? [config.normalWeight, config.normalWeight, config.normalWeight] : []),
+        ...(uvs ? [config.uvWeight, config.uvWeight] : []),
       ];
-      const targetIndexCount = Math.max(3, targetTriangles * 3);
+      const targetIndexCount = Math.max(3, config.targetTriangles * 3);
       const [simplified] = MeshoptSimplifier.simplifyWithAttributes(
         indices,
         positions,
@@ -147,8 +151,8 @@ function simplifyGlb(glb, targetTriangles) {
         attributeWeights,
         null,
         targetIndexCount,
-        1,
-        ['Permissive', 'Regularize'],
+        config.targetError,
+        ['LockBorder', 'Regularize'],
       );
 
       const compactIndices = new Uint32Array(simplified);

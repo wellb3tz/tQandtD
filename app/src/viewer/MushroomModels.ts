@@ -10,7 +10,6 @@ export interface MushroomModelPrototype {
 const mushroomModelCache = new Map<string, MushroomModelPrototype>();
 const mushroomModelPromiseCache = new Map<string, Promise<MushroomModelPrototype>>();
 const MUSHROOM_MODEL_FILE = 'mushroom.glb';
-const MUSHROOM_UPRIGHT_ROTATION_X = -Math.PI / 2;
 
 export async function getMushroomModelPrototype(): Promise<MushroomModelPrototype> {
   const cached = mushroomModelCache.get(MUSHROOM_MODEL_FILE);
@@ -63,7 +62,6 @@ async function loadMushroomModelPrototype(): Promise<MushroomModelPrototype> {
   if (!mesh.matrixWorld.equals(new THREE.Matrix4())) {
     geometry.applyMatrix4(mesh.matrixWorld);
   }
-  geometry.applyMatrix4(new THREE.Matrix4().makeRotationX(MUSHROOM_UPRIGHT_ROTATION_X));
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   geometry.userData.sharedFoliageResource = true;

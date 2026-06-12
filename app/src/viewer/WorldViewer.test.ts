@@ -855,6 +855,8 @@ describe('WorldViewer lifecycle', () => {
     const mushroom = findMushroomInstance(viewer);
     expect(mushroom).toBeDefined();
     const mushroomCenter = mushroom!.center;
+    const initialMushroomCount = mushroom!.mesh.count;
+    const collectedMushroomId = (mushroom!.mesh.userData.mushroomIds as string[])[mushroom!.instanceId];
 
     const cameraInputController = (viewer as unknown as {
       cameraInputController: { applySpeedBoost: (multiplier: number, durationMs: number) => void };
@@ -879,7 +881,9 @@ describe('WorldViewer lifecycle', () => {
 
     expect(boostSpy).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
     expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('Mushroom'));
-    expect(viewer.getScene().getObjectByName(mushroom!.mesh.name)).toBeUndefined();
+    const remainingMushrooms = viewer.getScene().getObjectByName(mushroom!.mesh.name) as THREE.InstancedMesh | undefined;
+    expect(remainingMushrooms?.count).toBe(initialMushroomCount - 1);
+    expect(remainingMushrooms?.userData.mushroomIds).not.toContain(collectedMushroomId);
     expect(document.body.classList.contains('collectible-focus-active')).toBe(false);
 
     viewer.dispose();

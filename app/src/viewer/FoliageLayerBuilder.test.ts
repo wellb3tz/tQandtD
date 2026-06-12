@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BiomeType, type ChunkData } from '@engine/index';
+import { BiomeType, TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import { clearFoliageGeometryCache } from './FoliageGeometryBuilder';
 import { createFoliageLayer, ensureFoliageLodBuilt, setBuiltFoliageLodVisibility } from './FoliageLayerBuilder';
 import { clearMushroomModelCache } from './MushroomModels';
@@ -38,6 +38,15 @@ describe('FoliageLayerBuilder', () => {
     expect(mushroomLayer.count).toBe(layer?.userData.mushroomCount);
     expect(mushroomLayer.userData.mushroomIds).toHaveLength(layer?.userData.mushroomCount);
     expect(mushroomLayer.userData.boostMultiplier).toBeGreaterThan(1);
+
+    const firstMatrix = new THREE.Matrix4();
+    const firstPosition = new THREE.Vector3();
+    const firstScale = new THREE.Vector3();
+    mushroomLayer.getMatrixAt(0, firstMatrix);
+    firstMatrix.decompose(firstPosition, new THREE.Quaternion(), firstScale);
+    mushroomLayer.geometry.computeBoundingBox();
+    const baseWorldY = firstPosition.y + (mushroomLayer.geometry.boundingBox?.min.y ?? 0) * firstScale.y;
+    expect(baseWorldY).toBeLessThan(0.5 * TERRAIN_HEIGHT_SCALE_METERS);
   });
 
   it('keeps procedural tree shadows but disables expensive tree model shadow casting', async () => {
