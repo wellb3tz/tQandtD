@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BiomeType, type ChunkData } from '@engine/index';
 import { clearFoliageGeometryCache } from './FoliageGeometryBuilder';
 import { createFoliageLayer, ensureFoliageLodBuilt, setBuiltFoliageLodVisibility } from './FoliageLayerBuilder';
+import { clearMushroomModelCache } from './MushroomModels';
 
 afterEach(() => {
   clearFoliageGeometryCache();
+  clearMushroomModelCache();
 });
 
 describe('FoliageLayerBuilder', () => {
@@ -19,6 +21,23 @@ describe('FoliageLayerBuilder', () => {
     expect(layer?.children.every(child => child instanceof THREE.Group)).toBe(true);
     expect(layer?.children.map(child => child.name)).toEqual(['foliage-lod-near']);
     expect(layer?.children.some(lod => lod.children.some(child => child.name.startsWith('foliage-trees-')))).toBe(true);
+  });
+
+  it('adds rare collectible mushrooms to forest near LOD foliage', async () => {
+    const layer = await createFoliageLayer(0, 0, createForestChunk(), 0.3);
+    const mushrooms: THREE.InstancedMesh[] = [];
+    layer?.traverse(child => {
+      if (child instanceof THREE.InstancedMesh && child.userData.collectibleKind === 'mushroom') {
+        mushrooms.push(child);
+      }
+    });
+
+    expect(layer?.userData.mushroomCount).toBeGreaterThan(0);
+    expect(mushrooms).toHaveLength(1);
+    const mushroomLayer = mushrooms[0];
+    expect(mushroomLayer.count).toBe(layer?.userData.mushroomCount);
+    expect(mushroomLayer.userData.mushroomIds).toHaveLength(layer?.userData.mushroomCount);
+    expect(mushroomLayer.userData.boostMultiplier).toBeGreaterThan(1);
   });
 
   it('keeps procedural tree shadows but disables expensive tree model shadow casting', async () => {
@@ -44,6 +63,20 @@ describe('FoliageLayerBuilder', () => {
     expect(treeMeshes.map(mesh => mesh.name)).not.toContain('foliage-trees-spruce-model');
     expect(layer?.userData.palmTreeModelCount).toBeGreaterThan(0);
     expect(layer?.userData.treeModelCount).toBeGreaterThan(0);
+    expect(layer?.userData.mushroomCount).toBe(0);
+  });
+
+  it('adds shrub model meshes for sparse savanna shrubs', async () => {
+    const layer = await createFoliageLayer(0, 0, createSavannaChunk(), 0.3);
+    const shrubMeshes = layer?.children.flatMap(lod => lod.children.filter(child => child.name.startsWith('foliage-shrubs'))) ?? [];
+
+    expect(layer).toBeDefined();
+    expect(layer?.userData.treeCount).toBe(0);
+    expect(layer?.userData.shrubCount).toBeGreaterThan(0);
+    expect(shrubMeshes.map(mesh => mesh.name)).toContain('foliage-shrubs-shrub-model');
+    expect(shrubMeshes.map(mesh => mesh.name)).not.toContain('foliage-shrubs');
+    expect(layer?.userData.shrubModelCount).toBeGreaterThan(0);
+    expect(layer?.userData.mushroomCount).toBe(0);
   });
 
   it('builds sparse simple LOD groups on demand for distant forest foliage', async () => {
@@ -112,6 +145,17 @@ function createDesertChunk(): ChunkData {
     size,
     heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
     biomeMap: new Uint8Array(size * size).fill(BiomeType.DESERT),
+    resources: [],
+    structures: [],
+  } as unknown as ChunkData;
+}
+
+function createSavannaChunk(): ChunkData {
+  const size = 32;
+  return {
+    size,
+    heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+    biomeMap: new Uint8Array(size * size).fill(BiomeType.SAVANNA),
     resources: [],
     structures: [],
   } as unknown as ChunkData;

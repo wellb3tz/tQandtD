@@ -82,6 +82,9 @@ export function bindAppDomEvents(options: AppDomBindingsOptions): void {
     if (e.code === 'KeyE' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
       if (document.body.classList.contains(JOURNEY_MODE_CLASS) && !isInteractiveTarget(e.target)) {
         e.preventDefault();
+        if (options.getViewer()?.collectHoveredMushroom()) {
+          return;
+        }
         economyConsoleOpen = !economyConsoleOpen;
         document.body.classList.toggle('economy-console-open', economyConsoleOpen);
         if (economyConsoleOpen && document.pointerLockElement) {

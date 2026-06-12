@@ -61,6 +61,8 @@ export class CameraInputController {
   private eyeHeight = FIRST_PERSON_EYE_HEIGHT;
   private velocityY = 0;
   private isOnGround = false;
+  private speedBoostMultiplier = 1;
+  private speedBoostExpiresAtMs = 0;
   private readonly gravity = 0.012;
   private readonly jumpForce = 0.10;
   private readonly terrainRaycaster = new THREE.Raycaster();
@@ -144,6 +146,9 @@ export class CameraInputController {
     if (this.hasTouchMovement()) {
       moveSpeed *= 0.75;
     }
+    if (this.firstPersonMode) {
+      moveSpeed *= this.getActiveSpeedBoostMultiplier(performance.now());
+    }
 
     const activeCamera = this.getActiveCamera();
     const movement = new THREE.Vector3();
@@ -219,6 +224,14 @@ export class CameraInputController {
     this.eyeHeight = height;
   }
 
+  applySpeedBoost(multiplier: number, durationMs: number): void {
+    if (multiplier <= 1 || durationMs <= 0) return;
+
+    const now = performance.now();
+    this.speedBoostMultiplier = Math.max(this.getActiveSpeedBoostMultiplier(now), multiplier);
+    this.speedBoostExpiresAtMs = Math.max(this.speedBoostExpiresAtMs, now + durationMs);
+  }
+
   setMovementBounds(bounds: CameraMovementBounds | null): void {
     this.movementBounds = bounds ? { ...bounds } : null;
     this.clampCameraToMovementBounds(this.getActiveCamera());
@@ -251,6 +264,16 @@ export class CameraInputController {
     );
     const euler = new THREE.Euler(this.cameraRotation.pitch, this.cameraRotation.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(euler);
+  }
+
+  private getActiveSpeedBoostMultiplier(nowMs: number): number {
+    if (this.speedBoostExpiresAtMs <= nowMs) {
+      this.speedBoostMultiplier = 1;
+      this.speedBoostExpiresAtMs = 0;
+      return 1;
+    }
+
+    return this.speedBoostMultiplier;
   }
 
   private clampCameraToMovementBounds(camera: THREE.Camera): void {

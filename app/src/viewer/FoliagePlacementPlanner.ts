@@ -4,6 +4,8 @@ export {
   type FoliagePlacement,
   type FoliagePlacementPlan,
   type FoliageProfile,
+  type ShrubPlacement,
+  type ShrubVariant,
   type TerrainPropPlacement,
   type TreePlacement,
   type TreeVariant,

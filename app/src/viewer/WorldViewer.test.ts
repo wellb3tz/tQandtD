@@ -4,13 +4,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { BiomeType, createSparseBiomeWeights, type ChunkData } from '@engine/index';
+import { BiomeType, FIRST_PERSON_EYE_HEIGHT_METERS, createSparseBiomeWeights, type ChunkData } from '@engine/index';
 import {
   HORIZON_FILL_PLANE_NAME,
   VIEWER_CAMERA_FAR_METERS,
   VIEWER_CAMERA_NEAR_METERS,
   WorldViewer,
 } from './WorldViewer';
+import { errorHandler } from '../utils/ErrorHandler';
 
 function getTexturePixelHex(texture: THREE.DataTexture, y: number): number {
   const data = texture.image.data as Uint8Array;
@@ -139,6 +140,31 @@ function getFoliageMeshes(foliage: THREE.Group, namePrefix: string): THREE.Insta
     }
   });
   return meshes;
+}
+
+interface MushroomInstanceRef {
+  mesh: THREE.InstancedMesh;
+  instanceId: number;
+  center: THREE.Vector3;
+}
+
+function findMushroomInstance(viewer: WorldViewer): MushroomInstanceRef | undefined {
+  let mushroom: THREE.InstancedMesh | undefined;
+  viewer.getScene().traverse(object => {
+    if (!mushroom && object instanceof THREE.InstancedMesh && object.userData.collectibleKind === 'mushroom') {
+      mushroom = object;
+    }
+  });
+  if (!mushroom || mushroom.count === 0) return undefined;
+
+  mushroom.updateWorldMatrix(true, false);
+  mushroom.geometry.computeBoundingBox();
+  const geometryCenter = (mushroom.geometry.boundingBox ?? new THREE.Box3()).getCenter(new THREE.Vector3());
+  const instanceMatrix = new THREE.Matrix4();
+  mushroom.getMatrixAt(0, instanceMatrix);
+  const center = geometryCenter.applyMatrix4(instanceMatrix).applyMatrix4(mushroom.matrixWorld);
+
+  return { mesh: mushroom, instanceId: 0, center };
 }
 
 describe('WorldViewer lifecycle', () => {
@@ -810,6 +836,51 @@ describe('WorldViewer lifecycle', () => {
 
     expect(foliage).toBeInstanceOf(THREE.Group);
     expect(foliage?.userData.foliageCount).toBeGreaterThan(0);
+
+    viewer.dispose();
+  });
+
+  it('focuses forest mushrooms before collecting them with the interact action', async () => {
+    const viewer = new WorldViewer();
+    disableWater(viewer);
+    viewer.setCameraPosition({ x: 0, y: 40, z: 0 });
+
+    viewer.addChunk(0, 0, createViewerChunkData({
+      size: 8,
+      heightmap: new Float32Array(9 * 9).fill(0.5),
+      biomeMap: new Uint8Array(8 * 8).fill(BiomeType.FOREST),
+    }));
+    await viewer.flushPendingChunkBuilds();
+
+    const mushroom = findMushroomInstance(viewer);
+    expect(mushroom).toBeDefined();
+    const mushroomCenter = mushroom!.center;
+
+    const cameraInputController = (viewer as unknown as {
+      cameraInputController: { applySpeedBoost: (multiplier: number, durationMs: number) => void };
+    }).cameraInputController;
+    const boostSpy = vi.spyOn(cameraInputController, 'applySpeedBoost');
+    const toastSpy = vi.spyOn(errorHandler, 'showSuccessToast').mockImplementation(() => undefined);
+
+    viewer.setFirstPersonMode(true);
+    viewer.setCameraPosition({
+      x: mushroomCenter.x,
+      y: mushroomCenter.y + FIRST_PERSON_EYE_HEIGHT_METERS * 0.5,
+      z: mushroomCenter.z + 2,
+    });
+    viewer.getCamera().lookAt(mushroomCenter);
+    viewer.getCamera().updateMatrixWorld(true);
+    (viewer as unknown as { updateCollectibleFocus: (camera: THREE.Camera) => void }).updateCollectibleFocus(viewer.getCamera());
+
+    expect(document.body.classList.contains('collectible-focus-active')).toBe(true);
+    expect(viewer.getScene().getObjectByName(mushroom!.mesh.name)).toBe(mushroom!.mesh);
+
+    expect(viewer.collectHoveredMushroom()).toBe(true);
+
+    expect(boostSpy).toHaveBeenCalledWith(expect.any(Number), expect.any(Number));
+    expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('Mushroom'));
+    expect(viewer.getScene().getObjectByName(mushroom!.mesh.name)).toBeUndefined();
+    expect(document.body.classList.contains('collectible-focus-active')).toBe(false);
 
     viewer.dispose();
   });

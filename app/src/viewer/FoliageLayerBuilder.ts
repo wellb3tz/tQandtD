@@ -15,9 +15,14 @@ import {
   planFoliagePlacements,
   type FoliagePlacement,
   type FoliagePlacementPlan,
+  type ShrubPlacement,
   type TreePlacement,
   type TreeVariant,
 } from './FoliagePlacementPlanner';
+import {
+  addMushroomLayer,
+  createMushroomLayerData,
+} from './MushroomLayerBuilder';
 import { disposeGroup } from './ThreeDisposal';
 
 export type FoliageLodLevel = 'near' | 'mid' | 'far';
@@ -40,9 +45,9 @@ const FOLIAGE_LOD_INSTANCE_FRACTION: Record<FoliageLodLevel, {
 };
 
 const FOLIAGE_LOD_MODEL_TREE_FRACTION: Record<FoliageLodLevel, Record<FoliageTreeModelKind, number>> = {
-  near: { spruce: 0.5, palm: 1 },
-  mid: { spruce: 0, palm: 1 },
-  far: { spruce: 0, palm: 1 },
+  near: { spruce: 0.5, palm: 1, shrub: 1 },
+  mid: { spruce: 0, palm: 1, shrub: 0.62 },
+  far: { spruce: 0, palm: 1, shrub: 0.34 },
 };
 
 const FOLIAGE_LOD_DETAIL: Record<FoliageLodLevel, FoliagePrototypeDetail> = {
@@ -67,20 +72,30 @@ export async function createFoliageLayer(
 
   const { treePlacements, shrubPlacements, terrainPropPlacements, clearingCount, clearingSample } = plan;
   const treePrototypes = await getTreeModelPrototypes(treePlacements);
+  const shrubPrototype = shrubPlacements.some(placement => placement.variant === 'model')
+    ? await getFoliageTreeModelPrototype('shrub')
+    : undefined;
+  const mushroomLayerData = await createMushroomLayerData(chunkX, chunkY, data, seaLevel);
   const initialLod = options.initialLod ?? 'near';
   const group = new THREE.Group();
   group.name = `foliage-${chunkX},${chunkY}`;
+  group.userData.chunkX = chunkX;
+  group.userData.chunkY = chunkY;
   group.userData.treeCount = treePlacements.length;
   group.userData.shrubCount = shrubPlacements.length;
   group.userData.terrainPropCount = terrainPropPlacements.length;
-  group.userData.foliageCount = treePlacements.length + shrubPlacements.length + terrainPropPlacements.length;
+  group.userData.mushroomCount = mushroomLayerData?.placements.length ?? 0;
+  group.userData.foliageCount = treePlacements.length + shrubPlacements.length + terrainPropPlacements.length + group.userData.mushroomCount;
   group.userData.clearingCount = clearingCount;
   group.userData.lodEnabled = true;
   group.userData.activeLod = initialLod;
   group.userData.foliagePlan = plan;
   group.userData.treePrototypes = treePrototypes;
+  group.userData.shrubPrototype = shrubPrototype;
+  group.userData.mushroomLayerData = mushroomLayerData;
   group.userData.chunkCenterX = (chunkX * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
   group.userData.chunkCenterZ = (chunkY * data.size + data.size * 0.5) * TERRAIN_TILE_SIZE_METERS;
+  group.userData.collectedMushroomIds = new Set<string>();
   if (clearingSample) group.userData.clearingSample = clearingSample;
 
   ensureFoliageLodBuilt(group, initialLod);
@@ -97,7 +112,8 @@ export function ensureFoliageLodBuilt(group: THREE.Group, lod: FoliageLodLevel):
   if (!plan) return undefined;
 
   const treePrototypes = group.userData.treePrototypes as Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>> | undefined;
-  const lodGroup = buildFoliageLodGroup(group, plan, lod, treePrototypes ?? {});
+  const shrubPrototype = group.userData.shrubPrototype as FoliageTreeModelPrototype | undefined;
+  const lodGroup = buildFoliageLodGroup(group, plan, lod, treePrototypes ?? {}, shrubPrototype);
   group.add(lodGroup);
   if (lodGroup.userData.treeVariantCount !== undefined) {
     group.userData.treeVariantCount = lodGroup.userData.treeVariantCount;
@@ -110,6 +126,9 @@ export function ensureFoliageLodBuilt(group: THREE.Group, lod: FoliageLodLevel):
   }
   if (lodGroup.userData.palmTreeModelCount !== undefined) {
     group.userData.palmTreeModelCount = lodGroup.userData.palmTreeModelCount;
+  }
+  if (lodGroup.userData.shrubModelCount !== undefined) {
+    group.userData.shrubModelCount = lodGroup.userData.shrubModelCount;
   }
   return lodGroup;
 }
@@ -141,6 +160,7 @@ function buildFoliageLodGroup(
   plan: FoliagePlacementPlan,
   lod: FoliageLodLevel,
   treePrototypes: Partial<Record<FoliageTreeModelKind, FoliageTreeModelPrototype>>,
+  shrubPrototype: FoliageTreeModelPrototype | undefined,
 ): THREE.Group {
   const lodGroup = new THREE.Group();
   lodGroup.name = `foliage-lod-${lod}`;
@@ -156,14 +176,55 @@ function buildFoliageLodGroup(
     detail,
     FOLIAGE_LOD_MODEL_TREE_FRACTION[lod],
   );
-  addPlacementLayer(lodGroup, 'foliage-shrubs', 'shrub', selectStableSubset(plan.shrubPlacements, fractions.shrubs), false, detail);
+  addShrubLayers(
+    lodGroup,
+    selectStableSubset(plan.shrubPlacements, fractions.shrubs),
+    shrubPrototype,
+    detail,
+    FOLIAGE_LOD_MODEL_TREE_FRACTION[lod].shrub,
+  );
   if (plan.terrainPropPlacements.length > 0) {
     addPlacementLayer(lodGroup, 'foliage-props-stumps', 'stump', selectStableSubset(plan.terrainPropPlacements, fractions.terrainProps), false, detail);
     owner.userData.terrainPropKindCount = 1;
   }
+  if (lod === 'near') {
+    addMushroomLayer(owner, lodGroup);
+  }
 
   lodGroup.userData.drawLayerCount = lodGroup.children.length;
   return lodGroup;
+}
+
+function addShrubLayers(
+  group: THREE.Group,
+  shrubPlacements: ShrubPlacement[],
+  shrubPrototype: FoliageTreeModelPrototype | undefined,
+  detail: FoliagePrototypeDetail,
+  modelShrubFraction: number,
+): void {
+  const modelPlacements = shrubPlacements.filter(placement => placement.variant === 'model');
+  const proceduralPlacements = shrubPlacements.filter(placement => placement.variant !== 'model');
+
+  if (modelPlacements.length > 0 && shrubPrototype) {
+    const placements = modelShrubFraction > 0
+      ? selectStableSubset(modelPlacements, modelShrubFraction)
+      : [];
+    if (placements.length > 0) {
+      const mesh = createFoliageInstancedMesh(
+        shrubPrototype.geometry,
+        placements,
+        shrubPrototype.material,
+        0.46,
+      );
+      mesh.name = 'foliage-shrubs-shrub-model';
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      group.userData.shrubModelCount = placements.length;
+    }
+  }
+
+  addPlacementLayer(group, 'foliage-shrubs', 'shrub', proceduralPlacements, false, detail);
 }
 
 function addTreeLayers(

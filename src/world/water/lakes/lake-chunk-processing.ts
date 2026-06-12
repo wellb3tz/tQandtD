@@ -127,6 +127,6 @@ export function determineLakeState(
   const avgMoisture = totalMoisture / sampled;
 
   if (avgTemp < -0.4) return 'frozen';
-  if (avgTemp > 0.4 && avgMoisture < -0.2) return 'dry';
+  if (avgTemp > 0.4 && avgMoisture < -0.2 && lake.maxDepth < 0.045) return 'dry';
   return 'filled';
 }

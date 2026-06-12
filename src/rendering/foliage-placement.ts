@@ -20,6 +20,8 @@ export type FoliageProfile = {
   color: number;
   maxSlope: number;
   treeVariant?: TreeVariant;
+  shrubVariant?: ShrubVariant;
+  allowTrees?: boolean;
   allowShrubs?: boolean;
   allowTerrainProps?: boolean;
 };
@@ -36,9 +38,14 @@ export type FoliagePlacement = {
 };
 
 export type TreeVariant = 'spire' | 'compact' | 'broad' | 'palm';
+export type ShrubVariant = 'procedural' | 'model';
 
 export type TreePlacement = FoliagePlacement & {
   variant: TreeVariant;
+};
+
+export type ShrubPlacement = FoliagePlacement & {
+  variant?: ShrubVariant;
 };
 
 export type TerrainPropPlacement = FoliagePlacement & {
@@ -64,7 +71,7 @@ type FoliageClearingInfluence = {
 
 export type FoliagePlacementPlan = {
   treePlacements: TreePlacement[];
-  shrubPlacements: FoliagePlacement[];
+  shrubPlacements: ShrubPlacement[];
   terrainPropPlacements: TerrainPropPlacement[];
   clearingCount: number;
   clearingSample?: { x: number; z: number; radius: number };
@@ -86,7 +93,7 @@ export function planFoliagePlacements(
   const heightScale = TERRAIN_HEIGHT_SCALE_METERS;
   const horizontalScale = TERRAIN_TILE_SIZE_METERS;
   const treePlacements: TreePlacement[] = [];
-  const shrubPlacements: FoliagePlacement[] = [];
+  const shrubPlacements: ShrubPlacement[] = [];
   const terrainPropPlacements: TerrainPropPlacement[] = [];
   let clearingCount = 0;
   let clearingSample: { x: number; z: number; radius: number } | undefined;
@@ -166,6 +173,7 @@ export function planFoliagePlacements(
             rotation: deterministic01(worldTileX, worldTileZ, 163) * Math.PI * 2,
             color: modulateFoliageColor(profile.color, worldTemperatureOffset ?? 0),
             rank: deterministic01(worldTileX, worldTileZ, 173),
+            variant: profile.shrubVariant,
           });
         }
       }
@@ -190,6 +198,8 @@ export function planFoliagePlacements(
           });
         }
       }
+
+      if (profile.allowTrees === false) continue;
 
       for (let candidate = 0; candidate < TREE_CANDIDATES_PER_TILE; candidate++) {
         const localCellX = candidate % 3;
@@ -450,6 +460,18 @@ function getFoliageProfile(biome: BiomeType): FoliageProfile | undefined {
       return { density: 0.72, height: 1.86, radius: 0.46, color: 0x254f3e, maxSlope: 0.17 };
     case BiomeType.SWAMP:
       return { density: 0.50, height: 1.14, radius: 0.52, color: 0x375a2b, maxSlope: 0.12 };
+    case BiomeType.SAVANNA:
+      return {
+        density: 0.16,
+        height: 0.64,
+        radius: 0.36,
+        color: 0x697735,
+        maxSlope: 0.13,
+        shrubVariant: 'model',
+        allowTrees: false,
+        allowShrubs: true,
+        allowTerrainProps: false,
+      };
     default:
       return undefined;
   }

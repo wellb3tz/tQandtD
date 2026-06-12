@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type FoliageTreeModelKind = 'spruce' | 'palm';
+export type FoliageTreeModelKind = 'spruce' | 'palm' | 'shrub';
 
 export interface FoliageTreeModelPrototype {
   geometry: THREE.BufferGeometry;
@@ -13,6 +13,7 @@ const treeModelPromiseCache = new Map<FoliageTreeModelKind, Promise<FoliageTreeM
 const FOLIAGE_TREE_MODEL_FILES: Record<FoliageTreeModelKind, string> = {
   spruce: 'spruce.glb',
   palm: 'palm.glb',
+  shrub: 'shrub.glb',
 };
 
 export async function getFoliageTreeModelPrototype(kind: FoliageTreeModelKind): Promise<FoliageTreeModelPrototype> {

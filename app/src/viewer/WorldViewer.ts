@@ -34,6 +34,14 @@ import { ViewerRenderStatsCache } from './ViewerRenderStatsCache';
 import { ViewerTerrainRaycaster } from './ViewerTerrainRaycaster';
 import { ViewerCanvasHost } from './ViewerCanvasHost';
 import { WorldChunkController } from './WorldChunkController';
+import { disposeGroup } from './ThreeDisposal';
+import {
+  addMushroomLayer,
+  MUSHROOM_INTERACTION_DISTANCE_METERS,
+  MUSHROOM_SPEED_BOOST_DURATION_MS,
+  MUSHROOM_SPEED_BOOST_MULTIPLIER,
+} from './MushroomLayerBuilder';
+import { errorHandler } from '../utils/ErrorHandler';
 
 export { RenderLayer } from './RenderLayerVisibility';
 export type { ChunkCoord, RaycastHit, Vector3 } from '../utils/coordinates';
@@ -44,6 +52,13 @@ export const DEFAULT_STREAMING_VIEW_DISTANCE_CHUNKS = 3;
 export const DEFAULT_STREAMING_CHUNK_SIZE_TILES = 32;
 export const TERRAIN_FOG_COLOR = 0xb9d5e6;
 export const HORIZON_FILL_PLANE_NAME = 'terrain-horizon-fill';
+
+interface CollectibleCandidate {
+  chunk: ChunkMesh;
+  mesh: THREE.InstancedMesh;
+  instanceId: number;
+  distance: number;
+}
 
 /**
  * WorldViewer - Manages 3D visualization of the procedural world
@@ -63,6 +78,10 @@ export class WorldViewer {
   
   private atmosphereController: AtmosphereController | null = null;
   private horizonFillPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | null = null;
+  private hoveredCollectible: CollectibleCandidate | null = null;
+  private readonly collectibleRaycaster = new THREE.Raycaster();
+  private readonly collectibleRayDirection = new THREE.Vector3();
+  private readonly collectibleIntersections: THREE.Intersection[] = [];
 
   // Chunk meshes
   private chunkMeshes: Map<string, ChunkMesh>;
@@ -140,6 +159,7 @@ export class WorldViewer {
       waterLayerManager: this.waterLayerManager,
       getWaterConfig: () => this.viewSettings.getWaterConfigReference(),
       beforeRender: activeCamera => {
+        this.updateCollectibleFocus(activeCamera);
         this.updateHorizonFill(activeCamera);
         this.atmosphereController?.updateSunAndShadowFocus(activeCamera);
       },
@@ -488,6 +508,27 @@ export class WorldViewer {
     return this.terrainRaycaster.raycast(screenX, screenY);
   }
 
+  collectHoveredMushroom(): boolean {
+    if (!this.hoveredCollectible) {
+      return false;
+    }
+
+    this.collectMushroom(
+      this.hoveredCollectible.chunk,
+      this.hoveredCollectible.mesh,
+      this.hoveredCollectible.instanceId,
+    );
+    this.hoveredCollectible = null;
+    this.setCollectiblePromptVisible(false);
+    this.cameraInputController.applySpeedBoost(
+      MUSHROOM_SPEED_BOOST_MULTIPLIER,
+      MUSHROOM_SPEED_BOOST_DURATION_MS,
+    );
+    errorHandler.showSuccessToast('Mushroom collected. Speed boost active.');
+    this.invalidateRenderStatsCache();
+    return true;
+  }
+
   /**
    * Get the active terrain chunk meshes.
    */
@@ -541,11 +582,86 @@ export class WorldViewer {
     this.renderStatsCache.invalidate();
   }
 
+  private updateCollectibleFocus(activeCamera: THREE.Camera): void {
+    if (!this.cameraInputController.isFirstPersonMode()) {
+      this.hoveredCollectible = null;
+      this.setCollectiblePromptVisible(false);
+      return;
+    }
+
+    this.hoveredCollectible = this.findFocusedMushroomCollectible(activeCamera);
+    this.setCollectiblePromptVisible(this.hoveredCollectible !== null);
+  }
+
+  private findFocusedMushroomCollectible(activeCamera: THREE.Camera): CollectibleCandidate | null {
+    let focusedCollectible: CollectibleCandidate | null = null;
+    this.collectibleRayDirection.set(0, 0, -1).applyQuaternion(activeCamera.quaternion).normalize();
+    this.collectibleRaycaster.set(activeCamera.position, this.collectibleRayDirection);
+    this.collectibleRaycaster.far = MUSHROOM_INTERACTION_DISTANCE_METERS;
+
+    for (const chunk of this.chunkMeshes.values()) {
+      const foliage = chunk.foliage;
+      if (!foliage || foliage.visible === false || foliage.userData.activeLod !== 'near') {
+        continue;
+      }
+
+      foliage.traverse((object) => {
+        if (!(object instanceof THREE.InstancedMesh)) return;
+        if (object.userData.collectibleKind !== 'mushroom') return;
+
+        this.collectibleRaycaster.intersectObject(object, false, this.collectibleIntersections);
+        const hit = this.collectibleIntersections.find(intersection => intersection.instanceId !== undefined);
+        this.collectibleIntersections.length = 0;
+        if (!hit) {
+          return;
+        }
+
+        if (!focusedCollectible || hit.distance < focusedCollectible.distance) {
+          focusedCollectible = {
+            chunk,
+            mesh: object,
+            instanceId: hit.instanceId!,
+            distance: hit.distance,
+          };
+        }
+      });
+    }
+
+    return focusedCollectible as CollectibleCandidate | null;
+  }
+
+  private collectMushroom(chunk: ChunkMesh, mesh: THREE.InstancedMesh, instanceId: number): void {
+    const foliage = chunk.foliage;
+    if (!foliage) return;
+
+    const mushroomIds = mesh.userData.mushroomIds as string[] | undefined;
+    const mushroomId = mushroomIds?.[instanceId];
+    if (!mushroomId) return;
+
+    const collectedIds = foliage.userData.collectedMushroomIds as Set<string> | undefined;
+    collectedIds?.add(mushroomId);
+
+    const mushroomLayer = mesh.parent instanceof THREE.Group ? mesh.parent : undefined;
+    const lodGroup = mushroomLayer?.parent instanceof THREE.Group ? mushroomLayer.parent : undefined;
+    if (!mushroomLayer || !lodGroup) return;
+
+    lodGroup.remove(mushroomLayer);
+    disposeGroup(mushroomLayer);
+    addMushroomLayer(foliage, lodGroup);
+    lodGroup.userData.drawLayerCount = lodGroup.children.length;
+  }
+
+  private setCollectiblePromptVisible(visible: boolean): void {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('collectible-focus-active', visible);
+  }
+
   /**
    * Clean up resources
    */
   dispose(): void {
     this.renderLoop.stop();
+    this.setCollectiblePromptVisible(false);
     
     this.chunkController.clearChunks();
     

@@ -44,8 +44,14 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
     return new Response(storedBlob, { status: 200 });
   }
 
-  if (url.includes('spruce.glb') || url.includes('palm.glb')) {
-    const modelFile = url.includes('palm.glb') ? 'palm.glb' : 'spruce.glb';
+  if (url.includes('spruce.glb') || url.includes('palm.glb') || url.includes('mushroom.glb') || url.includes('shrub.glb')) {
+    const modelFile = url.includes('palm.glb')
+      ? 'palm.glb'
+      : url.includes('shrub.glb')
+        ? 'shrub.glb'
+      : url.includes('mushroom.glb')
+        ? 'mushroom.glb'
+        : 'spruce.glb';
     const path = url.startsWith('file:')
       ? fileURLToPath(url)
       : resolve('app/public/models', modelFile);

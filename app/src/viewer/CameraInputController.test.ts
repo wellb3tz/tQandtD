@@ -3,13 +3,14 @@
  */
 
 import * as THREE from 'three';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FIRST_PERSON_EYE_HEIGHT_METERS } from '@engine/index';
 import { CameraInputController } from './CameraInputController';
 import type { ChunkMesh } from './ChunkMesh';
 
 describe('CameraInputController', () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     document.body.innerHTML = '';
   });
 
@@ -42,6 +43,30 @@ describe('CameraInputController', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
 
     expect(Math.abs(camera.position.z)).toBeGreaterThan(1);
+    controller.detach();
+  });
+
+  it('applies temporary first-person speed boosts and expires them', () => {
+    const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const camera = new THREE.PerspectiveCamera();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const controller = createController(camera, container);
+    controller.resetRotation(0, 0);
+    controller.setFirstPersonMode(true);
+    controller.attach();
+
+    controller.applySpeedBoost(2, 1000);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    controller.updateMovement();
+    const boostedZ = camera.position.z;
+
+    nowSpy.mockReturnValue(1001);
+    controller.updateMovement();
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+
+    expect(Math.abs(boostedZ)).toBeCloseTo(0.36);
+    expect(Math.abs(camera.position.z - boostedZ)).toBeCloseTo(0.18);
     controller.detach();
   });
 

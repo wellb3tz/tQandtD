@@ -118,6 +118,7 @@ export class TerrainGenerator {
   private readonly ridgeConfig: NoiseConfig;
   private readonly mountainDetailConfig: NoiseConfig;
   private readonly desertDuneConfig: NoiseConfig;
+  private readonly desertBasinConfig: NoiseConfig;
   private readonly cliffConfig: NoiseConfig;
   private readonly cliffFractureConfig: NoiseConfig;
   private readonly canyonRegionConfig: NoiseConfig;
@@ -174,6 +175,13 @@ export class TerrainGenerator {
       persistence: 0.56,
       lacunarity: 2.08,
       scale: config.baseScale * 0.42,
+    };
+
+    this.desertBasinConfig = {
+      octaves: 3,
+      persistence: 0.54,
+      lacunarity: 2.0,
+      scale: config.baseScale * 0.16,
     };
 
     this.cliffConfig = {
@@ -585,7 +593,27 @@ export class TerrainGenerator {
     const duneProfile = Math.max(0, Math.min(1, ridge * 0.84 + ripples * 0.16));
     const duneTarget = seaLevel + 0.035 + duneProfile * 0.19;
     const blend = Math.min(1, desertBlend * (0.58 + Math.max(0, height - seaLevel) * 1.15));
-    const sculpted = height + (duneTarget - height) * blend;
+    let sculpted = height + (duneTarget - height) * blend;
+
+    const basinCellSize = 56.0;
+    const basinCellX = Math.floor(x / basinCellSize);
+    const basinCellY = Math.floor(y / basinCellSize);
+    const basinGate = (noise.fbm(basinCellX * 1.71 - 37.0, basinCellY * 1.71 + 53.0, this.desertBasinConfig) + 1) * 0.5;
+    const basinChance = smoothstep(0.74, 0.94, basinGate);
+    if (basinChance > 0) {
+      const centerOffsetX = ((noise.fbm(basinCellX * 2.13 + 19.0, basinCellY * 2.13 - 29.0, this.desertBasinConfig) + 1) * 0.5 - 0.5) * 0.28;
+      const centerOffsetY = ((noise.fbm(basinCellX * 2.17 - 11.0, basinCellY * 2.17 + 41.0, this.desertBasinConfig) + 1) * 0.5 - 0.5) * 0.28;
+      const localX = x / basinCellSize - basinCellX - 0.5 - centerOffsetX;
+      const localY = y / basinCellSize - basinCellY - 0.5 - centerOffsetY;
+      const distance = Math.hypot(localX, localY);
+      const innerRadius = 0.12 + basinGate * 0.05;
+      const outerRadius = innerRadius + 0.42;
+      const bowl = 1 - smoothstep(innerRadius, outerRadius, distance);
+      const basinFloor = seaLevel + 0.018 + basinGate * 0.014;
+      const basinDepth = (0.032 + basinGate * 0.05) * desertBlend;
+      const basinTarget = Math.max(basinFloor, sculpted - basinDepth);
+      sculpted = sculpted + (basinTarget - sculpted) * bowl * basinChance;
+    }
     const ceiling = 0.685 - desertBlend * 0.02;
     const capped = Math.min(ceiling, sculpted);
     return Math.max(seaLevel + 0.01, capped);

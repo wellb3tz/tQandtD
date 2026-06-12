@@ -256,6 +256,7 @@ export class LakeManager {
 
         const biome = this.getBiomeAt(worldX, worldY);
         if (!this.allowedBiomes.has(biome)) continue;
+        if (this.isRiverTile?.(worldX, worldY)) continue;
 
         const h = this.getTileHeightCached(worldX, worldY, heightCache);
         if (h < this.config.minElevation || h > this.config.maxElevation) continue;
@@ -266,8 +267,11 @@ export class LakeManager {
         const wy = worldY + 0.5;
         const raw = this.noise.fbm(wx, wy, this.lakeNoiseConfig);
         const noiseVal = (raw + 1) * 0.5;
+        const desertBasinBonus = biome === BiomeType.DESERT
+          ? this.getDesertLakeCandidateBonus(worldX, worldY, h, heightCache, seaLevel)
+          : 0;
 
-        if (noiseVal >= this.config.noiseThreshold) {
+        if (noiseVal + desertBasinBonus >= this.config.noiseThreshold) {
           candidates.push([worldX, worldY]);
         }
       }
@@ -402,6 +406,33 @@ export class LakeManager {
     const height = this.getTileHeight(worldX, worldY);
     cache.set(key, height);
     return height;
+  }
+
+  private getDesertLakeCandidateBonus(
+    worldX: number,
+    worldY: number,
+    centerHeight: number,
+    heightCache: Map<string, number>,
+    seaLevel: number
+  ): number {
+    if (centerHeight <= seaLevel + 0.02 || centerHeight >= seaLevel + 0.22) {
+      return 0;
+    }
+
+    const sampleDistance = 4;
+    const north = this.getTileHeightCached(worldX, worldY - sampleDistance, heightCache);
+    const south = this.getTileHeightCached(worldX, worldY + sampleDistance, heightCache);
+    const west = this.getTileHeightCached(worldX - sampleDistance, worldY, heightCache);
+    const east = this.getTileHeightCached(worldX + sampleDistance, worldY, heightCache);
+    const rimAverage = (north + south + west + east) * 0.25;
+    const basinDepth = rimAverage - centerHeight;
+    if (basinDepth <= 0) {
+      return 0;
+    }
+
+    const lowlandFactor = 1 - smoothstep(seaLevel + 0.10, seaLevel + 0.22, centerHeight);
+    const basinFactor = smoothstep(0.012, 0.045, basinDepth);
+    return Math.max(0, Math.min(0.18, basinFactor * lowlandFactor * 0.18));
   }
 
   /**
@@ -678,4 +709,9 @@ export class LakeManager {
     this.lakeAccessTime.clear();
     this.chunkAccessTime.clear();
   }
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }

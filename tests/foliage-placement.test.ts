@@ -190,6 +190,24 @@ describe('foliage placement planner', () => {
     expect(Math.max(...plan!.treePlacements.map(tree => tree.height))).toBeLessThan(30);
   });
 
+  it('places rare model shrubs in savanna without adding trees', () => {
+    const size = 32;
+    const plan = planFoliagePlacements(0, 0, {
+      size,
+      heightmap: new Float32Array((size + 1) * (size + 1)).fill(0.5),
+      biomeMap: new Uint8Array(size * size).fill(BiomeType.SAVANNA),
+      resources: [],
+      structures: [],
+    }, 0.3);
+
+    expect(plan).toBeDefined();
+    expect(plan!.treePlacements).toHaveLength(0);
+    expect(plan!.terrainPropPlacements).toHaveLength(0);
+    expect(plan!.shrubPlacements.length).toBeGreaterThan(0);
+    expect(plan!.shrubPlacements.length).toBeLessThan(120);
+    expect(plan!.shrubPlacements.every(shrub => shrub.variant === 'model')).toBe(true);
+  });
+
   it('keeps dry desert dunes free of palms', () => {
     const size = 64;
     const plan = planFoliagePlacements(0, 0, {

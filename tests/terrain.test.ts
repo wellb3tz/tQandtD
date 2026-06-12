@@ -280,6 +280,25 @@ describe('Terrain', () => {
       expect(maxLandHeight).toBeLessThan(0.7);
       expect(maxLandHeight - minLandHeight).toBeGreaterThan(0.05);
     });
+
+    it('creates rare shallow basins in desert terrain for occasional oases', () => {
+      const config = createDefaultWorldConfig({
+        seed: 98765,
+        chunkSize: 16,
+      });
+      const gen = new TerrainGenerator(config.terrainConfig);
+      const chunkSize = config.chunkSize;
+
+      let bestBasinScore = 0;
+      for (let chunkY = 594; chunkY <= 606; chunkY++) {
+        for (let chunkX = -4; chunkX <= 4; chunkX++) {
+          const heightmap = gen.generateHeightmap(config.seed, chunkSize, chunkX, chunkY);
+          bestBasinScore = Math.max(bestBasinScore, findBestDesertBasinScore(heightmap, chunkSize));
+        }
+      }
+
+      expect(bestBasinScore).toBeGreaterThan(0.01);
+    });
   });
 });
 
@@ -314,4 +333,33 @@ function getAdjacentHeightDeltaStats(heightmap: Float32Array, chunkSize: number)
   }
 
   return { maxDelta, steepEdgeCount };
+}
+
+function findBestDesertBasinScore(heightmap: Float32Array, chunkSize: number): number {
+  const vSize = chunkSize + 1;
+  let bestScore = 0;
+
+  for (let y = 2; y < chunkSize - 1; y++) {
+    for (let x = 2; x < chunkSize - 1; x++) {
+      const center = heightmap[y * vSize + x];
+      if (center <= 0.31 || center >= 0.62) continue;
+
+      const innerNorth = heightmap[(y - 1) * vSize + x];
+      const innerSouth = heightmap[(y + 1) * vSize + x];
+      const innerWest = heightmap[y * vSize + x - 1];
+      const innerEast = heightmap[y * vSize + x + 1];
+      const innerAverage = (innerNorth + innerSouth + innerWest + innerEast) * 0.25;
+
+      const outerNorth = (heightmap[(y - 2) * vSize + x - 1] + heightmap[(y - 2) * vSize + x] + heightmap[(y - 2) * vSize + x + 1]) / 3;
+      const outerSouth = (heightmap[(y + 2) * vSize + x - 1] + heightmap[(y + 2) * vSize + x] + heightmap[(y + 2) * vSize + x + 1]) / 3;
+      const outerWest = (heightmap[(y - 1) * vSize + x - 2] + heightmap[y * vSize + x - 2] + heightmap[(y + 1) * vSize + x - 2]) / 3;
+      const outerEast = (heightmap[(y - 1) * vSize + x + 2] + heightmap[y * vSize + x + 2] + heightmap[(y + 1) * vSize + x + 2]) / 3;
+      const outerAverage = (outerNorth + outerSouth + outerWest + outerEast) * 0.25;
+
+      const score = (innerAverage - center) * 0.6 + (outerAverage - center) * 0.4;
+      if (score > bestScore) bestScore = score;
+    }
+  }
+
+  return bestScore;
 }

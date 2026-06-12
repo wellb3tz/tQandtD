@@ -1,5 +1,5 @@
 /**
- * TerrainTooltip - Shows terrain info (height, biome, coords) on mouse hover.
+ * TerrainTooltip - Shows terrain info (biome, surface, height, climate, coords) on mouse hover.
  * Uses WorldViewer.raycastTerrain() to get hit info, then looks up ChunkData.
  */
 
@@ -7,13 +7,7 @@ import { WorldApp } from '../core/WorldApp';
 import { JOURNEY_MODE_CLASS } from '../core/AppModeLifecycle';
 import { TERRAIN_HEIGHT_SCALE_METERS, type ChunkData } from '@engine/index';
 import { getBiomeCssColor, getBiomeDisplayName } from './biomeDisplay';
-import * as THREE from 'three';
-import {
-  getTerrainSurfaceDebugInfo,
-  type TerrainSurfaceDebugInfo,
-  type TerrainSurfaceSampleDebug,
-  type TerrainSurfaceWeights,
-} from '../viewer/TerrainAttributeBuilder';
+import { getTerrainSurfaceDebugInfo, type TerrainSurfaceWeights } from '../viewer/TerrainAttributeBuilder';
 import type { TerrainSurfaceKey } from '../viewer/terrain-geometry-types';
 
 const LAKE_NAME  = 'Lake';
@@ -37,6 +31,14 @@ const SURFACE_DISPLAY_NAMES: Record<TerrainSurfaceKey, string> = {
 
 function formatMeters(value: number, fractionDigits: number): string {
   return `${value.toFixed(fractionDigits)} m`;
+}
+
+function formatClimateValue(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return 'n/a';
+  }
+
+  return value.toFixed(2);
 }
 
 /**
@@ -77,78 +79,6 @@ export function formatSurfaceSummary(weights: TerrainSurfaceWeights): string {
       return weight >= 0.995 ? label : `${label} ${Math.round(weight * 100)}%`;
     })
     .join(' / ');
-}
-
-function formatSurfaceWeights(weights: TerrainSurfaceWeights): string {
-  const ranked = (Object.entries(weights) as Array<[TerrainSurfaceKey, number]>)
-    .filter(([, weight]) => weight > 0.01)
-    .sort((a, b) => b[1] - a[1]);
-
-  if (ranked.length === 0) {
-    return SURFACE_DISPLAY_NAMES.plains;
-  }
-
-  return ranked
-    .map(([surface, weight]) => {
-      const label = SURFACE_DISPLAY_NAMES[surface];
-      return `${label} ${Math.round(weight * 100)}%`;
-    })
-    .join(' / ');
-}
-
-function formatSurfaceSamples(samples: TerrainSurfaceSampleDebug[]): string {
-  if (samples.length === 0) {
-    return 'n/a';
-  }
-
-  return samples.map(sample => {
-    const biome = getBiomeDisplayName(sample.biome);
-    const surface = SURFACE_DISPLAY_NAMES[sample.surfaceKey];
-    return `(${sample.x},${sample.y}) ${biome} -> ${surface} [h ${sample.elevation.toFixed(2)} s ${sample.slope.toFixed(2)} m ${sample.moisture.toFixed(2)} t ${sample.temperature.toFixed(2)}]`;
-  }).join('<br>');
-}
-
-function formatVector4(attribute: THREE.BufferAttribute | undefined, index: number): string {
-  if (!attribute || attribute.itemSize < 4 || index >= attribute.count) {
-    return 'n/a';
-  }
-
-  return [
-    attribute.getX(index),
-    attribute.getY(index),
-    attribute.getZ(index),
-    attribute.getW(index),
-  ]
-    .map(value => value.toFixed(2))
-    .join(', ');
-}
-
-function formatVector3(attribute: THREE.BufferAttribute | undefined, index: number): string {
-  if (!attribute || attribute.itemSize < 3 || index >= attribute.count) {
-    return 'n/a';
-  }
-
-  return [
-    attribute.getX(index),
-    attribute.getY(index),
-    attribute.getZ(index),
-  ]
-    .map(value => value.toFixed(2))
-    .join(', ');
-}
-
-function getTerrainChunkMesh(viewer: any, chunkX: number, chunkY: number): THREE.Mesh | null {
-  const chunkMeshes = viewer?.getChunkMeshes?.();
-  if (!chunkMeshes) return null;
-
-  const key = `${chunkX},${chunkY}`;
-  for (const chunkMesh of chunkMeshes) {
-    if (`${chunkMesh?.terrain?.userData?.chunkData?.x ?? chunkMesh?.data?.x ?? ''},${chunkMesh?.terrain?.userData?.chunkData?.y ?? chunkMesh?.data?.y ?? ''}` === key) {
-      return chunkMesh.terrain ?? null;
-    }
-  }
-
-  return null;
 }
 
 export class TerrainTooltip {
@@ -285,24 +215,22 @@ export class TerrainTooltip {
     const biomeColor = lakeLevel !== null
       ? LAKE_COLOR
       : getBiomeCssColor(chunk.biomeMap[tileIndex]);
-    const surfaceDebug: TerrainSurfaceDebugInfo = getTerrainSurfaceDebugInfo(chunk, hit.localX, hit.localY, {
+    const surfaceDebug = getTerrainSurfaceDebugInfo(chunk, hit.localX, hit.localY, {
       includeRiverbedSurface: false,
     });
     const surfaceSummary = formatSurfaceSummary(surfaceDebug.weights);
-    const surfaceWeights = formatSurfaceWeights(surfaceDebug.weights);
-    const surfaceSamples = formatSurfaceSamples(surfaceDebug.samples);
-    const chunkMesh = getTerrainChunkMesh(this.viewer, hit.chunkX, hit.chunkY);
-    const geometry = chunkMesh?.geometry as THREE.BufferGeometry | undefined;
-    const vertexIndex = hit.localY * chunk.size + hit.localX;
-    const surfaceBlendA = formatVector4(geometry?.getAttribute('surfaceBlendA') as THREE.BufferAttribute | undefined, vertexIndex);
-    const surfaceBlendB = formatVector4(geometry?.getAttribute('surfaceBlendB') as THREE.BufferAttribute | undefined, vertexIndex);
-    const surfaceBlendC = formatVector4(geometry?.getAttribute('surfaceBlendC') as THREE.BufferAttribute | undefined, vertexIndex);
-    const terrainDetailBlend = formatVector4(geometry?.getAttribute('terrainDetailBlend') as THREE.BufferAttribute | undefined, vertexIndex);
-    const vertexColor = formatVector3(geometry?.getAttribute('color') as THREE.BufferAttribute | undefined, vertexIndex);
+    const averageMoisture = surfaceDebug.samples.length > 0
+      ? surfaceDebug.samples.reduce((sum, sample) => sum + sample.moisture, 0) / surfaceDebug.samples.length
+      : null;
+    const temperature = chunk.temperatureMap && tileIndex < chunk.temperatureMap.length
+      ? chunk.temperatureMap[tileIndex]
+      : null;
 
     const height = formatMeters(hit.height * TERRAIN_HEIGHT_SCALE_METERS, 2);
     const wx     = formatMeters(hit.point.x, 1);
     const wy     = formatMeters(hit.point.z, 1);
+    const temperatureText = formatClimateValue(temperature);
+    const moistureText = formatClimateValue(averageMoisture);
 
     const extraRow = lakeLevel !== null && chunk
       ? (() => {
@@ -323,15 +251,10 @@ export class TerrainTooltip {
       </div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;color:#9ca3af">
         <span>Height</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${height}</span>
+        <span>Temperature</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${temperatureText}</span>
+        <span>Moisture</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${moistureText}</span>
         <span>Position</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${wx}, ${wy}</span>
         <span>Chunk</span><span style="color:#e5e7eb;font-family:'Courier New',monospace">${hit.chunkX}, ${hit.chunkY}</span>
-        <span>Surface weights</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${surfaceWeights}</span>
-        <span>Samples</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${surfaceSamples}</span>
-        <span>surfaceBlendA</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${surfaceBlendA}</span>
-        <span>surfaceBlendB</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${surfaceBlendB}</span>
-        <span>surfaceBlendC</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${surfaceBlendC}</span>
-        <span>terrainDetailBlend</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${terrainDetailBlend}</span>
-        <span>Vertex color</span><span style="color:#e5e7eb;font-family:'Courier New',monospace;white-space:normal">${vertexColor}</span>
         ${extraRow}
       </div>
     `;

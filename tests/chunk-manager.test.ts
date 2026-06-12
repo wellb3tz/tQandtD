@@ -182,7 +182,7 @@ describe('ChunkData integrity', () => {
 });
 
 describe('Climate-driven water state', () => {
-  it('freezes cold lakes, keeps hot wet lakes filled, and dries only hot dry lakes', () => {
+  it('freezes cold lakes, keeps hot wet lakes filled, and dries only shallow hot dry lakes', () => {
     const lake = {
       id: 'lake_1',
       waterLevel: 0.5,
@@ -191,10 +191,16 @@ describe('Climate-driven water state', () => {
       minTerrainHeight: 0.4,
       bounds: { minX: 0, maxX: 1, minY: 0, maxY: 1 },
     };
+    const shallowLake = {
+      ...lake,
+      maxDepth: 0.03,
+      minTerrainHeight: 0.47,
+    };
 
     expect(determineLakeState(lake, () => ({ temperature: 0.55, moisture: 0.45 }))).toBe('filled');
     expect(determineLakeState(lake, () => ({ temperature: -0.55, moisture: 0.2 }))).toBe('frozen');
-    expect(determineLakeState(lake, () => ({ temperature: 0.55, moisture: -0.35 }))).toBe('dry');
+    expect(determineLakeState(lake, () => ({ temperature: 0.55, moisture: -0.35 }))).toBe('filled');
+    expect(determineLakeState(shallowLake, () => ({ temperature: 0.55, moisture: -0.35 }))).toBe('dry');
   });
 
   it('uses climateConfig world temperature offset when adjusting lake biomes', () => {
